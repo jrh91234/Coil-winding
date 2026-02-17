@@ -165,7 +165,9 @@
     </div>
 
     <script>
+        // อัปเดต SCRIPT_URL เรียบร้อยแล้ว
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec"; 
+        
         const DEFAULT_SYMPTOMS = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "อื่นๆ (Others)"];
         let ngSymptoms = [...DEFAULT_SYMPTOMS];
         let dailyTarget = 0;
@@ -262,10 +264,22 @@
             types.forEach((t, i) => { if (parseInt(qtys[i]) > 0) payload.ngDetails.push({ type: t, qty: parseInt(qtys[i]) }); });
 
             try {
-                await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
-                alert("Success!"); e.target.reset(); document.getElementById('ngList').innerHTML = ""; addNgRow();
-            } catch (err) { alert(err.message); }
-            finally { btn.disabled = false; btn.innerText = "💾 บันทึกข้อมูล"; }
+                // หากต้องการ Debug ให้ลบ mode: 'no-cors' ออก แต่ต้องแน่ใจว่า Apps Script รองรับ CORS
+                await fetch(SCRIPT_URL, { 
+                    method: 'POST', 
+                    mode: 'no-cors', 
+                    body: JSON.stringify(payload) 
+                });
+                alert("บันทึกข้อมูลสำเร็จ! (กรุณาเช็คใน Sheet อีกครั้ง)"); 
+                e.target.reset(); 
+                document.getElementById('ngList').innerHTML = ""; 
+                addNgRow();
+            } catch (err) { 
+                alert("เกิดข้อผิดพลาด: " + err.message); 
+            } finally { 
+                btn.disabled = false; 
+                btn.innerText = "💾 บันทึกข้อมูล"; 
+            }
         };
 
         let charts = {};
@@ -282,7 +296,9 @@
                 document.getElementById('progress-text').innerText = prog + "%";
                 renderMainCharts(data);
                 renderMachineTable(data);
-            } catch (e) { console.error(e); }
+            } catch (e) { 
+                console.error(e); 
+            }
         }
 
         function renderMainCharts(data) {
