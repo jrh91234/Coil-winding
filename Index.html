@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CWM Production System - Advanced Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .tab-active { @apply border-b-4 border-blue-600 text-blue-600 font-bold; }
+        .hidden { display: none; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        .table-container { @apply overflow-x-auto bg-white rounded-xl shadow mt-4; }
+        th { @apply px-4 py-2 bg-gray-100 text-left text-xs font-bold text-gray-600 uppercase border-b; }
+        td { @apply px-4 py-2 border-b text-sm text-gray-700; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+    <!-- Navigation Tabs -->
+    <nav class="bg-white shadow-sm sticky top-0 z-10">
+        <div class="flex max-w-6xl mx-auto">
+            <button onclick="switchTab('form')" id="tab-form" class="flex-1 py-4 text-center tab-active">บันทึกข้อมูล</button>
+            <button onclick="switchTab('dashboard'); loadDashboard();" id="tab-dashboard" class="flex-1 py-4 text-center text-gray-500">Dashboard</button>
+        </div>
+    </nav>
+
+    <!-- FORM SECTION -->
+    <main id="section-form" class="max-w-2xl mx-auto p-4 space-y-4">
+        <div class="bg-white rounded-xl shadow-md p-6 border-t-4 border-blue-500">
+            <h1 class="text-xl font-bold text-gray-800 mb-4">📝 บันทึกยอดการผลิต (CWM-01 to 16)</h1>
+            <form id="productionForm" class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm font-medium text-gray-600">เครื่องจักร</label>
+                        <select id="machine" name="machine" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"></select>
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-gray-600">ช่วงเวลา</label>
+                        <select id="hourSlot" name="hourSlot" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
+                            <option value="08:00-09:00">08:00-09:00</option>
+                            <option value="09:00-10:00">09:00-10:00</option>
+                            <option value="10:00-11:00">10:00-11:00</option>
+                            <option value="11:00-12:00">11:00-12:00</option>
+                            <option value="13:00-14:00">13:00-14:00</option>
+                            <option value="14:00-15:00">14:00-15:00</option>
+                            <option value="15:00-16:00">15:00-16:00</option>
+                            <option value="16:00-17:00">16:00-17:00</option>
+                            <option value="OT">OT</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-sm font-medium text-gray-600">รุ่นสินค้า (Product Model)</label>
+                    <select id="productCode" name="productCode" required class="w-full p-2 border rounded-md">
+                        <option value="6001CY00031">S1B29288-JR (10A)</option>
+                        <option value="6001CY00032">S1B71819-JR (16A)</option>
+                        <option value="6001CY00033">S1B29292-JR (20A)</option>
+                        <option value="6001CY00034">51207080HC-JR (25/32A)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="text-sm font-medium text-gray-600">ยอดผลิตดี (FG Amount)</label>
+                    <input type="number" name="fgAmount" id="fgAmount" value="0" min="0" required class="w-full p-2 border rounded-md text-lg font-bold text-blue-600">
+                </div>
+
+                <div class="bg-red-50 p-4 rounded-lg border border-red-100">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-sm font-bold text-red-600">ยอดของเสีย (NG Items)</h2>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="manageSymptoms()" class="text-blue-600 bg-white border border-blue-200 px-2 py-1 rounded text-xs hover:bg-blue-50">⚙️ จัดการรายการ</button>
+                            <button type="button" onclick="addNgRow()" class="bg-red-600 text-white px-2 py-1 rounded text-xs hover:bg-red-700">+ เพิ่มอาการ</button>
+                        </div>
+                    </div>
+                    <div id="ngList" class="space-y-2"></div>
+                </div>
+
+                <button type="submit" id="submitBtn" class="w-full bg-blue-600 text-white font-bold py-4 rounded-lg shadow-lg hover:bg-blue-700 transition">💾 บันทึกข้อมูล</button>
+            </form>
+        </div>
+    </main>
+
+    <!-- DASHBOARD SECTION -->
+    <main id="section-dashboard" class="max-w-6xl mx-auto p-4 space-y-6 hidden">
+        <!-- Target Setup & Summary -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white p-4 rounded-xl shadow border-l-4 border-yellow-500 md:col-span-2">
+                <h3 class="text-sm font-bold text-gray-700">🎯 เป้าหมายวันนี้</h3>
+                <div class="flex items-center gap-2 mt-2">
+                    <input type="number" id="dailyTargetInput" onchange="updateTarget()" class="p-1 border rounded w-24 text-center font-bold text-blue-600">
+                    <span class="text-xs text-gray-500">ชิ้น/วัน</span>
+                    <div class="flex-1 ml-4">
+                        <div class="flex justify-between text-[10px] mb-1">
+                            <span>ความคืบหน้า</span>
+                            <span id="progress-text">0%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div id="progress-bar" class="bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500">
+                <p class="text-[10px] text-gray-500 uppercase">FG รวมวันนี้</p>
+                <p id="stat-fg" class="text-2xl font-bold text-blue-600">0</p>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow border-l-4 border-red-500">
+                <p class="text-[10px] text-gray-500 uppercase">NG รวมวันนี้</p>
+                <p id="stat-ng" class="text-2xl font-bold text-red-600">0</p>
+            </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white p-6 rounded-xl shadow">
+                <h3 class="font-bold mb-4 text-gray-700 flex justify-between">
+                    <span>Hourly Trend</span>
+                    <span class="text-xs font-normal text-gray-400">Actual vs Target</span>
+                </h3>
+                <div class="h-64"><canvas id="hourlyChart"></canvas></div>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow">
+                <h3 class="font-bold mb-4 text-gray-700">NG Breakdown (All)</h3>
+                <div class="h-64"><canvas id="ngChart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Charts Row 2: Machine Performance -->
+        <div class="bg-white p-6 rounded-xl shadow">
+            <h3 class="font-bold mb-4 text-gray-700">FG & NG by Machine (Today)</h3>
+            <div class="h-80"><canvas id="machineChart"></canvas></div>
+        </div>
+
+        <!-- NG Detailed Table -->
+        <div class="bg-white p-6 rounded-xl shadow">
+            <h3 class="font-bold mb-4 text-gray-700">Detailed NG Breakdown by Machine</h3>
+            <div class="table-container">
+                <table class="w-full min-w-[600px]">
+                    <thead>
+                        <tr id="table-header">
+                            <th>Machine</th>
+                            <th>Total FG</th>
+                            <th>Total NG</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- SYMPTOM MANAGEMENT MODAL -->
+    <div id="modal-symptoms" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-xl max-w-sm w-full p-6 shadow-2xl">
+            <h3 class="font-bold text-lg mb-4">จัดการรายการอาการ NG</h3>
+            <div id="modal-list" class="space-y-2 max-h-60 overflow-y-auto mb-4 border-y py-2"></div>
+            <div class="flex gap-2">
+                <input type="text" id="new-symptom-input" placeholder="เพิ่มอาการใหม่..." class="flex-1 p-2 border rounded text-sm">
+                <button onclick="addNewSymptom()" class="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700">เพิ่ม</button>
+            </div>
+            <button onclick="closeModal()" class="w-full mt-4 bg-gray-200 py-2 rounded font-medium">ปิด</button>
+        </div>
+    </div>
+
+    <script>
+        const SCRIPT_URL = ""; 
+        const DEFAULT_SYMPTOMS = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "อื่นๆ (Others)"];
+        let ngSymptoms = [...DEFAULT_SYMPTOMS];
+        let dailyTarget = 0;
+
+        window.onload = () => {
+            const savedNg = localStorage.getItem('CWM_CUSTOM_NG');
+            if (savedNg) ngSymptoms = JSON.parse(savedNg);
+            const savedTarget = localStorage.getItem('CWM_DAILY_TARGET');
+            if (savedTarget) {
+                dailyTarget = parseInt(savedTarget);
+                document.getElementById('dailyTargetInput').value = dailyTarget;
+            }
+            const machineSelect = document.getElementById('machine');
+            for (let i = 1; i <= 16; i++) {
+                const name = `CWM-${String(i).padStart(2, '0')}`;
+                machineSelect.add(new Option(name, name));
+            }
+            addNgRow();
+        };
+
+        function switchTab(tab) {
+            document.getElementById('section-form').classList.toggle('hidden', tab !== 'form');
+            document.getElementById('section-dashboard').classList.toggle('hidden', tab !== 'dashboard');
+            document.getElementById('tab-form').className = `flex-1 py-4 text-center ${tab === 'form' ? 'tab-active' : 'text-gray-500'}`;
+            document.getElementById('tab-dashboard').className = `flex-1 py-4 text-center ${tab === 'dashboard' ? 'tab-active' : 'text-gray-500'}`;
+        }
+
+        function updateTarget() {
+            dailyTarget = parseInt(document.getElementById('dailyTargetInput').value) || 0;
+            localStorage.setItem('CWM_DAILY_TARGET', dailyTarget);
+            loadDashboard();
+        }
+
+        function addNgRow() {
+            const container = document.getElementById('ngList');
+            const rowId = Date.now();
+            const div = document.createElement('div');
+            div.id = `ng-row-${rowId}`;
+            div.className = "flex gap-2 animate-fade-in";
+            div.innerHTML = `
+                <select name="ng_type[]" class="flex-1 p-2 border rounded text-sm bg-white shadow-sm">${renderOptions()}</select>
+                <input type="number" name="ng_qty[]" placeholder="จำนวน" class="w-20 p-2 border rounded text-sm" min="1" value="0">
+                <button type="button" onclick="this.parentElement.remove()" class="text-red-400 px-2 hover:text-red-600">✕</button>
+            `;
+            container.appendChild(div);
+        }
+        function renderOptions() { return ngSymptoms.map(s => `<option value="${s}">${s}</option>`).join(''); }
+        function manageSymptoms() {
+            const modal = document.getElementById('modal-symptoms');
+            modal.classList.remove('hidden');
+            document.getElementById('modal-list').innerHTML = ngSymptoms.map((s, i) => `
+                <div class="flex justify-between items-center bg-gray-50 p-2 rounded">
+                    <span class="text-sm">${s}</span>
+                    <button onclick="deleteSymptom(${i})" class="text-red-500 text-xs">ลบ</button>
+                </div>
+            `).join('');
+        }
+        function addNewSymptom() {
+            const val = document.getElementById('new-symptom-input').value.trim();
+            if (val && !ngSymptoms.includes(val)) {
+                ngSymptoms.push(val);
+                localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
+                document.getElementById('new-symptom-input').value = '';
+                manageSymptoms();
+                document.querySelectorAll('select[name="ng_type[]"]').forEach(dd => {
+                    const v = dd.value; dd.innerHTML = renderOptions(); dd.value = v;
+                });
+            }
+        }
+        function deleteSymptom(i) {
+            if (confirm('ลบรายการนี้?')) {
+                ngSymptoms.splice(i, 1);
+                localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
+                manageSymptoms();
+            }
+        }
+        function closeModal() { document.getElementById('modal-symptoms').classList.add('hidden'); }
+
+        document.getElementById('productionForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true; btn.innerText = "Saving...";
+            const fd = new FormData(e.target);
+            const payload = {
+                action: 'SAVE_PRODUCTION',
+                machine: fd.get('machine'),
+                hourSlot: fd.get('hourSlot'),
+                productCode: fd.get('productCode'),
+                fgAmount: parseInt(fd.get('fgAmount')),
+                ngDetails: []
+            };
+            const types = fd.getAll('ng_type[]');
+            const qtys = fd.getAll('ng_qty[]');
+            types.forEach((t, i) => { if (parseInt(qtys[i]) > 0) payload.ngDetails.push({ type: t, qty: parseInt(qtys[i]) }); });
+
+            try {
+                await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+                alert("Success!"); e.target.reset(); document.getElementById('ngList').innerHTML = ""; addNgRow();
+            } catch (err) { alert(err.message); }
+            finally { btn.disabled = false; btn.innerText = "💾 บันทึกข้อมูล"; }
+        };
+
+        let charts = {};
+
+        async function loadDashboard() {
+            if (!SCRIPT_URL) return;
+            try {
+                const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD`);
+                const data = await res.json();
+                document.getElementById('stat-fg').innerText = data.todayTotalFg.toLocaleString();
+                document.getElementById('stat-ng').innerText = data.todayTotalNg.toLocaleString();
+                const prog = dailyTarget > 0 ? Math.min((data.todayTotalFg/dailyTarget)*100, 100).toFixed(1) : 0;
+                document.getElementById('progress-bar').style.width = prog + "%";
+                document.getElementById('progress-text').innerText = prog + "%";
+                renderMainCharts(data);
+                renderMachineTable(data);
+            } catch (e) { console.error(e); }
+        }
+
+        function renderMainCharts(data) {
+            const hCtx = document.getElementById('hourlyChart').getContext('2d');
+            if (charts.hourly) charts.hourly.destroy();
+            charts.hourly = new Chart(hCtx, {
+                type: 'bar',
+                data: {
+                    labels: data.hourlyLabels,
+                    datasets: [
+                        { label: 'Target', data: data.hourlyLabels.map(h => dailyTarget/8), type: 'line', borderColor: '#eab308', pointRadius: 0 },
+                        { label: 'Actual FG', data: data.hourlyData, backgroundColor: '#2563eb' }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            const nCtx = document.getElementById('ngChart').getContext('2d');
+            if (charts.ng) charts.ng.destroy();
+            charts.ng = new Chart(nCtx, {
+                type: 'pie',
+                data: {
+                    labels: data.ngLabels,
+                    datasets: [{ data: data.ngValues, backgroundColor: ['#ef4444', '#f97316', '#facc15', '#4ade80', '#60a5fa', '#a78bfa'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            const mCtx = document.getElementById('machineChart').getContext('2d');
+            if (charts.machine) charts.machine.destroy();
+            const machines = [];
+            for(let i=1; i<=16; i++) machines.push(`CWM-${String(i).padStart(2, '0')}`);
+            charts.machine = new Chart(mCtx, {
+                type: 'bar',
+                data: {
+                    labels: machines,
+                    datasets: [
+                        { label: 'FG', data: machines.map(m => data.machineData[m]?.fg || 0), backgroundColor: '#3b82f6' },
+                        { label: 'NG', data: machines.map(m => data.machineData[m]?.ngTotal || 0), backgroundColor: '#ef4444' }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
+            });
+        }
+
+        function renderMachineTable(data) {
+            const header = document.getElementById('table-header');
+            const body = document.getElementById('table-body');
+            header.innerHTML = '<th>Machine</th><th>Total FG</th><th>Total NG</th>';
+            ngSymptoms.forEach(s => {
+                const th = document.createElement('th');
+                th.innerText = s;
+                header.appendChild(th);
+            });
+            body.innerHTML = '';
+            for(let i=1; i<=16; i++) {
+                const mName = `CWM-${String(i).padStart(2, '0')}`;
+                const mData = data.machineData[mName] || { fg: 0, ngTotal: 0, ngBreakdown: {} };
+                let rowHtml = `<td><b>${mName}</b></td><td>${mData.fg}</td><td class="text-red-600 font-bold">${mData.ngTotal}</td>`;
+                ngSymptoms.forEach(s => {
+                    const count = mData.ngBreakdown[s] || 0;
+                    rowHtml += `<td class="${count > 0 ? 'bg-red-50 text-red-700 font-medium' : 'text-gray-300'}">${count}</td>`;
+                });
+                const tr = document.createElement('tr');
+                tr.innerHTML = rowHtml;
+                body.appendChild(tr);
+            }
+        }
+    </script>
+</body>
+</html>
