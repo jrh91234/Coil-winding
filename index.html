@@ -40,9 +40,9 @@
             background-color: #475569; /* สีเมื่อเอาเมาส์ชี้ (เข้มขึ้นอีก) */
         }
         
-        /* เพิ่ม padding (px-6) เพื่อให้ช่องห่างกันมากขึ้น */
-        th { @apply px-6 py-4 bg-gray-50 text-left text-xs font-bold text-gray-600 uppercase border-b whitespace-nowrap tracking-wider; }
-        td { @apply px-6 py-4 border-b text-sm text-gray-700 whitespace-nowrap; }
+        /* เพิ่ม padding (px-8) เพื่อให้ช่องห่างกันมากขึ้น (ขยายจากเดิม px-6) */
+        th { @apply px-8 py-4 bg-gray-50 text-left text-xs font-bold text-gray-600 uppercase border-b whitespace-nowrap tracking-wider; }
+        td { @apply px-8 py-4 border-b text-sm text-gray-700 whitespace-nowrap; }
         
         /* Loader Animation */
         .loader {
@@ -70,7 +70,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-lg md:text-xl font-bold text-gray-800">บันทึกยอดการผลิต</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v2.8 Scroll Fix</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v2.9 Wide Table</span>
             </div>
             
             <form id="productionForm" class="space-y-4">
@@ -251,8 +251,8 @@
             <div class="bg-white p-4 md:p-6 rounded-xl shadow-md">
                 <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">Detailed Machine Performance</h3>
                 <div class="table-container">
-                    <!-- เพิ่ม min-w-[1500px] เพื่อบังคับให้ตารางกว้างเกินจอแน่นอน และเกิด Scroll bar -->
-                    <table class="w-full min-w-[1500px] divide-y divide-gray-200">
+                    <!-- เพิ่ม min-w-[2200px] เพื่อบังคับให้ตารางกว้างเกินจอแน่นอน และเกิด Scroll bar -->
+                    <table class="w-full min-w-[2200px] divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr id="table-header">
                                 <th>Machine</th>
