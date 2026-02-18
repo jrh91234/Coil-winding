@@ -19,24 +19,25 @@
         .table-container { 
             @apply overflow-x-auto bg-white rounded-xl shadow mt-4 border border-gray-100; 
             -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
-            padding-bottom: 5px; /* เพิ่มพื้นที่ด้านล่างเล็กน้อยกันตกขอบ */
+            padding-bottom: 8px; /* เพิ่มพื้นที่ด้านล่างให้ scroll bar ไม่ทับเนื้อหา */
         }
 
-        /* --- เพิ่ม CSS ปรับแต่ง Scrollbar ให้เห็นชัดขึ้น --- */
+        /* --- ปรับแต่ง Scrollbar ให้เห็นชัดขึ้น (เข้มขึ้น/หนาขึ้น) --- */
         .table-container::-webkit-scrollbar {
-            height: 10px; /* ความสูงของ slide bar แนวนอน */
+            height: 14px; /* เพิ่มความสูงของ slide bar */
         }
         .table-container::-webkit-scrollbar-track {
-            background: #f3f4f6; /* สีพื้นหลังรางเลื่อน */
+            background: #f1f5f9; /* สีพื้นหลังรางเลื่อน */
             border-radius: 8px;
+            margin: 0 4px;
         }
         .table-container::-webkit-scrollbar-thumb {
-            background-color: #cbd5e1; /* สีตัวเลื่อน */
+            background-color: #64748b; /* เปลี่ยนเป็นสีเทาเข้ม (Slate-500) */
             border-radius: 8px;
-            border: 2px solid #f3f4f6;
+            border: 3px solid #f1f5f9; /* ขอบขาวเพื่อให้ดูโค้งมน */
         }
         .table-container::-webkit-scrollbar-thumb:hover {
-            background-color: #94a3b8; /* สีเมื่อเอาเมาส์ชี้ */
+            background-color: #475569; /* สีเมื่อเอาเมาส์ชี้ (เข้มขึ้นอีก) */
         }
         
         /* เพิ่ม padding (px-6) เพื่อให้ช่องห่างกันมากขึ้น */
@@ -69,7 +70,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-lg md:text-xl font-bold text-gray-800">บันทึกยอดการผลิต</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v2.7 Fixed Scroll</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v2.8 Scroll Fix</span>
             </div>
             
             <form id="productionForm" class="space-y-4">
@@ -250,8 +251,8 @@
             <div class="bg-white p-4 md:p-6 rounded-xl shadow-md">
                 <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">Detailed Machine Performance</h3>
                 <div class="table-container">
-                    <!-- ตั้งค่า min-w-1000px เพื่อบังคับให้เกิด scroll bar แนวนอน ถ้าหน้าจอเล็กกว่านี้ -->
-                    <table class="w-full min-w-[1000px] divide-y divide-gray-200">
+                    <!-- เพิ่ม min-w-[1500px] เพื่อบังคับให้ตารางกว้างเกินจอแน่นอน และเกิด Scroll bar -->
+                    <table class="w-full min-w-[1500px] divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr id="table-header">
                                 <th>Machine</th>
