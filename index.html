@@ -2,19 +2,23 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CWM Production System - Advanced Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CWM Production System - Mobile Ready</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <style>
-        .tab-active { @apply border-b-4 border-blue-600 text-blue-600 font-bold; }
+        /* Custom Mobile Styles */
+        body { -webkit-tap-highlight-color: transparent; }
+        .tab-active { @apply border-b-4 border-blue-600 text-blue-600 font-bold bg-blue-50; }
         .hidden { display: none; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.3s ease-out; }
-        .table-container { @apply overflow-x-auto bg-white rounded-xl shadow mt-4; }
-        th { @apply px-4 py-2 bg-gray-100 text-left text-xs font-bold text-gray-600 uppercase border-b; }
-        td { @apply px-4 py-2 border-b text-sm text-gray-700; }
+        .table-container { @apply overflow-x-auto bg-white rounded-xl shadow mt-4 border border-gray-100; }
+        th { @apply px-4 py-3 bg-gray-50 text-left text-xs font-bold text-gray-600 uppercase border-b whitespace-nowrap; }
+        td { @apply px-4 py-3 border-b text-sm text-gray-700 whitespace-nowrap; }
+        
+        /* Loader Animation */
         .loader {
             border: 4px solid #f3f3f3;
             border-top: 4px solid #3498db;
@@ -26,49 +30,58 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen font-sans">
-    <!-- Navigation Tabs -->
-    <nav class="bg-white shadow-sm sticky top-0 z-10">
+<body class="bg-gray-100 min-h-screen font-sans pb-10">
+    <!-- Navigation Tabs (Sticky Top) -->
+    <nav class="bg-white shadow-md sticky top-0 z-20">
         <div class="flex max-w-6xl mx-auto">
-            <button onclick="switchTab('form')" id="tab-form" class="flex-1 py-4 text-center tab-active">บันทึกข้อมูล</button>
-            <button onclick="switchTab('dashboard');" id="tab-dashboard" class="flex-1 py-4 text-center text-gray-500">Dashboard</button>
+            <button onclick="switchTab('form')" id="tab-form" class="flex-1 py-4 text-center tab-active text-sm md:text-base transition-colors">📝 บันทึกข้อมูล</button>
+            <button onclick="switchTab('dashboard');" id="tab-dashboard" class="flex-1 py-4 text-center text-gray-500 text-sm md:text-base hover:bg-gray-50 transition-colors">📊 Dashboard</button>
         </div>
     </nav>
 
-    <!-- FORM SECTION (Same as before) -->
+    <!-- FORM SECTION -->
     <main id="section-form" class="max-w-2xl mx-auto p-4 space-y-4">
-        <div class="bg-white rounded-xl shadow-md p-6 border-t-4 border-blue-500">
-            <h1 class="text-xl font-bold text-gray-800 mb-4 flex justify-between items-center">
-                <span>📝 บันทึกยอดการผลิต</span>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v2.5</span>
-            </h1>
+        <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-blue-500">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-lg md:text-xl font-bold text-gray-800">บันทึกยอดการผลิต</h1>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v2.5 Mobile</span>
+            </div>
+            
             <form id="productionForm" class="space-y-4">
-                <div>
-                    <label class="text-sm font-medium text-gray-600">ผู้บันทึก (Recorder)</label>
+                
+                <!-- Recorder Section -->
+                <div class="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                    <label class="block text-xs font-bold text-blue-800 mb-2">👤 ผู้บันทึก (Recorder)</label>
                     <div class="flex gap-2">
-                        <select id="recorder" name="recorder" required class="flex-1 p-2 border rounded-md focus:ring-2 focus:ring-blue-500 bg-gray-50"></select>
-                        <button type="button" onclick="manageRecorders()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded-md transition">⚙️</button>
+                        <select id="recorder" name="recorder" required class="flex-1 p-3 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm shadow-sm">
+                            <!-- Options generated by JS -->
+                        </select>
+                        <button type="button" onclick="manageRecorders()" class="bg-white border border-blue-200 text-blue-600 px-3 rounded-lg shadow-sm hover:bg-blue-50">
+                            ⚙️
+                        </button>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
+                <!-- Machine & Shift (Stacked on Mobile) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="text-sm font-medium text-gray-600">เครื่องจักร (Machine)</label>
-                        <select id="machine" name="machine" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"></select>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">เครื่องจักร (Machine)</label>
+                        <select id="machine" name="machine" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm appearance-none"></select>
                     </div>
                     <div>
-                        <label class="text-sm font-medium text-gray-600">กะการทำงาน (Shift)</label>
-                        <select id="shift" name="shift" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
-                            <option value="A">กะ A (Shift A)</option>
-                            <option value="B">กะ B (Shift B)</option>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">กะการทำงาน (Shift)</label>
+                        <select id="shift" name="shift" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm appearance-none">
+                            <option value="A">☀️ กะ A (กลางวัน)</option>
+                            <option value="B">🌙 กะ B (กลางคืน)</option>
                         </select>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
+                <!-- Product & Time (Stacked on Mobile) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="text-sm font-medium text-gray-600">รุ่นสินค้า (Product)</label>
-                        <select id="productCode" name="productCode" required class="w-full p-2 border rounded-md">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">รุ่นสินค้า (Product)</label>
+                        <select id="productCode" name="productCode" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm text-sm">
                             <option value="S1B29288-JR (10A)">S1B29288-JR (10A)</option>
                             <option value="S1B71819-JR (16A)">S1B71819-JR (16A)</option>
                             <option value="S1B29292-JR (20A)">S1B29292-JR (20A)</option>
@@ -76,9 +89,8 @@
                         </select>
                     </div>
                     <div>
-                        <label class="text-sm font-medium text-gray-600">ช่วงเวลา (Time)</label>
-                        <select id="hourSlot" name="hourSlot" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
-                             <!-- Options will be populated or static as before -->
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ช่วงเวลา (Time)</label>
+                        <select id="hourSlot" name="hourSlot" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm">
                              <option value="08:00-09:00">08:00-09:00</option>
                              <option value="09:00-10:00">09:00-10:00</option>
                              <option value="10:00-11:00">10:00-11:00</option>
@@ -108,23 +120,27 @@
                     </div>
                 </div>
 
-                <div>
-                    <label class="text-sm font-medium text-gray-600">ยอดผลิตดี (FG Amount)</label>
-                    <input type="number" name="fgAmount" id="fgAmount" value="0" min="0" required class="w-full p-2 border rounded-md text-lg font-bold text-blue-600">
+                <!-- FG Input -->
+                <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+                    <label class="block text-sm font-bold text-green-800 mb-2">✅ ยอดผลิตดี (FG Amount)</label>
+                    <input type="number" name="fgAmount" id="fgAmount" value="0" min="0" required class="w-full p-4 border border-green-300 rounded-lg text-2xl font-bold text-green-700 text-center shadow-inner focus:ring-2 focus:ring-green-500">
                 </div>
 
-                <div class="bg-red-50 p-4 rounded-lg border border-red-100">
+                <!-- NG Section -->
+                <div class="bg-red-50 p-4 rounded-lg border border-red-200">
                     <div class="flex justify-between items-center mb-3">
-                        <h2 class="text-sm font-bold text-red-600">ยอดของเสีย (NG Items)</h2>
+                        <h2 class="text-sm font-bold text-red-700">❌ ยอดของเสีย (NG Items)</h2>
                         <div class="flex gap-2">
-                            <button type="button" onclick="manageSymptoms()" class="text-blue-600 bg-white border border-blue-200 px-2 py-1 rounded text-xs hover:bg-blue-50">⚙️</button>
-                            <button type="button" onclick="addNgRow()" class="bg-red-600 text-white px-2 py-1 rounded text-xs hover:bg-red-700">+ เพิ่ม</button>
+                            <button type="button" onclick="manageSymptoms()" class="bg-white text-red-600 border border-red-200 px-3 py-1 rounded-md text-xs shadow-sm">⚙️ แก้ไข</button>
+                            <button type="button" onclick="addNgRow()" class="bg-red-600 text-white px-3 py-1 rounded-md text-xs shadow-sm hover:bg-red-700 font-bold">+ เพิ่ม</button>
                         </div>
                     </div>
-                    <div id="ngList" class="space-y-2"></div>
+                    <div id="ngList" class="space-y-3"></div>
                 </div>
 
-                <button type="submit" id="submitBtn" class="w-full bg-blue-600 text-white font-bold py-4 rounded-lg shadow-lg hover:bg-blue-700 transition">💾 บันทึกข้อมูล</button>
+                <button type="submit" id="submitBtn" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg hover:from-blue-700 hover:to-indigo-700 active:scale-95 transition-transform duration-100 text-lg mt-4">
+                    💾 บันทึกข้อมูล
+                </button>
             </form>
         </div>
     </main>
@@ -132,19 +148,21 @@
     <!-- DASHBOARD SECTION -->
     <main id="section-dashboard" class="max-w-6xl mx-auto p-4 space-y-6 hidden">
         
-        <!-- Date Filter Bar -->
-        <div class="bg-white p-4 rounded-xl shadow mb-4 flex flex-wrap items-end gap-4 border-l-4 border-indigo-500">
-            <div>
-                <label class="block text-xs font-bold text-gray-600 mb-1">วันที่เริ่มต้น (Start)</label>
-                <input type="date" id="startDate" class="p-2 border rounded text-sm">
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-gray-600 mb-1">วันที่สิ้นสุด (End)</label>
-                <input type="date" id="endDate" class="p-2 border rounded text-sm">
-            </div>
-            <button onclick="loadDashboard()" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-indigo-700">🔍 ค้นหา</button>
-            <div class="flex-1 text-right">
-                <p class="text-xs text-gray-400">เลือกช่วงวันที่เพื่อดูข้อมูลย้อนหลัง</p>
+        <!-- Date Filter (Stacked on Mobile) -->
+        <div class="bg-white p-4 rounded-xl shadow-md border-t-4 border-indigo-500">
+            <h2 class="text-gray-700 font-bold text-sm mb-3 flex items-center gap-2">📅 ตัวเลือกช่วงเวลา <span class="text-xs font-normal text-gray-400">(Date Range)</span></h2>
+            <div class="flex flex-col md:flex-row gap-3 items-end">
+                <div class="w-full md:w-auto">
+                    <label class="block text-xs text-gray-500 mb-1">เริ่ม (Start)</label>
+                    <input type="date" id="startDate" class="w-full p-2 border rounded-lg text-sm bg-gray-50">
+                </div>
+                <div class="w-full md:w-auto">
+                    <label class="block text-xs text-gray-500 mb-1">สิ้นสุด (End)</label>
+                    <input type="date" id="endDate" class="w-full p-2 border rounded-lg text-sm bg-gray-50">
+                </div>
+                <button onclick="loadDashboard()" class="w-full md:w-auto bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700 active:bg-indigo-800 transition">
+                    🔍 ค้นหา
+                </button>
             </div>
         </div>
 
@@ -156,112 +174,95 @@
         <div id="dashboard-content" class="space-y-6">
             <!-- Summary Cards -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500">
-                    <p class="text-[10px] text-gray-500 uppercase">FG รวมในช่วงเวลา</p>
-                    <p id="stat-fg" class="text-2xl font-bold text-blue-600">0</p>
+                <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-blue-500 flex justify-between items-center">
+                    <div>
+                        <p class="text-xs text-gray-400 uppercase font-semibold">FG รวม</p>
+                        <p id="stat-fg" class="text-3xl font-bold text-blue-600 mt-1">0</p>
+                    </div>
+                    <div class="bg-blue-50 p-3 rounded-full"><span class="text-2xl">📦</span></div>
                 </div>
-                <div class="bg-white p-4 rounded-xl shadow border-l-4 border-red-500">
-                    <p class="text-[10px] text-gray-500 uppercase">NG รวมในช่วงเวลา</p>
-                    <p id="stat-ng" class="text-2xl font-bold text-red-600">0</p>
+                <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-red-500 flex justify-between items-center">
+                    <div>
+                        <p class="text-xs text-gray-400 uppercase font-semibold">NG รวม</p>
+                        <p id="stat-ng" class="text-3xl font-bold text-red-600 mt-1">0</p>
+                    </div>
+                    <div class="bg-red-50 p-3 rounded-full"><span class="text-2xl">🗑️</span></div>
                 </div>
-                <div class="bg-white p-4 rounded-xl shadow border-l-4 border-green-500">
-                    <p class="text-[10px] text-gray-500 uppercase">% Yield รวม (Total)</p>
-                    <p id="stat-yield" class="text-2xl font-bold text-green-600">0%</p>
+                <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-green-500 flex justify-between items-center">
+                    <div>
+                        <p class="text-xs text-gray-400 uppercase font-semibold">% Yield</p>
+                        <p id="stat-yield" class="text-3xl font-bold text-green-600 mt-1">0%</p>
+                    </div>
+                    <div class="bg-green-50 p-3 rounded-full"><span class="text-2xl">📈</span></div>
                 </div>
             </div>
 
-            <!-- Yield Charts Row -->
+            <!-- Yield Charts (Stacked on Mobile) -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-white p-6 rounded-xl shadow">
-                    <h3 class="font-bold mb-4 text-gray-700">% Yield by Product Model (แยกรุ่น)</h3>
+                <div class="bg-white p-4 md:p-6 rounded-xl shadow-md">
+                    <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">% Yield by Model (แยกรุ่น)</h3>
                     <div class="h-64"><canvas id="yieldModelChart"></canvas></div>
                 </div>
-                <div class="bg-white p-6 rounded-xl shadow">
-                    <h3 class="font-bold mb-4 text-gray-700">% Yield by Machine (แยกเครื่อง)</h3>
+                <div class="bg-white p-4 md:p-6 rounded-xl shadow-md">
+                    <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">% Yield by Machine (แยกเครื่อง)</h3>
                     <div class="h-64"><canvas id="yieldMachineChart"></canvas></div>
                 </div>
             </div>
 
-            <!-- Standard Charts Row -->
+            <!-- Standard Charts -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-white p-6 rounded-xl shadow">
-                    <h3 class="font-bold mb-4 text-gray-700">Hourly Production (FG)</h3>
+                <div class="bg-white p-4 md:p-6 rounded-xl shadow-md">
+                    <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">Hourly Production (FG)</h3>
                     <div class="h-64"><canvas id="hourlyChart"></canvas></div>
                 </div>
-                <div class="bg-white p-6 rounded-xl shadow">
-                    <h3 class="font-bold mb-4 text-gray-700">NG Breakdown (อาการเสีย)</h3>
+                <div class="bg-white p-4 md:p-6 rounded-xl shadow-md">
+                    <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">NG Breakdown (อาการเสีย)</h3>
                     <div class="h-64"><canvas id="ngChart"></canvas></div>
                 </div>
             </div>
 
-            <!-- NG Detailed Table -->
-            <div class="bg-white p-6 rounded-xl shadow">
-                <h3 class="font-bold mb-4 text-gray-700">Detailed Machine Performance</h3>
+            <!-- Table -->
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-md">
+                <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">Detailed Machine Performance</h3>
                 <div class="table-container">
-                    <table class="w-full min-w-[800px]">
+                    <table class="w-full min-w-[600px] md:min-w-[800px]">
                         <thead>
                             <tr id="table-header">
                                 <th>Machine</th>
                                 <th>FG</th>
                                 <th>NG</th>
                                 <th>% Yield</th>
-                                <!-- NG headers added by JS -->
                             </tr>
                         </thead>
                         <tbody id="table-body"></tbody>
                     </table>
                 </div>
+                <p class="text-xs text-gray-400 mt-2 text-center md:text-right">* Scroll horizontally to see more details</p>
             </div>
         </div>
     </main>
 
-    <!-- Modals (Recorders, Symptoms) same as before... -->
-    <div id="modal-symptoms" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-white rounded-xl max-w-sm w-full p-6 shadow-2xl">
-            <h3 class="font-bold text-lg mb-4">จัดการรายการอาการ NG</h3>
-            <div id="modal-list" class="space-y-2 max-h-60 overflow-y-auto mb-4 border-y py-2"></div>
-            <div class="flex gap-2">
-                <input type="text" id="new-symptom-input" placeholder="เพิ่มอาการใหม่..." class="flex-1 p-2 border rounded text-sm">
-                <button onclick="addNewSymptom()" class="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700">เพิ่ม</button>
-            </div>
-            <button onclick="closeModal('modal-symptoms')" class="w-full mt-4 bg-gray-200 py-2 rounded font-medium">ปิด</button>
-        </div>
-    </div>
-    <div id="modal-recorders" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-white rounded-xl max-w-sm w-full p-6 shadow-2xl">
-            <h3 class="font-bold text-lg mb-4">จัดการรายชื่อผู้บันทึก</h3>
-            <div id="recorder-list" class="space-y-2 max-h-60 overflow-y-auto mb-4 border-y py-2"></div>
-            <div class="flex gap-2">
-                <input type="text" id="new-recorder-input" placeholder="ชื่อพนักงานใหม่..." class="flex-1 p-2 border rounded text-sm">
-                <button onclick="addNewRecorder()" class="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700">เพิ่ม</button>
-            </div>
-            <button onclick="closeModal('modal-recorders')" class="w-full mt-4 bg-gray-200 py-2 rounded font-medium">ปิด</button>
-        </div>
+    <!-- Modals -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-end md:items-center justify-center hidden backdrop-blur-sm p-0 md:p-4">
+        <!-- Content will be injected here -->
     </div>
 
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec"; 
         
-        // Defaults
         let ngSymptoms = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "อื่นๆ (Others)"];
         let recorderList = ["พนักงาน 1", "พนักงาน 2"];
         let dailyTarget = 0;
 
         window.onload = () => {
-            // Setup Dates
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('startDate').value = today;
             document.getElementById('endDate').value = today;
 
-            // Load LocalStorage
             if(localStorage.getItem('CWM_CUSTOM_NG')) ngSymptoms = JSON.parse(localStorage.getItem('CWM_CUSTOM_NG'));
             if(localStorage.getItem('CWM_RECORDERS')) recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
-            if(localStorage.getItem('CWM_DAILY_TARGET')) {
-                dailyTarget = parseInt(localStorage.getItem('CWM_DAILY_TARGET'));
-                // document.getElementById('dailyTargetInput').value = dailyTarget; // removed input from dash, using const logic
-            }
+            if(localStorage.getItem('CWM_DAILY_TARGET')) dailyTarget = parseInt(localStorage.getItem('CWM_DAILY_TARGET'));
 
-            // Init Machine Select
             const machineSelect = document.getElementById('machine');
             for (let i = 1; i <= 16; i++) {
                 const name = `CWM-${String(i).padStart(2, '0')}`;
@@ -271,80 +272,154 @@
             renderRecorderOptions();
             addNgRow();
             
-            // Auto load dashboard if tab is active (logic in switchTab)
-            switchTab('form');
+            // Handle URL hash for tab switching
+            if(window.location.hash === '#dashboard') switchTab('dashboard');
+            else switchTab('form');
         };
 
         function switchTab(tab) {
             document.getElementById('section-form').classList.toggle('hidden', tab !== 'form');
             document.getElementById('section-dashboard').classList.toggle('hidden', tab !== 'dashboard');
-            document.getElementById('tab-form').className = `flex-1 py-4 text-center ${tab === 'form' ? 'tab-active' : 'text-gray-500'}`;
-            document.getElementById('tab-dashboard').className = `flex-1 py-4 text-center ${tab === 'dashboard' ? 'tab-active' : 'text-gray-500'}`;
-            if(tab === 'dashboard') loadDashboard();
+            
+            const tabForm = document.getElementById('tab-form');
+            const tabDash = document.getElementById('tab-dashboard');
+            
+            if(tab === 'form') {
+                tabForm.classList.add('tab-active', 'text-blue-600');
+                tabForm.classList.remove('text-gray-500');
+                tabDash.classList.remove('tab-active', 'text-blue-600');
+                tabDash.classList.add('text-gray-500');
+            } else {
+                tabDash.classList.add('tab-active', 'text-blue-600');
+                tabDash.classList.remove('text-gray-500');
+                tabForm.classList.remove('tab-active', 'text-blue-600');
+                tabForm.classList.add('text-gray-500');
+                loadDashboard();
+            }
         }
 
-        // --- Recorders & NG Logic ---
+        // --- Recorders Logic ---
         function renderRecorderOptions() {
             const select = document.getElementById('recorder');
             const current = select.value;
             select.innerHTML = '<option value="">เลือกชื่อผู้บันทึก...</option>' + recorderList.map(r => `<option value="${r}">${r}</option>`).join('');
             if(recorderList.includes(current)) select.value = current;
         }
-        function manageRecorders() {
-            document.getElementById('modal-recorders').classList.remove('hidden');
-            document.getElementById('recorder-list').innerHTML = recorderList.map((r,i) => `
-                <div class="flex justify-between items-center bg-gray-50 p-2 rounded"><span class="text-sm">${r}</span><button onclick="deleteRecorder(${i})" class="text-red-500 text-xs font-bold">ลบ</button></div>
-            `).join('');
+
+        function showModal(title, contentHtml) {
+            const overlay = document.getElementById('modal-overlay');
+            overlay.innerHTML = `
+                <div class="bg-white w-full md:w-96 md:rounded-xl rounded-t-xl shadow-2xl overflow-hidden animate-fade-in">
+                    <div class="bg-gray-100 p-4 border-b flex justify-between items-center">
+                        <h3 class="font-bold text-lg text-gray-800">${title}</h3>
+                        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+                    </div>
+                    <div class="p-4 max-h-[60vh] overflow-y-auto">
+                        ${contentHtml}
+                    </div>
+                </div>
+            `;
+            overlay.classList.remove('hidden');
         }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.add('hidden');
+        }
+
+        function manageRecorders() {
+            const listHtml = recorderList.map((r,i) => `
+                <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg mb-2 border border-gray-100">
+                    <span class="text-sm font-medium text-gray-700">${r}</span>
+                    <button onclick="deleteRecorder(${i})" class="text-red-500 p-2 hover:bg-red-50 rounded">🗑️</button>
+                </div>
+            `).join('');
+            
+            const content = `
+                <div id="recorder-list-container">${listHtml}</div>
+                <div class="mt-4 flex gap-2">
+                    <input type="text" id="new-recorder-input" placeholder="ชื่อพนักงานใหม่..." class="flex-1 p-3 border rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none">
+                    <button onclick="addNewRecorder()" class="bg-green-600 text-white px-4 rounded-lg font-bold shadow hover:bg-green-700">เพิ่ม</button>
+                </div>
+            `;
+            showModal('จัดการรายชื่อผู้บันทึก', content);
+        }
+
         function addNewRecorder() {
             const val = document.getElementById('new-recorder-input').value.trim();
             if(val && !recorderList.includes(val)) {
                 recorderList.push(val);
                 localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList));
-                document.getElementById('new-recorder-input').value = '';
-                manageRecorders(); renderRecorderOptions();
+                closeModal(); manageRecorders(); renderRecorderOptions();
             }
         }
         function deleteRecorder(i) {
-            if(confirm('ลบ?')) { recorderList.splice(i,1); localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); manageRecorders(); renderRecorderOptions(); }
+            if(confirm('ยืนยันการลบรายชื่อ?')) {
+                recorderList.splice(i,1);
+                localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList));
+                closeModal(); manageRecorders(); renderRecorderOptions();
+            }
         }
 
+        // --- NG Logic ---
         function addNgRow() {
             const div = document.createElement('div');
-            div.className = "flex gap-2 animate-fade-in";
-            div.innerHTML = `<select name="ng_type[]" class="flex-1 p-2 border rounded text-sm">${ngSymptoms.map(s=>`<option value="${s}">${s}</option>`).join('')}</select><input type="number" name="ng_qty[]" placeholder="จำนวน" class="w-20 p-2 border rounded text-sm" min="1" value="0"><button type="button" onclick="this.parentElement.remove()" class="text-red-400 px-2">✕</button>`;
+            div.className = "flex gap-2 animate-fade-in items-center";
+            div.innerHTML = `
+                <select name="ng_type[]" class="flex-1 p-3 border rounded-lg text-sm bg-white shadow-sm appearance-none border-gray-300">
+                    ${ngSymptoms.map(s=>`<option value="${s}">${s}</option>`).join('')}
+                </select>
+                <input type="number" name="ng_qty[]" placeholder="0" class="w-20 p-3 border rounded-lg text-sm text-center font-bold bg-white shadow-sm border-gray-300" min="1" value="">
+                <button type="button" onclick="this.parentElement.remove()" class="text-red-400 p-2 hover:text-red-600 hover:bg-red-50 rounded-full">✕</button>
+            `;
             document.getElementById('ngList').appendChild(div);
         }
+
         function manageSymptoms() {
-            document.getElementById('modal-symptoms').classList.remove('hidden');
-            document.getElementById('modal-list').innerHTML = ngSymptoms.map((s,i) => `
-                <div class="flex justify-between items-center bg-gray-50 p-2 rounded"><span class="text-sm">${s}</span><button onclick="deleteSymptom(${i})" class="text-red-500 text-xs font-bold">ลบ</button></div>
+             const listHtml = ngSymptoms.map((s,i) => `
+                <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg mb-2 border border-gray-100">
+                    <span class="text-sm font-medium text-gray-700">${s}</span>
+                    <button onclick="deleteSymptom(${i})" class="text-red-500 p-2 hover:bg-red-50 rounded">🗑️</button>
+                </div>
             `).join('');
+            
+            const content = `
+                <div id="symptom-list-container">${listHtml}</div>
+                <div class="mt-4 flex gap-2">
+                    <input type="text" id="new-symptom-input" placeholder="อาการเสียใหม่..." class="flex-1 p-3 border rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-red-500 outline-none">
+                    <button onclick="addNewSymptom()" class="bg-green-600 text-white px-4 rounded-lg font-bold shadow hover:bg-green-700">เพิ่ม</button>
+                </div>
+            `;
+            showModal('จัดการรายการอาการ NG', content);
         }
+
         function addNewSymptom() {
             const val = document.getElementById('new-symptom-input').value.trim();
             if(val && !ngSymptoms.includes(val)) {
                 ngSymptoms.push(val); localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
-                document.getElementById('new-symptom-input').value = ''; manageSymptoms();
+                closeModal(); manageSymptoms();
                 document.querySelectorAll('select[name="ng_type[]"]').forEach(s => s.innerHTML = ngSymptoms.map(o=>`<option value="${o}">${o}</option>`).join(''));
             }
         }
         function deleteSymptom(i) {
-            if(confirm('ลบ?')) { ngSymptoms.splice(i,1); localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); manageSymptoms(); }
+            if(confirm('ลบรายการนี้?')) {
+                ngSymptoms.splice(i,1); localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
+                closeModal(); manageSymptoms();
+            }
         }
-        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
         // --- Submit ---
         document.getElementById('productionForm').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('submitBtn');
-            btn.disabled = true; btn.innerText = "Saving...";
+            const originalText = btn.innerText;
+            btn.disabled = true; btn.innerText = "กำลังส่งข้อมูล...";
+            
             const fd = new FormData(e.target);
             const payload = {
                 action: 'SAVE_PRODUCTION',
                 timestamp: new Date().toLocaleString('th-TH'),
                 machine: fd.get('machine'), shift: fd.get('shift'), recorder: fd.get('recorder'),
-                productCode: fd.get('productCode'), hourSlot: fd.get('hourSlot'), fgAmount: parseInt(fd.get('fgAmount')),
+                productCode: fd.get('productCode'), hourSlot: fd.get('hourSlot'), fgAmount: parseInt(fd.get('fgAmount')) || 0,
                 ngDetails: []
             };
             const types = fd.getAll('ng_type[]'); const qtys = fd.getAll('ng_qty[]');
@@ -352,9 +427,17 @@
 
             try {
                 await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
-                alert("บันทึกสำเร็จ!"); e.target.reset(); document.getElementById('ngList').innerHTML = ""; addNgRow();
-            } catch(e) { alert("Error: "+e.message); }
-            finally { btn.disabled = false; btn.innerText = "💾 บันทึกข้อมูล"; }
+                alert("✅ บันทึกข้อมูลสำเร็จ!"); 
+                e.target.reset(); 
+                document.getElementById('ngList').innerHTML = ""; 
+                addNgRow();
+                // Keep recorder selected
+                if(recorderList.length > 0 && fd.get('recorder')) document.getElementById('recorder').value = fd.get('recorder');
+            } catch(e) { 
+                alert("❌ Error: "+e.message); 
+            } finally { 
+                btn.disabled = false; btn.innerText = originalText; 
+            }
         };
 
         // --- Dashboard ---
@@ -372,7 +455,6 @@
                 const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}`);
                 const data = await res.json();
                 
-                // Update Summary Cards
                 document.getElementById('stat-fg').innerText = data.totalFg.toLocaleString();
                 document.getElementById('stat-ng').innerText = data.totalNg.toLocaleString();
                 const total = data.totalFg + data.totalNg;
@@ -381,14 +463,19 @@
 
                 renderCharts(data);
                 renderTable(data);
-            } catch(e) { console.error(e); alert("Failed to load dashboard"); }
-            finally {
+            } catch(e) { 
+                console.error(e); 
+                alert("ไม่สามารถโหลดข้อมูลได้"); 
+            } finally {
                 document.getElementById('dashboard-loader').classList.add('hidden');
                 document.getElementById('dashboard-content').classList.remove('hidden');
             }
         }
 
         function renderCharts(data) {
+            // Common Options
+            const commonOpts = { responsive: true, maintainAspectRatio: false };
+
             // 1. Yield by Model
             const mCtx = document.getElementById('yieldModelChart').getContext('2d');
             if(charts.yieldModel) charts.yieldModel.destroy();
@@ -401,10 +488,10 @@
             charts.yieldModel = new Chart(mCtx, {
                 type: 'bar',
                 data: {
-                    labels: models,
+                    labels: models.map(m => m.split(' ')[0]), // Shorten label
                     datasets: [{ label: '% Yield', data: modelYields, backgroundColor: '#10b981', borderRadius: 4 }]
                 },
-                options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                options: { ...commonOpts, indexAxis: 'y', plugins: { legend: { display: false } } }
             });
 
             // 2. Yield by Machine
@@ -424,10 +511,10 @@
                     labels: machines,
                     datasets: [{ label: '% Yield', data: macYields, backgroundColor: '#6366f1', borderRadius: 4 }]
                 },
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } }
+                options: { ...commonOpts, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } }
             });
 
-            // 3. Hourly FG (Existing)
+            // 3. Hourly
             const hCtx = document.getElementById('hourlyChart').getContext('2d');
             if(charts.hourly) charts.hourly.destroy();
             charts.hourly = new Chart(hCtx, {
@@ -436,10 +523,10 @@
                     labels: data.hourlyLabels,
                     datasets: [{ label: 'Actual FG', data: data.hourlyData, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.3 }]
                 },
-                options: { responsive: true, maintainAspectRatio: false }
+                options: commonOpts
             });
 
-            // 4. NG Pie (Existing)
+            // 4. NG
             const nCtx = document.getElementById('ngChart').getContext('2d');
             if(charts.ng) charts.ng.destroy();
             charts.ng = new Chart(nCtx, {
@@ -448,7 +535,7 @@
                     labels: data.ngLabels,
                     datasets: [{ data: data.ngValues, backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#8b5cf6'] }]
                 },
-                options: { responsive: true, maintainAspectRatio: false }
+                options: commonOpts
             });
         }
 
@@ -469,7 +556,7 @@
                 
                 ngSymptoms.forEach(s => {
                     const c = d.ngBreakdown[s] || 0;
-                    html += `<td class="${c>0?'bg-red-50 text-red-700':'' }">${c}</td>`;
+                    html += `<td class="${c>0?'bg-red-50 text-red-700 font-bold':'' }">${c>0?c:'-'}</td>`;
                 });
                 const tr = document.createElement('tr'); tr.innerHTML = html; b.appendChild(tr);
             }
