@@ -58,7 +58,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-lg md:text-xl font-bold text-gray-800">บันทึกยอดการผลิต</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v3.2 +Date Select</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v3.3 +Pareto</span>
             </div>
             
             <form id="productionForm" class="space-y-4">
@@ -135,7 +135,7 @@
                              <option value="05:00-06:00">05:00-06:00</option>
                              <option value="06:00-07:00">06:00-07:00</option>
                              <option value="07:00-08:00">07:00-08:00</option>
-                            
+                             <option value="OT">OT</option>
                         </select>
                     </div>
                 </div>
@@ -229,6 +229,13 @@
                 </div>
             </div>
 
+            <!-- Pareto Chart (New Feature) -->
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-md border-t-4 border-purple-500">
+                <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">📉 NG Analysis (Pareto Chart)</h3>
+                <div class="h-80 w-full"><canvas id="paretoChart"></canvas></div>
+                <p class="text-xs text-gray-400 mt-2 text-right">กราฟแท่ง = จำนวน NG | กราฟเส้น = % สะสม</p>
+            </div>
+
             <!-- Standard Charts -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-4 md:p-6 rounded-xl shadow-md">
@@ -236,7 +243,7 @@
                     <div class="h-64"><canvas id="hourlyChart"></canvas></div>
                 </div>
                 <div class="bg-white p-4 md:p-6 rounded-xl shadow-md">
-                    <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">NG Breakdown (อาการเสีย)</h3>
+                    <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">NG Breakdown (Pie Chart)</h3>
                     <div class="h-64"><canvas id="ngChart"></canvas></div>
                 </div>
             </div>
@@ -602,6 +609,91 @@
                     datasets: [{ data: data.ngValues, backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#8b5cf6'] }]
                 },
                 options: commonOpts
+            });
+
+            // 5. Pareto Chart (New!)
+            const pCtx = document.getElementById('paretoChart').getContext('2d');
+            if(charts.pareto) charts.pareto.destroy();
+
+            // เตรียมข้อมูล Pareto
+            const ngItems = data.ngLabels.map((label, i) => ({ label, value: data.ngValues[i] }));
+            // เรียงลำดับจากมากไปน้อย
+            ngItems.sort((a, b) => b.value - a.value);
+
+            const sortedLabels = ngItems.map(i => i.label);
+            const sortedValues = ngItems.map(i => i.value);
+            const totalNG = sortedValues.reduce((a, b) => a + b, 0);
+
+            let accumulator = 0;
+            const cumulativePercentages = sortedValues.map(value => {
+                accumulator += value;
+                return totalNG > 0 ? ((accumulator / totalNG) * 100).toFixed(1) : 0;
+            });
+
+            charts.pareto = new Chart(pCtx, {
+                type: 'bar',
+                data: {
+                    labels: sortedLabels,
+                    datasets: [
+                        {
+                            label: '% สะสม (Cumulative)',
+                            data: cumulativePercentages,
+                            borderColor: '#8b5cf6', // สีม่วง
+                            backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                            type: 'line',
+                            yAxisID: 'y1',
+                            tension: 0.3,
+                            fill: false,
+                            pointStyle: 'circle',
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: 'จำนวน NG (Count)',
+                            data: sortedValues,
+                            backgroundColor: '#ef4444', // สีแดง
+                            yAxisID: 'y',
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.dataset.type === 'line') {
+                                        return label + context.raw + '%';
+                                    }
+                                    return label + context.raw;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            position: 'left',
+                            title: { display: true, text: 'จำนวน (Count)' }
+                        },
+                        y1: {
+                            beginAtZero: true,
+                            max: 105, // ให้กราฟเส้นอยู่สูงกว่าแท่งนิดหน่อย
+                            position: 'right',
+                            grid: { drawOnChartArea: false }, // ซ่อนเส้น Grid ของแกนขวา
+                            title: { display: true, text: '% สะสม' },
+                            ticks: {
+                                callback: function(value) { return value + '%' }
+                            }
+                        }
+                    }
+                }
             });
         }
 
