@@ -14,9 +14,16 @@
         .hidden { display: none; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.3s ease-out; }
-        .table-container { @apply overflow-x-auto bg-white rounded-xl shadow mt-4 border border-gray-100; }
-        th { @apply px-4 py-3 bg-gray-50 text-left text-xs font-bold text-gray-600 uppercase border-b whitespace-nowrap; }
-        td { @apply px-4 py-3 border-b text-sm text-gray-700 whitespace-nowrap; }
+        
+        /* ปรับปรุงตารางให้มี Scroll bar และระยะห่างมากขึ้น */
+        .table-container { 
+            @apply overflow-x-auto bg-white rounded-xl shadow mt-4 border border-gray-100; 
+            -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
+        }
+        
+        /* เพิ่ม padding (px-6) เพื่อให้ช่องห่างกันมากขึ้น */
+        th { @apply px-6 py-4 bg-gray-50 text-left text-xs font-bold text-gray-600 uppercase border-b whitespace-nowrap tracking-wider; }
+        td { @apply px-6 py-4 border-b text-sm text-gray-700 whitespace-nowrap; }
         
         /* Loader Animation */
         .loader {
@@ -44,7 +51,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-lg md:text-xl font-bold text-gray-800">บันทึกยอดการผลิต</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v2.5 Mobile</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v2.6 Table Fix</span>
             </div>
             
             <form id="productionForm" class="space-y-4">
@@ -225,8 +232,9 @@
             <div class="bg-white p-4 md:p-6 rounded-xl shadow-md">
                 <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">Detailed Machine Performance</h3>
                 <div class="table-container">
-                    <table class="w-full min-w-[600px] md:min-w-[800px]">
-                        <thead>
+                    <!-- ตั้งค่า min-w-1000px เพื่อบังคับให้เกิด scroll bar แนวนอน ถ้าหน้าจอเล็กกว่านี้ -->
+                    <table class="w-full min-w-[1000px] divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
                             <tr id="table-header">
                                 <th>Machine</th>
                                 <th>FG</th>
@@ -234,10 +242,10 @@
                                 <th>% Yield</th>
                             </tr>
                         </thead>
-                        <tbody id="table-body"></tbody>
+                        <tbody id="table-body" class="bg-white divide-y divide-gray-200"></tbody>
                     </table>
                 </div>
-                <p class="text-xs text-gray-400 mt-2 text-center md:text-right">* Scroll horizontally to see more details</p>
+                <p class="text-xs text-gray-400 mt-2 text-center md:text-right">💡 เลื่อนซ้าย-ขวาเพื่อดูข้อมูลเพิ่มเติม (Scroll horizontally)</p>
             </div>
         </div>
     </main>
