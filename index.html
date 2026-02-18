@@ -41,38 +41,62 @@
         <div class="bg-white rounded-xl shadow-md p-6 border-t-4 border-blue-500">
             <h1 class="text-xl font-bold text-gray-800 mb-4 flex justify-between items-center">
                 <span>📝 บันทึกยอดการผลิต</span>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v2.1</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v2.2</span>
             </h1>
             <form id="productionForm" class="space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="text-sm font-medium text-gray-600">เครื่องจักร</label>
+                        <label class="text-sm font-medium text-gray-600">เครื่องจักร (Machine)</label>
                         <select id="machine" name="machine" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"></select>
                     </div>
                     <div>
-                        <label class="text-sm font-medium text-gray-600">ช่วงเวลา</label>
-                        <select id="hourSlot" name="hourSlot" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
-                            <option value="08:00-09:00">08:00-09:00</option>
-                            <option value="09:00-10:00">09:00-10:00</option>
-                            <option value="10:00-11:00">10:00-11:00</option>
-                            <option value="11:00-12:00">11:00-12:00</option>
-                            <option value="13:00-14:00">13:00-14:00</option>
-                            <option value="14:00-15:00">14:00-15:00</option>
-                            <option value="15:00-16:00">15:00-16:00</option>
-                            <option value="16:00-17:00">16:00-17:00</option>
-                            <option value="OT">OT</option>
+                        <label class="text-sm font-medium text-gray-600">กะการทำงาน (Shift)</label>
+                        <select id="shift" name="shift" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
+                            <option value="Day">Day (กลางวัน)</option>
+                            <option value="Night">Night (กลางคืน)</option>
                         </select>
                     </div>
                 </div>
 
-                <div>
-                    <label class="text-sm font-medium text-gray-600">รุ่นสินค้า (Product Model)</label>
-                    <select id="productCode" name="productCode" required class="w-full p-2 border rounded-md">
-                        <option value="6001CY00031">S1B29288-JR (10A)</option>
-                        <option value="6001CY00032">S1B71819-JR (16A)</option>
-                        <option value="6001CY00033">S1B29292-JR (20A)</option>
-                        <option value="6001CY00034">51207080HC-JR (25/32A)</option>
-                    </select>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm font-medium text-gray-600">รุ่นสินค้า (Product)</label>
+                        <select id="productCode" name="productCode" required class="w-full p-2 border rounded-md">
+                            <option value="6001CY00031">S1B29288-JR (10A)</option>
+                            <option value="6001CY00032">S1B71819-JR (16A)</option>
+                            <option value="6001CY00033">S1B29292-JR (20A)</option>
+                            <option value="6001CY00034">51207080HC-JR (25/32A)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-gray-600">ช่วงเวลา (Time)</label>
+                        <select id="hourSlot" name="hourSlot" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500">
+                            <option value="08:00-09:00">08:00-09:00</option>
+                                    <option value="09:00-10:00">09:00-10:00</option>
+                                    <option value="10:00-11:00">10:00-11:00</option>
+                                    <option value="11:00-12:00">11:00-12:00</option>
+                                    <option value="12:00-13:00">12:00-13:00</option>
+                                    <option value="13:00-14:00">13:00-14:00</option>
+                                    <option value="14:00-15:00">14:00-15:00</option>
+                                    <option value="15:00-16:00">15:00-16:00</option>
+                                    <option value="16:00-17:00">16:00-17:00</option>
+                                    <option value="17:00-18:00">17:00-18:00</option>
+                                    <option value="18:00-19:00">18:00-19:00</option>
+                                    <option value="19:00-20:00">19:00-20:00</option>
+                                    <option value="20:00-21:00">20:00-21:00</option>
+                                    <option value="21:00-22:00">21:00-22:00</option>
+                                    <option value="22:00-23:00">22:00-23:00</option>
+                                    <option value="23:00-00:00">23:00-00:00</option>
+                                    <option value="00:00-01:00">00:00-01:00</option>
+                                    <option value="01:00-02:00">01:00-02:00</option>
+                                    <option value="02:00-03:00">02:00-03:00</option>
+                                    <option value="03:00-04:00">03:00-04:00</option>
+                                    <option value="04:00-05:00">04:00-05:00</option>
+                                    <option value="05:00-06:00">05:00-06:00</option>
+                                    <option value="06:00-07:00">06:00-07:00</option>
+                                    <option value="07:00-08:00">07:00-08:00</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div>
@@ -282,6 +306,7 @@
                 action: 'SAVE_PRODUCTION',
                 timestamp: timestampStr, 
                 machine: fd.get('machine'),
+                shift: fd.get('shift'), // เพิ่มฟิลด์ Shift เข้าไปใน Payload
                 hourSlot: fd.get('hourSlot'),
                 productCode: fd.get('productCode'),
                 fgAmount: parseInt(fd.get('fgAmount')),
