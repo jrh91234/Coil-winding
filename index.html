@@ -22,25 +22,13 @@
             padding-bottom: 8px; /* เพิ่มพื้นที่ด้านล่างให้ scroll bar ไม่ทับเนื้อหา */
         }
 
-        /* --- ปรับแต่ง Scrollbar ให้เห็นชัดขึ้น (เข้มขึ้น/หนาขึ้น) --- */
-        .table-container::-webkit-scrollbar {
-            height: 14px; /* เพิ่มความสูงของ slide bar */
-        }
-        .table-container::-webkit-scrollbar-track {
-            background: #f1f5f9; /* สีพื้นหลังรางเลื่อน */
-            border-radius: 8px;
-            margin: 0 4px;
-        }
-        .table-container::-webkit-scrollbar-thumb {
-            background-color: #64748b; /* เปลี่ยนเป็นสีเทาเข้ม (Slate-500) */
-            border-radius: 8px;
-            border: 3px solid #f1f5f9; /* ขอบขาวเพื่อให้ดูโค้งมน */
-        }
-        .table-container::-webkit-scrollbar-thumb:hover {
-            background-color: #475569; /* สีเมื่อเอาเมาส์ชี้ (เข้มขึ้นอีก) */
-        }
+        /* --- ปรับแต่ง Scrollbar --- */
+        .table-container::-webkit-scrollbar { height: 14px; }
+        .table-container::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; margin: 0 4px; }
+        .table-container::-webkit-scrollbar-thumb { background-color: #64748b; border-radius: 8px; border: 3px solid #f1f5f9; }
+        .table-container::-webkit-scrollbar-thumb:hover { background-color: #475569; }
         
-        /* เพิ่ม padding (px-8) เพื่อให้ช่องห่างกันมากขึ้น (ขยายจากเดิม px-6) */
+        /* Table Styles */
         th { @apply px-8 py-4 bg-gray-50 text-left text-xs font-bold text-gray-600 uppercase border-b whitespace-nowrap tracking-wider; }
         td { @apply px-8 py-4 border-b text-sm text-gray-700 whitespace-nowrap; }
         
@@ -70,7 +58,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-lg md:text-xl font-bold text-gray-800">บันทึกยอดการผลิต</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v2.9 Wide Table</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v3.0 +Remark</span>
             </div>
             
             <form id="productionForm" class="space-y-4">
@@ -161,7 +149,7 @@
                             <button type="button" onclick="addNgRow()" class="bg-red-600 text-white px-3 py-1 rounded-md text-xs shadow-sm hover:bg-red-700 font-bold">+ เพิ่ม</button>
                         </div>
                     </div>
-                    <div id="ngList" class="space-y-3"></div>
+                    <div id="ngList" class="space-y-2"></div>
                 </div>
 
                 <button type="submit" id="submitBtn" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg hover:from-blue-700 hover:to-indigo-700 active:scale-95 transition-transform duration-100 text-lg mt-4">
@@ -264,7 +252,7 @@
                         <tbody id="table-body" class="bg-white divide-y divide-gray-200"></tbody>
                     </table>
                 </div>
-                <p class="text-xs text-gray-400 mt-2 text-center md:text-right">💡 เลื่อนซ้าย-ขวาเพื่อดูข้อมูลเพิ่มเติม (Scroll horizontally)</p>
+                <p class="text-xs text-gray-400 mt-2 text-center md:text-right">💡 คลิกที่ชื่อเครื่องเพื่อดูรายละเอียด | เลื่อนซ้าย-ขวาเพื่อดูข้อมูลเพิ่มเติม</p>
             </div>
         </div>
     </main>
@@ -274,12 +262,29 @@
         <!-- Content will be injected here -->
     </div>
 
+    <!-- Machine Detail Modal (Special) -->
+    <div id="modal-machine-detail" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center hidden backdrop-blur-sm p-2">
+        <div class="bg-white w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
+            <div class="bg-blue-600 p-4 border-b flex justify-between items-center text-white">
+                <h3 id="machine-detail-title" class="font-bold text-lg">Machine Detail</h3>
+                <button onclick="document.getElementById('modal-machine-detail').classList.add('hidden')" class="text-white hover:text-gray-200 text-2xl font-bold">&times;</button>
+            </div>
+            <div class="p-4 overflow-y-auto flex-1">
+                <div class="h-64 md:h-80 w-full">
+                    <canvas id="machineDetailChart"></canvas>
+                </div>
+                <div id="machine-detail-stats" class="mt-4 grid grid-cols-2 gap-4 text-center"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec"; 
         
         let ngSymptoms = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "อื่นๆ (Others)"];
         let recorderList = ["พนักงาน 1", "พนักงาน 2"];
         let dailyTarget = 0;
+        let currentDashboardData = null; // Store data for machine detail modal
 
         window.onload = () => {
             const today = new Date().toISOString().split('T')[0];
@@ -299,7 +304,6 @@
             renderRecorderOptions();
             addNgRow();
             
-            // Handle URL hash for tab switching
             if(window.location.hash === '#dashboard') switchTab('dashboard');
             else switchTab('form');
         };
@@ -387,16 +391,19 @@
             }
         }
 
-        // --- NG Logic ---
+        // --- NG Logic Updated with Remark ---
         function addNgRow() {
             const div = document.createElement('div');
-            div.className = "flex gap-2 animate-fade-in items-center";
+            div.className = "flex flex-col gap-2 p-3 bg-gray-50 rounded-lg mb-3 animate-fade-in border border-gray-100 shadow-sm";
             div.innerHTML = `
-                <select name="ng_type[]" class="flex-1 p-3 border rounded-lg text-sm bg-white shadow-sm appearance-none border-gray-300">
-                    ${ngSymptoms.map(s=>`<option value="${s}">${s}</option>`).join('')}
-                </select>
-                <input type="number" name="ng_qty[]" placeholder="0" class="w-20 p-3 border rounded-lg text-sm text-center font-bold bg-white shadow-sm border-gray-300" min="1" value="">
-                <button type="button" onclick="this.parentElement.remove()" class="text-red-400 p-2 hover:text-red-600 hover:bg-red-50 rounded-full">✕</button>
+                <div class="flex gap-2">
+                    <select name="ng_type[]" class="flex-1 p-3 border rounded-lg text-sm bg-white shadow-sm appearance-none border-gray-300 font-medium">
+                        ${ngSymptoms.map(s=>`<option value="${s}">${s}</option>`).join('')}
+                    </select>
+                    <input type="number" name="ng_qty[]" placeholder="0" class="w-20 p-3 border rounded-lg text-sm text-center font-bold bg-white shadow-sm border-gray-300" min="1" value="">
+                    <button type="button" onclick="this.parentElement.parentElement.remove()" class="text-red-400 p-2 hover:text-red-600 hover:bg-red-50 rounded-full">✕</button>
+                </div>
+                <input type="text" name="ng_remark[]" placeholder="📝 สาเหตุ/Remark (ถ้ามี)" class="w-full p-2 border border-gray-200 rounded text-sm bg-white text-gray-600 focus:ring-1 focus:ring-blue-300 outline-none">
             `;
             document.getElementById('ngList').appendChild(div);
         }
@@ -434,7 +441,7 @@
             }
         }
 
-        // --- Submit ---
+        // --- Submit Updated with Remark ---
         document.getElementById('productionForm').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('submitBtn');
@@ -449,8 +456,20 @@
                 productCode: fd.get('productCode'), hourSlot: fd.get('hourSlot'), fgAmount: parseInt(fd.get('fgAmount')) || 0,
                 ngDetails: []
             };
-            const types = fd.getAll('ng_type[]'); const qtys = fd.getAll('ng_qty[]');
-            types.forEach((t,i) => { if(parseInt(qtys[i]) > 0) payload.ngDetails.push({type:t, qty:parseInt(qtys[i])}); });
+            
+            const types = fd.getAll('ng_type[]'); 
+            const qtys = fd.getAll('ng_qty[]');
+            const remarks = fd.getAll('ng_remark[]'); // Capture remarks
+
+            types.forEach((t,i) => { 
+                if(parseInt(qtys[i]) > 0) {
+                    payload.ngDetails.push({
+                        type: t, 
+                        qty: parseInt(qtys[i]),
+                        remark: remarks[i] || "" // Add remark to payload
+                    });
+                }
+            });
 
             try {
                 await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
@@ -458,7 +477,6 @@
                 e.target.reset(); 
                 document.getElementById('ngList').innerHTML = ""; 
                 addNgRow();
-                // Keep recorder selected
                 if(recorderList.length > 0 && fd.get('recorder')) document.getElementById('recorder').value = fd.get('recorder');
             } catch(e) { 
                 alert("❌ Error: "+e.message); 
@@ -469,6 +487,7 @@
 
         // --- Dashboard ---
         let charts = {};
+        let machineDetailChart = null;
 
         async function loadDashboard() {
             if(!SCRIPT_URL) return;
@@ -481,6 +500,7 @@
             try {
                 const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}`);
                 const data = await res.json();
+                currentDashboardData = data; // Store globally
                 
                 document.getElementById('stat-fg').innerText = data.totalFg.toLocaleString();
                 document.getElementById('stat-ng').innerText = data.totalNg.toLocaleString();
@@ -492,7 +512,7 @@
                 renderTable(data);
             } catch(e) { 
                 console.error(e); 
-                alert("ไม่สามารถโหลดข้อมูลได้"); 
+                alert("ไม่สามารถโหลดข้อมูลได้ หรือ Script URL ไม่ถูกต้อง"); 
             } finally {
                 document.getElementById('dashboard-loader').classList.add('hidden');
                 document.getElementById('dashboard-content').classList.remove('hidden');
@@ -500,7 +520,6 @@
         }
 
         function renderCharts(data) {
-            // Common Options
             const commonOpts = { responsive: true, maintainAspectRatio: false };
 
             // 1. Yield by Model
@@ -515,7 +534,7 @@
             charts.yieldModel = new Chart(mCtx, {
                 type: 'bar',
                 data: {
-                    labels: models.map(m => m.split(' ')[0]), // Shorten label
+                    labels: models.map(m => m.split(' ')[0]),
                     datasets: [{ label: '% Yield', data: modelYields, backgroundColor: '#10b981', borderRadius: 4 }]
                 },
                 options: { ...commonOpts, indexAxis: 'y', plugins: { legend: { display: false } } }
@@ -541,19 +560,19 @@
                 options: { ...commonOpts, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } }
             });
 
-            // 3. Hourly
+            // 3. Hourly (Total)
             const hCtx = document.getElementById('hourlyChart').getContext('2d');
             if(charts.hourly) charts.hourly.destroy();
             charts.hourly = new Chart(hCtx, {
                 type: 'line',
                 data: {
                     labels: data.hourlyLabels,
-                    datasets: [{ label: 'Actual FG', data: data.hourlyData, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.3 }]
+                    datasets: [{ label: 'Total FG', data: data.hourlyData, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.3 }]
                 },
                 options: commonOpts
             });
 
-            // 4. NG
+            // 4. NG Pie
             const nCtx = document.getElementById('ngChart').getContext('2d');
             if(charts.ng) charts.ng.destroy();
             charts.ng = new Chart(nCtx, {
@@ -578,7 +597,9 @@
                 const t = d.fg + d.ngTotal;
                 const y = t > 0 ? ((d.fg/t)*100).toFixed(1) : "0.0";
                 
-                let html = `<td><b>${m}</b></td><td>${d.fg}</td><td class="text-red-600 font-bold">${d.ngTotal}</td>
+                // Add onclick event to machine name cell
+                let html = `<td class="cursor-pointer text-blue-600 font-bold hover:underline hover:text-blue-800 transition" onclick="showMachineDetail('${m}')">👉 ${m}</td>
+                            <td>${d.fg}</td><td class="text-red-600 font-bold">${d.ngTotal}</td>
                             <td><span class="px-2 py-1 rounded ${y >= 98 ? 'bg-green-100 text-green-800' : (y >= 90 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800')} text-xs font-bold">${y}%</span></td>`;
                 
                 ngSymptoms.forEach(s => {
@@ -587,6 +608,52 @@
                 });
                 const tr = document.createElement('tr'); tr.innerHTML = html; b.appendChild(tr);
             }
+        }
+
+        // --- Machine Detail Logic ---
+        function showMachineDetail(machineName) {
+            if(!currentDashboardData) return;
+            
+            const modal = document.getElementById('modal-machine-detail');
+            const title = document.getElementById('machine-detail-title');
+            const statsDiv = document.getElementById('machine-detail-stats');
+            
+            // Get machine data
+            const mData = currentDashboardData.machineData[machineName] || { fg: 0, ngTotal: 0, hourlyFg: [] };
+            
+            title.innerText = `📊 รายละเอียดเครื่อง ${machineName}`;
+            statsDiv.innerHTML = `
+                <div class="bg-blue-50 p-2 rounded">FG รวม: <b class="text-blue-700 text-xl">${mData.fg}</b></div>
+                <div class="bg-red-50 p-2 rounded">NG รวม: <b class="text-red-700 text-xl">${mData.ngTotal}</b></div>
+            `;
+
+            modal.classList.remove('hidden');
+
+            // Render Chart
+            const ctx = document.getElementById('machineDetailChart').getContext('2d');
+            if(machineDetailChart) machineDetailChart.destroy();
+
+            // Check if hourlyFg exists (requires backend update)
+            const hourlyData = mData.hourlyFg || Array(currentDashboardData.hourlyLabels.length).fill(0);
+
+            machineDetailChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: currentDashboardData.hourlyLabels,
+                    datasets: [{
+                        label: 'FG รายชั่วโมง',
+                        data: hourlyData,
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
         }
     </script>
 </body>
