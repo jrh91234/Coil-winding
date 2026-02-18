@@ -19,6 +19,24 @@
         .table-container { 
             @apply overflow-x-auto bg-white rounded-xl shadow mt-4 border border-gray-100; 
             -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
+            padding-bottom: 5px; /* เพิ่มพื้นที่ด้านล่างเล็กน้อยกันตกขอบ */
+        }
+
+        /* --- เพิ่ม CSS ปรับแต่ง Scrollbar ให้เห็นชัดขึ้น --- */
+        .table-container::-webkit-scrollbar {
+            height: 10px; /* ความสูงของ slide bar แนวนอน */
+        }
+        .table-container::-webkit-scrollbar-track {
+            background: #f3f4f6; /* สีพื้นหลังรางเลื่อน */
+            border-radius: 8px;
+        }
+        .table-container::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1; /* สีตัวเลื่อน */
+            border-radius: 8px;
+            border: 2px solid #f3f4f6;
+        }
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background-color: #94a3b8; /* สีเมื่อเอาเมาส์ชี้ */
         }
         
         /* เพิ่ม padding (px-6) เพื่อให้ช่องห่างกันมากขึ้น */
@@ -51,7 +69,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-lg md:text-xl font-bold text-gray-800">บันทึกยอดการผลิต</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v2.6 Table Fix</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v2.7 Fixed Scroll</span>
             </div>
             
             <form id="productionForm" class="space-y-4">
