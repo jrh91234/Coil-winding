@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.31 Robust Dashboard</title>
+    <title>CWM Production System - v3.32 with Debugger</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -46,7 +46,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.31 Robust Fix</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.32</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -150,6 +150,15 @@
         <div id="dashboard-loader" class="hidden text-center py-10">
             <div class="loader mx-auto"></div>
             <p class="text-gray-500 font-medium mt-2">กำลังประมวลผลข้อมูล...</p>
+        </div>
+
+        <!-- NEW: DEBUG PANEL -->
+        <div id="debug-panel" class="hidden bg-red-50 border border-red-200 p-4 rounded-xl shadow-inner">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-red-800 font-bold text-sm">🛑 พบข้อผิดพลาด (Debug Diagnostics)</h3>
+                <button onclick="document.getElementById('debug-panel').classList.add('hidden')" class="text-red-500 hover:bg-red-200 px-2 rounded">ปิด</button>
+            </div>
+            <pre id="debug-output" class="text-[10px] md:text-xs text-red-900 overflow-auto max-h-64 whitespace-pre-wrap font-mono bg-white p-2 rounded border border-red-100"></pre>
         </div>
         
         <div id="dashboard-content" class="space-y-6 pb-20">
@@ -350,7 +359,6 @@
         // --- NEW: ฟังก์ชันหา Shift Date ตามนาฬิกาปัจจุบัน ---
         function getShiftDateStr() {
             const now = new Date();
-            // หากตอนนี้ยังไม่ถึง 8:00 น. ให้ถือว่าเป็นกะของ "เมื่อวาน"
             if (now.getHours() < 8) {
                 now.setDate(now.getDate() - 1);
             }
@@ -361,7 +369,6 @@
         }
 
         window.onload = () => {
-            // ตั้งค่าวันที่ทุกช่องให้เป็น Shift Date แทนที่จะเป็น Calendar Date ธรรมดา
             const shiftDate = getShiftDateStr();
             document.getElementById('productionDate').value = shiftDate;
             document.getElementById('planDate').value = shiftDate;
@@ -788,20 +795,34 @@
             if(!SCRIPT_URL) return;
             document.getElementById('dashboard-content').classList.add('hidden');
             document.getElementById('dashboard-loader').classList.remove('hidden');
+            document.getElementById('debug-panel').classList.add('hidden');
             
             const start = document.getElementById('startDate').value; 
             const end = document.getElementById('endDate').value;
             const shift = document.getElementById('filterShift').value; 
             const shiftType = document.getElementById('filterShiftType').value;
             
+            let rawText = "";
             try {
                 const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}&shiftType=${shiftType}`);
-                const data = await res.json();
+                
+                // Fetch as raw text first for debugging
+                rawText = await res.text();
+                
+                let data;
+                try {
+                    data = JSON.parse(rawText);
+                } catch(parseError) {
+                    throw new Error("ระบบหลังบ้านส่งข้อมูลกลับมาไม่ถูกต้อง (ไม่ใช่ JSON)\nรายละเอียด:\n" + rawText.substring(0, 500));
+                }
+
+                if (data.error) {
+                    throw new Error("ข้อผิดพลาดจากเซิร์ฟเวอร์: " + data.error);
+                }
                 
                 // --- FALLBACKS (Robust Variables) ---
                 const fg = data.totalFg || 0;
                 const target = data.productionTarget || 0;
-                // Check if new Pcs variables exist, if not fallback to old variable structure
                 const ngPcs = data.totalNgPcs !== undefined ? data.totalNgPcs : (data.totalNg || 0);
                 const ngKg = data.totalNgKg || 0;
                 
@@ -829,9 +850,19 @@
                 renderCharts(data); 
                 renderTable(data); 
                 renderFgByModel(data);
+
             } catch(e) { 
                 console.error("Dashboard Load Error: ", e); 
-                alert("เกิดข้อผิดพลาดในการโหลดข้อมูล: " + e.message);
+                
+                // Show Debug Panel
+                const debugPanel = document.getElementById('debug-panel');
+                const debugOut = document.getElementById('debug-output');
+                if (debugPanel && debugOut) {
+                    debugOut.innerText = `[Error Message]\n${e.message}\n\n[Stack Trace]\n${e.stack || "No Stack Trace"}\n\n[Raw Response Text (First 500 chars)]\n${rawText.substring(0, 500)}`;
+                    debugPanel.classList.remove('hidden');
+                }
+                
+                alert("เกิดข้อผิดพลาดในการดึงข้อมูล กรุณาตรวจสอบที่แผง Debug สีแดงด้านบน");
             } finally { 
                 document.getElementById('dashboard-loader').classList.add('hidden'); 
                 document.getElementById('dashboard-content').classList.remove('hidden'); 
