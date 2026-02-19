@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.32 with Debugger</title>
+    <title>CWM Production System - v3.33 Active Alerts</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -46,7 +46,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.32</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.33</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -337,7 +337,7 @@
     </div>
 
     <script>
-        // ⚠️ สำคัญมาก: ตรวจสอบ URL นี้ให้ตรงกับตัวที่ Deploy ล่าสุด (v3.26)
+        // ⚠️ สำคัญมาก: ตรวจสอบ URL นี้ให้ตรงกับตัวที่ Deploy ล่าสุด
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec";
         
         let ngSymptoms = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "อื่นๆ (Others)"];
@@ -356,7 +356,6 @@
 
         try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
 
-        // --- NEW: ฟังก์ชันหา Shift Date ตามนาฬิกาปัจจุบัน ---
         function getShiftDateStr() {
             const now = new Date();
             if (now.getHours() < 8) {
@@ -413,7 +412,6 @@
             }
         }
 
-        // --- Layout ---
         function initSortable() {
             const grid = document.getElementById('sortable-grid');
             Sortable.create(grid, { 
@@ -440,7 +438,6 @@
             }
         }
 
-        // --- Common Logic ---
         function detectCurrentShift() {
             const hour = new Date().getHours();
             let type = (hour >= 8 && hour < 20) ? "Day" : "Night";
@@ -453,7 +450,6 @@
             const hours = (type === "Day") ? DAY_HOURS : NIGHT_HOURS;
             select.innerHTML = hours.map(h => `<option value="${h}">${h}</option>`).join('');
             
-            // Auto Select Slot
             const currentHourStr = new Date().getHours().toString().padStart(2, '0') + ":00";
             const match = hours.find(h => h.startsWith(currentHourStr));
             if(match) select.value = match;
@@ -474,7 +470,6 @@
             if(tab==='dashboard') loadDashboard();
         }
         
-        // --- Batch Row ---
         function addBatchRow() {
             const container = document.getElementById('batchList');
             const rowId = 'row-' + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -517,7 +512,6 @@
             delete batchNgData[id]; 
         }
 
-        // --- NG Modal ---
         function openNgModal(rowId) {
             currentRowIdForNg = rowId;
             const modal = document.getElementById('modal-ng');
@@ -602,7 +596,6 @@
             currentRowIdForNg = null;
         }
 
-        // --- Recorders & Lists ---
         function renderRecorderOptions() { 
             const datalist = document.getElementById('recorder-datalist'); 
             datalist.innerHTML = ''; 
@@ -683,7 +676,6 @@
             document.getElementById('modal-manage-list').classList.add('hidden'); 
         }
 
-        // --- Submits ---
         document.getElementById('productionForm').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('submitBtn'); 
@@ -806,7 +798,6 @@
             try {
                 const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}&shiftType=${shiftType}`);
                 
-                // Fetch as raw text first for debugging
                 rawText = await res.text();
                 
                 let data;
@@ -826,6 +817,11 @@
                 const ngPcs = data.totalNgPcs !== undefined ? data.totalNgPcs : (data.totalNg || 0);
                 const ngKg = data.totalNgKg || 0;
                 
+                // --- NEW: ดักจับและแจ้งเตือนเมื่อไม่มีข้อมูล ---
+                if (fg === 0 && ngPcs === 0 && target === 0) {
+                    alert(`⚠️ ไม่พบข้อมูลการผลิตหรือแผนงานในช่วงเวลาที่เลือก\n\nวันที่: ${start} ถึง ${end}\nกะ: ${shift}\nประเภท: ${shiftType}\n\n*คำแนะนำ: หากต้องการดูข้อมูลทั้งหมด ให้ลองเปลี่ยนวันที่ หรือเลือกกะเป็น "ทั้งหมด (All)" ครับ`);
+                }
+
                 document.getElementById('stat-fg').innerText = fg.toLocaleString();
                 document.getElementById('stat-target').innerText = target.toLocaleString();
                 
@@ -854,7 +850,6 @@
             } catch(e) { 
                 console.error("Dashboard Load Error: ", e); 
                 
-                // Show Debug Panel
                 const debugPanel = document.getElementById('debug-panel');
                 const debugOut = document.getElementById('debug-output');
                 if (debugPanel && debugOut) {
@@ -869,7 +864,6 @@
             }
         }
 
-        // --- NEW: Render FG by Model List ---
         function renderFgByModel(data) {
             const container = document.getElementById('fgModelList');
             if(!container) return;
@@ -897,10 +891,9 @@
              const commonOpts = { responsive: true, maintainAspectRatio: false };
 
              const labels = data.ngLabels || [];
-             const valsPcs = data.ngValuesPcs || data.ngValues || []; // Fallback to old format
+             const valsPcs = data.ngValuesPcs || data.ngValues || []; 
              const valsKg = data.ngValuesKg || [];
 
-             // Pareto
              const ctxP = document.getElementById('paretoChart');
              if(ctxP) {
                  if(charts.pareto) charts.pareto.destroy();
@@ -922,8 +915,7 @@
                  });
              }
 
-             // Hourly
-             const hNgPcs = data.hourlyNgPcsData || data.hourlyNgData || []; // Fallback
+             const hNgPcs = data.hourlyNgPcsData || data.hourlyNgData || []; 
              const ctxH = document.getElementById('hourlyChart');
              if(ctxH) {
                  if(charts.hourly) charts.hourly.destroy();
@@ -940,7 +932,6 @@
                  });
              }
 
-             // Yield Machine
              const ctxYieldM = document.getElementById('yieldMachineChart');
              if(ctxYieldM) {
                 if(charts.yieldMachine) charts.yieldMachine.destroy();
@@ -965,7 +956,6 @@
                 });
              }
 
-             // QC Trend
              const ctxQC = document.getElementById('qcTrendChart');
              if(ctxQC) {
                 if(charts.qcTrend) charts.qcTrend.destroy();
@@ -980,7 +970,6 @@
                  });
              }
 
-             // NG Pie
              const ctxNG = document.getElementById('ngChart');
              if(ctxNG) {
                 if(charts.ng) charts.ng.destroy();
@@ -994,7 +983,6 @@
                 });
              }
 
-             // Yield Model
              const ctxYM = document.getElementById('yieldModelChart');
              if(ctxYM) {
                  if(charts.yieldModel) charts.yieldModel.destroy();
@@ -1027,7 +1015,6 @@
                 const m = `CWM-${String(i).padStart(2,'0')}`; 
                 const d = (data.machineData && data.machineData[m]) ? data.machineData[m] : {fg:0, ngTotal:0, ngTotalKg:0, ngTotalPcs:0, ngBreakdownKg:{}, ngBreakdownPcs:{}};
                 
-                // Fallbacks
                 const ngPcs = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
                 const ngKg = d.ngTotalKg || 0;
                 
@@ -1053,7 +1040,6 @@
             const modal = document.getElementById('modal-machine-detail');
             const mData = currentDashboardData.machineData[machineName] || { fg: 0, ngTotal: 0, ngTotalKg: 0, ngTotalPcs: 0, hourlyFg: [], hourlyNgPcs: [], hourlyNg: [], hourlyNgKg: [], remarks: [] };
             
-            // Fallbacks
             const ngPcs = mData.ngTotalPcs !== undefined ? mData.ngTotalPcs : (mData.ngTotal || 0);
             const ngKg = mData.ngTotalKg || 0;
 
