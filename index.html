@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.22 Full</title>
+    <title>CWM Production System - v3.23 Auto-Remember</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -40,9 +40,7 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* Force White Background on Cards */
         .widget-card { background-color: #ffffff !important; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; height: 100%; }
-        .widget-header { @apply p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none; }
         .drag-handle { cursor: grab; }
         .drag-handle:active { cursor: grabbing; }
         .sortable-ghost { opacity: 0.4; background-color: #f3f4f6; border: 2px dashed #cbd5e1; }
@@ -62,7 +60,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.22 Full</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.23 Auto-Save</span>
             </div>
             
             <form id="productionForm" class="space-y-4">
@@ -73,8 +71,11 @@
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-blue-800 mb-1">👤 ผู้บันทึก</label>
-                        <input list="recorder-datalist" id="recorder" name="recorder" class="w-full p-2 border rounded text-sm" placeholder="เลือกหรือพิมพ์ชื่อ..." required autocomplete="off">
-                        <datalist id="recorder-datalist"></datalist>
+                        <div class="flex gap-1">
+                            <input list="recorder-datalist" id="recorder" name="recorder" class="w-full p-2 border rounded text-sm" placeholder="พิมพ์ชื่อ..." required autocomplete="off">
+                            <datalist id="recorder-datalist"></datalist>
+                            <button type="button" onclick="manageRecorders()" class="bg-white border border-blue-300 text-blue-600 px-2 rounded hover:bg-blue-50">⚙️</button>
+                        </div>
                     </div>
                     <div>
                          <label class="block text-xs font-bold text-blue-800 mb-1">กะ</label>
@@ -136,7 +137,6 @@
                 <input type="date" id="endDate" class="w-full md:w-auto p-2 border rounded text-sm">
                 <select id="filterShift" class="w-full md:w-auto p-2 border rounded text-sm"><option value="All">All Shift</option><option value="A">A</option><option value="B">B</option></select>
                 <select id="filterShiftType" class="w-full md:w-auto p-2 border rounded text-sm"><option value="All">All Type</option><option value="Day">Day</option><option value="Night">Night</option></select>
-                
                 <div class="flex gap-2 w-full md:w-auto">
                     <button onclick="loadDashboard()" class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded text-sm font-bold">🔍 ค้นหา</button>
                     <button onclick="toggleLayout()" id="layoutBtn" class="flex-1 bg-white text-indigo-600 border border-indigo-200 px-4 py-2 rounded text-sm font-bold">🔀 Layout: คู่</button>
@@ -176,69 +176,39 @@
                 </div>
             </div>
 
-            <!-- Charts Grid -->
+            <!-- Charts -->
             <div id="sortable-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Pareto -->
-                <div class="widget-card border-t-4 border-purple-500">
-                    <div class="widget-header drag-handle">
-                        <h3 class="font-bold text-gray-700 text-sm">📉 NG Analysis (Pareto)</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
-                    </div>
-                    <div class="p-4 flex-1 min-h-[300px]"><canvas id="paretoChart"></canvas></div>
+                <div class="widget-card p-4 h-80">
+                    <div class="widget-header drag-handle mb-2"><h3 class="font-bold text-gray-700 text-sm">📉 NG Analysis (Pareto)</h3><button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button></div>
+                    <div class="flex-1"><canvas id="paretoChart"></canvas></div>
                 </div>
-                <!-- QC Trend -->
-                <div class="widget-card border-t-4 border-orange-500">
-                    <div class="widget-header drag-handle">
-                        <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Rate Trend</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
-                    </div>
-                    <div class="p-4 flex-1 min-h-[300px]"><canvas id="qcTrendChart"></canvas></div>
+                <div class="widget-card p-4 h-80">
+                    <div class="widget-header drag-handle mb-2"><h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Trend</h3><button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button></div>
+                    <div class="flex-1"><canvas id="qcTrendChart"></canvas></div>
                 </div>
-                <!-- Yield Model -->
-                <div class="widget-card">
-                    <div class="widget-header drag-handle">
-                        <h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
-                    </div>
-                    <div class="p-4 flex-1 min-h-[250px]"><canvas id="yieldModelChart"></canvas></div>
+                <div class="widget-card p-4 h-64">
+                    <div class="widget-header drag-handle mb-2"><h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3><button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button></div>
+                    <div class="flex-1"><canvas id="yieldModelChart"></canvas></div>
                 </div>
-                <!-- Yield Machine -->
-                <div class="widget-card">
-                    <div class="widget-header drag-handle">
-                        <h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
-                    </div>
-                    <div class="p-4 flex-1 min-h-[250px]"><canvas id="yieldMachineChart"></canvas></div>
+                <div class="widget-card p-4 h-64">
+                    <div class="widget-header drag-handle mb-2"><h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3><button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button></div>
+                    <div class="flex-1"><canvas id="yieldMachineChart"></canvas></div>
                 </div>
-                <!-- Hourly -->
-                <div class="widget-card">
-                    <div class="widget-header drag-handle">
-                        <h3 class="font-bold text-gray-700 text-sm">Hourly Production (FG/NG)</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
-                    </div>
-                    <div class="p-4 flex-1 min-h-[300px]"><canvas id="hourlyChart"></canvas></div>
+                <div class="widget-card p-4 h-80">
+                    <div class="widget-header drag-handle mb-2"><h3 class="font-bold text-gray-700 text-sm">Hourly Production</h3><button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button></div>
+                    <div class="flex-1"><canvas id="hourlyChart"></canvas></div>
                 </div>
-                <!-- NG Pie -->
-                <div class="widget-card">
-                    <div class="widget-header drag-handle">
-                        <h3 class="font-bold text-gray-700 text-sm">NG Breakdown (Pie)</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
-                    </div>
-                    <div class="p-4 flex-1 min-h-[300px]"><canvas id="ngChart"></canvas></div>
+                <div class="widget-card p-4 h-80">
+                    <div class="widget-header drag-handle mb-2"><h3 class="font-bold text-gray-700 text-sm">NG Breakdown</h3><button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button></div>
+                    <div class="flex-1"><canvas id="ngChart"></canvas></div>
                 </div>
-                <!-- Table -->
-                <div class="widget-card md:col-span-2">
-                    <div class="widget-header drag-handle">
-                        <h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
-                    </div>
-                    <div class="p-4">
-                        <div class="table-container">
-                            <table class="w-full min-w-[1200px] divide-y divide-gray-200">
-                                <thead class="bg-gray-50"><tr id="table-header"><th>Machine</th><th>FG</th><th>NG (Kg)</th><th>% Yield</th></tr></thead>
-                                <tbody id="table-body" class="bg-white divide-y divide-gray-200"></tbody>
-                            </table>
-                        </div>
+                <div class="widget-card md:col-span-2 p-4">
+                    <div class="widget-header drag-handle mb-2"><h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3><button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button></div>
+                    <div class="table-container">
+                        <table class="w-full min-w-[1200px] divide-y divide-gray-200">
+                            <thead class="bg-gray-50"><tr id="table-header"><th>Machine</th><th>FG</th><th>NG (Kg)</th><th>% Yield</th></tr></thead>
+                            <tbody id="table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -278,6 +248,19 @@
         </div>
     </div>
 
+    <!-- Modals for Managing Lists -->
+    <div id="modal-manage-list" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[80vh]">
+            <h3 id="manage-list-title" class="text-lg font-bold mb-4 flex-none">Manage List</h3>
+            <div id="manage-list-content" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1"></div>
+            <div class="flex-none pt-2 border-t flex gap-2">
+                 <input type="text" id="new-item-input" class="flex-1 p-2 border rounded text-sm" placeholder="เพิ่มรายการใหม่...">
+                 <button onclick="addNewItemToList()" class="bg-green-600 text-white px-4 rounded font-bold">เพิ่ม</button>
+            </div>
+            <button onclick="closeManageListModal()" class="mt-2 w-full bg-gray-200 py-2 rounded font-bold">ปิด</button>
+        </div>
+    </div>
+
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec";
         
@@ -294,6 +277,7 @@
         let dailyTarget = 0;
         let machineDetailChart = null;
         let charts = {};
+        let currentManageType = ''; // 'recorder' or 'symptom'
 
         // Register Plugin
         try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
@@ -305,10 +289,16 @@
             document.getElementById('startDate').value = today;
             document.getElementById('endDate').value = today;
 
+            // Load from LocalStorage
+            if(localStorage.getItem('CWM_CUSTOM_NG')) ngSymptoms = JSON.parse(localStorage.getItem('CWM_CUSTOM_NG'));
+            if(localStorage.getItem('CWM_RECORDERS')) recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
+
             detectCurrentShift();
             addBatchRow();
             fetchOptions();
             initSortable();
+            renderRecorderOptions();
+            renderProductOptions();
 
             if(window.location.hash === '#dashboard') switchTab('dashboard');
             else switchTab('form');
@@ -319,15 +309,12 @@
                 const res = await fetch(`${SCRIPT_URL}?action=GET_OPTIONS`);
                 const data = await res.json();
                 
-                const recList = document.getElementById('recorder-datalist');
-                recList.innerHTML = '';
-                const allRecorders = new Set([...data.recorders, ...recorderList]);
-                allRecorders.forEach(r => {
-                    const opt = document.createElement('option');
-                    opt.value = r;
-                    recList.appendChild(opt);
-                });
+                // Merge Recorders
+                const allRecorders = new Set([...recorderList, ...data.recorders]);
+                recorderList = Array.from(allRecorders);
+                renderRecorderOptions();
 
+                // Merge NG Types
                 if (data.ngTypes && data.ngTypes.length > 0) {
                    const newSet = new Set([...ngSymptoms, ...data.ngTypes]);
                    ngSymptoms = Array.from(newSet);
@@ -449,16 +436,78 @@
             currentRowIdForNg = null;
         }
 
-        // --- Recorders Mgmt ---
+        // --- Recorders & List Mgmt ---
+        function renderRecorderOptions() { 
+            const datalist = document.getElementById('recorder-datalist'); 
+            datalist.innerHTML = '';
+            recorderList.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r;
+                datalist.appendChild(opt);
+            });
+        }
+        function renderProductOptions() { const s = document.getElementById('planProduct'); if(s) s.innerHTML = productList.map(p=>`<option value="${p}">${p}</option>`).join(''); }
+
         function manageRecorders() {
-             const p = prompt("เพิ่ม/ลบ ผู้บันทึก (คั่นด้วย comma):", recorderList.join(','));
-             if(p) {
-                 // In this version, we don't strictly enforce recorder list in datalist, but we can save it for convenience
-                 // But since we use <input list="..."> with free text, this function is less critical, mostly for pre-populating datalist
-                 // Just a placeholder alert for now as free text is enabled
-                 alert("คุณสามารถพิมพ์ชื่อใหม่ลงในช่องได้เลยครับ ไม่ต้องเพิ่มในลิสต์");
+            currentManageType = 'recorder';
+            openManageListModal('จัดการรายชื่อผู้บันทึก', recorderList);
+        }
+        function manageSymptoms() {
+            currentManageType = 'symptom';
+            openManageListModal('จัดการรายการอาการ NG', ngSymptoms);
+        }
+
+        function openManageListModal(title, list) {
+             const modal = document.getElementById('modal-manage-list');
+             document.getElementById('manage-list-title').innerText = title;
+             renderManageListContent(list);
+             modal.classList.remove('hidden');
+        }
+
+        function renderManageListContent(list) {
+             const container = document.getElementById('manage-list-content');
+             container.innerHTML = list.map((item, i) => `
+                <div class="flex justify-between items-center bg-gray-50 p-2 rounded mb-1">
+                    <span class="text-sm">${item}</span>
+                    <button onclick="deleteListItem(${i})" class="text-red-500 hover:bg-red-100 p-1 rounded">🗑️</button>
+                </div>
+             `).join('');
+        }
+
+        function addNewItemToList() {
+             const val = document.getElementById('new-item-input').value.trim();
+             if(!val) return;
+             if (currentManageType === 'recorder') {
+                 if (!recorderList.includes(val)) {
+                     recorderList.push(val);
+                     localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList));
+                     renderRecorderOptions();
+                     renderManageListContent(recorderList);
+                 }
+             } else if (currentManageType === 'symptom') {
+                 if (!ngSymptoms.includes(val)) {
+                     ngSymptoms.push(val);
+                     localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
+                     renderManageListContent(ngSymptoms);
+                 }
+             }
+             document.getElementById('new-item-input').value = '';
+        }
+
+        function deleteListItem(index) {
+             if (!confirm('ยืนยันการลบ?')) return;
+             if (currentManageType === 'recorder') {
+                 recorderList.splice(index, 1);
+                 localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList));
+                 renderRecorderOptions();
+                 renderManageListContent(recorderList);
+             } else if (currentManageType === 'symptom') {
+                 ngSymptoms.splice(index, 1);
+                 localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
+                 renderManageListContent(ngSymptoms);
              }
         }
+        function closeManageListModal() { document.getElementById('modal-manage-list').classList.add('hidden'); }
 
         // --- Submit Production ---
         document.getElementById('productionForm').onsubmit = async (e) => {
@@ -468,21 +517,48 @@
             
             const fd = new FormData(e.target);
             const shiftType = document.querySelector('input[name="shift_type_toggle"]:checked').value;
+            
+            // Auto-save Recorder
+            const currentRec = fd.get('recorder');
+            if(currentRec && !recorderList.includes(currentRec)) {
+                 recorderList.push(currentRec);
+                 localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList));
+                 renderRecorderOptions();
+            }
+
             const common = {
                 timestamp: new Date().toLocaleString('th-TH'),
                 productionDate: fd.get('productionDate'),
                 shift: fd.get('shift'), shiftType: shiftType,
-                recorder: fd.get('recorder'), hourSlot: fd.get('hourSlot')
+                recorder: currentRec, hourSlot: fd.get('hourSlot')
             };
 
             const items = [];
             const rowDivs = document.getElementById('batchList').children;
+            
+            // Auto-save NG
+            let newNgTypes = [];
+            
             for(let div of rowDivs) {
                 const machine = div.querySelector('[name="machine"]').value;
                 const product = div.querySelector('[name="productCode"]').value;
                 const fg = parseInt(div.querySelector('[name="fgAmount"]').value) || 0;
+                
                 if(!machine) continue;
-                items.push({ machine, productCode: product, fgAmount: fg, ngDetails: batchNgData[div.id] || [] });
+                
+                const ngDetails = batchNgData[div.id] || [];
+                ngDetails.forEach(ng => {
+                    if (ng.type && !ngSymptoms.includes(ng.type) && !newNgTypes.includes(ng.type)) {
+                        newNgTypes.push(ng.type);
+                    }
+                });
+
+                items.push({ machine, productCode: product, fgAmount: fg, ngDetails });
+            }
+
+            if(newNgTypes.length > 0) {
+                ngSymptoms = [...ngSymptoms, ...newNgTypes];
+                localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
             }
 
             if(items.length === 0) { alert("กรุณาเพิ่มรายการ"); btn.disabled = false; btn.innerText = txt; return; }
@@ -638,7 +714,7 @@
             
             modal.classList.remove('hidden');
             if(machineDetailChart) machineDetailChart.destroy();
-            machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), { type: 'bar', data: { labels: currentDashboardData.hourlyLabels, datasets: [{ label: 'FG (งานดี)', data: mData.hourlyFg, backgroundColor: '#3b82f6', borderRadius: 2 }, { label: 'NG (เสีย)', data: mData.hourlyNg || [], backgroundColor: '#ef4444', borderRadius: 2 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true } }, scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } } });
+            machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), { type: 'bar', data: { labels: currentDashboardData.hourlyLabels, datasets: [{ label: 'FG (งานดี)', data: mData.hourlyFg, backgroundColor: '#3b82f6', borderRadius: 2 }, { label: 'NG (เสีย)', data: mData.hourlyNg || [], backgroundColor: '#ef4444', borderRadius: 2 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true }, zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }, pan: { enabled: true, mode: 'x' } } }, scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } } });
         }
     </script>
 </body>
