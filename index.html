@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.30 Full & Readable</title>
+    <title>CWM Production System - v3.31 Robust Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -46,7 +46,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.30 Full</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.31 Robust Fix</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -210,7 +210,7 @@
             </div>
             
             <div id="sortable-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- NEW: FG by Model List -->
+                <!-- FG by Model List -->
                 <div class="widget-card p-4 h-auto">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">📦 FG by Model (ยอดดีแยกรุ่น)</h3>
@@ -328,6 +328,7 @@
     </div>
 
     <script>
+        // ⚠️ สำคัญมาก: ตรวจสอบ URL นี้ให้ตรงกับตัวที่ Deploy ล่าสุด (v3.26)
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec";
         
         let ngSymptoms = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "อื่นๆ (Others)"];
@@ -392,7 +393,7 @@
                 
                 const recList = document.getElementById('recorder-datalist');
                 recList.innerHTML = '';
-                const allRecorders = new Set([...recorderList, ...data.recorders]);
+                const allRecorders = new Set([...recorderList, ...(data.recorders || [])]);
                 recorderList = Array.from(allRecorders);
                 renderRecorderOptions();
                 
@@ -797,24 +798,31 @@
                 const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}&shiftType=${shiftType}`);
                 const data = await res.json();
                 
-                document.getElementById('stat-fg').innerText = data.totalFg.toLocaleString();
-                document.getElementById('stat-target').innerText = (data.productionTarget||0).toLocaleString();
+                // --- FALLBACKS (Robust Variables) ---
+                const fg = data.totalFg || 0;
+                const target = data.productionTarget || 0;
+                // Check if new Pcs variables exist, if not fallback to old variable structure
+                const ngPcs = data.totalNgPcs !== undefined ? data.totalNgPcs : (data.totalNg || 0);
+                const ngKg = data.totalNgKg || 0;
                 
-                document.getElementById('stat-ng').innerText = `${data.totalNgPcs.toLocaleString()} ชิ้น`;
-                document.getElementById('stat-ng-sub').innerText = `(${data.totalNgKg.toFixed(2)} Kg)`;
+                document.getElementById('stat-fg').innerText = fg.toLocaleString();
+                document.getElementById('stat-target').innerText = target.toLocaleString();
                 
-                const ach = data.productionTarget>0 ? ((data.totalFg/data.productionTarget)*100).toFixed(1) : 0;
-                document.getElementById('stat-achievement').innerText = ach+"%";
-                document.getElementById('progress-achievement').style.width = Math.min(ach,100)+"%";
+                document.getElementById('stat-ng').innerText = `${ngPcs.toLocaleString()} ชิ้น`;
+                document.getElementById('stat-ng-sub').innerText = `(${ngKg.toFixed(2)} Kg)`;
                 
-                const total = data.totalFg + data.totalNgPcs;
-                const yieldVal = total>0?((data.totalFg/total)*100).toFixed(2):0;
-                document.getElementById('stat-yield').innerText = yieldVal+"%";
+                const ach = target > 0 ? ((fg / target) * 100).toFixed(1) : 0;
+                document.getElementById('stat-achievement').innerText = ach + "%";
+                document.getElementById('progress-achievement').style.width = Math.min(ach, 100) + "%";
+                
+                const total = fg + ngPcs;
+                const yieldVal = total > 0 ? ((fg / total) * 100).toFixed(2) : 0;
+                document.getElementById('stat-yield').innerText = yieldVal + "%";
                 
                 let activeHours = 0; 
                 if(data.hourlyData) activeHours = data.hourlyData.filter(v => v > 0).length;
                 if(activeHours === 0) activeHours = 1;
-                const uph = (data.totalFg / activeHours).toFixed(0);
+                const uph = (fg / activeHours).toFixed(0);
                 document.getElementById('stat-uph').innerText = uph;
 
                 currentDashboardData = data;
@@ -822,7 +830,8 @@
                 renderTable(data); 
                 renderFgByModel(data);
             } catch(e) { 
-                console.error(e); 
+                console.error("Dashboard Load Error: ", e); 
+                alert("เกิดข้อผิดพลาดในการโหลดข้อมูล: " + e.message);
             } finally { 
                 document.getElementById('dashboard-loader').classList.add('hidden'); 
                 document.getElementById('dashboard-content').classList.remove('hidden'); 
@@ -841,7 +850,7 @@
             ];
             let html = '<ul class="divide-y divide-gray-100">';
             models.forEach(m => {
-                const fg = data.productData[m] ? data.productData[m].fg : 0;
+                const fg = (data.productData && data.productData[m]) ? data.productData[m].fg : 0;
                 html += `
                 <li class="py-3 flex justify-between items-center">
                     <span class="text-sm text-gray-700 font-medium">${m}</span>
@@ -856,10 +865,15 @@
              if(!charts) charts = {};
              const commonOpts = { responsive: true, maintainAspectRatio: false };
 
+             const labels = data.ngLabels || [];
+             const valsPcs = data.ngValuesPcs || data.ngValues || []; // Fallback to old format
+             const valsKg = data.ngValuesKg || [];
+
+             // Pareto
              const ctxP = document.getElementById('paretoChart');
              if(ctxP) {
                  if(charts.pareto) charts.pareto.destroy();
-                 const ngItems = data.ngLabels.map((l, i) => ({ label: l, pcs: data.ngValuesPcs[i], kg: data.ngValuesKg[i] })).sort((a,b)=>b.pcs-a.pcs);
+                 const ngItems = labels.map((l, i) => ({ label: l, pcs: valsPcs[i] || 0, kg: valsKg[i] || 0 })).sort((a,b)=>b.pcs-a.pcs);
                  const totalNG = ngItems.reduce((a,b)=>a+b.pcs,0);
                  let acc = 0; 
                  const cumulative = ngItems.map(i=>{ acc+=i.pcs; return totalNG>0?((acc/totalNG)*100).toFixed(1):0; });
@@ -877,22 +891,25 @@
                  });
              }
 
+             // Hourly
+             const hNgPcs = data.hourlyNgPcsData || data.hourlyNgData || []; // Fallback
              const ctxH = document.getElementById('hourlyChart');
              if(ctxH) {
                  if(charts.hourly) charts.hourly.destroy();
                  charts.hourly = new Chart(ctxH, { 
                      type: 'bar', 
                      data: { 
-                         labels: data.hourlyLabels, 
+                         labels: data.hourlyLabels || [], 
                          datasets: [
-                             {label:'FG', data:data.hourlyData, backgroundColor:'#3b82f6'}, 
-                             {label:'NG (ชิ้น)', data:data.hourlyNgPcsData, backgroundColor:'#ef4444'}
+                             {label:'FG', data:data.hourlyData || [], backgroundColor:'#3b82f6'}, 
+                             {label:'NG (ชิ้น)', data:hNgPcs, backgroundColor:'#ef4444'}
                          ] 
                      }, 
                      options: {...commonOpts, scales:{x:{stacked:true}, y:{stacked:true}}} 
                  });
              }
 
+             // Yield Machine
              const ctxYieldM = document.getElementById('yieldMachineChart');
              if(ctxYieldM) {
                 if(charts.yieldMachine) charts.yieldMachine.destroy();
@@ -904,10 +921,11 @@
                         datasets: [{ 
                             label: '% Yield', 
                             data: macs.map(m=>{
-                                const d=data.machineData[m]; 
-                                if(!d)return 0; 
-                                const t=d.fg+d.ngTotalPcs; 
-                                return t>0?((d.fg/t)*100).toFixed(1):0
+                                const d = (data.machineData && data.machineData[m]) ? data.machineData[m] : null; 
+                                if(!d) return 0; 
+                                const ngCount = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
+                                const t = d.fg + ngCount; 
+                                return t > 0 ? ((d.fg/t)*100).toFixed(1) : 0;
                             }), 
                             backgroundColor: '#6366f1' 
                         }] 
@@ -916,6 +934,7 @@
                 });
              }
 
+             // QC Trend
              const ctxQC = document.getElementById('qcTrendChart');
              if(ctxQC) {
                 if(charts.qcTrend) charts.qcTrend.destroy();
@@ -930,31 +949,35 @@
                  });
              }
 
+             // NG Pie
              const ctxNG = document.getElementById('ngChart');
              if(ctxNG) {
                 if(charts.ng) charts.ng.destroy();
                 charts.ng = new Chart(ctxNG, { 
                     type: 'doughnut', 
                     data: { 
-                        labels: data.ngLabels, 
-                        datasets: [{ data: data.ngValuesPcs, backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4'] }] 
+                        labels: labels, 
+                        datasets: [{ data: valsPcs, backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4'] }] 
                     }, 
                     options: commonOpts 
                 });
              }
 
+             // Yield Model
              const ctxYM = document.getElementById('yieldModelChart');
              if(ctxYM) {
                  if(charts.yieldModel) charts.yieldModel.destroy();
+                 const pData = data.productData || {};
                  charts.yieldModel = new Chart(ctxYM, { 
                      type: 'bar', 
                      data: { 
-                         labels: Object.keys(data.productData), 
+                         labels: Object.keys(pData), 
                          datasets: [{ 
                              label: '% Yield', 
-                             data: Object.values(data.productData).map(d => {
-                                 const t=d.fg+d.ngTotalPcs; 
-                                 return t>0?((d.fg/t)*100).toFixed(1):0
+                             data: Object.values(pData).map(d => {
+                                 const ngCount = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
+                                 const t = d.fg + ngCount; 
+                                 return t > 0 ? ((d.fg/t)*100).toFixed(1) : 0;
                              }), 
                              backgroundColor: '#10b981' 
                          }] 
@@ -971,18 +994,23 @@
             b.innerHTML = '';
             for(let i=1; i<=16; i++) {
                 const m = `CWM-${String(i).padStart(2,'0')}`; 
-                const d = data.machineData[m] || {fg:0, ngTotalKg:0, ngTotalPcs:0, ngBreakdownKg:{}, ngBreakdownPcs:{}};
-                const t = d.fg + d.ngTotalPcs; 
+                const d = (data.machineData && data.machineData[m]) ? data.machineData[m] : {fg:0, ngTotal:0, ngTotalKg:0, ngTotalPcs:0, ngBreakdownKg:{}, ngBreakdownPcs:{}};
+                
+                // Fallbacks
+                const ngPcs = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
+                const ngKg = d.ngTotalKg || 0;
+                
+                const t = d.fg + ngPcs; 
                 const y = t > 0 ? ((d.fg/t)*100).toFixed(1) : "0.0";
                 
                 let html = `<td class="p-4 border-b font-bold cursor-pointer text-blue-600 hover:underline" onclick="showMachineDetail('${m}')">👉 ${m}</td>
                     <td class="p-4 border-b">${d.fg}</td>
-                    <td class="p-4 border-b text-red-600 font-bold">${d.ngTotalPcs} <br><span class="text-[10px] text-gray-500 font-normal">(${d.ngTotalKg.toFixed(2)} Kg)</span></td>
+                    <td class="p-4 border-b text-red-600 font-bold">${ngPcs} <br><span class="text-[10px] text-gray-500 font-normal">(${ngKg.toFixed(2)} Kg)</span></td>
                     <td class="p-4 border-b">${y}%</td>`;
                     
                 ngSymptoms.forEach(s => { 
-                    const cPcs = d.ngBreakdownPcs[s] || 0; 
-                    const cKg = d.ngBreakdownKg[s] || 0; 
+                    const cPcs = (d.ngBreakdownPcs && d.ngBreakdownPcs[s]) ? d.ngBreakdownPcs[s] : ((d.ngBreakdown && d.ngBreakdown[s]) ? d.ngBreakdown[s] : 0); 
+                    const cKg = d.ngBreakdownKg ? (d.ngBreakdownKg[s] || 0) : 0; 
                     html += `<td class="${cPcs>0?'bg-red-50 text-red-700 font-bold':''}">${cPcs>0 ? cPcs + '<br><span class="text-[10px] text-gray-500 font-normal">(' + cKg.toFixed(2) + ' Kg)</span>' : '-'}</td>`; 
                 });
                 b.innerHTML += `<tr>${html}</tr>`;
@@ -992,10 +1020,14 @@
         function showMachineDetail(machineName) {
             if(!currentDashboardData) return;
             const modal = document.getElementById('modal-machine-detail');
-            const mData = currentDashboardData.machineData[machineName] || { fg: 0, ngTotalKg: 0, ngTotalPcs: 0, hourlyFg: [], hourlyNgPcs: [], hourlyNgKg: [], remarks: [] };
+            const mData = currentDashboardData.machineData[machineName] || { fg: 0, ngTotal: 0, ngTotalKg: 0, ngTotalPcs: 0, hourlyFg: [], hourlyNgPcs: [], hourlyNg: [], hourlyNgKg: [], remarks: [] };
             
+            // Fallbacks
+            const ngPcs = mData.ngTotalPcs !== undefined ? mData.ngTotalPcs : (mData.ngTotal || 0);
+            const ngKg = mData.ngTotalKg || 0;
+
             document.getElementById('machine-detail-title').innerText = `📊 รายละเอียดเครื่อง ${machineName}`;
-            document.getElementById('machine-detail-stats').innerHTML = `<div class="bg-blue-50 p-2 rounded">FG รวม: <b class="text-blue-700 text-xl">${mData.fg}</b></div><div class="bg-red-50 p-2 rounded">NG รวม: <b class="text-red-700 text-xl">${mData.ngTotalPcs} ชิ้น</b><br><span class="text-xs text-gray-500">(${mData.ngTotalKg.toFixed(2)} Kg)</span></div>`;
+            document.getElementById('machine-detail-stats').innerHTML = `<div class="bg-blue-50 p-2 rounded">FG รวม: <b class="text-blue-700 text-xl">${mData.fg}</b></div><div class="bg-red-50 p-2 rounded">NG รวม: <b class="text-red-700 text-xl">${ngPcs} ชิ้น</b><br><span class="text-xs text-gray-500">(${ngKg.toFixed(2)} Kg)</span></div>`;
             
             const rList = document.getElementById('machine-remarks-list'); 
             const rSec = document.getElementById('machine-detail-remarks');
@@ -1009,13 +1041,16 @@
             modal.classList.remove('hidden');
             
             if(machineDetailChart) machineDetailChart.destroy();
+            
+            const hNgPcs = mData.hourlyNgPcs || mData.hourlyNg || [];
+            
             machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), { 
                 type: 'bar', 
                 data: { 
-                    labels: currentDashboardData.hourlyLabels, 
+                    labels: currentDashboardData.hourlyLabels || [], 
                     datasets: [
-                        { label: 'FG (งานดี)', data: mData.hourlyFg, backgroundColor: '#3b82f6', borderRadius: 2 }, 
-                        { label: 'NG (เสียเป็นชิ้น)', data: mData.hourlyNgPcs || [], backgroundColor: '#ef4444', borderRadius: 2 }
+                        { label: 'FG (งานดี)', data: mData.hourlyFg || [], backgroundColor: '#3b82f6', borderRadius: 2 }, 
+                        { label: 'NG (เสียเป็นชิ้น)', data: hNgPcs, backgroundColor: '#ef4444', borderRadius: 2 }
                     ] 
                 }, 
                 options: { 
