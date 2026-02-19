@@ -1,613 +1,304 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.17 Planning UI</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+/**
+ * ปรับปรุง v3.18: Smart Trim & Enhanced Debugging
+ * - แก้ปัญหาหาข้อมูลไม่เจอเพราะมีเว้นวรรค (Space) ในข้อมูล
+ * - เพิ่ม Debug ให้แสดงข้อมูล 5 แถวล่าสุดเพื่อตรวจสอบความถูกต้อง
+ */
+
+const REQUIRED_COLUMNS = [
+  "Timestamp", "Date", "Machine", "Shift", "Recorder", 
+  "Product", "Hour", "FG", "NG_Total", "NG_Details_JSON", "Shift_Type"
+];
+
+function doGet(e) {
+  try {
+    const action = e.parameter.action;
+    if (action === "GET_DASHBOARD") {
+      const data = getAdvancedDashboardData(
+        e.parameter.start, 
+        e.parameter.end, 
+        e.parameter.shift, 
+        e.parameter.shiftType
+      );
+      return ContentService.createTextOutput(JSON.stringify(data))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    if (action === "DEBUG") {
+      return ContentService.createTextOutput(JSON.stringify(debugSheetData()))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    return HtmlService.createHtmlOutput("CWM Smart API v3.18 (Smart Trim) is Online");
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({error: err.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+
+    // --- CASE 1: PRODUCTION ---
+    if (data.action === 'SAVE_PRODUCTION') {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      let sheet = ss.getSheetByName("Production_Data") || ss.insertSheet("Production_Data");
+      syncHeaders(sheet);
+      
+      const now = new Date();
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const newRow = new Array(headers.length).fill("");
+      
+      const getColIndex = (name) => headers.findIndex(h => h.toString().trim().toLowerCase() === name.toLowerCase());
+      const mapData = (colName, value) => {
+        const idx = getColIndex(colName);
+        if (idx !== -1) newRow[idx] = value;
+      };
+
+      mapData("Timestamp", data.timestamp || now.toLocaleString('th-TH'));
+      mapData("Date", data.productionDate || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd"));
+      mapData("Machine", data.machine || "-");
+      mapData("Shift", data.shift || "A");
+      mapData("Recorder", data.recorder || "-");
+      mapData("Product", data.productCode || "-");
+      mapData("Hour", data.hourSlot || "-");
+      mapData("FG", parseInt(data.fgAmount) || 0);
+      
+      const totalNg = (data.ngDetails || []).reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
+      mapData("NG_Total", totalNg);
+      mapData("NG_Details_JSON", JSON.stringify(data.ngDetails || []));
+      mapData("Shift_Type", data.shiftType || "Day");
+
+      sheet.appendRow(newRow);
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Production Saved"}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // --- CASE 2: PLANNING ---
+    else if (data.action === 'SAVE_PLAN') {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      let sheet = ss.getSheetByName("Plan_Data");
+      
+      if (!sheet) {
+        sheet = ss.insertSheet("Plan_Data");
+        sheet.appendRow(["Date", "Product", "Target_Qty", "Shift", "Timestamp"]);
+      }
+      
+      const now = new Date();
+      sheet.appendRow([
+        data.planDate,          
+        data.product,           
+        parseInt(data.qty) || 0,
+        data.shift || "All",    
+        now.toLocaleString('th-TH') 
+      ]);
+      
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Plan Saved"}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    else {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Unknown Action"}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({status: "error", message: error.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function syncHeaders(sheet) {
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(REQUIRED_COLUMNS);
+    return;
+  }
+  const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.toString().trim());
+  const missingHeaders = REQUIRED_COLUMNS.filter(h => !currentHeaders.includes(h));
+  if (missingHeaders.length > 0) {
+    const lastCol = sheet.getLastColumn();
+    sheet.getRange(1, lastCol + 1, 1, missingHeaders.length).setValues([missingHeaders]);
+  }
+}
+
+function getProductionTarget(startDate, endDate) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let planSheet = ss.getSheetByName("Plan_Data");
+  if (!planSheet) return { total: 0, byProduct: {} };
+  
+  const data = planSheet.getDataRange().getValues();
+  if (data.length <= 1) return { total: 0, byProduct: {} };
+  
+  let totalTarget = 0;
+  let byProduct = {};
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    let rowDate = row[0];
+    let product = "All";
+    let targetQty = 0;
+
+    if (isNaN(parseInt(row[1]))) {
+       product = row[1] || "Unknown";
+       targetQty = parseInt(row[2]) || 0;
+    } else {
+       targetQty = parseInt(row[1]) || 0;
+    }
     
-    <style>
-        body { -webkit-tap-highlight-color: transparent; }
-        .tab-active { @apply border-b-4 border-blue-600 text-blue-600 font-bold bg-blue-50; }
-        .hidden { display: none; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+    let rowDateStr = (rowDate instanceof Date) ? Utilities.formatDate(rowDate, "GMT+7", "yyyy-MM-dd") : String(rowDate).trim().substring(0, 10);
+    
+    if (rowDateStr >= startDate && rowDateStr <= endDate) {
+      totalTarget += targetQty;
+      if (!byProduct[product]) byProduct[product] = 0;
+      byProduct[product] += targetQty;
+    }
+  }
+  return { total: totalTarget, byProduct: byProduct };
+}
+
+function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Production_Data");
+  
+  const today = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+  const startDate = reqStart || today;
+  const endDate = reqEnd || today;
+  const filterShift = reqShift || "All";
+  const filterType = reqType || "All";
+
+  const DAY_HOURS = ["08:00-09:00", "09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "OT 17:30-18:00", "OT 18:00-19:00", "OT 19:00-20:00"];
+  const NIGHT_HOURS = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:00-06:30", "OT 06:00-07:30", "OT 07:00-08:00"];
+  
+  let displayLabels = (filterType === "Day") ? DAY_HOURS : (filterType === "Night" ? NIGHT_HOURS : [...DAY_HOURS, ...NIGHT_HOURS]);
+
+  const planData = getProductionTarget(startDate, endDate);
+
+  const result = {
+    productionTarget: planData.total,
+    productionPlanByModel: planData.byProduct,
+    totalFg: 0, totalNg: 0,
+    hourlyLabels: displayLabels,
+    hourlyData: Array(displayLabels.length).fill(0),
+    hourlyNgData: Array(displayLabels.length).fill(0),
+    ngLabels: [], ngValues: [],
+    machineData: {}, productData: {}, dailyTrend: []
+  };
+
+  if (!sheet) return result;
+  const dataRange = sheet.getDataRange().getValues();
+  if (dataRange.length <= 1) return result; 
+  
+  const headers = dataRange[0];
+  const rows = dataRange.slice(1);
+  const col = {};
+  headers.forEach((name, index) => { col[name.toString().trim().toLowerCase()] = index; });
+  const getVal = (row, colName) => { const idx = col[colName.toLowerCase()]; return (idx !== undefined) ? row[idx] : undefined; };
+
+  const ngTempMap = {};
+  const dailyStats = {};
+
+  rows.forEach(row => {
+    try {
+      const rowDateRaw = getVal(row, "Date");
+      if (!rowDateRaw) return;
+      let rowDateStr = (rowDateRaw instanceof Date) ? Utilities.formatDate(rowDateRaw, "GMT+7", "yyyy-MM-dd") : String(rowDateRaw).trim().substring(0, 10);
+      
+      if (rowDateStr >= startDate && rowDateStr <= endDate) {
+        // *** Smart Trim Added *** ตัดช่องว่างหัวท้ายทิ้ง
+        const shiftName = String(getVal(row, "Shift") || "A").trim();
+        const shiftType = String(getVal(row, "Shift_Type") || "Day").trim();
+
+        if (filterShift !== "All" && shiftName !== filterShift) return;
+        if (filterType !== "All" && shiftType !== filterType) return;
+
+        const machine = String(getVal(row, "Machine") || "Unknown").trim();
+        const product = String(getVal(row, "Product") || "Unknown").trim();
+        const hour = String(getVal(row, "Hour") || "-").trim();
+        const fg = parseInt(getVal(row, "FG")) || 0;
+        const ngTotal = parseInt(getVal(row, "NG_Total")) || 0;
+        let details = []; try { const j = getVal(row, "NG_Details_JSON"); if(j) details = JSON.parse(j); } catch (e) {}
+
+        result.totalFg += fg;
+        result.totalNg += ngTotal;
+
+        if (!dailyStats[rowDateStr]) dailyStats[rowDateStr] = { fg: 0, ng: 0 };
+        dailyStats[rowDateStr].fg += fg;
+        dailyStats[rowDateStr].ng += ngTotal;
+
+        const hIdx = displayLabels.indexOf(hour);
+        if (hIdx !== -1) {
+           result.hourlyData[hIdx] += fg;
+           result.hourlyNgData[hIdx] += ngTotal;
+        }
+
+        if (!result.machineData[machine]) {
+          result.machineData[machine] = { 
+            fg: 0, ngTotal: 0, ngBreakdown: {}, remarks: [],
+            hourlyFg: Array(displayLabels.length).fill(0),
+            hourlyNg: Array(displayLabels.length).fill(0)
+          };
+        }
+        result.machineData[machine].fg += fg;
+        result.machineData[machine].ngTotal += ngTotal;
         
-        .table-container { 
-            @apply overflow-x-auto bg-white rounded-xl shadow mt-4 border border-gray-100; 
-            -webkit-overflow-scrolling: touch; 
-            padding-bottom: 8px; 
-        }
-        .table-container::-webkit-scrollbar { height: 14px; }
-        .table-container::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; margin: 0 4px; }
-        .table-container::-webkit-scrollbar-thumb { background-color: #64748b; border-radius: 8px; border: 3px solid #f1f5f9; }
-        .table-container::-webkit-scrollbar-thumb:hover { background-color: #475569; }
-        
-        th { @apply px-8 py-4 bg-gray-50 text-left text-xs font-bold text-gray-600 uppercase border-b whitespace-nowrap tracking-wider; }
-        td { @apply px-8 py-4 border-b text-sm text-gray-700 whitespace-nowrap; }
-        
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
-            border-radius: 50%;
-            width: 40px; height: 40px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        /* Force White Background on Cards */
-        .widget-card { background-color: #ffffff !important; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; height: 100%; }
-        .drag-handle { cursor: grab; }
-        .drag-handle:active { cursor: grabbing; }
-    </style>
-</head>
-<body class="bg-gray-100 min-h-screen font-sans pb-10">
-    <nav class="bg-white shadow-md sticky top-0 z-20">
-        <div class="flex max-w-6xl mx-auto">
-            <button onclick="switchTab('form')" id="tab-form" class="flex-1 py-4 text-center tab-active text-sm md:text-base transition-colors">📝 บันทึกผลิต</button>
-            <button onclick="switchTab('planning')" id="tab-planning" class="flex-1 py-4 text-center text-gray-500 text-sm md:text-base hover:bg-gray-50 transition-colors">📅 วางแผน (Plan)</button>
-            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="flex-1 py-4 text-center text-gray-500 text-sm md:text-base hover:bg-gray-50 transition-colors">📊 Dashboard</button>
-        </div>
-    </nav>
-
-    <!-- SECTION 1: PRODUCTION RECORD FORM -->
-    <main id="section-form" class="max-w-2xl mx-auto p-4 space-y-4">
-        <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-blue-500">
-            <div class="flex justify-between items-center mb-6">
-                <h1 class="text-lg md:text-xl font-bold text-gray-800">บันทึกยอดการผลิต</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v3.17 Plan UI</span>
-            </div>
-            
-            <form id="productionForm" class="space-y-4">
-                <div class="bg-blue-50 p-3 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold text-blue-800 mb-2">📅 วันที่ผลิต (Production Date)</label>
-                        <input type="date" id="productionDate" name="productionDate" required class="w-full p-3 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm shadow-sm cursor-pointer">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-blue-800 mb-2">👤 ผู้บันทึก (Recorder)</label>
-                        <div class="flex gap-2">
-                            <select id="recorder" name="recorder" required class="flex-1 p-3 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm shadow-sm"></select>
-                            <button type="button" onclick="manageRecorders()" class="bg-white border border-blue-200 text-blue-600 px-3 rounded-lg shadow-sm hover:bg-blue-50">⚙️</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">เครื่องจักร (Machine)</label>
-                        <select id="machine" name="machine" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm appearance-none"></select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">กะ (Shift Name)</label>
-                        <select id="shift" name="shift" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm appearance-none">
-                            <option value="A">กะ A (Shift A)</option>
-                            <option value="B">กะ B (Shift B)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">รุ่นสินค้า (Product)</label>
-                        <select id="productCode" name="productCode" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm text-sm">
-                            <option value="S1B29288-JR (10A)">S1B29288-JR (10A)</option>
-                            <option value="S1B71819-JR (16A)">S1B71819-JR (16A)</option>
-                            <option value="S1B29292-JR (20A)">S1B29292-JR (20A)</option>
-                            <option value="51207080HC-JR (25/32A)">51207080HC-JR (25/32A)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">ช่วงเวลา (Work Hours)</label>
-                        <div class="flex flex-col gap-1">
-                            <div class="flex text-[10px] gap-2 mb-1">
-                                <label><input type="radio" name="shift_type_toggle" value="Day" onclick="updateHourSlots('Day')"> กะเช้า (Day)</label>
-                                <label><input type="radio" name="shift_type_toggle" value="Night" onclick="updateHourSlots('Night')"> กะดึก (Night)</label>
-                            </div>
-                            <select id="hourSlot" name="hourSlot" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"></select>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-green-50 p-4 rounded-lg border border-green-200">
-                    <label class="block text-sm font-bold text-green-800 mb-2">✅ ยอดผลิตดี (FG Amount)</label>
-                    <input type="number" name="fgAmount" id="fgAmount" value="0" min="0" required class="w-full p-4 border border-green-300 rounded-lg text-2xl font-bold text-green-700 text-center shadow-inner focus:ring-2 focus:ring-green-500">
-                </div>
-
-                <div class="bg-red-50 p-4 rounded-lg border border-red-200">
-                    <div class="flex justify-between items-center mb-3">
-                        <h2 class="text-sm font-bold text-red-700">❌ ยอดของเสีย (NG Items)</h2>
-                        <div class="flex gap-2">
-                            <button type="button" onclick="manageSymptoms()" class="bg-white text-red-600 border border-red-200 px-3 py-1 rounded-md text-xs shadow-sm">⚙️ แก้ไข</button>
-                            <button type="button" onclick="addNgRow()" class="bg-red-600 text-white px-3 py-1 rounded-md text-xs shadow-sm hover:bg-red-700 font-bold">+ เพิ่ม</button>
-                        </div>
-                    </div>
-                    <div id="ngList" class="space-y-2"></div>
-                </div>
-
-                <button type="submit" id="submitBtn" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg hover:from-blue-700 hover:to-indigo-700 active:scale-95 transition-transform duration-100 text-lg mt-4">
-                    💾 บันทึกข้อมูล
-                </button>
-            </form>
-        </div>
-    </main>
-
-    <!-- SECTION 2: PLANNING FORM (New) -->
-    <main id="section-planning" class="max-w-2xl mx-auto p-4 space-y-4 hidden">
-        <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-indigo-500">
-            <div class="flex justify-between items-center mb-6">
-                <h1 class="text-lg md:text-xl font-bold text-gray-800">📅 วางแผนการผลิต (Planning)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">Add Target</span>
-            </div>
-            
-            <form id="planningForm" class="space-y-6">
-                <div class="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
-                    <p class="text-sm text-indigo-800 mb-4">กรุณาระบุยอดเป้าหมาย (Target) สำหรับวันที่และรุ่นสินค้าที่ต้องการ</p>
-                    
-                    <div class="grid grid-cols-1 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ผลิต (Plan Date)</label>
-                            <input type="date" id="planDate" name="planDate" required class="w-full p-3 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">รุ่นสินค้า (Product Model)</label>
-                            <select id="planProduct" name="planProduct" required class="w-full p-3 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
-                                <option value="S1B29288-JR (10A)">S1B29288-JR (10A)</option>
-                                <option value="S1B71819-JR (16A)">S1B71819-JR (16A)</option>
-                                <option value="S1B29292-JR (20A)">S1B29292-JR (20A)</option>
-                                <option value="51207080HC-JR (25/32A)">51207080HC-JR (25/32A)</option>
-                            </select>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">กะ (Shift)</label>
-                                <select id="planShift" name="planShift" required class="w-full p-3 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
-                                    <option value="All">รวมทุกกะ (All Day)</option>
-                                    <option value="A">เฉพาะกะ A</option>
-                                    <option value="B">เฉพาะกะ B</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">เป้าหมาย (Target Qty)</label>
-                                <input type="number" id="planQty" name="planQty" min="1" required class="w-full p-3 border border-indigo-200 rounded-lg text-lg font-bold text-indigo-700 text-center focus:ring-2 focus:ring-indigo-500" placeholder="0">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <button type="submit" id="planSubmitBtn" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-indigo-700 active:scale-95 transition-transform duration-100 text-lg">
-                    💾 บันทึกแผน (Save Plan)
-                </button>
-            </form>
-        </div>
-    </main>
-
-    <!-- SECTION 3: DASHBOARD -->
-    <main id="section-dashboard" class="max-w-6xl mx-auto p-4 space-y-6 hidden">
-        <div class="bg-white p-4 rounded-xl shadow-md border-t-4 border-indigo-500">
-            <h2 class="text-gray-700 font-bold text-sm mb-3 flex items-center gap-2">📅 ตัวเลือกการกรอง <span class="text-xs font-normal text-gray-400">(Filter)</span></h2>
-            <div class="flex flex-col md:flex-row gap-3 items-end">
-                <div class="w-full md:w-auto">
-                    <label class="block text-xs text-gray-500 mb-1">เริ่ม (Start)</label>
-                    <input type="date" id="startDate" class="w-full p-2 border rounded-lg text-sm bg-gray-50">
-                </div>
-                <div class="w-full md:w-auto">
-                    <label class="block text-xs text-gray-500 mb-1">สิ้นสุด (End)</label>
-                    <input type="date" id="endDate" class="w-full p-2 border rounded-lg text-sm bg-gray-50">
-                </div>
-                <div class="w-full md:w-auto">
-                    <label class="block text-xs text-gray-500 mb-1">กะ (Shift Name)</label>
-                    <select id="filterShift" class="w-full p-2 border rounded-lg text-sm bg-gray-50">
-                        <option value="All">ทั้งหมด (All)</option>
-                        <option value="A">กะ A</option>
-                        <option value="B">กะ B</option>
-                    </select>
-                </div>
-                <div class="w-full md:w-auto">
-                    <label class="block text-xs text-gray-500 mb-1">ประเภทกะ (Shift Type)</label>
-                    <select id="filterShiftType" class="w-full p-2 border rounded-lg text-sm bg-gray-50">
-                        <option value="All">ทั้งหมด</option>
-                        <option value="Day">เฉพาะกะเช้า (Day)</option>
-                        <option value="Night">เฉพาะกะดึก (Night)</option>
-                    </select>
-                </div>
-                <div class="flex gap-2 w-full md:w-auto">
-                    <button onclick="loadDashboard()" class="flex-1 bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700 active:bg-indigo-800 transition">
-                        🔍 ค้นหา
-                    </button>
-                    <button onclick="toggleLayout()" id="layoutBtn" class="flex-1 bg-white text-indigo-600 border border-indigo-200 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-indigo-50 active:bg-indigo-100 transition whitespace-nowrap">
-                        🔀 Layout: คู่
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <div id="dashboard-loader" class="hidden flex flex-col items-center justify-center py-20">
-            <div class="loader mb-4"></div>
-            <p class="text-gray-500 font-medium animate-pulse">กำลังประมวลผลข้อมูล...</p>
-        </div>
-
-        <div id="dashboard-content" class="space-y-6 pb-20">
-            <!-- KPIs Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="widget-card border-l-4 border-indigo-500 p-5">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <p class="text-xs text-gray-400 uppercase font-semibold">Production Target (Plan)</p>
-                            <p id="stat-target" class="text-3xl font-bold text-indigo-600 mt-1">0</p>
-                            <p class="text-[10px] text-gray-400">ดึงจากแผนรายวัน (Sheet: Plan_Data)</p>
-                        </div>
-                        <div class="bg-indigo-50 p-3 rounded-full"><span class="text-2xl">🎯</span></div>
-                    </div>
-                </div>
-                <div class="widget-card border-l-4 border-blue-500 p-5">
-                    <div class="flex justify-between items-center">
-                        <div><p class="text-xs text-gray-400 uppercase font-semibold">Total FG (ยอดดี)</p><p id="stat-fg" class="text-3xl font-bold text-blue-600 mt-1">0</p></div>
-                        <div class="bg-blue-50 p-3 rounded-full"><span class="text-2xl">📦</span></div>
-                    </div>
-                </div>
-                <div class="widget-card border-l-4 border-orange-500 p-5">
-                    <div class="w-full">
-                        <p class="text-xs text-gray-400 uppercase font-semibold">% Achievement</p>
-                        <p id="stat-achievement" class="text-3xl font-bold text-orange-600 mt-1">0%</p>
-                        <div class="w-full bg-gray-200 rounded-full h-2.5 mt-2"><div id="progress-achievement" class="bg-orange-600 h-2.5 rounded-full" style="width: 0%"></div></div>
-                    </div>
-                </div>
-                <div class="widget-card border-l-4 border-red-500 p-5">
-                    <div class="flex justify-between items-center">
-                        <div><p class="text-xs text-gray-400 uppercase font-semibold">Total NG (ยอดเสีย)</p><p id="stat-ng" class="text-3xl font-bold text-red-600 mt-1">0</p></div>
-                        <div class="bg-red-50 p-3 rounded-full"><span class="text-2xl">🗑️</span></div>
-                    </div>
-                </div>
-                <div class="widget-card border-l-4 border-green-500 p-5">
-                    <div class="flex justify-between items-center">
-                        <div><p class="text-xs text-gray-400 uppercase font-semibold">% Yield (คุณภาพ)</p><p id="stat-yield" class="text-3xl font-bold text-green-600 mt-1">0%</p></div>
-                        <div class="bg-green-50 p-3 rounded-full"><span class="text-2xl">📈</span></div>
-                    </div>
-                </div>
-                <div class="widget-card border-l-4 border-teal-500 p-5">
-                    <div class="flex justify-between items-center">
-                        <div><p class="text-xs text-gray-400 uppercase font-semibold">Avg Speed (UPH)</p><p id="stat-uph" class="text-3xl font-bold text-teal-600 mt-1">0</p></div>
-                        <div class="bg-teal-50 p-3 rounded-full"><span class="text-2xl">🚀</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Charts Grid -->
-            <div id="sortable-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="widget-card border-t-4 border-purple-500 bg-white">
-                    <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
-                        <h3 class="font-bold text-gray-700 text-sm">📉 NG Analysis (Pareto)</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
-                    </div>
-                    <div class="p-4 flex-1 min-h-[300px]"><canvas id="paretoChart"></canvas></div>
-                </div>
-                <div class="widget-card border-t-4 border-orange-500 bg-white">
-                    <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
-                        <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Rate Trend</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
-                    </div>
-                    <div class="p-4 flex-1 min-h-[300px]"><canvas id="qcTrendChart"></canvas></div>
-                </div>
-                <div class="widget-card bg-white">
-                    <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
-                        <h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
-                    </div>
-                    <div class="p-4 flex-1 min-h-[250px]"><canvas id="yieldModelChart"></canvas></div>
-                </div>
-                <div class="widget-card bg-white">
-                    <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
-                        <h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
-                    </div>
-                    <div class="p-4 flex-1 min-h-[250px]"><canvas id="yieldMachineChart"></canvas></div>
-                </div>
-                <div class="widget-card bg-white">
-                    <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
-                        <h3 class="font-bold text-gray-700 text-sm">Hourly Production (FG/NG)</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
-                    </div>
-                    <div class="p-4 flex-1 min-h-[300px]"><canvas id="hourlyChart"></canvas></div>
-                </div>
-                <div class="widget-card bg-white">
-                    <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
-                        <h3 class="font-bold text-gray-700 text-sm">NG Breakdown (Pie)</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
-                    </div>
-                    <div class="p-4 flex-1 min-h-[300px]"><canvas id="ngChart"></canvas></div>
-                </div>
-                <div class="widget-card md:col-span-2 bg-white">
-                    <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
-                        <h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
-                    </div>
-                    <div class="p-4">
-                        <div class="table-container">
-                            <table class="w-full min-w-[2200px] divide-y divide-gray-200">
-                                <thead class="bg-gray-50"><tr id="table-header"><th>Machine</th><th>Total FG</th><th>Total NG</th><th>% Yield</th></tr></thead>
-                                <tbody id="table-body" class="bg-white divide-y divide-gray-200"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Modals -->
-    <div id="modal-overlay" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-end md:items-center justify-center hidden backdrop-blur-sm p-0 md:p-4"></div>
-    <div id="modal-machine-detail" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center hidden backdrop-blur-sm p-2">
-        <div class="bg-white w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
-            <div class="bg-blue-600 p-4 border-b flex justify-between items-center text-white">
-                <h3 id="machine-detail-title" class="font-bold text-lg">Machine Detail</h3>
-                <button onclick="document.getElementById('modal-machine-detail').classList.add('hidden')" class="text-white hover:text-gray-200 text-2xl font-bold">&times;</button>
-            </div>
-            <div class="p-4 overflow-y-auto flex-1">
-                <div class="h-64 md:h-80 w-full"><canvas id="machineDetailChart"></canvas></div>
-                <div id="machine-detail-stats" class="mt-4 grid grid-cols-2 gap-4 text-center"></div>
-                <div id="machine-detail-remarks" class="mt-4 border-t pt-2 hidden">
-                    <h4 class="font-bold text-gray-700 text-left">📝 หมายเหตุของเสีย (NG Remarks)</h4>
-                    <div id="machine-remarks-list" class="text-left text-sm text-gray-600 mt-2 max-h-32 overflow-y-auto"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec"; 
-        
-        let ngSymptoms = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "อื่นๆ (Others)"];
-        let recorderList = ["พนักงาน 1", "พนักงาน 2"];
-        let dailyTarget = 0;
-        let currentDashboardData = null;
-        let machineDetailChart = null;
-        let charts = {};
-
-        const DAY_HOURS = ["08:00-09:00", "09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "OT 17:30-18:00", "OT 18:00-19:00", "OT 19:00-20:00"];
-        const NIGHT_HOURS = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:00-06:30", "OT 06:00-07:30", "OT 07:00-08:00"];
-
-        try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
-
-        function initSortable() {
-            const grid = document.getElementById('sortable-grid');
-            Sortable.create(grid, {
-                handle: '.drag-handle',
-                animation: 150,
-                ghostClass: 'sortable-ghost',
-                onEnd: function() {
-                    Object.values(charts).forEach(c => { if(c) c.resize(); });
-                }
-            });
+        if (hIdx !== -1) {
+            result.machineData[machine].hourlyFg[hIdx] += fg;
+            result.machineData[machine].hourlyNg[hIdx] += ngTotal;
         }
 
-        function toggleCardSize(btn) {
-            const card = btn.closest('.widget-card');
-            if (card.classList.contains('md:col-span-2')) {
-                card.classList.remove('md:col-span-2');
-            } else {
-                card.classList.add('md:col-span-2');
-            }
-            const canvas = card.querySelector('canvas');
-            if(canvas) {
-                const chartInstance = Chart.getChart(canvas);
-                if(chartInstance) chartInstance.resize();
-            }
-        }
+        if (!result.productData[product]) result.productData[product] = { fg: 0, ngTotal: 0 };
+        result.productData[product].fg += fg;
+        result.productData[product].ngTotal += ngTotal;
 
-        window.onload = () => {
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('startDate').value = today;
-            document.getElementById('endDate').value = today;
-            document.getElementById('productionDate').value = today;
-            document.getElementById('planDate').value = today; // Default Plan Date
+        details.forEach(item => {
+          if (item.type) {
+            ngTempMap[item.type] = (ngTempMap[item.type] || 0) + (parseInt(item.qty) || 0);
+            result.machineData[machine].ngBreakdown[item.type] = (result.machineData[machine].ngBreakdown[item.type] || 0) + (parseInt(item.qty) || 0);
+            if (item.remark) result.machineData[machine].remarks.push(`[${item.type}] ${item.remark}`);
+          }
+        });
+      }
+    } catch (e) { console.log("Row error: " + e); }
+  });
 
-            if(localStorage.getItem('CWM_CUSTOM_NG')) ngSymptoms = JSON.parse(localStorage.getItem('CWM_CUSTOM_NG'));
-            if(localStorage.getItem('CWM_RECORDERS')) recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
+  result.ngLabels = Object.keys(ngTempMap);
+  result.ngValues = Object.values(ngTempMap);
+  const sortedDates = Object.keys(dailyStats).sort();
+  result.dailyTrend = sortedDates.map(date => {
+    const d = dailyStats[date];
+    const total = d.fg + d.ng;
+    const rate = total > 0 ? ((d.ng / total) * 100).toFixed(2) : 0;
+    return { date: date, ngRate: parseFloat(rate) };
+  });
 
-            const machineSelect = document.getElementById('machine');
-            for (let i = 1; i <= 16; i++) {
-                const name = `CWM-${String(i).padStart(2, '0')}`;
-                machineSelect.add(new Option(name, name));
-            }
+  return result;
+}
 
-            renderRecorderOptions();
-            addNgRow();
-            detectCurrentShift();
-            initSortable();
+// *** New Debug Logic ***
+function debugSheetData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Production_Data");
+  if (!sheet) return { error: "Production_Data not found" };
+  
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  
+  // Show detailed last 5 rows
+  const lastRows = values.slice(-5).map(r => {
+      // Map row index to header name for easier reading
+      let obj = {};
+      headers.forEach((h, i) => {
+          obj[h] = r[i];
+      });
+      // Format date for check
+      if (obj['Date'] instanceof Date) {
+          obj['Date_Formatted'] = Utilities.formatDate(obj['Date'], "GMT+7", "yyyy-MM-dd");
+      }
+      return obj;
+  });
 
-            if(window.location.hash === '#dashboard') switchTab('dashboard');
-            else switchTab('form');
-        };
-
-        // --- Common Logic ---
-        function detectCurrentShift() {
-            const hour = new Date().getHours();
-            let type = (hour >= 8 && hour < 20) ? "Day" : "Night";
-            document.querySelector(`input[name="shift_type_toggle"][value="${type}"]`).checked = true;
-            updateHourSlots(type);
-        }
-        function updateHourSlots(type) {
-            const select = document.getElementById('hourSlot');
-            const hours = (type === "Day") ? DAY_HOURS : NIGHT_HOURS;
-            select.innerHTML = hours.map(h => `<option value="${h}">${h}</option>`).join('');
-            const currentHourStr = new Date().getHours().toString().padStart(2, '0') + ":00";
-            const match = hours.find(h => h.startsWith(currentHourStr));
-            if(match) select.value = match;
-        }
-
-        function switchTab(tab) {
-            document.getElementById('section-form').classList.toggle('hidden', tab !== 'form');
-            document.getElementById('section-planning').classList.toggle('hidden', tab !== 'planning');
-            document.getElementById('section-dashboard').classList.toggle('hidden', tab !== 'dashboard');
-            
-            const tabs = ['form', 'planning', 'dashboard'];
-            tabs.forEach(t => {
-                const btn = document.getElementById('tab-' + t);
-                if (t === tab) {
-                    btn.classList.add('tab-active', 'text-blue-600');
-                    btn.classList.remove('text-gray-500');
-                } else {
-                    btn.classList.remove('tab-active', 'text-blue-600');
-                    btn.classList.add('text-gray-500');
-                }
-            });
-
-            if (tab === 'dashboard') loadDashboard();
-        }
-        
-        function calculateKPIs() {
-             if(!currentDashboardData) return;
-             const totalFg = currentDashboardData.totalFg || 0;
-             const target = currentDashboardData.productionTarget || 0; 
-             
-             document.getElementById('stat-target').innerText = target.toLocaleString();
-             
-             const ach = target > 0 ? ((totalFg / target) * 100).toFixed(1) : 0;
-             document.getElementById('stat-achievement').innerText = ach + "%";
-             document.getElementById('progress-achievement').style.width = Math.min(ach, 100) + "%";
-             
-             let activeHours = 0; if(currentDashboardData.hourlyData) activeHours = currentDashboardData.hourlyData.filter(v => v > 0).length;
-             if(activeHours === 0) activeHours = 1;
-             const uph = (totalFg / activeHours).toFixed(0);
-             document.getElementById('stat-uph').innerText = uph;
-        }
-
-        function renderRecorderOptions() { const select = document.getElementById('recorder'); const current = select.value; select.innerHTML = '<option value="">เลือกชื่อผู้บันทึก...</option>' + recorderList.map(r => `<option value="${r}">${r}</option>`).join(''); if(recorderList.includes(current)) select.value = current; }
-        function showModal(title, contentHtml) { const overlay = document.getElementById('modal-overlay'); overlay.innerHTML = `<div class="bg-white w-full md:w-96 md:rounded-xl rounded-t-xl shadow-2xl overflow-hidden animate-fade-in"><div class="bg-gray-100 p-4 border-b flex justify-between items-center"><h3 class="font-bold text-lg text-gray-800">${title}</h3><button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button></div><div class="p-4 max-h-[60vh] overflow-y-auto">${contentHtml}</div></div>`; overlay.classList.remove('hidden'); }
-        function closeModal() { document.getElementById('modal-overlay').classList.add('hidden'); }
-        function manageRecorders() { const listHtml = recorderList.map((r,i) => `<div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg mb-2 border border-gray-100"><span class="text-sm font-medium text-gray-700">${r}</span><button onclick="deleteRecorder(${i})" class="text-red-500 p-2 hover:bg-red-50 rounded">🗑️</button></div>`).join(''); const content = `<div id="recorder-list-container">${listHtml}</div><div class="mt-4 flex gap-2"><input type="text" id="new-recorder-input" placeholder="ชื่อพนักงานใหม่..." class="flex-1 p-3 border rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none"><button onclick="addNewRecorder()" class="bg-green-600 text-white px-4 rounded-lg font-bold shadow hover:bg-green-700">เพิ่ม</button></div>`; showModal('จัดการรายชื่อผู้บันทึก', content); }
-        function addNewRecorder() { const val = document.getElementById('new-recorder-input').value.trim(); if(val && !recorderList.includes(val)) { recorderList.push(val); localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); closeModal(); manageRecorders(); renderRecorderOptions(); } }
-        function deleteRecorder(i) { if(confirm('ยืนยันการลบ?')) { recorderList.splice(i,1); localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); closeModal(); manageRecorders(); renderRecorderOptions(); } }
-
-        function addNgRow() { const div = document.createElement('div'); div.className = "flex flex-col gap-2 p-3 bg-gray-50 rounded-lg mb-3 animate-fade-in border border-gray-100 shadow-sm"; div.innerHTML = `<div class="flex gap-2"><select name="ng_type[]" class="flex-1 p-3 border rounded-lg text-sm bg-white shadow-sm appearance-none border-gray-300 font-medium">${ngSymptoms.map(s=>`<option value="${s}">${s}</option>`).join('')}</select><input type="number" name="ng_qty[]" placeholder="0" class="w-20 p-3 border rounded-lg text-sm text-center font-bold bg-white shadow-sm border-gray-300" min="1" value=""><button type="button" onclick="this.parentElement.parentElement.remove()" class="text-red-400 p-2 hover:text-red-600 hover:bg-red-50 rounded-full">✕</button></div><input type="text" name="ng_remark[]" placeholder="📝 สาเหตุ/Remark (ถ้ามี)" class="w-full p-2 border border-gray-200 rounded text-sm bg-white text-gray-600 focus:ring-1 focus:ring-blue-300 outline-none">`; document.getElementById('ngList').appendChild(div); }
-        function manageSymptoms() { const listHtml = ngSymptoms.map((s,i) => `<div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg mb-2 border border-gray-100"><span class="text-sm font-medium text-gray-700">${s}</span><button onclick="deleteSymptom(${i})" class="text-red-500 p-2 hover:bg-red-50 rounded">🗑️</button></div>`).join(''); const content = `<div id="symptom-list-container">${listHtml}</div><div class="mt-4 flex gap-2"><input type="text" id="new-symptom-input" placeholder="อาการเสียใหม่..." class="flex-1 p-3 border rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-red-500 outline-none"><button onclick="addNewSymptom()" class="bg-green-600 text-white px-4 rounded-lg font-bold shadow hover:bg-green-700">เพิ่ม</button></div>`; showModal('จัดการรายการอาการ NG', content); }
-        function addNewSymptom() { const val = document.getElementById('new-symptom-input').value.trim(); if(val && !ngSymptoms.includes(val)) { ngSymptoms.push(val); localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); closeModal(); manageSymptoms(); document.querySelectorAll('select[name="ng_type[]"]').forEach(s => s.innerHTML = ngSymptoms.map(o=>`<option value="${o}">${o}</option>`).join('')); } }
-        function deleteSymptom(i) { if(confirm('ลบ?')) { ngSymptoms.splice(i,1); localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); closeModal(); manageSymptoms(); } }
-
-        // --- PRODUCTION SUBMIT ---
-        document.getElementById('productionForm').onsubmit = async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('submitBtn'); const originalText = btn.innerText;
-            btn.disabled = true; btn.innerText = "กำลังส่งข้อมูล...";
-            const fd = new FormData(e.target);
-            const shiftType = document.querySelector('input[name="shift_type_toggle"]:checked').value;
-            const payload = { action: 'SAVE_PRODUCTION', timestamp: new Date().toLocaleString('th-TH'), productionDate: fd.get('productionDate'), machine: fd.get('machine'), shift: fd.get('shift'), shiftType: shiftType, recorder: fd.get('recorder'), productCode: fd.get('productCode'), hourSlot: fd.get('hourSlot'), fgAmount: parseInt(fd.get('fgAmount')) || 0, ngDetails: [] };
-            const types = fd.getAll('ng_type[]'); const qtys = fd.getAll('ng_qty[]'); const remarks = fd.getAll('ng_remark[]');
-            types.forEach((t,i) => { if(parseInt(qtys[i]) > 0) payload.ngDetails.push({type:t, qty:parseInt(qtys[i]), remark: remarks[i]||""}); });
-            try { await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); alert("✅ บันทึกข้อมูลสำเร็จ!"); e.target.reset(); document.getElementById('ngList').innerHTML = ""; addNgRow(); detectCurrentShift(); if(recorderList.length > 0 && fd.get('recorder')) document.getElementById('recorder').value = fd.get('recorder'); document.getElementById('productionDate').value = new Date().toISOString().split('T')[0];} catch(e) { alert("❌ Error: "+e.message); } finally { btn.disabled = false; btn.innerText = originalText; }
-        };
-
-        // --- PLANNING SUBMIT ---
-        document.getElementById('planningForm').onsubmit = async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('planSubmitBtn'); const originalText = btn.innerText;
-            btn.disabled = true; btn.innerText = "กำลังบันทึกแผน...";
-            const fd = new FormData(e.target);
-            
-            const payload = {
-                action: 'SAVE_PLAN', // New Action
-                planDate: fd.get('planDate'),
-                product: fd.get('planProduct'),
-                shift: fd.get('planShift'),
-                qty: parseInt(fd.get('planQty'))
-            };
-
-            try {
-                await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
-                alert("✅ บันทึกแผนการผลิตสำเร็จ!");
-                e.target.reset();
-                document.getElementById('planDate').value = new Date().toISOString().split('T')[0];
-            } catch(e) { 
-                alert("❌ Error: "+e.message); 
-            } finally { 
-                btn.disabled = false; btn.innerText = originalText; 
-            }
-        };
-
-        async function loadDashboard() {
-            if(!SCRIPT_URL) return;
-            document.getElementById('dashboard-content').classList.add('hidden');
-            document.getElementById('dashboard-loader').classList.remove('hidden');
-            const start = document.getElementById('startDate').value; const end = document.getElementById('endDate').value;
-            const shift = document.getElementById('filterShift').value; const shiftType = document.getElementById('filterShiftType').value;
-            try {
-                const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}&shiftType=${shiftType}`);
-                const data = await res.json();
-                if(data.totalFg === 0 && data.totalNg === 0) {
-                     alert(`⚠️ ไม่พบข้อมูลในช่วงวันที่เลือก\n(วัน: ${start} ถึง ${end}, กะ: ${shift}, ประเภท: ${shiftType})`);
-                }
-                currentDashboardData = data;
-                document.getElementById('stat-fg').innerText = data.totalFg.toLocaleString();
-                document.getElementById('stat-ng').innerText = data.totalNg.toLocaleString();
-                const total = data.totalFg + data.totalNg;
-                const totalYield = total > 0 ? ((data.totalFg / total) * 100).toFixed(2) : 0;
-                document.getElementById('stat-yield').innerText = totalYield + "%";
-                calculateKPIs(); renderCharts(data); renderTable(data);
-            } catch(e) { console.error(e); alert("โหลดข้อมูลล้มเหลว: " + e.message); } 
-            finally { document.getElementById('dashboard-loader').classList.add('hidden'); document.getElementById('dashboard-content').classList.remove('hidden'); }
-        }
-
-        function renderCharts(data) {
-            const commonOpts = { responsive: true, maintainAspectRatio: false };
-
-            if(charts.yieldModel) charts.yieldModel.destroy();
-            charts.yieldModel = new Chart(document.getElementById('yieldModelChart').getContext('2d'), { type: 'bar', data: { labels: Object.keys(data.productData).map(m=>m.split(' ')[0]), datasets: [{ label: '% Yield', data: Object.values(data.productData).map(d => {const t=d.fg+d.ngTotal; return t>0?((d.fg/t)*100).toFixed(1):0}), backgroundColor: '#10b981', borderRadius: 4 }] }, options: { ...commonOpts, indexAxis: 'y' } });
-
-            if(charts.yieldMachine) charts.yieldMachine.destroy();
-            const macs = []; for(let i=1;i<=16;i++) macs.push(`CWM-${String(i).padStart(2,'0')}`);
-            charts.yieldMachine = new Chart(document.getElementById('yieldMachineChart').getContext('2d'), { type: 'bar', data: { labels: macs, datasets: [{ label: '% Yield', data: macs.map(m=>{const d=data.machineData[m]; if(!d)return 0; const t=d.fg+d.ngTotal; return t>0?((d.fg/t)*100).toFixed(1):0}), backgroundColor: '#6366f1', borderRadius: 4 }] }, options: { ...commonOpts, scales: { y: { beginAtZero: true, max: 100 } } } });
-
-            if(charts.hourly) charts.hourly.destroy();
-            charts.hourly = new Chart(document.getElementById('hourlyChart').getContext('2d'), { type: 'bar', data: { labels: data.hourlyLabels, datasets: [{ label: 'FG (งานดี)', data: data.hourlyData, backgroundColor: '#3b82f6', borderRadius: 2 }, { label: 'NG (เสีย)', data: data.hourlyNgData || [], backgroundColor: '#ef4444', borderRadius: 2 }] }, options: { ...commonOpts, scales: { x: { stacked: true }, y: { stacked: true } } } });
-
-            if(charts.ng) charts.ng.destroy();
-            charts.ng = new Chart(document.getElementById('ngChart').getContext('2d'), { type: 'doughnut', data: { labels: data.ngLabels, datasets: [{ data: data.ngValues, backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#8b5cf6'] }] }, options: { ...commonOpts, plugins: { zoom: false } } });
-
-            if(charts.pareto) charts.pareto.destroy();
-            const ngItems = data.ngLabels.map((l, i) => ({ label: l, value: data.ngValues[i] })).sort((a,b)=>b.value-a.value);
-            const totalNG = ngItems.reduce((a,b)=>a+b.value,0);
-            let acc = 0; const cumulativeData = ngItems.map(i=>{ acc+=i.value; return totalNG>0?((acc/totalNG)*100).toFixed(1):0; });
-            charts.pareto = new Chart(document.getElementById('paretoChart').getContext('2d'), { type: 'bar', plugins: [ChartDataLabels], data: { labels: ngItems.map(i=>i.label), datasets: [ { label: '% สะสม', data: cumulativeData, type: 'line', borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.2)', yAxisID: 'y1', tension: 0.3, pointRadius: 4, datalabels: { align: 'top', color: '#7c3aed', offset: 8, formatter: (val) => val + '%' } }, { label: 'จำนวน', data: ngItems.map(i=>i.value), backgroundColor: '#ef4444', yAxisID: 'y', borderRadius: 4, datalabels: { align: 'end', anchor: 'end', color: '#444', formatter: (val) => val>0 ? val + '\n(' + (totalNG>0?((val/totalNG)*100).toFixed(1):0) + '%)' : '' } } ] }, options: { ...commonOpts, layout: { padding: { top: 20 } }, scales: { y: { beginAtZero: true, grace: '15%' }, y1: { beginAtZero: true, max: 105, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + '%' } } } } });
-
-            if(charts.qcTrend) charts.qcTrend.destroy();
-            const trendData = data.dailyTrend || [];
-            const avgNgRate = trendData.length > 0 ? (trendData.reduce((s,d)=>s+d.ngRate,0)/trendData.length).toFixed(2) : 0;
-            charts.qcTrend = new Chart(document.getElementById('qcTrendChart').getContext('2d'), { type: 'line', data: { labels: trendData.map(d => d.date), datasets: [ { label: '% NG Rate (Daily)', data: trendData.map(d => d.ngRate), borderColor: '#f97316', backgroundColor: 'rgba(249, 115, 22, 0.1)', fill: true, tension: 0.2, pointRadius: 4 }, { label: 'Avg NG Rate (' + avgNgRate + '%)', data: Array(trendData.length).fill(avgNgRate), borderColor: '#6b7280', borderDash: [5, 5], pointRadius: 0, borderWidth: 2, fill: false } ]}, options: { ...commonOpts, scales: { y: { beginAtZero: true, title: { display: true, text: '% NG Rate' } } } } });
-        }
-
-        function renderTable(data) {
-            const h = document.getElementById('table-header'); const b = document.getElementById('table-body');
-            h.innerHTML = '<th>Machine</th><th>Total FG</th><th>Total NG</th><th>% Yield</th>' + ngSymptoms.map(s=>`<th>${s}</th>`).join('');
-            b.innerHTML = '';
-            for(let i=1; i<=16; i++) {
-                const m = `CWM-${String(i).padStart(2,'0')}`; const d = data.machineData[m] || {fg:0, ngTotal:0, ngBreakdown:{}};
-                const t = d.fg + d.ngTotal; const y = t > 0 ? ((d.fg/t)*100).toFixed(1) : "0.0";
-                let html = `<td class="cursor-pointer text-blue-600 font-bold hover:underline" onclick="showMachineDetail('${m}')">👉 ${m}</td><td>${d.fg}</td><td class="text-red-600 font-bold">${d.ngTotal}</td><td><span class="px-2 py-1 rounded ${y>=98?'bg-green-100 text-green-800':(y>=90?'bg-yellow-100 text-yellow-800':'bg-red-100 text-red-800')} text-xs font-bold">${y}%</span></td>`;
-                ngSymptoms.forEach(s => { const c = d.ngBreakdown[s] || 0; html += `<td class="${c>0?'bg-red-50 text-red-700 font-bold':'' }">${c>0?c:'-'}</td>`; });
-                const tr = document.createElement('tr'); tr.innerHTML = html; b.appendChild(tr);
-            }
-        }
-
-        function showMachineDetail(machineName) {
-            if(!currentDashboardData) return;
-            const modal = document.getElementById('modal-machine-detail');
-            const mData = currentDashboardData.machineData[machineName] || { fg: 0, ngTotal: 0, hourlyFg: [], hourlyNg: [], remarks: [] };
-            document.getElementById('machine-detail-title').innerText = `📊 รายละเอียดเครื่อง ${machineName}`;
-            document.getElementById('machine-detail-stats').innerHTML = `<div class="bg-blue-50 p-2 rounded">FG รวม: <b class="text-blue-700 text-xl">${mData.fg}</b></div><div class="bg-red-50 p-2 rounded">NG รวม: <b class="text-red-700 text-xl">${mData.ngTotal}</b></div>`;
-            const rList = document.getElementById('machine-remarks-list'); const rSec = document.getElementById('machine-detail-remarks');
-            if(mData.remarks && mData.remarks.length > 0) { rSec.classList.remove('hidden'); rList.innerHTML = `<ul class="list-disc pl-5 space-y-1">${mData.remarks.map(r => `<li>${r}</li>`).join('')}</ul>`; } else { rSec.classList.add('hidden'); }
-            modal.classList.remove('hidden');
-            if(machineDetailChart) machineDetailChart.destroy();
-            machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), { type: 'bar', data: { labels: currentDashboardData.hourlyLabels, datasets: [{ label: 'FG (งานดี)', data: mData.hourlyFg, backgroundColor: '#3b82f6', borderRadius: 2 }, { label: 'NG (เสีย)', data: mData.hourlyNg || [], backgroundColor: '#ef4444', borderRadius: 2 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true }, zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }, pan: { enabled: true, mode: 'x' } } }, scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } } });
-        }
-    </script>
-</body>
-</html>
+  return { 
+      status: "DEBUG_V3.18", 
+      totalRows: values.length, 
+      headersFound: headers,
+      last5Rows: lastRows // ส่งข้อมูลตัวอย่างกลับมาดู
+  };
+}
