@@ -3,15 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - Interactive v3.13</title>
+    <title>CWM Production System - Interactive v3.14</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js Core -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
-    <!-- Zoom Plugin (Requires Hammer.js) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
-    <!-- SortableJS for Drag & Drop -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     
     <style>
@@ -48,7 +45,7 @@
         .drag-handle { cursor: grab; }
         .drag-handle:active { cursor: grabbing; }
         
-        /* Widget Card Style */
+        /* Widget Card Style - Ensure White Background */
         .widget-card { @apply bg-white rounded-xl shadow-md flex flex-col h-full transition-all duration-200; }
         .widget-header { @apply p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none; }
     </style>
@@ -192,15 +189,14 @@
         <div id="dashboard-content" class="space-y-6 pb-20">
             <!-- KPIs Grid (Fixed Top) -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <!-- 1. Target -->
+                <!-- 1. Target (From Google Sheet) -->
                 <div class="widget-card border-l-4 border-indigo-500 p-5">
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="text-xs text-gray-400 uppercase font-semibold">Production Target</p>
-                            <div class="flex items-baseline gap-2 mt-1">
-                                <input type="number" id="targetInput" onchange="updateTarget(this.value)" class="text-2xl font-bold text-indigo-600 w-24 border-b border-indigo-200 focus:outline-none focus:border-indigo-600 bg-transparent" value="0">
-                                <span class="text-xs text-gray-500">pcs</span>
-                            </div>
+                            <p class="text-xs text-gray-400 uppercase font-semibold">Production Target (Plan)</p>
+                            <!-- เปลี่ยนจาก Input เป็น Text Display เพราะดึงจาก Sheet -->
+                            <p id="stat-target" class="text-3xl font-bold text-indigo-600 mt-1">0</p>
+                            <p class="text-[10px] text-gray-400">ดึงจากแผนรายวัน (Google Sheet)</p>
                         </div>
                         <div class="bg-indigo-50 p-3 rounded-full"><span class="text-2xl">🎯</span></div>
                     </div>
@@ -247,7 +243,7 @@
             <div id="sortable-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
                 <!-- Pareto -->
-                <div class="widget-card border-t-4 border-purple-500">
+                <div class="widget-card border-t-4 border-purple-500 bg-white">
                     <div class="widget-header drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">📉 NG Analysis (Pareto)</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
@@ -256,7 +252,7 @@
                 </div>
 
                 <!-- QC Trend -->
-                <div class="widget-card border-t-4 border-orange-500">
+                <div class="widget-card border-t-4 border-orange-500 bg-white">
                     <div class="widget-header drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Rate Trend</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
@@ -265,7 +261,7 @@
                 </div>
 
                 <!-- Yield Model -->
-                <div class="widget-card">
+                <div class="widget-card bg-white">
                     <div class="widget-header drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
@@ -274,7 +270,7 @@
                 </div>
 
                 <!-- Yield Machine -->
-                <div class="widget-card">
+                <div class="widget-card bg-white">
                     <div class="widget-header drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
@@ -283,7 +279,7 @@
                 </div>
 
                 <!-- Hourly -->
-                <div class="widget-card">
+                <div class="widget-card bg-white">
                     <div class="widget-header drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">Hourly Production (FG/NG)</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
@@ -292,7 +288,7 @@
                 </div>
 
                 <!-- NG Breakdown -->
-                <div class="widget-card">
+                <div class="widget-card bg-white">
                     <div class="widget-header drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">NG Breakdown (Pie)</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
@@ -301,7 +297,7 @@
                 </div>
 
                 <!-- Detailed Table (Full Width by Default, but sortable) -->
-                <div class="widget-card md:col-span-2">
+                <div class="widget-card md:col-span-2 bg-white">
                     <div class="widget-header drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
@@ -369,21 +365,12 @@
         }
 
         function toggleCardSize(btn) {
-            const cardContainer = btn.closest('.widget-card').parentElement; // The div wrapping widget-card inside grid
-            // The structure is: Grid > Div(Card) > ...
-            // Wait, in my HTML structure, the Grid items ARE the Divs with class widget-card.
-            // Let's adjust structure slightly or apply class to the card itself.
-            // In my HTML above: <div class="widget-card ..."> is the direct child of #sortable-grid
             const card = btn.closest('.widget-card');
-            
             if (card.classList.contains('md:col-span-2')) {
                 card.classList.remove('md:col-span-2');
-                // If it was full width, make it normal (span-1)
             } else {
                 card.classList.add('md:col-span-2');
             }
-            
-            // Trigger chart resize
             const canvas = card.querySelector('canvas');
             if(canvas) {
                 const chartInstance = Chart.getChart(canvas);
@@ -399,10 +386,6 @@
 
             if(localStorage.getItem('CWM_CUSTOM_NG')) ngSymptoms = JSON.parse(localStorage.getItem('CWM_CUSTOM_NG'));
             if(localStorage.getItem('CWM_RECORDERS')) recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
-            if(localStorage.getItem('CWM_DAILY_TARGET')) {
-                dailyTarget = parseInt(localStorage.getItem('CWM_DAILY_TARGET'));
-                document.getElementById('targetInput').value = dailyTarget;
-            }
 
             const machineSelect = document.getElementById('machine');
             for (let i = 1; i <= 16; i++) {
@@ -413,7 +396,7 @@
             renderRecorderOptions();
             addNgRow();
             detectCurrentShift();
-            initSortable(); // Enable drag & drop
+            initSortable();
 
             if(window.location.hash === '#dashboard') switchTab('dashboard');
             else switchTab('form');
@@ -441,20 +424,25 @@
             if(tab === 'form') { tabForm.classList.add('tab-active', 'text-blue-600'); tabForm.classList.remove('text-gray-500'); tabDash.classList.remove('tab-active', 'text-blue-600'); tabDash.classList.add('text-gray-500'); } 
             else { tabDash.classList.add('tab-active', 'text-blue-600'); tabDash.classList.remove('text-gray-500'); tabForm.classList.remove('tab-active', 'text-blue-600'); tabForm.classList.add('text-gray-500'); loadDashboard(); }
         }
-        function updateTarget(val) { dailyTarget = parseInt(val) || 0; localStorage.setItem('CWM_DAILY_TARGET', dailyTarget); calculateKPIs(); }
+        
         function calculateKPIs() {
              if(!currentDashboardData) return;
              const totalFg = currentDashboardData.totalFg || 0;
-             const ach = dailyTarget > 0 ? ((totalFg / dailyTarget) * 100).toFixed(1) : 0;
+             const target = currentDashboardData.productionTarget || 0; // Get target from backend
+             
+             // Update target display
+             document.getElementById('stat-target').innerText = target.toLocaleString();
+             
+             const ach = target > 0 ? ((totalFg / target) * 100).toFixed(1) : 0;
              document.getElementById('stat-achievement').innerText = ach + "%";
              document.getElementById('progress-achievement').style.width = Math.min(ach, 100) + "%";
+             
              let activeHours = 0; if(currentDashboardData.hourlyData) activeHours = currentDashboardData.hourlyData.filter(v => v > 0).length;
              if(activeHours === 0) activeHours = 1;
              const uph = (totalFg / activeHours).toFixed(0);
              document.getElementById('stat-uph').innerText = uph;
         }
 
-        // --- Recorders & NG Mgmt ---
         function renderRecorderOptions() { const select = document.getElementById('recorder'); const current = select.value; select.innerHTML = '<option value="">เลือกชื่อผู้บันทึก...</option>' + recorderList.map(r => `<option value="${r}">${r}</option>`).join(''); if(recorderList.includes(current)) select.value = current; }
         function showModal(title, contentHtml) { const overlay = document.getElementById('modal-overlay'); overlay.innerHTML = `<div class="bg-white w-full md:w-96 md:rounded-xl rounded-t-xl shadow-2xl overflow-hidden animate-fade-in"><div class="bg-gray-100 p-4 border-b flex justify-between items-center"><h3 class="font-bold text-lg text-gray-800">${title}</h3><button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button></div><div class="p-4 max-h-[60vh] overflow-y-auto">${contentHtml}</div></div>`; overlay.classList.remove('hidden'); }
         function closeModal() { document.getElementById('modal-overlay').classList.add('hidden'); }
