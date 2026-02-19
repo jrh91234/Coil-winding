@@ -789,10 +789,11 @@
             document.getElementById('dashboard-loader').classList.remove('hidden');
             document.getElementById('debug-panel').classList.add('hidden');
             
-            const start = document.getElementById('startDate').value; 
-            const end = document.getElementById('endDate').value;
-            const shift = document.getElementById('filterShift').value; 
-            const shiftType = document.getElementById('filterShiftType').value;
+            // เพิ่ม .trim() เพื่อตัดช่องว่างป้องกันข้อมูลเพี้ยนตอนค้นหา
+            const start = document.getElementById('startDate').value.trim(); 
+            const end = document.getElementById('endDate').value.trim();
+            const shift = document.getElementById('filterShift').value.trim(); 
+            const shiftType = document.getElementById('filterShiftType').value.trim();
             
             let rawText = "";
             try {
