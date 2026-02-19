@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.15 Fixed</title>
+    <title>CWM Production System - v3.16 Plan & White BG</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -40,8 +40,8 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* Drag & Drop Styles */
-        .sortable-ghost { opacity: 0.4; background-color: #f3f4f6; border: 2px dashed #cbd5e1; }
+        /* Force White Background on Cards */
+        .widget-card { background-color: #ffffff !important; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; height: 100%; }
         .drag-handle { cursor: grab; }
         .drag-handle:active { cursor: grabbing; }
     </style>
@@ -59,7 +59,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-lg md:text-xl font-bold text-gray-800">บันทึกยอดการผลิต</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v3.15 Fixed</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v3.16 Plan</span>
             </div>
             
             <form id="productionForm" class="space-y-4">
@@ -189,8 +189,9 @@
                     <div class="flex justify-between items-start">
                         <div>
                             <p class="text-xs text-gray-400 uppercase font-semibold">Production Target (Plan)</p>
+                            <!-- แสดงผลเป็นข้อความที่ดึงมา -->
                             <p id="stat-target" class="text-3xl font-bold text-indigo-600 mt-1">0</p>
-                            <p class="text-[10px] text-gray-400">ดึงจากแผนรายวัน (Google Sheet)</p>
+                            <p class="text-[10px] text-gray-400">ดึงจากแผนรายวัน (Sheet: Plan_Data)</p>
                         </div>
                         <div class="bg-indigo-50 p-3 rounded-full"><span class="text-2xl">🎯</span></div>
                     </div>
@@ -235,63 +236,56 @@
 
             <!-- Sortable Charts Grid -->
             <div id="sortable-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
                 <!-- Pareto -->
-                <div class="bg-white rounded-xl shadow-md flex flex-col h-full transition-all duration-200 border-t-4 border-purple-500 widget-card">
+                <div class="widget-card border-t-4 border-purple-500">
                     <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">📉 NG Analysis (Pareto)</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
                     </div>
                     <div class="p-4 flex-1 min-h-[300px]"><canvas id="paretoChart"></canvas></div>
                 </div>
-
                 <!-- QC Trend -->
-                <div class="bg-white rounded-xl shadow-md flex flex-col h-full transition-all duration-200 border-t-4 border-orange-500 widget-card">
+                <div class="widget-card border-t-4 border-orange-500">
                     <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Rate Trend</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
                     </div>
                     <div class="p-4 flex-1 min-h-[300px]"><canvas id="qcTrendChart"></canvas></div>
                 </div>
-
                 <!-- Yield Model -->
-                <div class="bg-white rounded-xl shadow-md flex flex-col h-full transition-all duration-200 widget-card">
+                <div class="widget-card">
                     <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
                     </div>
                     <div class="p-4 flex-1 min-h-[250px]"><canvas id="yieldModelChart"></canvas></div>
                 </div>
-
                 <!-- Yield Machine -->
-                <div class="bg-white rounded-xl shadow-md flex flex-col h-full transition-all duration-200 widget-card">
+                <div class="widget-card">
                     <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
                     </div>
                     <div class="p-4 flex-1 min-h-[250px]"><canvas id="yieldMachineChart"></canvas></div>
                 </div>
-
                 <!-- Hourly -->
-                <div class="bg-white rounded-xl shadow-md flex flex-col h-full transition-all duration-200 widget-card">
+                <div class="widget-card">
                     <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">Hourly Production (FG/NG)</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
                     </div>
                     <div class="p-4 flex-1 min-h-[300px]"><canvas id="hourlyChart"></canvas></div>
                 </div>
-
                 <!-- NG Breakdown -->
-                <div class="bg-white rounded-xl shadow-md flex flex-col h-full transition-all duration-200 widget-card">
+                <div class="widget-card">
                     <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">NG Breakdown (Pie)</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
                     </div>
                     <div class="p-4 flex-1 min-h-[300px]"><canvas id="ngChart"></canvas></div>
                 </div>
-
                 <!-- Detailed Table -->
-                <div class="bg-white rounded-xl shadow-md flex flex-col h-full transition-all duration-200 md:col-span-2 widget-card">
+                <div class="widget-card md:col-span-2">
                     <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
@@ -329,7 +323,6 @@
     </div>
 
     <script>
-        // *** สำคัญ: ตรวจสอบ URL นี้ให้ตรงกับที่ Deploy ล่าสุด ***
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec"; 
         
         let ngSymptoms = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "อื่นๆ (Others)"];
@@ -344,15 +337,13 @@
 
         try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
 
-        // --- Layout & Drag Functions ---
         function initSortable() {
             const grid = document.getElementById('sortable-grid');
             Sortable.create(grid, {
-                handle: '.drag-handle', // Drag handle selector
+                handle: '.drag-handle',
                 animation: 150,
                 ghostClass: 'sortable-ghost',
                 onEnd: function() {
-                    // Re-render charts slightly to ensure fit
                     Object.values(charts).forEach(c => { if(c) c.resize(); });
                 }
             });
@@ -396,13 +387,13 @@
             else switchTab('form');
         };
 
-        // --- Common Logic ---
         function detectCurrentShift() {
             const hour = new Date().getHours();
             let type = (hour >= 8 && hour < 20) ? "Day" : "Night";
             document.querySelector(`input[name="shift_type_toggle"][value="${type}"]`).checked = true;
             updateHourSlots(type);
         }
+
         function updateHourSlots(type) {
             const select = document.getElementById('hourSlot');
             const hours = (type === "Day") ? DAY_HOURS : NIGHT_HOURS;
@@ -411,6 +402,7 @@
             const match = hours.find(h => h.startsWith(currentHourStr));
             if(match) select.value = match;
         }
+
         function switchTab(tab) {
             document.getElementById('section-form').classList.toggle('hidden', tab !== 'form');
             document.getElementById('section-dashboard').classList.toggle('hidden', tab !== 'dashboard');
@@ -422,7 +414,7 @@
         function calculateKPIs() {
              if(!currentDashboardData) return;
              const totalFg = currentDashboardData.totalFg || 0;
-             const target = currentDashboardData.productionTarget || 0; 
+             const target = currentDashboardData.productionTarget || 0; // Fetched from Sheet
              
              document.getElementById('stat-target').innerText = target.toLocaleString();
              
