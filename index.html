@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - Mobile Ready</title>
+    <title>CWM Production System - Smart Shift v3.7</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -48,14 +48,16 @@
         </div>
     </nav>
 
+    <!-- FORM SECTION -->
     <main id="section-form" class="max-w-2xl mx-auto p-4 space-y-4">
         <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-lg md:text-xl font-bold text-gray-800">บันทึกยอดการผลิต</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v3.6 +Shift Filter</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v3.7 Smart Shift</span>
             </div>
             
             <form id="productionForm" class="space-y-4">
+                <!-- Date & Recorder Section -->
                 <div class="bg-blue-50 p-3 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-bold text-blue-800 mb-2">📅 วันที่ผลิต (Production Date)</label>
@@ -76,7 +78,7 @@
                         <select id="machine" name="machine" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm appearance-none"></select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">กะการทำงาน (Shift)</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">กะ (Shift Name)</label>
                         <select id="shift" name="shift" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm appearance-none">
                             <option value="A">กะ A (Shift A)</option>
                             <option value="B">กะ B (Shift B)</option>
@@ -95,34 +97,17 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">ช่วงเวลา (Time)</label>
-                        <select id="hourSlot" name="hourSlot" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm">
-                             <option value="08:00-09:00">08:00-09:00</option>
-                             <option value="09:00-10:00">09:00-10:00</option>
-                             <option value="10:00-11:00">10:00-11:00</option>
-                             <option value="11:00-12:00">11:00-12:00</option>
-                             <option value="12:00-13:00">12:00-13:00</option>
-                             <option value="13:00-14:00">13:00-14:00</option>
-                             <option value="14:00-15:00">14:00-15:00</option>
-                             <option value="15:00-16:00">15:00-16:00</option>
-                             <option value="16:00-17:00">16:00-17:00</option>
-                             <option value="17:00-18:00">17:00-18:00</option>
-                             <option value="18:00-19:00">18:00-19:00</option>
-                             <option value="19:00-20:00">19:00-20:00</option>
-                             <option value="20:00-21:00">20:00-21:00</option>
-                             <option value="21:00-22:00">21:00-22:00</option>
-                             <option value="22:00-23:00">22:00-23:00</option>
-                             <option value="23:00-00:00">23:00-00:00</option>
-                             <option value="00:00-01:00">00:00-01:00</option>
-                             <option value="01:00-02:00">01:00-02:00</option>
-                             <option value="02:00-03:00">02:00-03:00</option>
-                             <option value="03:00-04:00">03:00-04:00</option>
-                             <option value="04:00-05:00">04:00-05:00</option>
-                             <option value="05:00-06:00">05:00-06:00</option>
-                             <option value="06:00-07:00">06:00-07:00</option>
-                             <option value="07:00-08:00">07:00-08:00</option>
-                             <option value="OT">OT</option>
-                        </select>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ช่วงเวลา (Work Hours)</label>
+                        <div class="flex flex-col gap-1">
+                            <!-- Toggle Shift Type manually if needed -->
+                            <div class="flex text-[10px] gap-2 mb-1">
+                                <label><input type="radio" name="shift_type_toggle" value="Morning" onclick="updateHourSlots('Morning')"> กะเช้า</label>
+                                <label><input type="radio" name="shift_type_toggle" value="Night" onclick="updateHourSlots('Night')"> กะดึก</label>
+                            </div>
+                            <select id="hourSlot" name="hourSlot" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm">
+                                <!-- Generated by JS -->
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -151,7 +136,6 @@
 
     <!-- DASHBOARD SECTION -->
     <main id="section-dashboard" class="max-w-6xl mx-auto p-4 space-y-6 hidden">
-        <!-- Filter Bar -->
         <div class="bg-white p-4 rounded-xl shadow-md border-t-4 border-indigo-500">
             <h2 class="text-gray-700 font-bold text-sm mb-3 flex items-center gap-2">📅 ตัวเลือกการกรอง <span class="text-xs font-normal text-gray-400">(Filter)</span></h2>
             <div class="flex flex-col md:flex-row gap-3 items-end">
@@ -163,13 +147,21 @@
                     <label class="block text-xs text-gray-500 mb-1">สิ้นสุด (End)</label>
                     <input type="date" id="endDate" class="w-full p-2 border rounded-lg text-sm bg-gray-50">
                 </div>
-                <!-- Shift Filter -->
                 <div class="w-full md:w-auto">
-                    <label class="block text-xs text-gray-500 mb-1">กะ (Shift)</label>
+                    <label class="block text-xs text-gray-500 mb-1">กะ (Shift Name)</label>
                     <select id="filterShift" class="w-full p-2 border rounded-lg text-sm bg-gray-50">
                         <option value="All">ทั้งหมด (All)</option>
                         <option value="A">กะ A</option>
                         <option value="B">กะ B</option>
+                    </select>
+                </div>
+                <!-- New Type Filter -->
+                <div class="w-full md:w-auto">
+                    <label class="block text-xs text-gray-500 mb-1">ประเภทกะ (Shift Type)</label>
+                    <select id="filterShiftType" class="w-full p-2 border rounded-lg text-sm bg-gray-50">
+                        <option value="All">ทั้งหมด</option>
+                        <option value="Morning">เฉพาะกะเช้า</option>
+                        <option value="Night">เฉพาะกะดึก</option>
                     </select>
                 </div>
                 <button onclick="loadDashboard()" class="w-full md:w-auto bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700 active:bg-indigo-800 transition">
@@ -210,17 +202,13 @@
 
             <!-- Pareto & QC Trend -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Pareto -->
                 <div class="bg-white p-4 md:p-6 rounded-xl shadow-md border-t-4 border-purple-500">
                     <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">📉 NG Analysis (Pareto Chart)</h3>
                     <div class="h-80 w-full"><canvas id="paretoChart"></canvas></div>
-                    <p class="text-xs text-gray-400 mt-2 text-right">แสดงจำนวนและ % ของแต่ละอาการเสีย</p>
                 </div>
-                <!-- QC Trend -->
                 <div class="bg-white p-4 md:p-6 rounded-xl shadow-md border-t-4 border-orange-500">
                     <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">📉 Daily NG Rate Trend (แนวโน้มของเสีย)</h3>
                     <div class="h-80 w-full"><canvas id="qcTrendChart"></canvas></div>
-                    <p class="text-xs text-gray-400 mt-2 text-right">ใช้ติดตามการพัฒนาคุณภาพ (% NG ลดลง = ดีขึ้น)</p>
                 </div>
             </div>
 
@@ -266,7 +254,7 @@
         </div>
     </main>
 
-    <!-- Modals (Recorder, Symptoms, Machine Detail) -->
+    <!-- Modals -->
     <div id="modal-overlay" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-end md:items-center justify-center hidden backdrop-blur-sm p-0 md:p-4"></div>
 
     <div id="modal-machine-detail" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center hidden backdrop-blur-sm p-2">
@@ -297,6 +285,10 @@
         let currentDashboardData = null;
         let machineDetailChart = null;
 
+        // Shift Configuration
+        const MORNING_HOURS = ["08:00-09:00", "09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "OT 17:30-18:30", "OT 18:30-19:30", "OT 19:30-20:00"];
+        const NIGHT_HOURS = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:30-06:30", "OT 06:30-07:30", "OT 07:30-08:00"];
+
         window.onload = () => {
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('startDate').value = today;
@@ -305,7 +297,6 @@
 
             if(localStorage.getItem('CWM_CUSTOM_NG')) ngSymptoms = JSON.parse(localStorage.getItem('CWM_CUSTOM_NG'));
             if(localStorage.getItem('CWM_RECORDERS')) recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
-            if(localStorage.getItem('CWM_DAILY_TARGET')) dailyTarget = parseInt(localStorage.getItem('CWM_DAILY_TARGET'));
 
             const machineSelect = document.getElementById('machine');
             for (let i = 1; i <= 16; i++) {
@@ -316,9 +307,31 @@
             renderRecorderOptions();
             addNgRow();
             
+            // Smart Detect Shift Type based on current hour
+            detectCurrentShift();
+
             if(window.location.hash === '#dashboard') switchTab('dashboard');
             else switchTab('form');
         };
+
+        function detectCurrentShift() {
+            const hour = new Date().getHours();
+            // เช้า: 08:00 - 19:59, ดึก: 20:00 - 07:59
+            let type = (hour >= 8 && hour < 20) ? "Morning" : "Night";
+            document.querySelector(`input[name="shift_type_toggle"][value="${type}"]`).checked = true;
+            updateHourSlots(type);
+        }
+
+        function updateHourSlots(type) {
+            const select = document.getElementById('hourSlot');
+            const hours = (type === "Morning") ? MORNING_HOURS : NIGHT_HOURS;
+            select.innerHTML = hours.map(h => `<option value="${h}">${h}</option>`).join('');
+            
+            // Auto select slot based on current hour if it matches
+            const currentHourStr = new Date().getHours().toString().padStart(2, '0') + ":00";
+            const match = hours.find(h => h.startsWith(currentHourStr));
+            if(match) select.value = match;
+        }
 
         function switchTab(tab) {
             document.getElementById('section-form').classList.toggle('hidden', tab !== 'form');
@@ -385,39 +398,51 @@
             const btn = document.getElementById('submitBtn'); const originalText = btn.innerText;
             btn.disabled = true; btn.innerText = "กำลังส่งข้อมูล...";
             const fd = new FormData(e.target);
+            
+            // Smart get shift type from toggle
+            const shiftType = document.querySelector('input[name="shift_type_toggle"]:checked').value;
+
             const payload = {
                 action: 'SAVE_PRODUCTION', timestamp: new Date().toLocaleString('th-TH'),
-                productionDate: fd.get('productionDate'), machine: fd.get('machine'), shift: fd.get('shift'), recorder: fd.get('recorder'),
-                productCode: fd.get('productCode'), hourSlot: fd.get('hourSlot'), fgAmount: parseInt(fd.get('fgAmount')) || 0,
+                productionDate: fd.get('productionDate'), 
+                machine: fd.get('machine'), 
+                shift: fd.get('shift'), 
+                shiftType: shiftType, // เช้า หรือ ดึก
+                recorder: fd.get('recorder'),
+                productCode: fd.get('productCode'), 
+                hourSlot: fd.get('hourSlot'), 
+                fgAmount: parseInt(fd.get('fgAmount')) || 0,
                 ngDetails: []
             };
             const types = fd.getAll('ng_type[]'); const qtys = fd.getAll('ng_qty[]'); const remarks = fd.getAll('ng_remark[]');
             types.forEach((t,i) => { if(parseInt(qtys[i]) > 0) payload.ngDetails.push({type:t, qty:parseInt(qtys[i]), remark: remarks[i]||""}); });
 
-            try { await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); alert("✅ บันทึกข้อมูลสำเร็จ!"); e.target.reset(); document.getElementById('ngList').innerHTML = ""; addNgRow(); document.getElementById('productionDate').value = new Date().toISOString().split('T')[0]; if(recorderList.length > 0 && fd.get('recorder')) document.getElementById('recorder').value = fd.get('recorder'); } 
+            try { await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); alert("✅ บันทึกข้อมูลสำเร็จ!"); e.target.reset(); document.getElementById('ngList').innerHTML = ""; addNgRow(); detectCurrentShift(); if(recorderList.length > 0 && fd.get('recorder')) document.getElementById('recorder').value = fd.get('recorder'); } 
             catch(e) { alert("❌ Error: "+e.message); } finally { btn.disabled = false; btn.innerText = originalText; }
         };
 
         // --- Dashboard Logic ---
-        let charts = {};
-
         async function loadDashboard() {
             if(!SCRIPT_URL) return;
             document.getElementById('dashboard-content').classList.add('hidden');
             document.getElementById('dashboard-loader').classList.remove('hidden');
+            
             const start = document.getElementById('startDate').value; 
             const end = document.getElementById('endDate').value;
             const shift = document.getElementById('filterShift').value;
+            const shiftType = document.getElementById('filterShiftType').value;
 
             try {
-                const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}`);
+                const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}&shiftType=${shiftType}`);
                 const data = await res.json();
                 currentDashboardData = data;
+                
                 document.getElementById('stat-fg').innerText = data.totalFg.toLocaleString();
                 document.getElementById('stat-ng').innerText = data.totalNg.toLocaleString();
                 const total = data.totalFg + data.totalNg;
                 const totalYield = total > 0 ? ((data.totalFg / total) * 100).toFixed(2) : 0;
                 document.getElementById('stat-yield').innerText = totalYield + "%";
+                
                 renderCharts(data); renderTable(data);
             } catch(e) { console.error(e); alert("ไม่สามารถโหลดข้อมูลได้"); } 
             finally { document.getElementById('dashboard-loader').classList.add('hidden'); document.getElementById('dashboard-content').classList.remove('hidden'); }
@@ -441,7 +466,7 @@
                 options: { ...commonOpts, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } }
             });
 
-            // 3. Hourly
+            // 3. Hourly (Dynamic Labels)
             if(charts.hourly) charts.hourly.destroy();
             charts.hourly = new Chart(document.getElementById('hourlyChart').getContext('2d'), {
                 type: 'line', data: { labels: data.hourlyLabels, datasets: [{ label: 'Total FG', data: data.hourlyData, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.3 }] }, options: commonOpts
@@ -453,54 +478,22 @@
                 type: 'doughnut', data: { labels: data.ngLabels, datasets: [{ data: data.ngValues, backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#8b5cf6'] }] }, options: commonOpts
             });
 
-            // 5. Pareto (FIXED OVERLAP)
+            // 5. Pareto
             if(charts.pareto) charts.pareto.destroy();
             const ngItems = data.ngLabels.map((l, i) => ({ label: l, value: data.ngValues[i] })).sort((a,b)=>b.value-a.value);
             const totalNG = ngItems.reduce((a,b)=>a+b.value,0);
             let acc = 0;
-            const cumulativeData = ngItems.map(i=>{
-                acc+=i.value; 
-                return totalNG>0?((acc/totalNG)*100).toFixed(1):0;
-            });
+            const cumulativeData = ngItems.map(i=>{ acc+=i.value; return totalNG>0?((acc/totalNG)*100).toFixed(1):0; });
             charts.pareto = new Chart(document.getElementById('paretoChart').getContext('2d'), {
-                type: 'bar',
-                plugins: [ChartDataLabels],
+                type: 'bar', plugins: [ChartDataLabels],
                 data: { 
                     labels: ngItems.map(i=>i.label), 
                     datasets: [
-                        { 
-                            label: '% สะสม', 
-                            data: cumulativeData, 
-                            type: 'line', 
-                            borderColor: '#8b5cf6', 
-                            backgroundColor: 'rgba(139, 92, 246, 0.2)', 
-                            yAxisID: 'y1', 
-                            tension: 0.3, 
-                            pointRadius: 4, 
-                            datalabels: { align: 'top', color: '#7c3aed', offset: 8, font: { weight: 'bold' }, formatter: (val) => val + '%' } 
-                        },
-                        { 
-                            label: 'จำนวน', 
-                            data: ngItems.map(i=>i.value), 
-                            backgroundColor: '#ef4444', 
-                            yAxisID: 'y', 
-                            borderRadius: 4, 
-                            datalabels: { align: 'end', anchor: 'end', color: '#444', formatter: (val) => val>0 ? val + '\n(' + (totalNG>0?((val/totalNG)*100).toFixed(1):0) + '%)' : '' } 
-                        }
+                        { label: '% สะสม', data: cumulativeData, type: 'line', borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.2)', yAxisID: 'y1', tension: 0.3, pointRadius: 4, datalabels: { align: 'top', color: '#7c3aed', offset: 8, font: { weight: 'bold' }, formatter: (val) => val + '%' } },
+                        { label: 'จำนวน', data: ngItems.map(i=>i.value), backgroundColor: '#ef4444', yAxisID: 'y', borderRadius: 4, datalabels: { align: 'end', anchor: 'end', color: '#444', formatter: (val) => val>0 ? val + '\n(' + (totalNG>0?((val/totalNG)*100).toFixed(1):0) + '%)' : '' } }
                     ]
                 },
-                options: { 
-                    ...commonOpts, 
-                    layout: { padding: { top: 30 } }, // เพิ่มพื้นที่ว่างด้านบนให้ Label
-                    plugins: { 
-                        legend: { display: true, position: 'bottom' }, // ย้าย Legend ลงล่างเพื่อลดการทับซ้อน
-                        datalabels: { display: true } 
-                    }, 
-                    scales: { 
-                        y: { beginAtZero: true }, 
-                        y1: { beginAtZero: true, max: 105, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + '%' } } 
-                    } 
-                }
+                options: { ...commonOpts, layout: { padding: { top: 30 } }, plugins: { legend: { display: true, position: 'bottom' }, datalabels: { display: true } }, scales: { y: { beginAtZero: true }, y1: { beginAtZero: true, max: 105, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + '%' } } } }
             });
 
             // 6. QC Trend
@@ -539,9 +532,8 @@
             if(mData.remarks && mData.remarks.length > 0) { rSec.classList.remove('hidden'); rList.innerHTML = `<ul class="list-disc pl-5 space-y-1">${mData.remarks.map(r => `<li>${r}</li>`).join('')}</ul>`; } else { rSec.classList.add('hidden'); }
             modal.classList.remove('hidden');
             if(machineDetailChart) machineDetailChart.destroy();
-            const hourlyData = mData.hourlyFg || Array(currentDashboardData.hourlyLabels.length).fill(0);
             machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), {
-                type: 'bar', data: { labels: currentDashboardData.hourlyLabels, datasets: [{ label: 'FG รายชั่วโมง', data: hourlyData, backgroundColor: '#3b82f6', borderRadius: 4 }] },
+                type: 'bar', data: { labels: currentDashboardData.hourlyLabels, datasets: [{ label: 'FG รายชั่วโมง', data: mData.hourlyFg, backgroundColor: '#3b82f6', borderRadius: 4 }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
             });
         }
