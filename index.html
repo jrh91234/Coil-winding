@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.16 Plan & White BG</title>
+    <title>CWM Production System - v3.17 Planning UI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -49,17 +49,18 @@
 <body class="bg-gray-100 min-h-screen font-sans pb-10">
     <nav class="bg-white shadow-md sticky top-0 z-20">
         <div class="flex max-w-6xl mx-auto">
-            <button onclick="switchTab('form')" id="tab-form" class="flex-1 py-4 text-center tab-active text-sm md:text-base transition-colors">📝 บันทึกข้อมูล</button>
-            <button onclick="switchTab('dashboard');" id="tab-dashboard" class="flex-1 py-4 text-center text-gray-500 text-sm md:text-base hover:bg-gray-50 transition-colors">📊 Dashboard</button>
+            <button onclick="switchTab('form')" id="tab-form" class="flex-1 py-4 text-center tab-active text-sm md:text-base transition-colors">📝 บันทึกผลิต</button>
+            <button onclick="switchTab('planning')" id="tab-planning" class="flex-1 py-4 text-center text-gray-500 text-sm md:text-base hover:bg-gray-50 transition-colors">📅 วางแผน (Plan)</button>
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="flex-1 py-4 text-center text-gray-500 text-sm md:text-base hover:bg-gray-50 transition-colors">📊 Dashboard</button>
         </div>
     </nav>
 
-    <!-- FORM SECTION -->
+    <!-- SECTION 1: PRODUCTION RECORD FORM -->
     <main id="section-form" class="max-w-2xl mx-auto p-4 space-y-4">
         <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-lg md:text-xl font-bold text-gray-800">บันทึกยอดการผลิต</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v3.16 Plan</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v3.17 Plan UI</span>
             </div>
             
             <form id="productionForm" class="space-y-4">
@@ -136,7 +137,59 @@
         </div>
     </main>
 
-    <!-- DASHBOARD SECTION -->
+    <!-- SECTION 2: PLANNING FORM (New) -->
+    <main id="section-planning" class="max-w-2xl mx-auto p-4 space-y-4 hidden">
+        <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-indigo-500">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-lg md:text-xl font-bold text-gray-800">📅 วางแผนการผลิต (Planning)</h1>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">Add Target</span>
+            </div>
+            
+            <form id="planningForm" class="space-y-6">
+                <div class="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
+                    <p class="text-sm text-indigo-800 mb-4">กรุณาระบุยอดเป้าหมาย (Target) สำหรับวันที่และรุ่นสินค้าที่ต้องการ</p>
+                    
+                    <div class="grid grid-cols-1 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ผลิต (Plan Date)</label>
+                            <input type="date" id="planDate" name="planDate" required class="w-full p-3 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">รุ่นสินค้า (Product Model)</label>
+                            <select id="planProduct" name="planProduct" required class="w-full p-3 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
+                                <option value="S1B29288-JR (10A)">S1B29288-JR (10A)</option>
+                                <option value="S1B71819-JR (16A)">S1B71819-JR (16A)</option>
+                                <option value="S1B29292-JR (20A)">S1B29292-JR (20A)</option>
+                                <option value="51207080HC-JR (25/32A)">51207080HC-JR (25/32A)</option>
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">กะ (Shift)</label>
+                                <select id="planShift" name="planShift" required class="w-full p-3 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
+                                    <option value="All">รวมทุกกะ (All Day)</option>
+                                    <option value="A">เฉพาะกะ A</option>
+                                    <option value="B">เฉพาะกะ B</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">เป้าหมาย (Target Qty)</label>
+                                <input type="number" id="planQty" name="planQty" min="1" required class="w-full p-3 border border-indigo-200 rounded-lg text-lg font-bold text-indigo-700 text-center focus:ring-2 focus:ring-indigo-500" placeholder="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" id="planSubmitBtn" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-indigo-700 active:scale-95 transition-transform duration-100 text-lg">
+                    💾 บันทึกแผน (Save Plan)
+                </button>
+            </form>
+        </div>
+    </main>
+
+    <!-- SECTION 3: DASHBOARD -->
     <main id="section-dashboard" class="max-w-6xl mx-auto p-4 space-y-6 hidden">
         <div class="bg-white p-4 rounded-xl shadow-md border-t-4 border-indigo-500">
             <h2 class="text-gray-700 font-bold text-sm mb-3 flex items-center gap-2">📅 ตัวเลือกการกรอง <span class="text-xs font-normal text-gray-400">(Filter)</span></h2>
@@ -182,51 +235,44 @@
         </div>
 
         <div id="dashboard-content" class="space-y-6 pb-20">
-            <!-- KPIs Grid (Fixed Top) -->
+            <!-- KPIs Grid -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <!-- 1. Target (From Google Sheet) -->
-                <div class="bg-white rounded-xl shadow-md flex flex-col h-full transition-all duration-200 border-l-4 border-indigo-500 p-5">
+                <div class="widget-card border-l-4 border-indigo-500 p-5">
                     <div class="flex justify-between items-start">
                         <div>
                             <p class="text-xs text-gray-400 uppercase font-semibold">Production Target (Plan)</p>
-                            <!-- แสดงผลเป็นข้อความที่ดึงมา -->
                             <p id="stat-target" class="text-3xl font-bold text-indigo-600 mt-1">0</p>
                             <p class="text-[10px] text-gray-400">ดึงจากแผนรายวัน (Sheet: Plan_Data)</p>
                         </div>
                         <div class="bg-indigo-50 p-3 rounded-full"><span class="text-2xl">🎯</span></div>
                     </div>
                 </div>
-                <!-- 2. FG -->
-                <div class="bg-white rounded-xl shadow-md flex flex-col h-full transition-all duration-200 border-l-4 border-blue-500 p-5">
+                <div class="widget-card border-l-4 border-blue-500 p-5">
                     <div class="flex justify-between items-center">
                         <div><p class="text-xs text-gray-400 uppercase font-semibold">Total FG (ยอดดี)</p><p id="stat-fg" class="text-3xl font-bold text-blue-600 mt-1">0</p></div>
                         <div class="bg-blue-50 p-3 rounded-full"><span class="text-2xl">📦</span></div>
                     </div>
                 </div>
-                <!-- 3. Achievement -->
-                <div class="bg-white rounded-xl shadow-md flex flex-col h-full transition-all duration-200 border-l-4 border-orange-500 p-5">
+                <div class="widget-card border-l-4 border-orange-500 p-5">
                     <div class="w-full">
                         <p class="text-xs text-gray-400 uppercase font-semibold">% Achievement</p>
                         <p id="stat-achievement" class="text-3xl font-bold text-orange-600 mt-1">0%</p>
                         <div class="w-full bg-gray-200 rounded-full h-2.5 mt-2"><div id="progress-achievement" class="bg-orange-600 h-2.5 rounded-full" style="width: 0%"></div></div>
                     </div>
                 </div>
-                <!-- 4. NG -->
-                <div class="bg-white rounded-xl shadow-md flex flex-col h-full transition-all duration-200 border-l-4 border-red-500 p-5">
+                <div class="widget-card border-l-4 border-red-500 p-5">
                     <div class="flex justify-between items-center">
                         <div><p class="text-xs text-gray-400 uppercase font-semibold">Total NG (ยอดเสีย)</p><p id="stat-ng" class="text-3xl font-bold text-red-600 mt-1">0</p></div>
                         <div class="bg-red-50 p-3 rounded-full"><span class="text-2xl">🗑️</span></div>
                     </div>
                 </div>
-                <!-- 5. Yield -->
-                <div class="bg-white rounded-xl shadow-md flex flex-col h-full transition-all duration-200 border-l-4 border-green-500 p-5">
+                <div class="widget-card border-l-4 border-green-500 p-5">
                     <div class="flex justify-between items-center">
                         <div><p class="text-xs text-gray-400 uppercase font-semibold">% Yield (คุณภาพ)</p><p id="stat-yield" class="text-3xl font-bold text-green-600 mt-1">0%</p></div>
                         <div class="bg-green-50 p-3 rounded-full"><span class="text-2xl">📈</span></div>
                     </div>
                 </div>
-                <!-- 6. UPH -->
-                <div class="bg-white rounded-xl shadow-md flex flex-col h-full transition-all duration-200 border-l-4 border-teal-500 p-5">
+                <div class="widget-card border-l-4 border-teal-500 p-5">
                     <div class="flex justify-between items-center">
                         <div><p class="text-xs text-gray-400 uppercase font-semibold">Avg Speed (UPH)</p><p id="stat-uph" class="text-3xl font-bold text-teal-600 mt-1">0</p></div>
                         <div class="bg-teal-50 p-3 rounded-full"><span class="text-2xl">🚀</span></div>
@@ -234,58 +280,51 @@
                 </div>
             </div>
 
-            <!-- Sortable Charts Grid -->
+            <!-- Charts Grid -->
             <div id="sortable-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Pareto -->
-                <div class="widget-card border-t-4 border-purple-500">
+                <div class="widget-card border-t-4 border-purple-500 bg-white">
                     <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">📉 NG Analysis (Pareto)</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
                     </div>
                     <div class="p-4 flex-1 min-h-[300px]"><canvas id="paretoChart"></canvas></div>
                 </div>
-                <!-- QC Trend -->
-                <div class="widget-card border-t-4 border-orange-500">
+                <div class="widget-card border-t-4 border-orange-500 bg-white">
                     <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Rate Trend</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
                     </div>
                     <div class="p-4 flex-1 min-h-[300px]"><canvas id="qcTrendChart"></canvas></div>
                 </div>
-                <!-- Yield Model -->
-                <div class="widget-card">
+                <div class="widget-card bg-white">
                     <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
                     </div>
                     <div class="p-4 flex-1 min-h-[250px]"><canvas id="yieldModelChart"></canvas></div>
                 </div>
-                <!-- Yield Machine -->
-                <div class="widget-card">
+                <div class="widget-card bg-white">
                     <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
                     </div>
                     <div class="p-4 flex-1 min-h-[250px]"><canvas id="yieldMachineChart"></canvas></div>
                 </div>
-                <!-- Hourly -->
-                <div class="widget-card">
+                <div class="widget-card bg-white">
                     <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">Hourly Production (FG/NG)</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
                     </div>
                     <div class="p-4 flex-1 min-h-[300px]"><canvas id="hourlyChart"></canvas></div>
                 </div>
-                <!-- NG Breakdown -->
-                <div class="widget-card">
+                <div class="widget-card bg-white">
                     <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">NG Breakdown (Pie)</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
                     </div>
                     <div class="p-4 flex-1 min-h-[300px]"><canvas id="ngChart"></canvas></div>
                 </div>
-                <!-- Detailed Table -->
-                <div class="widget-card md:col-span-2">
+                <div class="widget-card md:col-span-2 bg-white">
                     <div class="p-3 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none drag-handle">
                         <h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600 px-2">↔</button>
@@ -368,6 +407,7 @@
             document.getElementById('startDate').value = today;
             document.getElementById('endDate').value = today;
             document.getElementById('productionDate').value = today;
+            document.getElementById('planDate').value = today; // Default Plan Date
 
             if(localStorage.getItem('CWM_CUSTOM_NG')) ngSymptoms = JSON.parse(localStorage.getItem('CWM_CUSTOM_NG'));
             if(localStorage.getItem('CWM_RECORDERS')) recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
@@ -387,13 +427,13 @@
             else switchTab('form');
         };
 
+        // --- Common Logic ---
         function detectCurrentShift() {
             const hour = new Date().getHours();
             let type = (hour >= 8 && hour < 20) ? "Day" : "Night";
             document.querySelector(`input[name="shift_type_toggle"][value="${type}"]`).checked = true;
             updateHourSlots(type);
         }
-
         function updateHourSlots(type) {
             const select = document.getElementById('hourSlot');
             const hours = (type === "Day") ? DAY_HOURS : NIGHT_HOURS;
@@ -405,16 +445,28 @@
 
         function switchTab(tab) {
             document.getElementById('section-form').classList.toggle('hidden', tab !== 'form');
+            document.getElementById('section-planning').classList.toggle('hidden', tab !== 'planning');
             document.getElementById('section-dashboard').classList.toggle('hidden', tab !== 'dashboard');
-            const tabForm = document.getElementById('tab-form'); const tabDash = document.getElementById('tab-dashboard');
-            if(tab === 'form') { tabForm.classList.add('tab-active', 'text-blue-600'); tabForm.classList.remove('text-gray-500'); tabDash.classList.remove('tab-active', 'text-blue-600'); tabDash.classList.add('text-gray-500'); } 
-            else { tabDash.classList.add('tab-active', 'text-blue-600'); tabDash.classList.remove('text-gray-500'); tabForm.classList.remove('tab-active', 'text-blue-600'); tabForm.classList.add('text-gray-500'); loadDashboard(); }
+            
+            const tabs = ['form', 'planning', 'dashboard'];
+            tabs.forEach(t => {
+                const btn = document.getElementById('tab-' + t);
+                if (t === tab) {
+                    btn.classList.add('tab-active', 'text-blue-600');
+                    btn.classList.remove('text-gray-500');
+                } else {
+                    btn.classList.remove('tab-active', 'text-blue-600');
+                    btn.classList.add('text-gray-500');
+                }
+            });
+
+            if (tab === 'dashboard') loadDashboard();
         }
         
         function calculateKPIs() {
              if(!currentDashboardData) return;
              const totalFg = currentDashboardData.totalFg || 0;
-             const target = currentDashboardData.productionTarget || 0; // Fetched from Sheet
+             const target = currentDashboardData.productionTarget || 0; 
              
              document.getElementById('stat-target').innerText = target.toLocaleString();
              
@@ -440,6 +492,7 @@
         function addNewSymptom() { const val = document.getElementById('new-symptom-input').value.trim(); if(val && !ngSymptoms.includes(val)) { ngSymptoms.push(val); localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); closeModal(); manageSymptoms(); document.querySelectorAll('select[name="ng_type[]"]').forEach(s => s.innerHTML = ngSymptoms.map(o=>`<option value="${o}">${o}</option>`).join('')); } }
         function deleteSymptom(i) { if(confirm('ลบ?')) { ngSymptoms.splice(i,1); localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); closeModal(); manageSymptoms(); } }
 
+        // --- PRODUCTION SUBMIT ---
         document.getElementById('productionForm').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('submitBtn'); const originalText = btn.innerText;
@@ -450,6 +503,33 @@
             const types = fd.getAll('ng_type[]'); const qtys = fd.getAll('ng_qty[]'); const remarks = fd.getAll('ng_remark[]');
             types.forEach((t,i) => { if(parseInt(qtys[i]) > 0) payload.ngDetails.push({type:t, qty:parseInt(qtys[i]), remark: remarks[i]||""}); });
             try { await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); alert("✅ บันทึกข้อมูลสำเร็จ!"); e.target.reset(); document.getElementById('ngList').innerHTML = ""; addNgRow(); detectCurrentShift(); if(recorderList.length > 0 && fd.get('recorder')) document.getElementById('recorder').value = fd.get('recorder'); document.getElementById('productionDate').value = new Date().toISOString().split('T')[0];} catch(e) { alert("❌ Error: "+e.message); } finally { btn.disabled = false; btn.innerText = originalText; }
+        };
+
+        // --- PLANNING SUBMIT ---
+        document.getElementById('planningForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('planSubmitBtn'); const originalText = btn.innerText;
+            btn.disabled = true; btn.innerText = "กำลังบันทึกแผน...";
+            const fd = new FormData(e.target);
+            
+            const payload = {
+                action: 'SAVE_PLAN', // New Action
+                planDate: fd.get('planDate'),
+                product: fd.get('planProduct'),
+                shift: fd.get('planShift'),
+                qty: parseInt(fd.get('planQty'))
+            };
+
+            try {
+                await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+                alert("✅ บันทึกแผนการผลิตสำเร็จ!");
+                e.target.reset();
+                document.getElementById('planDate').value = new Date().toISOString().split('T')[0];
+            } catch(e) { 
+                alert("❌ Error: "+e.message); 
+            } finally { 
+                btn.disabled = false; btn.innerText = originalText; 
+            }
         };
 
         async function loadDashboard() {
