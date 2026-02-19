@@ -50,7 +50,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-lg md:text-xl font-bold text-gray-800">บันทึกยอดการผลิต</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v3.12 Stacked</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v3.13 +KPIs</span>
             </div>
             
             <form id="productionForm" class="space-y-4">
@@ -173,28 +173,72 @@
         </div>
 
         <div id="dashboard-content" class="space-y-6">
+            <!-- Main KPIs Grid -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                <!-- 1. Target Setting -->
+                <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-indigo-500 flex justify-between items-start">
+                    <div>
+                        <p class="text-xs text-gray-400 uppercase font-semibold">Production Target</p>
+                        <div class="flex items-baseline gap-2 mt-1">
+                            <input type="number" id="targetInput" onchange="updateTarget(this.value)" class="text-2xl font-bold text-indigo-600 w-24 border-b border-indigo-200 focus:outline-none focus:border-indigo-600 bg-transparent" value="0">
+                            <span class="text-xs text-gray-500">pcs</span>
+                        </div>
+                    </div>
+                    <div class="bg-indigo-50 p-3 rounded-full"><span class="text-2xl">🎯</span></div>
+                </div>
+
+                <!-- 2. Total FG -->
                 <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-blue-500 flex justify-between items-center">
                     <div>
-                        <p class="text-xs text-gray-400 uppercase font-semibold">FG รวม</p>
+                        <p class="text-xs text-gray-400 uppercase font-semibold">Total FG (ยอดดี)</p>
                         <p id="stat-fg" class="text-3xl font-bold text-blue-600 mt-1">0</p>
                     </div>
                     <div class="bg-blue-50 p-3 rounded-full"><span class="text-2xl">📦</span></div>
                 </div>
+
+                <!-- 3. % Achievement (New) -->
+                <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-orange-500">
+                     <div class="flex justify-between items-start">
+                        <div class="w-full">
+                            <p class="text-xs text-gray-400 uppercase font-semibold">% Achievement (ความสำเร็จ)</p>
+                            <div class="flex justify-between items-end mt-1">
+                                <p id="stat-achievement" class="text-3xl font-bold text-orange-600">0%</p>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+                                <div id="progress-achievement" class="bg-orange-600 h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                     </div>
+                 </div>
+
+                <!-- 4. Total NG -->
                 <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-red-500 flex justify-between items-center">
                     <div>
-                        <p class="text-xs text-gray-400 uppercase font-semibold">NG รวม</p>
+                        <p class="text-xs text-gray-400 uppercase font-semibold">Total NG (ยอดเสีย)</p>
                         <p id="stat-ng" class="text-3xl font-bold text-red-600 mt-1">0</p>
                     </div>
                     <div class="bg-red-50 p-3 rounded-full"><span class="text-2xl">🗑️</span></div>
                 </div>
+
+                <!-- 5. % Yield -->
                 <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-green-500 flex justify-between items-center">
                     <div>
-                        <p class="text-xs text-gray-400 uppercase font-semibold">% Yield</p>
+                        <p class="text-xs text-gray-400 uppercase font-semibold">% Yield (คุณภาพ)</p>
                         <p id="stat-yield" class="text-3xl font-bold text-green-600 mt-1">0%</p>
                     </div>
                     <div class="bg-green-50 p-3 rounded-full"><span class="text-2xl">📈</span></div>
                 </div>
+
+                <!-- 6. UPH (New) -->
+                 <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-teal-500 flex justify-between items-center">
+                    <div>
+                        <p class="text-xs text-gray-400 uppercase font-semibold">Avg Speed (UPH)</p>
+                        <p id="stat-uph" class="text-3xl font-bold text-teal-600 mt-1">0</p>
+                        <p class="text-[10px] text-gray-400">ชิ้น/ชั่วโมง (ที่มีการผลิต)</p>
+                    </div>
+                    <div class="bg-teal-50 p-3 rounded-full"><span class="text-2xl">🚀</span></div>
+                 </div>
             </div>
 
             <!-- Pareto & QC Trend -->
@@ -298,6 +342,10 @@
 
             if(localStorage.getItem('CWM_CUSTOM_NG')) ngSymptoms = JSON.parse(localStorage.getItem('CWM_CUSTOM_NG'));
             if(localStorage.getItem('CWM_RECORDERS')) recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
+            if(localStorage.getItem('CWM_DAILY_TARGET')) {
+                dailyTarget = parseInt(localStorage.getItem('CWM_DAILY_TARGET'));
+                document.getElementById('targetInput').value = dailyTarget;
+            }
 
             const machineSelect = document.getElementById('machine');
             for (let i = 1; i <= 16; i++) {
@@ -312,6 +360,32 @@
             if(window.location.hash === '#dashboard') switchTab('dashboard');
             else switchTab('form');
         };
+
+        function updateTarget(val) {
+            dailyTarget = parseInt(val) || 0;
+            localStorage.setItem('CWM_DAILY_TARGET', dailyTarget);
+            calculateKPIs();
+        }
+
+        function calculateKPIs() {
+             if(!currentDashboardData) return;
+             // Achievement
+             const totalFg = currentDashboardData.totalFg || 0;
+             const ach = dailyTarget > 0 ? ((totalFg / dailyTarget) * 100).toFixed(1) : 0;
+             document.getElementById('stat-achievement').innerText = ach + "%";
+             document.getElementById('progress-achievement').style.width = Math.min(ach, 100) + "%";
+             
+             // UPH (Avg based on active hours)
+             // Count hours that have > 0 FG
+             let activeHours = 0;
+             if(currentDashboardData.hourlyData) {
+                 activeHours = currentDashboardData.hourlyData.filter(v => v > 0).length;
+             }
+             if(activeHours === 0) activeHours = 1; // avoid divide by zero
+             
+             const uph = (totalFg / activeHours).toFixed(0);
+             document.getElementById('stat-uph').innerText = uph;
+        }
 
         function toggleLayout() {
             const containers = document.querySelectorAll('.chart-section');
@@ -437,6 +511,8 @@
                 const total = data.totalFg + data.totalNg;
                 const totalYield = total > 0 ? ((data.totalFg / total) * 100).toFixed(2) : 0;
                 document.getElementById('stat-yield').innerText = totalYield + "%";
+                
+                calculateKPIs(); // Recalculate extra KPIs
                 renderCharts(data); renderTable(data);
             } catch(e) { console.error(e); alert("โหลดข้อมูลล้มเหลว"); } 
             finally { document.getElementById('dashboard-loader').classList.add('hidden'); document.getElementById('dashboard-content').classList.remove('hidden'); }
@@ -458,7 +534,6 @@
                 options: { ...commonOpts, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } }
             });
 
-            // 3. Hourly Production (Stacked: FG vs NG)
             if(charts.hourly) charts.hourly.destroy();
             charts.hourly = new Chart(document.getElementById('hourlyChart').getContext('2d'), {
                 type: 'bar', // เปลี่ยนเป็น Bar
@@ -469,10 +544,7 @@
                         { label: 'NG (เสีย)', data: data.hourlyNgData || [], backgroundColor: '#ef4444', borderRadius: 2 }
                     ] 
                 }, 
-                options: { 
-                    ...commonOpts, 
-                    scales: { x: { stacked: true }, y: { stacked: true } } // Stacked
-                }
+                options: { ...commonOpts, scales: { x: { stacked: true }, y: { stacked: true } } }
             });
 
             if(charts.ng) charts.ng.destroy();
@@ -480,7 +552,6 @@
                 type: 'doughnut', data: { labels: data.ngLabels, datasets: [{ data: data.ngValues, backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#8b5cf6'] }] }, options: commonOpts
             });
 
-            // 5. Pareto (Fixed Label Clipping with Grace)
             if(charts.pareto) charts.pareto.destroy();
             const ngItems = data.ngLabels.map((l, i) => ({ label: l, value: data.ngValues[i] })).sort((a,b)=>b.value-a.value);
             const totalNG = ngItems.reduce((a,b)=>a+b.value,0);
@@ -497,7 +568,7 @@
                     layout: { padding: { top: 20 } },
                     plugins: { legend: { display: true, position: 'bottom' }, datalabels: { display: true } }, 
                     scales: { 
-                        y: { beginAtZero: true, grace: '15%' }, // เพิ่ม Space ด้านบนไม่ให้ label ชน
+                        y: { beginAtZero: true, grace: '15%' }, 
                         y1: { beginAtZero: true, max: 105, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + '%' } } 
                     } 
                 }
@@ -539,7 +610,6 @@
             modal.classList.remove('hidden');
             if(machineDetailChart) machineDetailChart.destroy();
             
-            // Stacked Bar in Modal
             machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), {
                 type: 'bar', 
                 data: { 
@@ -549,12 +619,7 @@
                         { label: 'NG (เสีย)', data: mData.hourlyNg || [], backgroundColor: '#ef4444', borderRadius: 2 }
                     ] 
                 },
-                options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false, 
-                    plugins: { legend: { display: true } }, 
-                    scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } 
-                }
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true } }, scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } }
             });
         }
     </script>
