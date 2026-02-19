@@ -121,7 +121,7 @@
                              <option value="05:00-06:00">05:00-06:00</option>
                              <option value="06:00-07:00">06:00-07:00</option>
                              <option value="07:00-08:00">07:00-08:00</option>
-                        
+                             <option value="OT">OT</option>
                         </select>
                     </div>
                 </div>
@@ -149,6 +149,7 @@
         </div>
     </main>
 
+    <!-- DASHBOARD SECTION -->
     <main id="section-dashboard" class="max-w-6xl mx-auto p-4 space-y-6 hidden">
         <!-- Filter Bar -->
         <div class="bg-white p-4 rounded-xl shadow-md border-t-4 border-indigo-500">
@@ -215,10 +216,10 @@
                     <div class="h-80 w-full"><canvas id="paretoChart"></canvas></div>
                     <p class="text-xs text-gray-400 mt-2 text-right">แสดงจำนวนและ % ของแต่ละอาการเสีย</p>
                 </div>
-                <!-- QC Trend (New!) -->
+                <!-- QC Trend -->
                 <div class="bg-white p-4 md:p-6 rounded-xl shadow-md border-t-4 border-orange-500">
                     <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">📉 Daily NG Rate Trend (แนวโน้มของเสีย)</h3>
-                    <div class="h-64"><canvas id="qcTrendChart"></canvas></div>
+                    <div class="h-80 w-full"><canvas id="qcTrendChart"></canvas></div>
                     <p class="text-xs text-gray-400 mt-2 text-right">ใช้ติดตามการพัฒนาคุณภาพ (% NG ลดลง = ดีขึ้น)</p>
                 </div>
             </div>
@@ -265,6 +266,7 @@
         </div>
     </main>
 
+    <!-- Modals (Recorder, Symptoms, Machine Detail) -->
     <div id="modal-overlay" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-end md:items-center justify-center hidden backdrop-blur-sm p-0 md:p-4"></div>
 
     <div id="modal-machine-detail" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center hidden backdrop-blur-sm p-2">
@@ -293,6 +295,7 @@
         let recorderList = ["พนักงาน 1", "พนักงาน 2"];
         let dailyTarget = 0;
         let currentDashboardData = null;
+        let machineDetailChart = null;
 
         window.onload = () => {
             const today = new Date().toISOString().split('T')[0];
@@ -332,7 +335,7 @@
             }
         }
 
-        // --- Recorders Logic ---
+        // --- Recorders & NG Mgmt ---
         function renderRecorderOptions() {
             const select = document.getElementById('recorder');
             const current = select.value;
@@ -357,7 +360,6 @@
             if(confirm('ยืนยันการลบ?')) { recorderList.splice(i,1); localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); document.getElementById('modal-overlay').classList.add('hidden'); manageRecorders(); renderRecorderOptions(); }
         }
 
-        // --- NG Logic ---
         function addNgRow() {
             const div = document.createElement('div');
             div.className = "flex flex-col gap-2 p-3 bg-gray-50 rounded-lg mb-3 animate-fade-in border border-gray-100 shadow-sm";
@@ -365,7 +367,7 @@
             document.getElementById('ngList').appendChild(div);
         }
         function manageSymptoms() {
-             const listHtml = ngSymptoms.map((s,i) => `<div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg mb-2 border border-gray-100"><span class="text-sm font-medium text-gray-700">${s}</span><button onclick="deleteSymptom(${i})" class="text-red-500 p-2 hover:bg-red-50 rounded">🗑️</button></div>`).join('');
+            const listHtml = ngSymptoms.map((s,i) => `<div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg mb-2 border border-gray-100"><span class="text-sm font-medium text-gray-700">${s}</span><button onclick="deleteSymptom(${i})" class="text-red-500 p-2 hover:bg-red-50 rounded">🗑️</button></div>`).join('');
             const content = `<div id="symptom-list-container">${listHtml}</div><div class="mt-4 flex gap-2"><input type="text" id="new-symptom-input" placeholder="อาการเสียใหม่..." class="flex-1 p-3 border rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-red-500 outline-none"><button onclick="addNewSymptom()" class="bg-green-600 text-white px-4 rounded-lg font-bold shadow hover:bg-green-700">เพิ่ม</button></div>`;
             showModal('จัดการรายการอาการ NG', content);
         }
@@ -377,7 +379,7 @@
             if(confirm('ลบ?')) { ngSymptoms.splice(i,1); localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); document.getElementById('modal-overlay').classList.add('hidden'); manageSymptoms(); }
         }
 
-        // --- Submit ---
+        // --- Submit Logic ---
         document.getElementById('productionForm').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('submitBtn'); const originalText = btn.innerText;
@@ -396,9 +398,8 @@
             catch(e) { alert("❌ Error: "+e.message); } finally { btn.disabled = false; btn.innerText = originalText; }
         };
 
-        // --- Dashboard ---
+        // --- Dashboard Logic ---
         let charts = {};
-        let machineDetailChart = null;
 
         async function loadDashboard() {
             if(!SCRIPT_URL) return;
@@ -406,10 +407,9 @@
             document.getElementById('dashboard-loader').classList.remove('hidden');
             const start = document.getElementById('startDate').value; 
             const end = document.getElementById('endDate').value;
-            const shift = document.getElementById('filterShift').value; // Get Selected Shift
+            const shift = document.getElementById('filterShift').value;
 
             try {
-                // Pass shift param to backend
                 const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}`);
                 const data = await res.json();
                 currentDashboardData = data;
@@ -453,7 +453,7 @@
                 type: 'doughnut', data: { labels: data.ngLabels, datasets: [{ data: data.ngValues, backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#8b5cf6'] }] }, options: commonOpts
             });
 
-            // 5. Pareto
+            // 5. Pareto (FIXED OVERLAP)
             if(charts.pareto) charts.pareto.destroy();
             const ngItems = data.ngLabels.map((l, i) => ({ label: l, value: data.ngValues[i] })).sort((a,b)=>b.value-a.value);
             const totalNG = ngItems.reduce((a,b)=>a+b.value,0);
@@ -462,10 +462,9 @@
                 acc+=i.value; 
                 return totalNG>0?((acc/totalNG)*100).toFixed(1):0;
             });
-
             charts.pareto = new Chart(document.getElementById('paretoChart').getContext('2d'), {
                 type: 'bar',
-                plugins: [ChartDataLabels], 
+                plugins: [ChartDataLabels],
                 data: { 
                     labels: ngItems.map(i=>i.label), 
                     datasets: [
@@ -474,28 +473,33 @@
                             data: cumulativeData, 
                             type: 'line', 
                             borderColor: '#8b5cf6', 
-                            backgroundColor: 'rgba(139, 92, 246, 0.2)',
-                            yAxisID: 'y1',
-                            tension: 0.3,
-                            pointStyle: 'circle',
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
-                            datalabels: { align: 'top', anchor: 'start', offset: 4, color: '#7c3aed', formatter: (val) => val + '%', font: { weight: 'bold', size: 10 } }
+                            backgroundColor: 'rgba(139, 92, 246, 0.2)', 
+                            yAxisID: 'y1', 
+                            tension: 0.3, 
+                            pointRadius: 4, 
+                            datalabels: { align: 'top', color: '#7c3aed', offset: 8, font: { weight: 'bold' }, formatter: (val) => val + '%' } 
                         },
                         { 
                             label: 'จำนวน', 
                             data: ngItems.map(i=>i.value), 
                             backgroundColor: '#ef4444', 
-                            yAxisID: 'y',
-                            borderRadius: 4,
-                            datalabels: { align: 'end', anchor: 'end', color: '#444', formatter: (val) => val>0 ? val + '\n(' + (totalNG>0?((val/totalNG)*100).toFixed(1):0) + '%)' : '', font: { size: 10 } }
+                            yAxisID: 'y', 
+                            borderRadius: 4, 
+                            datalabels: { align: 'end', anchor: 'end', color: '#444', formatter: (val) => val>0 ? val + '\n(' + (totalNG>0?((val/totalNG)*100).toFixed(1):0) + '%)' : '' } 
                         }
                     ]
                 },
                 options: { 
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: true }, datalabels: { display: true } },
-                    scales: { y: { beginAtZero: true }, y1: { beginAtZero: true, max: 105, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: function(value) { return value + '%' } } } } 
+                    ...commonOpts, 
+                    layout: { padding: { top: 30 } }, // เพิ่มพื้นที่ว่างด้านบนให้ Label
+                    plugins: { 
+                        legend: { display: true, position: 'bottom' }, // ย้าย Legend ลงล่างเพื่อลดการทับซ้อน
+                        datalabels: { display: true } 
+                    }, 
+                    scales: { 
+                        y: { beginAtZero: true }, 
+                        y1: { beginAtZero: true, max: 105, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + '%' } } 
+                    } 
                 }
             });
 
