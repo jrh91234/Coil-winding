@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - Smart Shift v3.8</title>
+    <title>CWM Production System - Smart Shift v3.12</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -50,7 +50,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-lg md:text-xl font-bold text-gray-800">บันทึกยอดการผลิต</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v3.8 Updated Time</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">v3.12 Stacked</span>
             </div>
             
             <form id="productionForm" class="space-y-4">
@@ -156,9 +156,14 @@
                         <option value="Night">เฉพาะกะดึก (Night)</option>
                     </select>
                 </div>
-                <button onclick="loadDashboard()" class="w-full md:w-auto bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700 active:bg-indigo-800 transition">
-                    🔍 ค้นหา
-                </button>
+                <div class="flex gap-2 w-full md:w-auto">
+                    <button onclick="loadDashboard()" class="flex-1 bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700 active:bg-indigo-800 transition">
+                        🔍 ค้นหา
+                    </button>
+                    <button onclick="toggleLayout()" id="layoutBtn" class="flex-1 bg-white text-indigo-600 border border-indigo-200 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-indigo-50 active:bg-indigo-100 transition whitespace-nowrap">
+                        🔀 Layout: คู่
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -193,18 +198,20 @@
             </div>
 
             <!-- Pareto & QC Trend -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="chart-section grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Pareto -->
                 <div class="bg-white p-4 md:p-6 rounded-xl shadow-md border-t-4 border-purple-500">
                     <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">📉 NG Analysis (Pareto Chart)</h3>
                     <div class="h-80 w-full"><canvas id="paretoChart"></canvas></div>
                 </div>
+                <!-- QC Trend -->
                 <div class="bg-white p-4 md:p-6 rounded-xl shadow-md border-t-4 border-orange-500">
                     <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">📉 Daily NG Rate Trend (แนวโน้มของเสีย)</h3>
                     <div class="h-80 w-full"><canvas id="qcTrendChart"></canvas></div>
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="chart-section grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-4 md:p-6 rounded-xl shadow-md">
                     <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">% Yield by Model (แยกรุ่น)</h3>
                     <div class="h-64"><canvas id="yieldModelChart"></canvas></div>
@@ -215,9 +222,9 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="chart-section grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-4 md:p-6 rounded-xl shadow-md">
-                    <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">Hourly Production (FG)</h3>
+                    <h3 class="font-bold mb-4 text-gray-700 text-sm md:text-base">Hourly Production (FG/NG)</h3>
                     <div class="h-64"><canvas id="hourlyChart"></canvas></div>
                 </div>
                 <div class="bg-white p-4 md:p-6 rounded-xl shadow-md">
@@ -246,6 +253,7 @@
         </div>
     </main>
 
+    <!-- Modals -->
     <div id="modal-overlay" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-end md:items-center justify-center hidden backdrop-blur-sm p-0 md:p-4"></div>
 
     <div id="modal-machine-detail" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center hidden backdrop-blur-sm p-2">
@@ -277,11 +285,9 @@
         let machineDetailChart = null;
         let charts = {};
 
-        // Shift Configuration Updated
         const DAY_HOURS = ["08:00-09:00", "09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "OT 17:30-18:00", "OT 18:00-19:00", "OT 19:00-20:00"];
         const NIGHT_HOURS = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:00-06:30", "OT 06:00-07:30", "OT 07:00-08:00"];
 
-        // ลงทะเบียน Plugin สำหรับ Pareto Chart
         try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
 
         window.onload = () => {
@@ -301,17 +307,26 @@
 
             renderRecorderOptions();
             addNgRow();
-            
-            // Smart Detect Shift Type
             detectCurrentShift();
 
             if(window.location.hash === '#dashboard') switchTab('dashboard');
             else switchTab('form');
         };
 
+        function toggleLayout() {
+            const containers = document.querySelectorAll('.chart-section');
+            const btn = document.getElementById('layoutBtn');
+            const isCurrentlyGrid = containers[0].classList.contains('md:grid-cols-2');
+            containers.forEach(c => {
+                if (isCurrentlyGrid) { c.classList.remove('md:grid-cols-2'); c.classList.add('md:grid-cols-1'); } 
+                else { c.classList.remove('md:grid-cols-1'); c.classList.add('md:grid-cols-2'); }
+            });
+            btn.innerText = isCurrentlyGrid ? "🔀 Layout: เดี่ยว" : "🔀 Layout: คู่";
+            Object.values(charts).forEach(chart => { if(chart) chart.resize(); });
+        }
+
         function detectCurrentShift() {
             const hour = new Date().getHours();
-            // เช้า: 08:00 - 19:59, ดึก: 20:00 - 07:59
             let type = (hour >= 8 && hour < 20) ? "Day" : "Night";
             document.querySelector(`input[name="shift_type_toggle"][value="${type}"]`).checked = true;
             updateHourSlots(type);
@@ -321,7 +336,6 @@
             const select = document.getElementById('hourSlot');
             const hours = (type === "Day") ? DAY_HOURS : NIGHT_HOURS;
             select.innerHTML = hours.map(h => `<option value="${h}">${h}</option>`).join('');
-            
             const currentHourStr = new Date().getHours().toString().padStart(2, '0') + ":00";
             const match = hours.find(h => h.startsWith(currentHourStr));
             if(match) select.value = match;
@@ -353,6 +367,7 @@
             overlay.innerHTML = `<div class="bg-white w-full md:w-96 md:rounded-xl rounded-t-xl shadow-2xl overflow-hidden animate-fade-in"><div class="bg-gray-100 p-4 border-b flex justify-between items-center"><h3 class="font-bold text-lg text-gray-800">${title}</h3><button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button></div><div class="p-4 max-h-[60vh] overflow-y-auto">${contentHtml}</div></div>`;
             overlay.classList.remove('hidden');
         }
+        function closeModal() { document.getElementById('modal-overlay').classList.add('hidden'); }
         function manageRecorders() {
             const listHtml = recorderList.map((r,i) => `<div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg mb-2 border border-gray-100"><span class="text-sm font-medium text-gray-700">${r}</span><button onclick="deleteRecorder(${i})" class="text-red-500 p-2 hover:bg-red-50 rounded">🗑️</button></div>`).join('');
             const content = `<div id="recorder-list-container">${listHtml}</div><div class="mt-4 flex gap-2"><input type="text" id="new-recorder-input" placeholder="ชื่อพนักงานใหม่..." class="flex-1 p-3 border rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none"><button onclick="addNewRecorder()" class="bg-green-600 text-white px-4 rounded-lg font-bold shadow hover:bg-green-700">เพิ่ม</button></div>`;
@@ -360,10 +375,10 @@
         }
         function addNewRecorder() {
             const val = document.getElementById('new-recorder-input').value.trim();
-            if(val && !recorderList.includes(val)) { recorderList.push(val); localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); document.getElementById('modal-overlay').classList.add('hidden'); manageRecorders(); renderRecorderOptions(); }
+            if(val && !recorderList.includes(val)) { recorderList.push(val); localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); closeModal(); manageRecorders(); renderRecorderOptions(); }
         }
         function deleteRecorder(i) {
-            if(confirm('ยืนยันการลบ?')) { recorderList.splice(i,1); localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); document.getElementById('modal-overlay').classList.add('hidden'); manageRecorders(); renderRecorderOptions(); }
+            if(confirm('ยืนยันการลบ?')) { recorderList.splice(i,1); localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); closeModal(); manageRecorders(); renderRecorderOptions(); }
         }
 
         function addNgRow() {
@@ -379,10 +394,10 @@
         }
         function addNewSymptom() {
             const val = document.getElementById('new-symptom-input').value.trim();
-            if(val && !ngSymptoms.includes(val)) { ngSymptoms.push(val); localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); document.getElementById('modal-overlay').classList.add('hidden'); manageSymptoms(); document.querySelectorAll('select[name="ng_type[]"]').forEach(s => s.innerHTML = ngSymptoms.map(o=>`<option value="${o}">${o}</option>`).join('')); }
+            if(val && !ngSymptoms.includes(val)) { ngSymptoms.push(val); localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); closeModal(); manageSymptoms(); document.querySelectorAll('select[name="ng_type[]"]').forEach(s => s.innerHTML = ngSymptoms.map(o=>`<option value="${o}">${o}</option>`).join('')); }
         }
         function deleteSymptom(i) {
-            if(confirm('ลบ?')) { ngSymptoms.splice(i,1); localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); document.getElementById('modal-overlay').classList.add('hidden'); manageSymptoms(); }
+            if(confirm('ลบ?')) { ngSymptoms.splice(i,1); localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); closeModal(); manageSymptoms(); }
         }
 
         document.getElementById('productionForm').onsubmit = async (e) => {
@@ -405,42 +420,25 @@
             catch(e) { alert("❌ Error: "+e.message); } finally { btn.disabled = false; btn.innerText = originalText; }
         };
 
-        // --- Dashboard Logic ---
         async function loadDashboard() {
             if(!SCRIPT_URL) return;
             document.getElementById('dashboard-content').classList.add('hidden');
             document.getElementById('dashboard-loader').classList.remove('hidden');
-            
-            const start = document.getElementById('startDate').value; 
-            const end = document.getElementById('endDate').value;
-            const shift = document.getElementById('filterShift').value;
-            const shiftType = document.getElementById('filterShiftType').value;
+            const start = document.getElementById('startDate').value; const end = document.getElementById('endDate').value;
+            const shift = document.getElementById('filterShift').value; const shiftType = document.getElementById('filterShiftType').value;
 
             try {
                 const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}&shiftType=${shiftType}`);
-                
-                // ตรวจสอบว่า Response เป็น HTML หรือ JSON
-                const contentType = res.headers.get("content-type");
-                if (contentType && contentType.indexOf("application/json") === -1) {
-                    throw new Error("ระบบตอบกลับมาเป็นหน้าเว็บ (HTML) แทนข้อมูล JSON อาจเกิดจากลิงก์ Script ผิด หรือสิทธิ์การเข้าถึงไม่ได้ตั้งเป็น 'Anyone'");
-                }
-
                 const data = await res.json();
-                
-                // เช็คว่ามีข้อมูลหรือไม่
-                if(data.totalFg === 0 && data.totalNg === 0) {
-                    alert("⚠️ ไม่พบข้อมูลในช่วงวันที่เลือก\n(หรือ Script ยังไม่ได้รับการอัปเดต Version)");
-                }
-
+                if(data.totalFg === 0 && data.totalNg === 0) alert("⚠️ ไม่พบข้อมูลในช่วงวันที่เลือก");
                 currentDashboardData = data;
                 document.getElementById('stat-fg').innerText = data.totalFg.toLocaleString();
                 document.getElementById('stat-ng').innerText = data.totalNg.toLocaleString();
                 const total = data.totalFg + data.totalNg;
                 const totalYield = total > 0 ? ((data.totalFg / total) * 100).toFixed(2) : 0;
                 document.getElementById('stat-yield').innerText = totalYield + "%";
-                
                 renderCharts(data); renderTable(data);
-            } catch(e) { console.error(e); alert("ไม่สามารถโหลดข้อมูลได้: " + e.message); } 
+            } catch(e) { console.error(e); alert("โหลดข้อมูลล้มเหลว"); } 
             finally { document.getElementById('dashboard-loader').classList.add('hidden'); document.getElementById('dashboard-content').classList.remove('hidden'); }
         }
 
@@ -460,9 +458,21 @@
                 options: { ...commonOpts, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } }
             });
 
+            // 3. Hourly Production (Stacked: FG vs NG)
             if(charts.hourly) charts.hourly.destroy();
             charts.hourly = new Chart(document.getElementById('hourlyChart').getContext('2d'), {
-                type: 'line', data: { labels: data.hourlyLabels, datasets: [{ label: 'Total FG', data: data.hourlyData, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.3 }] }, options: commonOpts
+                type: 'bar', // เปลี่ยนเป็น Bar
+                data: { 
+                    labels: data.hourlyLabels, 
+                    datasets: [
+                        { label: 'FG (งานดี)', data: data.hourlyData, backgroundColor: '#3b82f6', borderRadius: 2 },
+                        { label: 'NG (เสีย)', data: data.hourlyNgData || [], backgroundColor: '#ef4444', borderRadius: 2 }
+                    ] 
+                }, 
+                options: { 
+                    ...commonOpts, 
+                    scales: { x: { stacked: true }, y: { stacked: true } } // Stacked
+                }
             });
 
             if(charts.ng) charts.ng.destroy();
@@ -470,6 +480,7 @@
                 type: 'doughnut', data: { labels: data.ngLabels, datasets: [{ data: data.ngValues, backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#8b5cf6'] }] }, options: commonOpts
             });
 
+            // 5. Pareto (Fixed Label Clipping with Grace)
             if(charts.pareto) charts.pareto.destroy();
             const ngItems = data.ngLabels.map((l, i) => ({ label: l, value: data.ngValues[i] })).sort((a,b)=>b.value-a.value);
             const totalNG = ngItems.reduce((a,b)=>a+b.value,0);
@@ -481,7 +492,15 @@
                     { label: '% สะสม', data: cumulativeData, type: 'line', borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.2)', yAxisID: 'y1', tension: 0.3, pointRadius: 4, datalabels: { align: 'top', color: '#7c3aed', offset: 8, font: { weight: 'bold' }, formatter: (val) => val + '%' } },
                     { label: 'จำนวน', data: ngItems.map(i=>i.value), backgroundColor: '#ef4444', yAxisID: 'y', borderRadius: 4, datalabels: { align: 'end', anchor: 'end', color: '#444', formatter: (val) => val>0 ? val + '\n(' + (totalNG>0?((val/totalNG)*100).toFixed(1):0) + '%)' : '' } }
                 ]},
-                options: { ...commonOpts, layout: { padding: { top: 30 } }, plugins: { legend: { display: true, position: 'bottom' }, datalabels: { display: true } }, scales: { y: { beginAtZero: true }, y1: { beginAtZero: true, max: 105, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + '%' } } } }
+                options: { 
+                    ...commonOpts, 
+                    layout: { padding: { top: 20 } },
+                    plugins: { legend: { display: true, position: 'bottom' }, datalabels: { display: true } }, 
+                    scales: { 
+                        y: { beginAtZero: true, grace: '15%' }, // เพิ่ม Space ด้านบนไม่ให้ label ชน
+                        y1: { beginAtZero: true, max: 105, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + '%' } } 
+                    } 
+                }
             });
 
             if(charts.qcTrend) charts.qcTrend.destroy();
@@ -512,16 +531,30 @@
         function showMachineDetail(machineName) {
             if(!currentDashboardData) return;
             const modal = document.getElementById('modal-machine-detail');
-            const mData = currentDashboardData.machineData[machineName] || { fg: 0, ngTotal: 0, hourlyFg: [], remarks: [] };
+            const mData = currentDashboardData.machineData[machineName] || { fg: 0, ngTotal: 0, hourlyFg: [], hourlyNg: [], remarks: [] };
             document.getElementById('machine-detail-title').innerText = `📊 รายละเอียดเครื่อง ${machineName}`;
             document.getElementById('machine-detail-stats').innerHTML = `<div class="bg-blue-50 p-2 rounded">FG รวม: <b class="text-blue-700 text-xl">${mData.fg}</b></div><div class="bg-red-50 p-2 rounded">NG รวม: <b class="text-red-700 text-xl">${mData.ngTotal}</b></div>`;
             const rList = document.getElementById('machine-remarks-list'); const rSec = document.getElementById('machine-detail-remarks');
             if(mData.remarks && mData.remarks.length > 0) { rSec.classList.remove('hidden'); rList.innerHTML = `<ul class="list-disc pl-5 space-y-1">${mData.remarks.map(r => `<li>${r}</li>`).join('')}</ul>`; } else { rSec.classList.add('hidden'); }
             modal.classList.remove('hidden');
             if(machineDetailChart) machineDetailChart.destroy();
+            
+            // Stacked Bar in Modal
             machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), {
-                type: 'bar', data: { labels: currentDashboardData.hourlyLabels, datasets: [{ label: 'FG รายชั่วโมง', data: mData.hourlyFg, backgroundColor: '#3b82f6', borderRadius: 4 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+                type: 'bar', 
+                data: { 
+                    labels: currentDashboardData.hourlyLabels, 
+                    datasets: [
+                        { label: 'FG (งานดี)', data: mData.hourlyFg, backgroundColor: '#3b82f6', borderRadius: 2 },
+                        { label: 'NG (เสีย)', data: mData.hourlyNg || [], backgroundColor: '#ef4444', borderRadius: 2 }
+                    ] 
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: true } }, 
+                    scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } 
+                }
             });
         }
     </script>
