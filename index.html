@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.29 FG by Model</title>
+    <title>CWM Production System - v3.30 Full & Readable</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -46,7 +46,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.28 Auto-Cut Shift</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.30 Full</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -54,14 +54,44 @@
                         <label class="block text-xs font-bold text-blue-800 mb-1">📅 วันที่ <span class="text-[10px] text-gray-500 font-normal">(ตัดวัน 08:00น.)</span></label>
                         <input type="date" id="productionDate" name="productionDate" required class="w-full p-2 border rounded text-sm">
                     </div>
-                    <div><label class="block text-xs font-bold text-blue-800 mb-1">👤 ผู้บันทึก</label><div class="flex gap-1"><input list="recorder-datalist" id="recorder" name="recorder" class="w-full p-2 border rounded text-sm" placeholder="พิมพ์ชื่อ..." required autocomplete="off"><datalist id="recorder-datalist"></datalist><button type="button" onclick="manageRecorders()" class="bg-white border border-blue-300 text-blue-600 px-2 rounded hover:bg-blue-50">⚙️</button></div></div>
-                    <div><label class="block text-xs font-bold text-blue-800 mb-1">กะ</label><div class="flex items-center gap-2"><select id="shift" name="shift" class="w-20 p-2 border rounded text-sm"><option value="A">A</option><option value="B">B</option></select><div class="flex flex-col text-[10px]"><label><input type="radio" name="shift_type_toggle" value="Day" onclick="updateHourSlots('Day')"> เช้า</label><label><input type="radio" name="shift_type_toggle" value="Night" onclick="updateHourSlots('Night')"> ดึก</label></div></div></div>
-                    <div><label class="block text-xs font-bold text-blue-800 mb-1">ช่วงเวลา</label><select id="hourSlot" name="hourSlot" required class="w-full p-2 border rounded text-sm"></select></div>
+                    <div>
+                        <label class="block text-xs font-bold text-blue-800 mb-1">👤 ผู้บันทึก</label>
+                        <div class="flex gap-1">
+                            <input list="recorder-datalist" id="recorder" name="recorder" class="w-full p-2 border rounded text-sm" placeholder="พิมพ์ชื่อ..." required autocomplete="off">
+                            <datalist id="recorder-datalist"></datalist>
+                            <button type="button" onclick="manageRecorders()" class="bg-white border border-blue-300 text-blue-600 px-2 rounded hover:bg-blue-50">⚙️</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-blue-800 mb-1">กะ</label>
+                        <div class="flex items-center gap-2">
+                            <select id="shift" name="shift" class="w-20 p-2 border rounded text-sm">
+                                <option value="A">A</option>
+                                <option value="B">B</option>
+                            </select>
+                            <div class="flex flex-col text-[10px]">
+                                <label><input type="radio" name="shift_type_toggle" value="Day" onclick="updateHourSlots('Day')"> เช้า</label>
+                                <label><input type="radio" name="shift_type_toggle" value="Night" onclick="updateHourSlots('Night')"> ดึก</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-blue-800 mb-1">ช่วงเวลา</label>
+                        <select id="hourSlot" name="hourSlot" required class="w-full p-2 border rounded text-sm"></select>
+                    </div>
                 </div>
+                
                 <div id="batchList" class="space-y-3"></div>
-                <button type="button" onclick="addBatchRow()" class="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 font-bold hover:border-blue-400 hover:text-blue-500">+ เพิ่มรายการ (Add Model/Machine)</button>
+                
+                <button type="button" onclick="addBatchRow()" class="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 font-bold hover:border-blue-400 hover:text-blue-500">
+                    + เพิ่มรายการ (Add Model/Machine)
+                </button>
+                
                 <hr class="border-gray-200">
-                <button type="submit" id="submitBtn" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg">💾 บันทึกข้อมูลทั้งหมด</button>
+                
+                <button type="submit" id="submitBtn" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg hover:from-blue-700 hover:to-indigo-700 transition-colors">
+                    💾 บันทึกข้อมูลทั้งหมด
+                </button>
             </form>
         </div>
     </main>
@@ -78,11 +108,17 @@
                     </div>
                     <select id="planProduct" name="planProduct" required class="w-full p-3 border rounded-lg"></select>
                     <div class="grid grid-cols-2 gap-4">
-                         <select id="planShift" name="planShift" class="p-3 border rounded-lg"><option value="All">All Shifts</option><option value="A">A</option><option value="B">B</option></select>
+                         <select id="planShift" name="planShift" class="p-3 border rounded-lg">
+                             <option value="All">All Shifts</option>
+                             <option value="A">A</option>
+                             <option value="B">B</option>
+                         </select>
                          <input type="number" id="planQty" name="planQty" placeholder="Target Qty (ชิ้น)" class="p-3 border rounded-lg text-center font-bold">
                     </div>
                 </div>
-                <button type="submit" id="planSubmitBtn" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg">บันทึกแผน</button>
+                <button type="submit" id="planSubmitBtn" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition-colors">
+                    บันทึกแผน
+                </button>
             </form>
         </div>
     </main>
@@ -94,8 +130,16 @@
             <div class="flex flex-col md:flex-row gap-3 items-end">
                 <input type="date" id="startDate" class="w-full md:w-auto p-2 border rounded text-sm">
                 <input type="date" id="endDate" class="w-full md:w-auto p-2 border rounded text-sm">
-                <select id="filterShift" class="w-full md:w-auto p-2 border rounded text-sm"><option value="All">All Shift</option><option value="A">A</option><option value="B">B</option></select>
-                <select id="filterShiftType" class="w-full md:w-auto p-2 border rounded text-sm"><option value="All">All Type</option><option value="Day">Day</option><option value="Night">Night</option></select>
+                <select id="filterShift" class="w-full md:w-auto p-2 border rounded text-sm">
+                    <option value="All">All Shift</option>
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                </select>
+                <select id="filterShiftType" class="w-full md:w-auto p-2 border rounded text-sm">
+                    <option value="All">All Type</option>
+                    <option value="Day">Day</option>
+                    <option value="Night">Night</option>
+                </select>
                 <div class="flex gap-2 w-full md:w-auto">
                     <button onclick="loadDashboard()" class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded text-sm font-bold shadow-md hover:bg-indigo-700 active:bg-indigo-800 transition-colors">🔍 ค้นหา</button>
                     <button onclick="toggleLayout()" id="layoutBtn" class="flex-1 bg-white text-indigo-600 border border-indigo-200 px-4 py-2 rounded text-sm font-bold shadow-sm hover:bg-indigo-50 transition-colors">🔀 Layout: คู่</button>
@@ -103,7 +147,10 @@
             </div>
         </div>
         
-        <div id="dashboard-loader" class="hidden text-center py-10"><div class="loader mx-auto"></div><p class="text-gray-500 font-medium mt-2">กำลังประมวลผลข้อมูล...</p></div>
+        <div id="dashboard-loader" class="hidden text-center py-10">
+            <div class="loader mx-auto"></div>
+            <p class="text-gray-500 font-medium mt-2">กำลังประมวลผลข้อมูล...</p>
+        </div>
         
         <div id="dashboard-content" class="space-y-6 pb-20">
              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -172,14 +219,59 @@
                     <div class="flex-1 overflow-y-auto" id="fgModelList"></div>
                 </div>
                 
-                <div class="widget-card p-4 h-80"><div class="widget-header drag-handle mb-2"><h3 class="font-bold text-gray-700 text-sm">📉 NG Analysis (Pareto)</h3><button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button></div><div class="flex-1 relative"><canvas id="paretoChart"></canvas></div></div>
-                <div class="widget-card p-4 h-80"><div class="widget-header drag-handle mb-2"><h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Trend</h3><button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button></div><div class="flex-1 relative"><canvas id="qcTrendChart"></canvas></div></div>
-                <div class="widget-card p-4 h-64"><div class="widget-header drag-handle mb-2"><h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3><button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button></div><div class="flex-1 relative"><canvas id="yieldModelChart"></canvas></div></div>
-                <div class="widget-card p-4 h-64"><div class="widget-header drag-handle mb-2"><h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3><button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button></div><div class="flex-1 relative"><canvas id="yieldMachineChart"></canvas></div></div>
-                <div class="widget-card p-4 h-80"><div class="widget-header drag-handle mb-2"><h3 class="font-bold text-gray-700 text-sm">Hourly Production (FG & NG)</h3><button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button></div><div class="flex-1 relative"><canvas id="hourlyChart"></canvas></div></div>
-                <div class="widget-card p-4 h-80"><div class="widget-header drag-handle mb-2"><h3 class="font-bold text-gray-700 text-sm">NG Breakdown</h3><button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button></div><div class="flex-1 relative"><canvas id="ngChart"></canvas></div></div>
+                <div class="widget-card p-4 h-80">
+                    <div class="widget-header drag-handle mb-2">
+                        <h3 class="font-bold text-gray-700 text-sm">📉 NG Analysis (Pareto)</h3>
+                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                    </div>
+                    <div class="flex-1 relative"><canvas id="paretoChart"></canvas></div>
+                </div>
+                
+                <div class="widget-card p-4 h-80">
+                    <div class="widget-header drag-handle mb-2">
+                        <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Trend</h3>
+                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                    </div>
+                    <div class="flex-1 relative"><canvas id="qcTrendChart"></canvas></div>
+                </div>
+                
+                <div class="widget-card p-4 h-64">
+                    <div class="widget-header drag-handle mb-2">
+                        <h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3>
+                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                    </div>
+                    <div class="flex-1 relative"><canvas id="yieldModelChart"></canvas></div>
+                </div>
+                
+                <div class="widget-card p-4 h-64">
+                    <div class="widget-header drag-handle mb-2">
+                        <h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3>
+                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                    </div>
+                    <div class="flex-1 relative"><canvas id="yieldMachineChart"></canvas></div>
+                </div>
+                
+                <div class="widget-card p-4 h-80">
+                    <div class="widget-header drag-handle mb-2">
+                        <h3 class="font-bold text-gray-700 text-sm">Hourly Production (FG & NG)</h3>
+                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                    </div>
+                    <div class="flex-1 relative"><canvas id="hourlyChart"></canvas></div>
+                </div>
+                
+                <div class="widget-card p-4 h-80">
+                    <div class="widget-header drag-handle mb-2">
+                        <h3 class="font-bold text-gray-700 text-sm">NG Breakdown</h3>
+                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                    </div>
+                    <div class="flex-1 relative"><canvas id="ngChart"></canvas></div>
+                </div>
+                
                 <div class="widget-card md:col-span-2 p-4">
-                    <div class="widget-header drag-handle mb-2"><h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3><button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button></div>
+                    <div class="widget-header drag-handle mb-2">
+                        <h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3>
+                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                    </div>
                     <div class="table-container">
                         <table class="w-full min-w-[1200px] divide-y divide-gray-200">
                             <thead class="bg-gray-50"><tr id="table-header"><th>Machine</th><th>FG</th><th>NG (ชิ้น / Kg)</th><th>% Yield</th></tr></thead>
@@ -275,8 +367,12 @@
             document.getElementById('startDate').value = shiftDate;
             document.getElementById('endDate').value = shiftDate;
 
-            if(localStorage.getItem('CWM_CUSTOM_NG')) ngSymptoms = JSON.parse(localStorage.getItem('CWM_CUSTOM_NG'));
-            if(localStorage.getItem('CWM_RECORDERS')) recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
+            if(localStorage.getItem('CWM_CUSTOM_NG')) {
+                ngSymptoms = JSON.parse(localStorage.getItem('CWM_CUSTOM_NG'));
+            }
+            if(localStorage.getItem('CWM_RECORDERS')) {
+                recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
+            }
 
             detectCurrentShift();
             addBatchRow();
@@ -293,28 +389,47 @@
             try {
                 const res = await fetch(`${SCRIPT_URL}?action=GET_OPTIONS`);
                 const data = await res.json();
+                
                 const recList = document.getElementById('recorder-datalist');
                 recList.innerHTML = '';
                 const allRecorders = new Set([...recorderList, ...data.recorders]);
                 recorderList = Array.from(allRecorders);
                 renderRecorderOptions();
+                
                 if (data.ngTypes && data.ngTypes.length > 0) {
                    const newSet = new Set([...ngSymptoms, ...data.ngTypes]);
                    ngSymptoms = Array.from(newSet);
                 }
-            } catch (e) { console.log("Error fetching options", e); }
+            } catch (e) { 
+                console.log("Error fetching options", e); 
+            }
         }
 
         // --- Layout ---
         function initSortable() {
             const grid = document.getElementById('sortable-grid');
-            Sortable.create(grid, { handle: '.drag-handle', animation: 150, ghostClass: 'sortable-ghost', onEnd: function() { Object.values(charts).forEach(c => { if(c) c.resize(); }); } });
+            Sortable.create(grid, { 
+                handle: '.drag-handle', 
+                animation: 150, 
+                ghostClass: 'sortable-ghost', 
+                onEnd: function() { 
+                    Object.values(charts).forEach(c => { if(c) c.resize(); }); 
+                } 
+            });
         }
+
         function toggleCardSize(btn) {
             const card = btn.closest('.widget-card');
-            if (card.classList.contains('md:col-span-2')) card.classList.remove('md:col-span-2'); else card.classList.add('md:col-span-2');
+            if (card.classList.contains('md:col-span-2')) {
+                card.classList.remove('md:col-span-2'); 
+            } else {
+                card.classList.add('md:col-span-2');
+            }
             const canvas = card.querySelector('canvas');
-            if(canvas) { const chartInstance = Chart.getChart(canvas); if(chartInstance) chartInstance.resize(); }
+            if(canvas) { 
+                const chartInstance = Chart.getChart(canvas); 
+                if(chartInstance) chartInstance.resize(); 
+            }
         }
 
         // --- Common Logic ---
@@ -324,6 +439,7 @@
             document.querySelector(`input[name="shift_type_toggle"][value="${type}"]`).checked = true;
             updateHourSlots(type);
         }
+
         function updateHourSlots(type) {
             const select = document.getElementById('hourSlot');
             const hours = (type === "Day") ? DAY_HOURS : NIGHT_HOURS;
@@ -334,12 +450,18 @@
             const match = hours.find(h => h.startsWith(currentHourStr));
             if(match) select.value = match;
         }
+
         function switchTab(tab) {
             ['form', 'planning', 'dashboard'].forEach(t => {
                 document.getElementById('section-'+t).classList.toggle('hidden', t !== tab);
                 const btn = document.getElementById('tab-'+t);
-                if(t === tab) { btn.classList.add('tab-active','text-blue-600'); btn.classList.remove('text-gray-500'); }
-                else { btn.classList.remove('tab-active','text-blue-600'); btn.classList.add('text-gray-500'); }
+                if(t === tab) { 
+                    btn.classList.add('tab-active','text-blue-600'); 
+                    btn.classList.remove('text-gray-500'); 
+                } else { 
+                    btn.classList.remove('tab-active','text-blue-600'); 
+                    btn.classList.add('text-gray-500'); 
+                }
             });
             if(tab==='dashboard') loadDashboard();
         }
@@ -349,18 +471,31 @@
             const container = document.getElementById('batchList');
             const rowId = 'row-' + Date.now() + Math.random().toString(36).substr(2, 5);
             let machineOpts = '<option value="">เลือกเครื่อง...</option>';
-            for(let i=1; i<=16; i++) machineOpts += `<option value="CWM-${String(i).padStart(2,'0')}">CWM-${String(i).padStart(2,'0')}</option>`;
+            for(let i=1; i<=16; i++) {
+                machineOpts += `<option value="CWM-${String(i).padStart(2,'0')}">CWM-${String(i).padStart(2,'0')}</option>`;
+            }
             let prodOpts = productList.map(p => `<option value="${p}">${p}</option>`).join('');
 
             const div = document.createElement('div');
             div.id = rowId;
             div.className = "bg-white p-3 border border-gray-200 rounded-lg shadow-sm flex flex-col md:flex-row gap-3 items-end md:items-center";
             div.innerHTML = `
-                <div class="flex-1 w-full"><label class="text-[10px] text-gray-400 font-bold uppercase">Machine</label><select name="machine" class="w-full p-2 border rounded bg-gray-50 text-sm font-bold">${machineOpts}</select></div>
-                <div class="flex-1 w-full"><label class="text-[10px] text-gray-400 font-bold uppercase">Product</label><select name="productCode" class="w-full p-2 border rounded bg-gray-50 text-sm">${prodOpts}</select></div>
-                <div class="w-24"><label class="text-[10px] text-gray-400 font-bold uppercase">FG</label><input type="number" name="fgAmount" value="1000" class="w-full p-2 border rounded text-center font-bold text-green-600 bg-green-50 focus:bg-white" min="0"></div>
+                <div class="flex-1 w-full">
+                    <label class="text-[10px] text-gray-400 font-bold uppercase">Machine</label>
+                    <select name="machine" class="w-full p-2 border rounded bg-gray-50 text-sm font-bold">${machineOpts}</select>
+                </div>
+                <div class="flex-1 w-full">
+                    <label class="text-[10px] text-gray-400 font-bold uppercase">Product</label>
+                    <select name="productCode" class="w-full p-2 border rounded bg-gray-50 text-sm">${prodOpts}</select>
+                </div>
+                <div class="w-24">
+                    <label class="text-[10px] text-gray-400 font-bold uppercase">FG</label>
+                    <input type="number" name="fgAmount" value="1000" class="w-full p-2 border rounded text-center font-bold text-green-600 bg-green-50 focus:bg-white" min="0">
+                </div>
                 <div class="w-full md:w-auto flex gap-2">
-                    <button type="button" onclick="openNgModal('${rowId}')" class="flex-1 md:flex-none bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded font-bold text-sm hover:bg-red-100 relative">NG (Kg) <span id="ng-badge-${rowId}" class="hidden absolute -top-2 -right-2 bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">0</span></button>
+                    <button type="button" onclick="openNgModal('${rowId}')" class="flex-1 md:flex-none bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded font-bold text-sm hover:bg-red-100 relative">
+                        NG (Kg) <span id="ng-badge-${rowId}" class="hidden absolute -top-2 -right-2 bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">0</span>
+                    </button>
                     <button type="button" onclick="removeBatchRow('${rowId}')" class="text-gray-400 hover:text-red-500 px-2 text-xl">&times;</button>
                 </div>
             `;
@@ -368,7 +503,11 @@
             batchNgData[rowId] = [];
         }
 
-        function removeBatchRow(id) { document.getElementById(id).remove(); delete batchNgData[id]; }
+        function removeBatchRow(id) { 
+            const el = document.getElementById(id);
+            if(el) el.remove(); 
+            delete batchNgData[id]; 
+        }
 
         // --- NG Modal ---
         function openNgModal(rowId) {
@@ -383,92 +522,232 @@
                 const remark = existing ? existing.remark : '';
                 renderNgItem(list, s, val, remark);
             });
+
             const customItems = batchNgData[rowId].filter(x => !ngSymptoms.includes(x.type));
-            customItems.forEach(item => { renderNgItem(list, item.type, item.qty, item.remark, true); });
+            customItems.forEach(item => { 
+                renderNgItem(list, item.type, item.qty, item.remark, true); 
+            });
+
             modal.classList.remove('hidden');
         }
 
         function renderNgItem(container, label, qty, remark, isCustom=false) {
-            const div = document.createElement('div'); div.className = "border-b pb-2 mb-2 ng-item-row";
-            const typeInput = isCustom ? `<input type="text" class="ng-type-name w-full p-1 border rounded text-sm font-bold text-red-700 mb-1" value="${label}" placeholder="ระบุชื่ออาการ...">` : `<span class="text-sm font-medium text-gray-700 ng-type-label" data-label="${label}">${label}</span>`;
-            div.innerHTML = `<div class="flex justify-between items-center mb-1"><div class="flex-1">${typeInput}</div><div class="flex items-center ml-2"><input type="number" class="ng-input-qty w-20 p-1 border rounded text-right" value="${qty}" placeholder="0.00" min="0" step="0.01"><span class="text-xs text-gray-500 ml-1">Kg</span></div></div><input type="text" class="ng-input-remark w-full p-1 border rounded text-xs bg-gray-50" value="${remark}" placeholder="หมายเหตุ...">`;
+            const div = document.createElement('div'); 
+            div.className = "border-b pb-2 mb-2 ng-item-row";
+            
+            const typeInput = isCustom 
+                ? `<input type="text" class="ng-type-name w-full p-1 border rounded text-sm font-bold text-red-700 mb-1" value="${label}" placeholder="ระบุชื่ออาการ...">` 
+                : `<span class="text-sm font-medium text-gray-700 ng-type-label" data-label="${label}">${label}</span>`;
+            
+            div.innerHTML = `
+                <div class="flex justify-between items-center mb-1">
+                    <div class="flex-1">${typeInput}</div>
+                    <div class="flex items-center ml-2">
+                        <input type="number" class="ng-input-qty w-20 p-1 border rounded text-right" value="${qty}" placeholder="0.00" min="0" step="0.01">
+                        <span class="text-xs text-gray-500 ml-1">Kg</span>
+                    </div>
+                </div>
+                <input type="text" class="ng-input-remark w-full p-1 border rounded text-xs bg-gray-50" value="${remark}" placeholder="หมายเหตุ...">
+            `;
             container.appendChild(div);
         }
 
-        function addCustomNgField() { const list = document.getElementById('modal-ng-list'); renderNgItem(list, "", "", "", true); list.scrollTop = list.scrollHeight; }
+        function addCustomNgField() { 
+            const list = document.getElementById('modal-ng-list'); 
+            renderNgItem(list, "", "", "", true); 
+            list.scrollTop = list.scrollHeight; 
+        }
 
         function closeNgModal(save) {
             if(save && currentRowIdForNg) {
                 const rows = document.querySelectorAll('.ng-item-row');
                 const newData = [];
                 let total = 0;
+
                 rows.forEach(row => {
                     let type = "";
                     const labelSpan = row.querySelector('.ng-type-label');
                     const nameInput = row.querySelector('.ng-type-name');
-                    if (labelSpan) type = labelSpan.dataset.label; else if (nameInput) type = nameInput.value.trim();
+                    
+                    if (labelSpan) type = labelSpan.dataset.label; 
+                    else if (nameInput) type = nameInput.value.trim();
+                    
                     const qty = parseFloat(row.querySelector('.ng-input-qty').value);
                     const remark = row.querySelector('.ng-input-remark').value;
-                    if (type && qty > 0) { newData.push({ type, qty, remark }); total += qty; }
+                    
+                    if (type && qty > 0) { 
+                        newData.push({ type, qty, remark }); 
+                        total += qty; 
+                    }
                 });
+
                 batchNgData[currentRowIdForNg] = newData;
                 const badge = document.getElementById(`ng-badge-${currentRowIdForNg}`);
-                if(total > 0) { badge.innerText = total.toFixed(2); badge.classList.remove('hidden'); } else { badge.classList.add('hidden'); }
+                if(total > 0) { 
+                    badge.innerText = total.toFixed(2); 
+                    badge.classList.remove('hidden'); 
+                } else { 
+                    badge.classList.add('hidden'); 
+                }
             }
             document.getElementById('modal-ng').classList.add('hidden');
             currentRowIdForNg = null;
         }
 
         // --- Recorders & Lists ---
-        function renderRecorderOptions() { const datalist = document.getElementById('recorder-datalist'); datalist.innerHTML = ''; recorderList.forEach(r => { const opt = document.createElement('option'); opt.value = r; datalist.appendChild(opt); }); }
-        function renderProductOptions() { const s = document.getElementById('planProduct'); if(s) s.innerHTML = productList.map(p=>`<option value="${p}">${p}</option>`).join(''); }
-        function manageRecorders() { currentManageType = 'recorder'; openManageListModal('จัดการรายชื่อผู้บันทึก', recorderList); }
-        function manageSymptoms() { currentManageType = 'symptom'; openManageListModal('จัดการรายการอาการ NG', ngSymptoms); }
-        function openManageListModal(title, list) { const modal = document.getElementById('modal-manage-list'); document.getElementById('manage-list-title').innerText = title; renderManageListContent(list); modal.classList.remove('hidden'); }
-        function renderManageListContent(list) { const container = document.getElementById('manage-list-content'); container.innerHTML = list.map((item, i) => `<div class="flex justify-between items-center bg-gray-50 p-2 rounded mb-1"><span class="text-sm">${item}</span><button onclick="deleteListItem(${i})" class="text-red-500 hover:bg-red-100 p-1 rounded">🗑️</button></div>`).join(''); }
+        function renderRecorderOptions() { 
+            const datalist = document.getElementById('recorder-datalist'); 
+            datalist.innerHTML = ''; 
+            recorderList.forEach(r => { 
+                const opt = document.createElement('option'); 
+                opt.value = r; 
+                datalist.appendChild(opt); 
+            }); 
+        }
+
+        function renderProductOptions() { 
+            const s = document.getElementById('planProduct'); 
+            if(s) s.innerHTML = productList.map(p=>`<option value="${p}">${p}</option>`).join(''); 
+        }
+
+        function manageRecorders() { 
+            currentManageType = 'recorder'; 
+            openManageListModal('จัดการรายชื่อผู้บันทึก', recorderList); 
+        }
+
+        function manageSymptoms() { 
+            currentManageType = 'symptom'; 
+            openManageListModal('จัดการรายการอาการ NG', ngSymptoms); 
+        }
+
+        function openManageListModal(title, list) { 
+            const modal = document.getElementById('modal-manage-list'); 
+            document.getElementById('manage-list-title').innerText = title; 
+            renderManageListContent(list); 
+            modal.classList.remove('hidden'); 
+        }
+
+        function renderManageListContent(list) { 
+            const container = document.getElementById('manage-list-content'); 
+            container.innerHTML = list.map((item, i) => `
+                <div class="flex justify-between items-center bg-gray-50 p-2 rounded mb-1">
+                    <span class="text-sm">${item}</span>
+                    <button onclick="deleteListItem(${i})" class="text-red-500 hover:bg-red-100 p-1 rounded">🗑️</button>
+                </div>
+            `).join(''); 
+        }
+
         function addNewItemToList() {
              const val = document.getElementById('new-item-input').value.trim();
              if(!val) return;
-             if (currentManageType === 'recorder') { if (!recorderList.includes(val)) { recorderList.push(val); localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); renderRecorderOptions(); renderManageListContent(recorderList); } } 
-             else if (currentManageType === 'symptom') { if (!ngSymptoms.includes(val)) { ngSymptoms.push(val); localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); renderManageListContent(ngSymptoms); } }
+             if (currentManageType === 'recorder') { 
+                 if (!recorderList.includes(val)) { 
+                     recorderList.push(val); 
+                     localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
+                     renderRecorderOptions(); 
+                     renderManageListContent(recorderList); 
+                 } 
+             } else if (currentManageType === 'symptom') { 
+                 if (!ngSymptoms.includes(val)) { 
+                     ngSymptoms.push(val); 
+                     localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
+                     renderManageListContent(ngSymptoms); 
+                 } 
+             }
              document.getElementById('new-item-input').value = '';
         }
+
         function deleteListItem(index) {
              if (!confirm('ยืนยันการลบ?')) return;
-             if (currentManageType === 'recorder') { recorderList.splice(index, 1); localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); renderRecorderOptions(); renderManageListContent(recorderList); } 
-             else if (currentManageType === 'symptom') { ngSymptoms.splice(index, 1); localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); renderManageListContent(ngSymptoms); }
+             if (currentManageType === 'recorder') { 
+                 recorderList.splice(index, 1); 
+                 localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
+                 renderRecorderOptions(); 
+                 renderManageListContent(recorderList); 
+             } else if (currentManageType === 'symptom') { 
+                 ngSymptoms.splice(index, 1); 
+                 localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
+                 renderManageListContent(ngSymptoms); 
+             }
         }
-        function closeManageListModal() { document.getElementById('modal-manage-list').classList.add('hidden'); }
+
+        function closeManageListModal() { 
+            document.getElementById('modal-manage-list').classList.add('hidden'); 
+        }
 
         // --- Submits ---
         document.getElementById('productionForm').onsubmit = async (e) => {
             e.preventDefault();
-            const btn = document.getElementById('submitBtn'); const txt = btn.innerText;
-            btn.disabled = true; btn.innerText = "กำลังส่งข้อมูล...";
+            const btn = document.getElementById('submitBtn'); 
+            const txt = btn.innerText;
+            btn.disabled = true; 
+            btn.innerText = "กำลังส่งข้อมูล...";
+            
             const fd = new FormData(e.target);
             const shiftType = document.querySelector('input[name="shift_type_toggle"]:checked').value;
             const currentRec = fd.get('recorder');
-            if(currentRec && !recorderList.includes(currentRec)) { recorderList.push(currentRec); localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); renderRecorderOptions(); }
-            const common = { timestamp: new Date().toLocaleString('th-TH'), productionDate: fd.get('productionDate'), shift: fd.get('shift'), shiftType: shiftType, recorder: currentRec, hourSlot: fd.get('hourSlot') };
-            const items = []; const rowDivs = document.getElementById('batchList').children;
+            
+            if(currentRec && !recorderList.includes(currentRec)) { 
+                recorderList.push(currentRec); 
+                localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
+                renderRecorderOptions(); 
+            }
+            
+            const common = { 
+                timestamp: new Date().toLocaleString('th-TH'), 
+                productionDate: fd.get('productionDate'), 
+                shift: fd.get('shift'), 
+                shiftType: shiftType, 
+                recorder: currentRec, 
+                hourSlot: fd.get('hourSlot') 
+            };
+            
+            const items = []; 
+            const rowDivs = document.getElementById('batchList').children;
             let newNgTypes = [];
+            
             for(let div of rowDivs) {
                 const machine = div.querySelector('[name="machine"]').value;
                 const product = div.querySelector('[name="productCode"]').value;
                 const fg = parseInt(div.querySelector('[name="fgAmount"]').value) || 0;
+                
                 if(!machine) continue;
+                
                 const ngDetails = batchNgData[div.id] || [];
-                ngDetails.forEach(ng => { if (ng.type && !ngSymptoms.includes(ng.type) && !newNgTypes.includes(ng.type)) newNgTypes.push(ng.type); });
+                ngDetails.forEach(ng => { 
+                    if (ng.type && !ngSymptoms.includes(ng.type) && !newNgTypes.includes(ng.type)) {
+                        newNgTypes.push(ng.type);
+                    } 
+                });
                 items.push({ machine, productCode: product, fgAmount: fg, ngDetails });
             }
-            if(newNgTypes.length > 0) { ngSymptoms = [...ngSymptoms, ...newNgTypes]; localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); }
-            if(items.length === 0) { alert("กรุณาเพิ่มรายการ"); btn.disabled = false; btn.innerText = txt; return; }
+
+            if(newNgTypes.length > 0) { 
+                ngSymptoms = [...ngSymptoms, ...newNgTypes]; 
+                localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
+            }
+
+            if(items.length === 0) { 
+                alert("กรุณาเพิ่มรายการ"); 
+                btn.disabled = false; 
+                btn.innerText = txt; 
+                return; 
+            }
+            
             const payload = { action: 'SAVE_BATCH_PRODUCTION', common, items };
+            
             try { 
                 await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
                 alert("✅ บันทึกข้อมูลเรียบร้อย!"); 
-                document.getElementById('batchList').innerHTML = ''; batchNgData = {}; addBatchRow(); 
-            } catch(e) { alert("Error: " + e.message); } finally { btn.disabled = false; btn.innerText = txt; }
+                document.getElementById('batchList').innerHTML = ''; 
+                batchNgData = {}; 
+                addBatchRow(); 
+            } catch(e) { 
+                alert("Error: " + e.message); 
+            } finally { 
+                btn.disabled = false; 
+                btn.innerText = txt; 
+            }
         };
 
         document.getElementById('planningForm').onsubmit = async (e) => {
@@ -476,13 +755,18 @@
             const btn = document.getElementById('planSubmitBtn');
             const originalText = btn.innerText;
             
-            // ล็อกปุ่มและเปลี่ยนข้อความระหว่างรอ
             btn.disabled = true;
             btn.innerText = "⏳ กำลังบันทึกแผน...";
             btn.classList.add('opacity-50', 'cursor-not-allowed');
 
             const fd = new FormData(e.target);
-            const payload = { action: 'SAVE_PLAN', planDate: fd.get('planDate'), product: fd.get('planProduct'), shift: fd.get('planShift'), qty: fd.get('planQty') };
+            const payload = { 
+                action: 'SAVE_PLAN', 
+                planDate: fd.get('planDate'), 
+                product: fd.get('planProduct'), 
+                shift: fd.get('planShift'), 
+                qty: fd.get('planQty') 
+            };
             
             try {
                 await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', body:JSON.stringify(payload)}); 
@@ -492,7 +776,6 @@
             } catch (error) {
                 alert("❌ เกิดข้อผิดพลาด: " + error.message);
             } finally {
-                // คืนค่าปุ่มกลับมาเมื่อเสร็จสิ้น
                 btn.disabled = false;
                 btn.innerText = originalText;
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -504,17 +787,19 @@
             if(!SCRIPT_URL) return;
             document.getElementById('dashboard-content').classList.add('hidden');
             document.getElementById('dashboard-loader').classList.remove('hidden');
-            const start = document.getElementById('startDate').value; const end = document.getElementById('endDate').value;
-            const shift = document.getElementById('filterShift').value; const shiftType = document.getElementById('filterShiftType').value;
+            
+            const start = document.getElementById('startDate').value; 
+            const end = document.getElementById('endDate').value;
+            const shift = document.getElementById('filterShift').value; 
+            const shiftType = document.getElementById('filterShiftType').value;
+            
             try {
                 const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}&shiftType=${shiftType}`);
                 const data = await res.json();
                 
-                // Show FG and Target
                 document.getElementById('stat-fg').innerText = data.totalFg.toLocaleString();
                 document.getElementById('stat-target').innerText = (data.productionTarget||0).toLocaleString();
                 
-                // Show NG in Pcs and Kg
                 document.getElementById('stat-ng').innerText = `${data.totalNgPcs.toLocaleString()} ชิ้น`;
                 document.getElementById('stat-ng-sub').innerText = `(${data.totalNgKg.toFixed(2)} Kg)`;
                 
@@ -522,22 +807,29 @@
                 document.getElementById('stat-achievement').innerText = ach+"%";
                 document.getElementById('progress-achievement').style.width = Math.min(ach,100)+"%";
                 
-                // Yield calculation using Pcs
                 const total = data.totalFg + data.totalNgPcs;
                 const yieldVal = total>0?((data.totalFg/total)*100).toFixed(2):0;
                 document.getElementById('stat-yield').innerText = yieldVal+"%";
                 
-                let activeHours = 0; if(data.hourlyData) activeHours = data.hourlyData.filter(v => v > 0).length;
+                let activeHours = 0; 
+                if(data.hourlyData) activeHours = data.hourlyData.filter(v => v > 0).length;
                 if(activeHours === 0) activeHours = 1;
                 const uph = (data.totalFg / activeHours).toFixed(0);
                 document.getElementById('stat-uph').innerText = uph;
 
                 currentDashboardData = data;
-                renderCharts(data); renderTable(data); renderFgByModel(data);
-            } catch(e) { console.error(e); } 
-            finally { document.getElementById('dashboard-loader').classList.add('hidden'); document.getElementById('dashboard-content').classList.remove('hidden'); }
+                renderCharts(data); 
+                renderTable(data); 
+                renderFgByModel(data);
+            } catch(e) { 
+                console.error(e); 
+            } finally { 
+                document.getElementById('dashboard-loader').classList.add('hidden'); 
+                document.getElementById('dashboard-content').classList.remove('hidden'); 
+            }
         }
 
+        // --- NEW: Render FG by Model List ---
         function renderFgByModel(data) {
             const container = document.getElementById('fgModelList');
             if(!container) return;
@@ -550,7 +842,11 @@
             let html = '<ul class="divide-y divide-gray-100">';
             models.forEach(m => {
                 const fg = data.productData[m] ? data.productData[m].fg : 0;
-                html += `<li class="py-3 flex justify-between items-center"><span class="text-sm text-gray-700 font-medium">${m}</span><span class="font-bold text-blue-600 text-lg">${fg.toLocaleString()} <span class="text-xs text-gray-400 font-normal">ชิ้น</span></span></li>`;
+                html += `
+                <li class="py-3 flex justify-between items-center">
+                    <span class="text-sm text-gray-700 font-medium">${m}</span>
+                    <span class="font-bold text-blue-600 text-lg">${fg.toLocaleString()} <span class="text-xs text-gray-400 font-normal">ชิ้น</span></span>
+                </li>`;
             });
             html += '</ul>';
             container.innerHTML = html;
@@ -560,13 +856,13 @@
              if(!charts) charts = {};
              const commonOpts = { responsive: true, maintainAspectRatio: false };
 
-             // Pareto (Using Pieces for the chart)
              const ctxP = document.getElementById('paretoChart');
              if(ctxP) {
                  if(charts.pareto) charts.pareto.destroy();
                  const ngItems = data.ngLabels.map((l, i) => ({ label: l, pcs: data.ngValuesPcs[i], kg: data.ngValuesKg[i] })).sort((a,b)=>b.pcs-a.pcs);
                  const totalNG = ngItems.reduce((a,b)=>a+b.pcs,0);
-                 let acc = 0; const cumulative = ngItems.map(i=>{ acc+=i.pcs; return totalNG>0?((acc/totalNG)*100).toFixed(1):0; });
+                 let acc = 0; 
+                 const cumulative = ngItems.map(i=>{ acc+=i.pcs; return totalNG>0?((acc/totalNG)*100).toFixed(1):0; });
                  
                  charts.pareto = new Chart(ctxP, { 
                      type: 'bar', plugins: [ChartDataLabels],
@@ -584,34 +880,93 @@
              const ctxH = document.getElementById('hourlyChart');
              if(ctxH) {
                  if(charts.hourly) charts.hourly.destroy();
-                 charts.hourly = new Chart(ctxH, { type: 'bar', data: { labels: data.hourlyLabels, datasets: [{label:'FG', data:data.hourlyData, backgroundColor:'#3b82f6'}, {label:'NG (ชิ้น)', data:data.hourlyNgPcsData, backgroundColor:'#ef4444'}] }, options: {...commonOpts, scales:{x:{stacked:true}, y:{stacked:true}}} });
+                 charts.hourly = new Chart(ctxH, { 
+                     type: 'bar', 
+                     data: { 
+                         labels: data.hourlyLabels, 
+                         datasets: [
+                             {label:'FG', data:data.hourlyData, backgroundColor:'#3b82f6'}, 
+                             {label:'NG (ชิ้น)', data:data.hourlyNgPcsData, backgroundColor:'#ef4444'}
+                         ] 
+                     }, 
+                     options: {...commonOpts, scales:{x:{stacked:true}, y:{stacked:true}}} 
+                 });
              }
+
              const ctxYieldM = document.getElementById('yieldMachineChart');
              if(ctxYieldM) {
                 if(charts.yieldMachine) charts.yieldMachine.destroy();
                 const macs = []; for(let i=1;i<=16;i++) macs.push(`CWM-${String(i).padStart(2,'0')}`);
-                charts.yieldMachine = new Chart(ctxYieldM, { type: 'bar', data: { labels: macs, datasets: [{ label: '% Yield', data: macs.map(m=>{const d=data.machineData[m]; if(!d)return 0; const t=d.fg+d.ngTotalPcs; return t>0?((d.fg/t)*100).toFixed(1):0}), backgroundColor: '#6366f1' }] }, options: {...commonOpts, scales:{y:{max:100}}} });
+                charts.yieldMachine = new Chart(ctxYieldM, { 
+                    type: 'bar', 
+                    data: { 
+                        labels: macs, 
+                        datasets: [{ 
+                            label: '% Yield', 
+                            data: macs.map(m=>{
+                                const d=data.machineData[m]; 
+                                if(!d)return 0; 
+                                const t=d.fg+d.ngTotalPcs; 
+                                return t>0?((d.fg/t)*100).toFixed(1):0
+                            }), 
+                            backgroundColor: '#6366f1' 
+                        }] 
+                    }, 
+                    options: {...commonOpts, scales:{y:{max:100}}} 
+                });
              }
+
              const ctxQC = document.getElementById('qcTrendChart');
              if(ctxQC) {
                 if(charts.qcTrend) charts.qcTrend.destroy();
                  const trendData = data.dailyTrend || [];
-                 charts.qcTrend = new Chart(ctxQC, { type: 'line', data: { labels: trendData.map(d=>d.date), datasets: [{label:'% NG Rate', data:trendData.map(d=>d.ngRate), borderColor:'#f97316'}] }, options: commonOpts });
+                 charts.qcTrend = new Chart(ctxQC, { 
+                     type: 'line', 
+                     data: { 
+                         labels: trendData.map(d=>d.date), 
+                         datasets: [{label:'% NG Rate', data:trendData.map(d=>d.ngRate), borderColor:'#f97316'}] 
+                     }, 
+                     options: commonOpts 
+                 });
              }
+
              const ctxNG = document.getElementById('ngChart');
              if(ctxNG) {
                 if(charts.ng) charts.ng.destroy();
-                charts.ng = new Chart(ctxNG, { type: 'doughnut', data: { labels: data.ngLabels, datasets: [{ data: data.ngValuesPcs, backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4'] }] }, options: commonOpts });
+                charts.ng = new Chart(ctxNG, { 
+                    type: 'doughnut', 
+                    data: { 
+                        labels: data.ngLabels, 
+                        datasets: [{ data: data.ngValuesPcs, backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4'] }] 
+                    }, 
+                    options: commonOpts 
+                });
              }
+
              const ctxYM = document.getElementById('yieldModelChart');
              if(ctxYM) {
                  if(charts.yieldModel) charts.yieldModel.destroy();
-                 charts.yieldModel = new Chart(ctxYM, { type: 'bar', data: { labels: Object.keys(data.productData), datasets: [{ label: '% Yield', data: Object.values(data.productData).map(d => {const t=d.fg+d.ngTotalPcs; return t>0?((d.fg/t)*100).toFixed(1):0}), backgroundColor: '#10b981' }] }, options: {...commonOpts, indexAxis:'y'} });
+                 charts.yieldModel = new Chart(ctxYM, { 
+                     type: 'bar', 
+                     data: { 
+                         labels: Object.keys(data.productData), 
+                         datasets: [{ 
+                             label: '% Yield', 
+                             data: Object.values(data.productData).map(d => {
+                                 const t=d.fg+d.ngTotalPcs; 
+                                 return t>0?((d.fg/t)*100).toFixed(1):0
+                             }), 
+                             backgroundColor: '#10b981' 
+                         }] 
+                     }, 
+                     options: {...commonOpts, indexAxis:'y'} 
+                 });
              }
         }
 
         function renderTable(data) {
-            const h = document.getElementById('table-header'); const b = document.getElementById('table-body');
+            const h = document.getElementById('table-header'); 
+            const b = document.getElementById('table-body');
             h.innerHTML = '<th>Machine</th><th>FG</th><th>NG (ชิ้น/Kg)</th><th>% Yield</th>' + ngSymptoms.map(s=>`<th>${s}</th>`).join('');
             b.innerHTML = '';
             for(let i=1; i<=16; i++) {
@@ -638,13 +993,38 @@
             if(!currentDashboardData) return;
             const modal = document.getElementById('modal-machine-detail');
             const mData = currentDashboardData.machineData[machineName] || { fg: 0, ngTotalKg: 0, ngTotalPcs: 0, hourlyFg: [], hourlyNgPcs: [], hourlyNgKg: [], remarks: [] };
+            
             document.getElementById('machine-detail-title').innerText = `📊 รายละเอียดเครื่อง ${machineName}`;
             document.getElementById('machine-detail-stats').innerHTML = `<div class="bg-blue-50 p-2 rounded">FG รวม: <b class="text-blue-700 text-xl">${mData.fg}</b></div><div class="bg-red-50 p-2 rounded">NG รวม: <b class="text-red-700 text-xl">${mData.ngTotalPcs} ชิ้น</b><br><span class="text-xs text-gray-500">(${mData.ngTotalKg.toFixed(2)} Kg)</span></div>`;
-            const rList = document.getElementById('machine-remarks-list'); const rSec = document.getElementById('machine-detail-remarks');
-            if(mData.remarks && mData.remarks.length > 0) { rSec.classList.remove('hidden'); rList.innerHTML = `<ul class="list-disc pl-5 space-y-1">${mData.remarks.map(r => `<li>${r}</li>`).join('')}</ul>`; } else { rSec.classList.add('hidden'); }
+            
+            const rList = document.getElementById('machine-remarks-list'); 
+            const rSec = document.getElementById('machine-detail-remarks');
+            if(mData.remarks && mData.remarks.length > 0) { 
+                rSec.classList.remove('hidden'); 
+                rList.innerHTML = `<ul class="list-disc pl-5 space-y-1">${mData.remarks.map(r => `<li>${r}</li>`).join('')}</ul>`; 
+            } else { 
+                rSec.classList.add('hidden'); 
+            }
+            
             modal.classList.remove('hidden');
+            
             if(machineDetailChart) machineDetailChart.destroy();
-            machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), { type: 'bar', data: { labels: currentDashboardData.hourlyLabels, datasets: [{ label: 'FG (งานดี)', data: mData.hourlyFg, backgroundColor: '#3b82f6', borderRadius: 2 }, { label: 'NG (เสียเป็นชิ้น)', data: mData.hourlyNgPcs || [], backgroundColor: '#ef4444', borderRadius: 2 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true } }, scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } } });
+            machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), { 
+                type: 'bar', 
+                data: { 
+                    labels: currentDashboardData.hourlyLabels, 
+                    datasets: [
+                        { label: 'FG (งานดี)', data: mData.hourlyFg, backgroundColor: '#3b82f6', borderRadius: 2 }, 
+                        { label: 'NG (เสียเป็นชิ้น)', data: mData.hourlyNgPcs || [], backgroundColor: '#ef4444', borderRadius: 2 }
+                    ] 
+                }, 
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: true } }, 
+                    scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } 
+                } 
+            });
         }
     </script>
 </body>
