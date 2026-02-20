@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.36 Case Insensitive Fix</title>
+    <title>CWM Production System - v3.37 Anti-Cache Fix</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -46,7 +46,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.36</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.37</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -365,7 +365,6 @@
 
         try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
 
-        // --- NEW: ฟังก์ชันบังคับให้ตัวแรกเป็นพิมพ์ใหญ่ (Capitalize) เพื่อป้องกันข้อมูลเบิ้ล ---
         function capitalizeFirst(str) {
             if (!str) return "";
             if (/^[a-zA-Z]/.test(str)) {
@@ -374,7 +373,6 @@
             return str;
         }
 
-        // --- NEW: ฟังก์ชันกำจัดคำซ้ำ (Case-insensitive deduplication) ---
         function normalizeSymptomList(list) {
             const unique = [];
             list.forEach(item => {
@@ -409,7 +407,6 @@
             if(localStorage.getItem('CWM_CUSTOM_NG')) {
                 ngSymptoms = JSON.parse(localStorage.getItem('CWM_CUSTOM_NG'));
             }
-            // แปลงลิสต์ NG ทันทีที่โหลด เพื่อเอาความซ้ำซ้อนออก
             ngSymptoms = normalizeSymptomList(ngSymptoms);
             localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
 
@@ -430,7 +427,8 @@
         
         async function fetchOptions() {
             try {
-                const res = await fetch(`${SCRIPT_URL}?action=GET_OPTIONS`);
+                // บังคับไม่ให้โหลด Cache เก่าของเบราว์เซอร์
+                const res = await fetch(`${SCRIPT_URL}?action=GET_OPTIONS&_t=${Date.now()}`);
                 const data = await res.json();
                 
                 const recList = document.getElementById('recorder-datalist');
@@ -797,7 +795,8 @@
             }
 
             try {
-                const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${date}&end=${date}&shift=All&shiftType=All`);
+                // บังคับไม่ให้โหลด Cache เก่าของเบราว์เซอร์
+                const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${date}&end=${date}&shift=All&shiftType=All&_t=${Date.now()}`);
                 const dbData = await res.json();
                 
                 const hourIdx = dbData.hourlyLabels ? dbData.hourlyLabels.indexOf(hourSlot) : -1;
@@ -902,7 +901,9 @@
             
             let rawText = "";
             try {
-                const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}&shiftType=${shiftType}`);
+                // บังคับไม่ให้โหลด Cache เก่าของเบราว์เซอร์
+                const fetchUrl = `${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}&shiftType=${shiftType}&_t=${Date.now()}`;
+                const res = await fetch(fetchUrl);
                 
                 rawText = await res.text();
                 
@@ -917,7 +918,6 @@
                     throw new Error("ข้อผิดพลาดจากเซิร์ฟเวอร์: " + data.error);
                 }
 
-                // --- START CASE-INSENSITIVE NORMALIZATION ---
                 const normalizedNgMapPcs = {};
                 const normalizedNgMapKg = {};
                 
@@ -956,7 +956,6 @@
                         mData.ngBreakdownKg = newBreakdownKg;
                     }
                 }
-                // --- END CASE-INSENSITIVE NORMALIZATION ---
                 
                 const fg = data.totalFg || 0;
                 const target = data.productionTarget || 0;
@@ -964,7 +963,7 @@
                 const ngKg = data.totalNgKg || 0;
                 
                 if (fg === 0 && ngPcs === 0 && target === 0) {
-                    alert(`⚠️ ไม่พบข้อมูลการผลิตหรือแผนงานในช่วงเวลาที่เลือก\n\nวันที่: ${start} ถึง ${end}\nกะ: ${shift}\nประเภท: ${shiftType}\n\n*คำแนะนำ: หากต้องการดูข้อมูลทั้งหมด ให้ลองเปลี่ยนวันที่ หรือเลือกกะเป็น "ทั้งหมด (All)" ครับ`);
+                    alert(`⚠️ ไม่พบข้อมูลการผลิตหรือแผนงานในช่วงเวลาที่เลือก\n\nวันที่: ${start} ถึง ${end}\nกะ: ${shift}\nประเภท: ${shiftType}\n\n*ข้อแนะนำ: \n1. ลองเลือกกะเป็น "ทั้งหมด (All)"\n2. อาจเป็นปัญหา Cache ของระบบเบราว์เซอร์ (กดตกลงเพื่อลองใหม่)`);
                 }
 
                 document.getElementById('stat-fg').innerText = fg.toLocaleString();
