@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.33 Active Alerts</title>
+    <title>CWM Production System - v3.34 Logic & Validation</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -46,7 +46,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.33</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.34</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -152,7 +152,7 @@
             <p class="text-gray-500 font-medium mt-2">กำลังประมวลผลข้อมูล...</p>
         </div>
 
-        <!-- NEW: DEBUG PANEL -->
+        <!-- DEBUG PANEL -->
         <div id="debug-panel" class="hidden bg-red-50 border border-red-200 p-4 rounded-xl shadow-inner">
             <div class="flex justify-between items-center mb-2">
                 <h3 class="text-red-800 font-bold text-sm">🛑 พบข้อผิดพลาด (Debug Diagnostics)</h3>
@@ -295,12 +295,20 @@
     <!-- Modals -->
     <div id="modal-ng" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[80vh]">
-            <h3 class="text-lg font-bold mb-4 flex-none">บันทึกของเสีย (NG) - กรอกเป็น Kg</h3>
+            <div class="flex justify-between items-center mb-4 flex-none">
+                <h3 class="text-lg font-bold">บันทึกของเสีย (NG)</h3>
+                <!-- NEW: ปุ่มจัดการรายการ NG -->
+                <button type="button" onclick="manageSymptomsFromModal()" class="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded text-xs font-bold hover:bg-blue-100 shadow-sm">
+                    ⚙️ จัดการรายการ
+                </button>
+            </div>
+            
             <div id="modal-ng-list" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1"></div>
+            
             <div class="flex-none pt-2 border-t">
                  <button type="button" onclick="addCustomNgField()" class="w-full mb-2 text-blue-600 text-xs font-bold border border-blue-200 rounded py-1 hover:bg-blue-50">+ ระบุอาการอื่น (Add Other)</button>
                  <div class="flex gap-2">
-                    <button onclick="closeNgModal(true)" class="flex-1 bg-green-600 text-white py-2 rounded-lg font-bold">บันทึก</button>
+                    <button onclick="closeNgModal(true)" class="flex-1 bg-green-600 text-white py-2 rounded-lg font-bold">ยืนยัน</button>
                     <button onclick="closeNgModal(false)" class="flex-1 bg-gray-200 py-2 rounded-lg font-bold">ยกเลิก</button>
                  </div>
             </div>
@@ -324,15 +332,16 @@
         </div>
     </div>
 
+    <!-- Modal for Manage Lists -->
     <div id="modal-manage-list" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[80vh]">
             <h3 id="manage-list-title" class="text-lg font-bold mb-4 flex-none">Manage List</h3>
             <div id="manage-list-content" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1"></div>
             <div class="flex-none pt-2 border-t flex gap-2">
-                 <input type="text" id="new-item-input" class="flex-1 p-2 border rounded text-sm" placeholder="เพิ่มรายการใหม่...">
-                 <button onclick="addNewItemToList()" class="bg-green-600 text-white px-4 rounded font-bold">เพิ่ม</button>
+                 <input type="text" id="new-item-input" class="flex-1 p-2 border rounded text-sm" placeholder="พิมพ์ชื่อรายการใหม่...">
+                 <button onclick="addNewItemToList()" class="bg-green-600 text-white px-4 rounded font-bold hover:bg-green-700">เพิ่ม</button>
             </div>
-            <button onclick="closeManageListModal()" class="mt-2 w-full bg-gray-200 py-2 rounded font-bold">ปิด</button>
+            <button onclick="closeManageListModal()" class="mt-2 w-full bg-gray-200 py-2 rounded font-bold hover:bg-gray-300">ปิด</button>
         </div>
     </div>
 
@@ -560,42 +569,51 @@
             list.scrollTop = list.scrollHeight; 
         }
 
-        function closeNgModal(save) {
-            if(save && currentRowIdForNg) {
-                const rows = document.querySelectorAll('.ng-item-row');
-                const newData = [];
-                let total = 0;
+        // --- NEW: ฟังก์ชันเซฟค่า NG ชั่วคราวก่อนเปิดตั้งค่า ---
+        function saveCurrentNgInputs() {
+            if(!currentRowIdForNg) return;
+            const rows = document.querySelectorAll('.ng-item-row');
+            const newData = [];
+            let total = 0;
 
-                rows.forEach(row => {
-                    let type = "";
-                    const labelSpan = row.querySelector('.ng-type-label');
-                    const nameInput = row.querySelector('.ng-type-name');
-                    
-                    if (labelSpan) type = labelSpan.dataset.label; 
-                    else if (nameInput) type = nameInput.value.trim();
-                    
-                    const qty = parseFloat(row.querySelector('.ng-input-qty').value);
-                    const remark = row.querySelector('.ng-input-remark').value;
-                    
-                    if (type && qty > 0) { 
-                        newData.push({ type, qty, remark }); 
-                        total += qty; 
-                    }
-                });
-
-                batchNgData[currentRowIdForNg] = newData;
-                const badge = document.getElementById(`ng-badge-${currentRowIdForNg}`);
-                if(total > 0) { 
-                    badge.innerText = total.toFixed(2); 
-                    badge.classList.remove('hidden'); 
-                } else { 
-                    badge.classList.add('hidden'); 
+            rows.forEach(row => {
+                let type = "";
+                const labelSpan = row.querySelector('.ng-type-label');
+                const nameInput = row.querySelector('.ng-type-name');
+                if (labelSpan) type = labelSpan.dataset.label; 
+                else if (nameInput) type = nameInput.value.trim();
+                
+                const qty = parseFloat(row.querySelector('.ng-input-qty').value);
+                const remark = row.querySelector('.ng-input-remark').value;
+                if (type && qty > 0) { 
+                    newData.push({ type, qty, remark }); 
+                    total += qty; 
                 }
+            });
+
+            batchNgData[currentRowIdForNg] = newData;
+            const badge = document.getElementById(`ng-badge-${currentRowIdForNg}`);
+            if(total > 0) { 
+                badge.innerText = total.toFixed(2); 
+                badge.classList.remove('hidden'); 
+            } else { 
+                badge.classList.add('hidden'); 
             }
+        }
+
+        function closeNgModal(save) {
+            if(save) saveCurrentNgInputs();
             document.getElementById('modal-ng').classList.add('hidden');
             currentRowIdForNg = null;
         }
 
+        // --- NEW: จัดการรายการ NG จากหน้าต่าง Modal ---
+        function manageSymptomsFromModal() {
+            saveCurrentNgInputs(); // จำค่าตัวเลขที่เพิ่งกรอกไว้
+            manageSymptoms(); // เปิดหน้าตั้งค่าทับซ้อน
+        }
+
+        // --- Recorders & Lists ---
         function renderRecorderOptions() { 
             const datalist = document.getElementById('recorder-datalist'); 
             datalist.innerHTML = ''; 
@@ -633,7 +651,7 @@
             container.innerHTML = list.map((item, i) => `
                 <div class="flex justify-between items-center bg-gray-50 p-2 rounded mb-1">
                     <span class="text-sm">${item}</span>
-                    <button onclick="deleteListItem(${i})" class="text-red-500 hover:bg-red-100 p-1 rounded">🗑️</button>
+                    <button onclick="deleteListItem(${i})" class="text-red-500 hover:bg-red-100 p-1 rounded">🗑️ ลบ</button>
                 </div>
             `).join(''); 
         }
@@ -656,10 +674,16 @@
                  } 
              }
              document.getElementById('new-item-input').value = '';
+
+             // อัปเดตหน้าต่าง NG ทันทีถ้าเปิดค้างไว้
+             if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
+                 openNgModal(currentRowIdForNg);
+             }
         }
 
         function deleteListItem(index) {
-             if (!confirm('ยืนยันการลบ?')) return;
+             if (!confirm('ยืนยันการลบรายการนี้ใช่หรือไม่?')) return;
+             
              if (currentManageType === 'recorder') { 
                  recorderList.splice(index, 1); 
                  localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
@@ -670,22 +694,30 @@
                  localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
                  renderManageListContent(ngSymptoms); 
              }
+
+             // อัปเดตหน้าต่าง NG ทันทีถ้าเปิดค้างไว้
+             if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
+                 openNgModal(currentRowIdForNg);
+             }
         }
 
         function closeManageListModal() { 
             document.getElementById('modal-manage-list').classList.add('hidden'); 
         }
 
+        // --- NEW: เพิ่มระบบ Validation ดึงข้อมูลก่อนบันทึก ---
         document.getElementById('productionForm').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('submitBtn'); 
             const txt = btn.innerText;
             btn.disabled = true; 
-            btn.innerText = "กำลังส่งข้อมูล...";
+            btn.innerText = "⏳ กำลังตรวจสอบยอดปัจจุบัน...";
             
             const fd = new FormData(e.target);
             const shiftType = document.querySelector('input[name="shift_type_toggle"]:checked').value;
             const currentRec = fd.get('recorder');
+            const date = fd.get('productionDate');
+            const hourSlot = fd.get('hourSlot');
             
             if(currentRec && !recorderList.includes(currentRec)) { 
                 recorderList.push(currentRec); 
@@ -695,11 +727,11 @@
             
             const common = { 
                 timestamp: new Date().toLocaleString('th-TH'), 
-                productionDate: fd.get('productionDate'), 
+                productionDate: date, 
                 shift: fd.get('shift'), 
                 shiftType: shiftType, 
                 recorder: currentRec, 
-                hourSlot: fd.get('hourSlot') 
+                hourSlot: hourSlot 
             };
             
             const items = []; 
@@ -733,23 +765,75 @@
                 btn.innerText = txt; 
                 return; 
             }
-            
-            const payload = { action: 'SAVE_BATCH_PRODUCTION', common, items };
-            
-            try { 
+
+            // --- 🛑 VALIDATION BLOCK 🛑 ---
+            try {
+                // ดึงข้อมูลภาพรวมของวันนั้นมาเช็คยอด (แอบดึงเงียบๆ)
+                const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${date}&end=${date}&shift=All&shiftType=All`);
+                const dbData = await res.json();
+                
+                // หาว่าชั่วโมงที่เรากำลังกรอก คือ index ที่เท่าไหร่ในกราฟ
+                const hourIdx = dbData.hourlyLabels ? dbData.hourlyLabels.indexOf(hourSlot) : -1;
+                
+                let validationMsg = `📊 สรุปยอดผลิตในระบบ ช่วงเวลา [${hourSlot}]\n\n`;
+                let hasError = false;
+                let errorMsg = "";
+
+                // เช็คยอดทีละเครื่อง
+                for (let item of items) {
+                    let existingFg = 0;
+                    if (hourIdx !== -1 && dbData.machineData && dbData.machineData[item.machine]) {
+                        existingFg = dbData.machineData[item.machine].hourlyFg[hourIdx] || 0;
+                    }
+                    
+                    let totalFg = existingFg + item.fgAmount;
+
+                    validationMsg += `▶ ${item.machine}:\n`;
+                    validationMsg += `   - ยอดในระบบมีแล้ว: ${existingFg} ตัว\n`;
+                    validationMsg += `   - กำลังบันทึกเพิ่ม: ${item.fgAmount} ตัว\n`;
+                    validationMsg += `   - รวมเป็น: ${totalFg} ตัว\n\n`;
+
+                    if (totalFg > 2000) {
+                        hasError = true;
+                        errorMsg += `❌ ${item.machine}: ยอดรวม (${totalFg} ตัว) เกิน 2,000 ตัว/ชั่วโมง\n`;
+                    }
+                }
+
+                if (hasError) {
+                    alert("⚠️ ปฏิเสธการบันทึก!\n\n" + errorMsg + "\nไม่อนุญาตให้บันทึกยอด FG เกิน 2,000 ตัวในชั่วโมงเดียวกัน กรุณาตรวจสอบใหม่อีกครั้ง");
+                    btn.disabled = false; 
+                    btn.innerText = txt; 
+                    return; // ยกเลิกการส่ง
+                }
+
+                // ให้พนักงานยืนยันความถูกต้อง
+                const confirmSave = confirm(validationMsg + "✅ ข้อมูลถูกต้อง ยืนยันที่จะบันทึกใช่หรือไม่?");
+                if (!confirmSave) {
+                    btn.disabled = false; 
+                    btn.innerText = txt; 
+                    return; // ยกเลิกการส่ง
+                }
+
+                btn.innerText = "กำลังบันทึกข้อมูลเข้าฐานข้อมูล...";
+
+                // --- บันทึกจริง ---
+                const payload = { action: 'SAVE_BATCH_PRODUCTION', common, items };
                 await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
+                
                 alert("✅ บันทึกข้อมูลเรียบร้อย!"); 
                 document.getElementById('batchList').innerHTML = ''; 
                 batchNgData = {}; 
                 addBatchRow(); 
+
             } catch(e) { 
-                alert("Error: " + e.message); 
+                alert("Error ระหว่างตรวจสอบ: " + e.message); 
             } finally { 
                 btn.disabled = false; 
                 btn.innerText = txt; 
             }
         };
 
+        // --- Planning Form ---
         document.getElementById('planningForm').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('planSubmitBtn');
@@ -818,7 +902,7 @@
                 const ngPcs = data.totalNgPcs !== undefined ? data.totalNgPcs : (data.totalNg || 0);
                 const ngKg = data.totalNgKg || 0;
                 
-                // --- NEW: ดักจับและแจ้งเตือนเมื่อไม่มีข้อมูล ---
+                // --- ดักจับและแจ้งเตือนเมื่อไม่มีข้อมูล ---
                 if (fg === 0 && ngPcs === 0 && target === 0) {
                     alert(`⚠️ ไม่พบข้อมูลการผลิตหรือแผนงานในช่วงเวลาที่เลือก\n\nวันที่: ${start} ถึง ${end}\nกะ: ${shift}\nประเภท: ${shiftType}\n\n*คำแนะนำ: หากต้องการดูข้อมูลทั้งหมด ให้ลองเปลี่ยนวันที่ หรือเลือกกะเป็น "ทั้งหมด (All)" ครับ`);
                 }
