@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.37 Anti-Cache Fix</title>
+    <title>CWM Production System - v3.39 Breakdown ACH</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -46,7 +46,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.37</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.38</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -222,7 +222,7 @@
                 <!-- FG by Model List -->
                 <div class="widget-card p-4 h-auto">
                     <div class="widget-header drag-handle mb-2">
-                        <h3 class="font-bold text-gray-700 text-sm">📦 FG by Model (ยอดดีแยกรุ่น)</h3>
+                        <h3 class="font-bold text-gray-700 text-sm">📦 FG & ACH by Model (ยอดผลิต vs แผน)</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
                     <div class="flex-1 overflow-y-auto" id="fgModelList"></div>
@@ -349,12 +349,12 @@
         // ⚠️ สำคัญมาก: ตรวจสอบ URL นี้ให้ตรงกับตัวที่ Deploy ล่าสุด
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec";
         
-        let ngSymptoms = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "ปรับเครื่อง (setup)", "อื่นๆ (Others)"];
+        let ngSymptoms = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "อื่นๆ (Others)"];
         let productList = ["S1B29288-JR (10A)", "S1B71819-JR (16A)", "S1B29292-JR (20A)", "51207080HC-JR (25/32A)"];
         let recorderList = ["พนักงาน 1", "พนักงาน 2"];
         
         const DAY_HOURS = ["08:00-09:00", "09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "OT 17:30-18:00", "OT 18:00-19:00", "OT 19:00-20:00"];
-        const NIGHT_HOURS = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:00-06:00", "OT 06:00-07:00", "OT 07:00-08:00"];
+        const NIGHT_HOURS = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:00-06:30", "OT 06:00-07:30", "OT 07:00-08:00"];
 
         let currentRowIdForNg = null;
         let batchNgData = {};
@@ -365,10 +365,13 @@
 
         try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
 
-        function capitalizeFirst(str) {
-            if (!str) return "";
-            if (/^[a-zA-Z]/.test(str)) {
-                return str.charAt(0).toUpperCase() + str.slice(1);
+        // --- NEW: ฟังก์ชันแปลงข้อความเป็นมาตรฐานเดียวกันเด็ดขาด ---
+        function toStdSymptom(name) {
+            if (!name) return "";
+            let str = name.trim();
+            if (str.length > 0) {
+                // บังคับตัวอักษรแรกพิมพ์ใหญ่เสมอ ป้องกัน setup กับ Setup แยกกัน
+                str = str.charAt(0).toUpperCase() + str.slice(1);
             }
             return str;
         }
@@ -377,9 +380,10 @@
             const unique = [];
             list.forEach(item => {
                 if (item && item.trim() !== '') {
-                    const str = item.trim();
-                    if (!unique.some(u => u.toLowerCase() === str.toLowerCase())) {
-                        unique.push(capitalizeFirst(str));
+                    const stdStr = toStdSymptom(item);
+                    // ป้องกันการแอดซ้ำ
+                    if (!unique.some(u => u.toLowerCase() === stdStr.toLowerCase())) {
+                        unique.push(stdStr);
                     }
                 }
             });
@@ -439,9 +443,9 @@
                 
                 if (data.ngTypes && data.ngTypes.length > 0) {
                    data.ngTypes.forEach(t => {
-                       const str = t.trim();
-                       if(!ngSymptoms.some(s => s.toLowerCase() === str.toLowerCase())) {
-                           ngSymptoms.push(capitalizeFirst(str));
+                       const stdStr = toStdSymptom(t);
+                       if(!ngSymptoms.some(s => s.toLowerCase() === stdStr.toLowerCase())) {
+                           ngSymptoms.push(stdStr);
                        }
                    });
                    ngSymptoms = normalizeSymptomList(ngSymptoms);
@@ -615,7 +619,8 @@
                 const qty = parseFloat(row.querySelector('.ng-input-qty').value);
                 const remark = row.querySelector('.ng-input-remark').value;
                 if (type && qty > 0) { 
-                    newData.push({ type: capitalizeFirst(type), qty, remark }); 
+                    // สำคัญ: บังคับเปลี่ยนตัวแรกเป็นพิมพ์ใหญ่ก่อนจำค่า
+                    newData.push({ type: toStdSymptom(type), qty, remark }); 
                     total += qty; 
                 }
             });
@@ -695,8 +700,9 @@
                      renderManageListContent(recorderList); 
                  } 
              } else if (currentManageType === 'symptom') { 
-                 if (!ngSymptoms.some(s => s.toLowerCase() === rawVal.toLowerCase())) { 
-                     ngSymptoms.push(capitalizeFirst(rawVal)); 
+                 const stdVal = toStdSymptom(rawVal);
+                 if (!ngSymptoms.some(s => s.toLowerCase() === stdVal.toLowerCase())) { 
+                     ngSymptoms.push(stdVal); 
                      localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
                      renderManageListContent(ngSymptoms); 
                  } 
@@ -773,9 +779,10 @@
                 const ngDetails = batchNgData[div.id] || [];
                 ngDetails.forEach(ng => { 
                     if (ng.type) {
-                        const tLower = ng.type.toLowerCase();
-                        if (!ngSymptoms.some(s => s.toLowerCase() === tLower) && !newNgTypes.some(s => s.toLowerCase() === tLower)) {
-                            newNgTypes.push(capitalizeFirst(ng.type));
+                        const stdType = toStdSymptom(ng.type);
+                        ng.type = stdType; // บังคับเซฟเป็นพิมพ์ใหญ่เพื่อความชัวร์
+                        if (!ngSymptoms.some(s => s.toLowerCase() === stdType.toLowerCase()) && !newNgTypes.some(s => s.toLowerCase() === stdType.toLowerCase())) {
+                            newNgTypes.push(stdType);
                         } 
                     }
                 });
@@ -922,7 +929,7 @@
                 const normalizedNgMapKg = {};
                 
                 (data.ngLabels || []).forEach((label, i) => {
-                    const stdLabel = ngSymptoms.find(s => s.toLowerCase() === label.trim().toLowerCase()) || capitalizeFirst(label.trim());
+                    const stdLabel = toStdSymptom(label);
                     const vPcs = data.ngValuesPcs ? data.ngValuesPcs[i] : (data.ngValues ? data.ngValues[i] : 0);
                     const vKg = data.ngValuesKg ? data.ngValuesKg[i] : 0;
                     
@@ -942,13 +949,13 @@
                         
                         const oldPcs = mData.ngBreakdownPcs || mData.ngBreakdown || {};
                         for (let k in oldPcs) {
-                            const stdLabel = ngSymptoms.find(s => s.toLowerCase() === k.trim().toLowerCase()) || capitalizeFirst(k.trim());
+                            const stdLabel = toStdSymptom(k);
                             newBreakdownPcs[stdLabel] = (newBreakdownPcs[stdLabel] || 0) + oldPcs[k];
                         }
                         
                         const oldKg = mData.ngBreakdownKg || {};
                         for (let k in oldKg) {
-                            const stdLabel = ngSymptoms.find(s => s.toLowerCase() === k.trim().toLowerCase()) || capitalizeFirst(k.trim());
+                            const stdLabel = toStdSymptom(k);
                             newBreakdownKg[stdLabel] = (newBreakdownKg[stdLabel] || 0) + oldKg[k];
                         }
                         
@@ -1020,10 +1027,25 @@
             let html = '<ul class="divide-y divide-gray-100">';
             models.forEach(m => {
                 const fg = (data.productData && data.productData[m]) ? data.productData[m].fg : 0;
+                const plan = (data.productionPlanByModel && data.productionPlanByModel[m]) ? data.productionPlanByModel[m] : 0;
+                const ach = plan > 0 ? ((fg / plan) * 100).toFixed(1) : (fg > 0 ? '100.0' : '0.0');
+                
+                const achColor = ach >= 100 ? 'text-green-600' : (ach >= 80 ? 'text-orange-500' : 'text-red-500');
+                const barColor = ach >= 100 ? 'bg-green-500' : (ach >= 80 ? 'bg-orange-500' : 'bg-red-500');
+
                 html += `
-                <li class="py-3 flex justify-between items-center">
-                    <span class="text-sm text-gray-700 font-medium">${m}</span>
-                    <span class="font-bold text-blue-600 text-lg">${fg.toLocaleString()} <span class="text-xs text-gray-400 font-normal">ชิ้น</span></span>
+                <li class="py-3 flex flex-col gap-1">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-800 font-bold">${m}</span>
+                        <span class="font-bold ${achColor} text-lg">${ach}%</span>
+                    </div>
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="text-gray-500">FG: <span class="font-bold text-blue-600">${fg.toLocaleString()}</span> ชิ้น</span>
+                        <span class="text-gray-500">Plan: <span class="font-bold text-indigo-600">${plan.toLocaleString()}</span> ชิ้น</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                        <div class="${barColor} h-1.5 rounded-full" style="width: ${Math.min(ach, 100)}%"></div>
+                    </div>
                 </li>`;
             });
             html += '</ul>';
@@ -1157,13 +1179,17 @@
                     const d = data.machineData[m];
                     if (d.ngBreakdownPcs) {
                         Object.keys(d.ngBreakdownPcs).forEach(k => {
-                            if (!dynamicColumns.some(s => s.toLowerCase() === k.toLowerCase())) {
-                                dynamicColumns.push(capitalizeFirst(k));
+                            const stdK = toStdSymptom(k);
+                            if (!dynamicColumns.some(s => s.toLowerCase() === stdK.toLowerCase())) {
+                                dynamicColumns.push(stdK);
                             }
                         });
                     }
                 }
             }
+            
+            // ทำให้แน่ใจว่า Column ไม่เบิ้ล 100%
+            dynamicColumns = [...new Set(dynamicColumns.map(s => toStdSymptom(s)))];
 
             const h = document.getElementById('table-header'); 
             const b = document.getElementById('table-body');
