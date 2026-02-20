@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.35 Case Insensitive Fix</title>
+    <title>CWM Production System - v3.36 Case Insensitive Fix</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -46,7 +46,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.35</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.36</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -353,8 +353,8 @@
         let productList = ["S1B29288-JR (10A)", "S1B71819-JR (16A)", "S1B29292-JR (20A)", "51207080HC-JR (25/32A)"];
         let recorderList = ["พนักงาน 1", "พนักงาน 2"];
         
-        const DAY_HOURS = ["08:00-09:00", "09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "OT 17:00-18:00", "OT 18:00-19:00", "OT 19:00-20:00"];
-        const NIGHT_HOURS = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:00-06:00", "OT 06:00-07:00", "OT 07:00-08:00"];
+        const DAY_HOURS = ["08:00-09:00", "09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "OT 17:30-18:00", "OT 18:00-19:00", "OT 19:00-20:00"];
+        const NIGHT_HOURS = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:00-06:30", "OT 06:00-07:30", "OT 07:00-08:00"];
 
         let currentRowIdForNg = null;
         let batchNgData = {};
@@ -364,6 +364,29 @@
         let currentManageType = '';
 
         try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
+
+        // --- NEW: ฟังก์ชันบังคับให้ตัวแรกเป็นพิมพ์ใหญ่ (Capitalize) เพื่อป้องกันข้อมูลเบิ้ล ---
+        function capitalizeFirst(str) {
+            if (!str) return "";
+            if (/^[a-zA-Z]/.test(str)) {
+                return str.charAt(0).toUpperCase() + str.slice(1);
+            }
+            return str;
+        }
+
+        // --- NEW: ฟังก์ชันกำจัดคำซ้ำ (Case-insensitive deduplication) ---
+        function normalizeSymptomList(list) {
+            const unique = [];
+            list.forEach(item => {
+                if (item && item.trim() !== '') {
+                    const str = item.trim();
+                    if (!unique.some(u => u.toLowerCase() === str.toLowerCase())) {
+                        unique.push(capitalizeFirst(str));
+                    }
+                }
+            });
+            return unique;
+        }
 
         function getShiftDateStr() {
             const now = new Date();
@@ -386,6 +409,10 @@
             if(localStorage.getItem('CWM_CUSTOM_NG')) {
                 ngSymptoms = JSON.parse(localStorage.getItem('CWM_CUSTOM_NG'));
             }
+            // แปลงลิสต์ NG ทันทีที่โหลด เพื่อเอาความซ้ำซ้อนออก
+            ngSymptoms = normalizeSymptomList(ngSymptoms);
+            localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
+
             if(localStorage.getItem('CWM_RECORDERS')) {
                 recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
             }
@@ -414,11 +441,12 @@
                 
                 if (data.ngTypes && data.ngTypes.length > 0) {
                    data.ngTypes.forEach(t => {
-                       // เช็คซ้ำแบบไม่สนใจพิมพ์เล็กพิมพ์ใหญ่
-                       if(!ngSymptoms.some(s => s.toLowerCase() === t.trim().toLowerCase())) {
-                           ngSymptoms.push(t.trim());
+                       const str = t.trim();
+                       if(!ngSymptoms.some(s => s.toLowerCase() === str.toLowerCase())) {
+                           ngSymptoms.push(capitalizeFirst(str));
                        }
                    });
+                   ngSymptoms = normalizeSymptomList(ngSymptoms);
                 }
             } catch (e) { 
                 console.log("Error fetching options", e); 
@@ -589,7 +617,7 @@
                 const qty = parseFloat(row.querySelector('.ng-input-qty').value);
                 const remark = row.querySelector('.ng-input-remark').value;
                 if (type && qty > 0) { 
-                    newData.push({ type, qty, remark }); 
+                    newData.push({ type: capitalizeFirst(type), qty, remark }); 
                     total += qty; 
                 }
             });
@@ -658,18 +686,19 @@
         }
 
         function addNewItemToList() {
-             const val = document.getElementById('new-item-input').value.trim();
-             if(!val) return;
+             const rawVal = document.getElementById('new-item-input').value.trim();
+             if(!rawVal) return;
+             
              if (currentManageType === 'recorder') { 
-                 if (!recorderList.some(r => r.toLowerCase() === val.toLowerCase())) { 
-                     recorderList.push(val); 
+                 if (!recorderList.some(r => r.toLowerCase() === rawVal.toLowerCase())) { 
+                     recorderList.push(rawVal); 
                      localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
                      renderRecorderOptions(); 
                      renderManageListContent(recorderList); 
                  } 
              } else if (currentManageType === 'symptom') { 
-                 if (!ngSymptoms.some(s => s.toLowerCase() === val.toLowerCase())) { 
-                     ngSymptoms.push(val); 
+                 if (!ngSymptoms.some(s => s.toLowerCase() === rawVal.toLowerCase())) { 
+                     ngSymptoms.push(capitalizeFirst(rawVal)); 
                      localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
                      renderManageListContent(ngSymptoms); 
                  } 
@@ -748,7 +777,7 @@
                     if (ng.type) {
                         const tLower = ng.type.toLowerCase();
                         if (!ngSymptoms.some(s => s.toLowerCase() === tLower) && !newNgTypes.some(s => s.toLowerCase() === tLower)) {
-                            newNgTypes.push(ng.type);
+                            newNgTypes.push(capitalizeFirst(ng.type));
                         } 
                     }
                 });
@@ -889,13 +918,11 @@
                 }
 
                 // --- START CASE-INSENSITIVE NORMALIZATION ---
-                // รวมข้อมูล NG จากฐานข้อมูลที่มีตัวพิมพ์เล็กพิมพ์ใหญ่ต่างกันเข้าด้วยกัน
                 const normalizedNgMapPcs = {};
                 const normalizedNgMapKg = {};
                 
                 (data.ngLabels || []).forEach((label, i) => {
-                    // หาชื่อมาตรฐาน (เทียบแบบตัวเล็กทั้งหมด)
-                    const stdLabel = ngSymptoms.find(s => s.toLowerCase() === label.trim().toLowerCase()) || label.trim();
+                    const stdLabel = ngSymptoms.find(s => s.toLowerCase() === label.trim().toLowerCase()) || capitalizeFirst(label.trim());
                     const vPcs = data.ngValuesPcs ? data.ngValuesPcs[i] : (data.ngValues ? data.ngValues[i] : 0);
                     const vKg = data.ngValuesKg ? data.ngValuesKg[i] : 0;
                     
@@ -915,13 +942,13 @@
                         
                         const oldPcs = mData.ngBreakdownPcs || mData.ngBreakdown || {};
                         for (let k in oldPcs) {
-                            const stdLabel = ngSymptoms.find(s => s.toLowerCase() === k.trim().toLowerCase()) || k.trim();
+                            const stdLabel = ngSymptoms.find(s => s.toLowerCase() === k.trim().toLowerCase()) || capitalizeFirst(k.trim());
                             newBreakdownPcs[stdLabel] = (newBreakdownPcs[stdLabel] || 0) + oldPcs[k];
                         }
                         
                         const oldKg = mData.ngBreakdownKg || {};
                         for (let k in oldKg) {
-                            const stdLabel = ngSymptoms.find(s => s.toLowerCase() === k.trim().toLowerCase()) || k.trim();
+                            const stdLabel = ngSymptoms.find(s => s.toLowerCase() === k.trim().toLowerCase()) || capitalizeFirst(k.trim());
                             newBreakdownKg[stdLabel] = (newBreakdownKg[stdLabel] || 0) + oldKg[k];
                         }
                         
@@ -1125,15 +1152,14 @@
         }
 
         function renderTable(data) {
-            // สร้างคอลัมน์แบบไดนามิก โดยดึงรายการ NG ทั้งหมดมาสร้างหัวตาราง (ไม่ให้ตกหล่น)
-            let dynamicColumns = [...ngSymptoms];
+            let dynamicColumns = normalizeSymptomList(ngSymptoms);
             if (data.machineData) {
                 for (let m in data.machineData) {
                     const d = data.machineData[m];
                     if (d.ngBreakdownPcs) {
                         Object.keys(d.ngBreakdownPcs).forEach(k => {
                             if (!dynamicColumns.some(s => s.toLowerCase() === k.toLowerCase())) {
-                                dynamicColumns.push(k);
+                                dynamicColumns.push(capitalizeFirst(k));
                             }
                         });
                     }
@@ -1161,7 +1187,6 @@
                     <td class="p-4 border-b">${y}%</td>`;
                     
                 dynamicColumns.forEach(s => { 
-                    // ค้นหาคีย์ด้วยการเทียบตัวพิมพ์เล็ก-ใหญ่
                     const keyPcs = Object.keys(d.ngBreakdownPcs || {}).find(k => k.toLowerCase() === s.toLowerCase());
                     const keyKg = Object.keys(d.ngBreakdownKg || {}).find(k => k.toLowerCase() === s.toLowerCase());
                     
