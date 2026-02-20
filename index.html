@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.40 Plan per Day Indicator</title>
+    <title>CWM Production System - v3.41 Machine Assignment</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -46,7 +46,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.40</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.41</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -81,9 +81,17 @@
                     </div>
                 </div>
                 
+                <!-- ปุ่มกำหนดรุ่นให้เครื่องจักร (NEW) -->
+                <div class="flex justify-between items-end mt-4 mb-2">
+                    <h3 class="font-bold text-gray-700 text-sm">รายการผลิต</h3>
+                    <button type="button" onclick="openAssignModal()" class="text-xs bg-indigo-50 text-indigo-700 font-bold py-1.5 px-3 rounded border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1 shadow-sm">
+                        <span>⚙️</span> ตั้งค่าเครื่องจักร (Assign)
+                    </button>
+                </div>
+
                 <div id="batchList" class="space-y-3"></div>
                 
-                <button type="button" onclick="addBatchRow()" class="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 font-bold hover:border-blue-400 hover:text-blue-500">
+                <button type="button" onclick="addBatchRow()" class="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 font-bold hover:border-blue-400 hover:text-blue-500 mt-2">
                     + เพิ่มรายการ (Add Model/Machine)
                 </button>
                 
@@ -156,7 +164,7 @@
         <div id="debug-panel" class="hidden bg-red-50 border border-red-200 p-4 rounded-xl shadow-inner">
             <div class="flex justify-between items-center mb-2">
                 <h3 class="text-red-800 font-bold text-sm">🛑 พบข้อผิดพลาด (Debug Diagnostics)</h3>
-                <button onclick="document.getElementById('debug-panel').classList.add('hidden')" class="text-red-500 hover:bg-red-200 px-2 rounded">ปิด</button>
+                <button onclick="document.getElementById('debug-panel').classList.add('hidden')" class="text-red-50 hover:bg-red-200 px-2 rounded">ปิด</button>
             </div>
             <pre id="debug-output" class="text-[10px] md:text-xs text-red-900 overflow-auto max-h-64 whitespace-pre-wrap font-mono bg-white p-2 rounded border border-red-100"></pre>
         </div>
@@ -293,6 +301,25 @@
     </main>
 
     <!-- Modals -->
+    <!-- Assign Modal (NEW) -->
+    <div id="modal-assign" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center mb-4 flex-none">
+                <h3 class="text-lg font-bold text-gray-800">⚙️ กำหนดรุ่นให้เครื่องจักร</h3>
+                <button onclick="closeAssignModal()" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+            </div>
+            <p class="text-xs text-gray-500 mb-3 flex-none">เมื่อเลือกเครื่องจักรในฟอร์ม ระบบจะดึงรุ่นที่ตั้งค่าไว้นี้มาให้อัตโนมัติ</p>
+            
+            <div id="assign-list-container" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1 pr-2">
+                <!-- Data will be injected here -->
+            </div>
+            
+            <div class="flex-none pt-3 border-t flex gap-2">
+                <button onclick="saveAssignment()" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold hover:bg-indigo-700">💾 บันทึกการตั้งค่า</button>
+            </div>
+        </div>
+    </div>
+
     <div id="modal-ng" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[80vh]">
             <div class="flex justify-between items-center mb-4 flex-none">
@@ -353,8 +380,11 @@
         let productList = ["S1B29288-JR (10A)", "S1B71819-JR (16A)", "S1B29292-JR (20A)", "51207080HC-JR (25/32A)"];
         let recorderList = ["พนักงาน 1", "พนักงาน 2"];
         
+        // --- ตัวแปรสำหรับเก็บ Log การตั้งค่าเครื่องจักร ---
+        let machineMapping = {};
+        
         const DAY_HOURS = ["08:00-09:00", "09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "OT 17:30-18:00", "OT 18:00-19:00", "OT 19:00-20:00"];
-        const NIGHT_HOURS = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:00-06:00", "OT 06:00-07:00", "OT 07:00-08:00"];
+        const NIGHT_HOURS = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:00-06:30", "OT 06:00-07:30", "OT 07:00-08:00"];
 
         let currentRowIdForNg = null;
         let batchNgData = {};
@@ -413,6 +443,11 @@
 
             if(localStorage.getItem('CWM_RECORDERS')) {
                 recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
+            }
+            
+            // โหลด Machine Mapping จากเครื่องไว้
+            if(localStorage.getItem('CWM_MACHINE_MAPPING')) {
+                machineMapping = JSON.parse(localStorage.getItem('CWM_MACHINE_MAPPING'));
             }
 
             detectCurrentShift();
@@ -510,6 +545,81 @@
             if(tab==='dashboard') loadDashboard();
         }
         
+        // --- NEW: ระบบกำหนดเครื่องจักร ---
+        function openAssignModal() {
+            const container = document.getElementById('assign-list-container');
+            container.innerHTML = '';
+            
+            for(let i=1; i<=16; i++) {
+                const m = `CWM-${String(i).padStart(2,'0')}`;
+                const currentVal = machineMapping[m] || '';
+                
+                let opts = `<option value="">-- ไม่ได้ระบุ --</option>`;
+                opts += productList.map(p => `<option value="${p}" ${currentVal===p?'selected':''}>${p}</option>`).join('');
+                
+                container.innerHTML += `
+                    <div class="flex items-center gap-2 bg-gray-50 p-2 rounded border border-gray-100 mb-1">
+                        <label class="font-bold text-gray-700 w-20 flex-none">${m}</label>
+                        <select class="assign-select-input w-full p-1.5 border rounded text-sm bg-white" data-machine="${m}">
+                            ${opts}
+                        </select>
+                    </div>
+                `;
+            }
+            document.getElementById('modal-assign').classList.remove('hidden');
+        }
+
+        function closeAssignModal() {
+            document.getElementById('modal-assign').classList.add('hidden');
+        }
+
+        async function saveAssignment() {
+            const selects = document.querySelectorAll('.assign-select-input');
+            let hasChanges = false;
+            let logEntries = [];
+            
+            selects.forEach(sel => {
+                const m = sel.dataset.machine;
+                const v = sel.value;
+                if(machineMapping[m] !== v) {
+                    hasChanges = true;
+                    if(v) {
+                        machineMapping[m] = v;
+                        logEntries.push({machine: m, product: v});
+                    } else {
+                        delete machineMapping[m];
+                        logEntries.push({machine: m, product: "Unassigned"});
+                    }
+                }
+            });
+            
+            localStorage.setItem('CWM_MACHINE_MAPPING', JSON.stringify(machineMapping));
+            closeAssignModal();
+            
+            // ทำให้แถวในฟอร์มปัจจุบันอัปเดตตามทันที
+            const rows = document.getElementById('batchList').children;
+            for(let r of rows) {
+                const mSel = r.querySelector('.machine-select-trigger');
+                const pSel = r.querySelector('.product-select-target');
+                if(mSel && mSel.value && machineMapping[mSel.value]) {
+                    pSel.value = machineMapping[mSel.value];
+                }
+            }
+
+            // ส่งข้อมูลไปเซฟที่หลังบ้าน
+            if(hasChanges && logEntries.length > 0) {
+                const payload = { 
+                    action: 'SAVE_ASSIGNMENT', 
+                    timestamp: new Date().toLocaleString('th-TH'),
+                    logs: logEntries,
+                    recorder: document.getElementById('recorder').value || "System"
+                };
+                // แอบยิงไปที่เซิร์ฟเวอร์แบบเบื้องหลัง ไม่ต้องรอโหลด
+                fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) })
+                .catch(e => console.log("Error logging assignment:", e));
+            }
+        }
+
         function addBatchRow() {
             const container = document.getElementById('batchList');
             const rowId = 'row-' + Date.now() + Math.random().toString(36).substr(2, 5);
@@ -525,11 +635,13 @@
             div.innerHTML = `
                 <div class="flex-1 w-full">
                     <label class="text-[10px] text-gray-400 font-bold uppercase">Machine</label>
-                    <select name="machine" class="w-full p-2 border rounded bg-gray-50 text-sm font-bold">${machineOpts}</select>
+                    <!-- เพิ่ม class machine-select-trigger -->
+                    <select name="machine" class="machine-select-trigger w-full p-2 border rounded bg-gray-50 text-sm font-bold">${machineOpts}</select>
                 </div>
                 <div class="flex-1 w-full">
                     <label class="text-[10px] text-gray-400 font-bold uppercase">Product</label>
-                    <select name="productCode" class="w-full p-2 border rounded bg-gray-50 text-sm">${prodOpts}</select>
+                    <!-- เพิ่ม class product-select-target -->
+                    <select name="productCode" class="product-select-target w-full p-2 border rounded bg-gray-50 text-sm">${prodOpts}</select>
                 </div>
                 <div class="w-24">
                     <label class="text-[10px] text-gray-400 font-bold uppercase">FG</label>
@@ -544,6 +656,16 @@
             `;
             container.appendChild(div);
             batchNgData[rowId] = [];
+
+            // --- NEW: Event Listener ทำให้การเลือกเครื่องจักร "ฉลาด" ---
+            const mSelect = div.querySelector('.machine-select-trigger');
+            const pSelect = div.querySelector('.product-select-target');
+            mSelect.addEventListener('change', function() {
+                const selectedM = this.value;
+                if(selectedM && machineMapping[selectedM]) {
+                    pSelect.value = machineMapping[selectedM];
+                }
+            });
         }
 
         function removeBatchRow(id) { 
