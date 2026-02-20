@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.42 Layout & Sync Fixed</title>
+    <title>CWM Production System - v3.43 Layout & Sync Fixed</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -46,7 +46,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.42</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.43</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -164,7 +164,7 @@
         <div id="debug-panel" class="hidden bg-red-50 border border-red-200 p-4 rounded-xl shadow-inner">
             <div class="flex justify-between items-center mb-2">
                 <h3 class="text-red-800 font-bold text-sm">🛑 พบข้อผิดพลาด (Debug Diagnostics)</h3>
-                <button onclick="document.getElementById('debug-panel').classList.add('hidden')" class="text-red-50 hover:bg-red-200 px-2 rounded">ปิด</button>
+                <button onclick="document.getElementById('debug-panel').classList.add('hidden')" class="text-red-500 hover:bg-red-200 px-2 rounded">ปิด</button>
             </div>
             <pre id="debug-output" class="text-[10px] md:text-xs text-red-900 overflow-auto max-h-64 whitespace-pre-wrap font-mono bg-white p-2 rounded border border-red-100"></pre>
         </div>
@@ -227,16 +227,16 @@
             </div>
             
             <div id="sortable-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- FG by Model List - Changed height from h-auto to h-80 for grid uniformity -->
-                <div class="widget-card p-4 h-80">
+                <!-- ทุกกราฟปรับความสูงเป็น h-[350px] เพื่อความเท่ากันเป๊ะใน PC -->
+                <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
-                        <h3 class="font-bold text-gray-700 text-sm">📦 FG by Model (ยอดดีแยกรุ่น)</h3>
+                        <h3 class="font-bold text-gray-700 text-sm">📦 FG & ACH by Model (ยอดผลิต vs แผน)</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
                     <div class="flex-1 overflow-y-auto" id="fgModelList"></div>
                 </div>
                 
-                <div class="widget-card p-4 h-80">
+                <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">📉 NG Analysis (Pareto)</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
@@ -244,7 +244,7 @@
                     <div class="flex-1 relative"><canvas id="paretoChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card p-4 h-80">
+                <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Trend</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
@@ -252,8 +252,7 @@
                     <div class="flex-1 relative"><canvas id="qcTrendChart"></canvas></div>
                 </div>
                 
-                <!-- Changed height from h-64 to h-80 -->
-                <div class="widget-card p-4 h-80">
+                <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
@@ -261,8 +260,7 @@
                     <div class="flex-1 relative"><canvas id="yieldModelChart"></canvas></div>
                 </div>
                 
-                <!-- Changed height from h-64 to h-80 -->
-                <div class="widget-card p-4 h-80">
+                <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
@@ -270,7 +268,7 @@
                     <div class="flex-1 relative"><canvas id="yieldMachineChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card p-4 h-80">
+                <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">Hourly Production (FG & NG)</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
@@ -278,7 +276,7 @@
                     <div class="flex-1 relative"><canvas id="hourlyChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card p-4 h-80">
+                <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">NG Breakdown</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
@@ -375,6 +373,7 @@
     </div>
 
     <script>
+        // ⚠️ สำคัญมาก: ตรวจสอบ URL นี้ให้ตรงกับตัวที่ Deploy ล่าสุด
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec";
         
         let ngSymptoms = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "อื่นๆ (Others)"];
@@ -392,7 +391,9 @@
         let machineDetailChart = null;
         let charts = {};
         let currentManageType = '';
-        let isDualLayout = true;
+        
+        // --- ตัวแปรสำหรับคุม Layout ถูกเพิ่มเข้ามาแล้วที่นี่ ---
+        let isDualLayout = true; 
 
         try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
 
@@ -483,7 +484,7 @@
                    ngSymptoms = normalizeSymptomList(ngSymptoms);
                 }
                 
-                // --- NEW: ซิงค์การตั้งค่าเครื่องจักรจาก Cloud ลง Local อัตโนมัติ ---
+                // --- ซิงค์การตั้งค่าเครื่องจักรจาก Cloud ลง Local อัตโนมัติ ---
                 if (data.machineMapping) {
                     machineMapping = data.machineMapping; // อัปเดตตัวแปรหลักด้วยข้อมูลจาก Cloud
                     localStorage.setItem('CWM_MACHINE_MAPPING', JSON.stringify(machineMapping)); // เซฟทับ Local Storage
@@ -561,7 +562,7 @@
             if(tab==='dashboard') loadDashboard();
         }
 
-        // --- NEW: นำฟังก์ชัน toggleLayout กลับมา ---
+        // --- NEW: ฟังก์ชันสลับ Layout ถูกเพิ่มเข้ามาแล้ว ---
         function toggleLayout() {
             isDualLayout = !isDualLayout;
             const grid = document.getElementById('sortable-grid');
