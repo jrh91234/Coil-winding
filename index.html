@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.39 Breakdown ACH</title>
+    <title>CWM Production System - v3.40 Plan per Day Indicator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -46,7 +46,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.38</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.40</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -365,23 +365,20 @@
 
         try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
 
-        // --- NEW: ฟังก์ชันแปลงข้อความเป็นมาตรฐานเดียวกันเด็ดขาด ---
-        function toStdSymptom(name) {
-            if (!name) return "";
-            let str = name.trim();
-            if (str.length > 0) {
-                // บังคับตัวอักษรแรกพิมพ์ใหญ่เสมอ ป้องกัน setup กับ Setup แยกกัน
-                str = str.charAt(0).toUpperCase() + str.slice(1);
+        function capitalizeFirst(str) {
+            if (!str) return "";
+            let strTrimmed = str.trim();
+            if (strTrimmed.length > 0) {
+                return strTrimmed.charAt(0).toUpperCase() + strTrimmed.slice(1);
             }
-            return str;
+            return strTrimmed;
         }
 
         function normalizeSymptomList(list) {
             const unique = [];
             list.forEach(item => {
                 if (item && item.trim() !== '') {
-                    const stdStr = toStdSymptom(item);
-                    // ป้องกันการแอดซ้ำ
+                    const stdStr = capitalizeFirst(item);
                     if (!unique.some(u => u.toLowerCase() === stdStr.toLowerCase())) {
                         unique.push(stdStr);
                     }
@@ -443,7 +440,7 @@
                 
                 if (data.ngTypes && data.ngTypes.length > 0) {
                    data.ngTypes.forEach(t => {
-                       const stdStr = toStdSymptom(t);
+                       const stdStr = capitalizeFirst(t);
                        if(!ngSymptoms.some(s => s.toLowerCase() === stdStr.toLowerCase())) {
                            ngSymptoms.push(stdStr);
                        }
@@ -619,8 +616,7 @@
                 const qty = parseFloat(row.querySelector('.ng-input-qty').value);
                 const remark = row.querySelector('.ng-input-remark').value;
                 if (type && qty > 0) { 
-                    // สำคัญ: บังคับเปลี่ยนตัวแรกเป็นพิมพ์ใหญ่ก่อนจำค่า
-                    newData.push({ type: toStdSymptom(type), qty, remark }); 
+                    newData.push({ type: capitalizeFirst(type), qty, remark }); 
                     total += qty; 
                 }
             });
@@ -700,7 +696,7 @@
                      renderManageListContent(recorderList); 
                  } 
              } else if (currentManageType === 'symptom') { 
-                 const stdVal = toStdSymptom(rawVal);
+                 const stdVal = capitalizeFirst(rawVal);
                  if (!ngSymptoms.some(s => s.toLowerCase() === stdVal.toLowerCase())) { 
                      ngSymptoms.push(stdVal); 
                      localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
@@ -779,7 +775,7 @@
                 const ngDetails = batchNgData[div.id] || [];
                 ngDetails.forEach(ng => { 
                     if (ng.type) {
-                        const stdType = toStdSymptom(ng.type);
+                        const stdType = capitalizeFirst(ng.type);
                         ng.type = stdType; // บังคับเซฟเป็นพิมพ์ใหญ่เพื่อความชัวร์
                         if (!ngSymptoms.some(s => s.toLowerCase() === stdType.toLowerCase()) && !newNgTypes.some(s => s.toLowerCase() === stdType.toLowerCase())) {
                             newNgTypes.push(stdType);
@@ -906,6 +902,9 @@
             const shift = document.getElementById('filterShift').value.trim(); 
             const shiftType = document.getElementById('filterShiftType').value.trim();
             
+            // เช็คว่ากำลังดูข้อมูลแบบถูกกรอง (ไม่ได้ดูยอดเต็มทั้งวัน) หรือไม่
+            const isPartialView = (shift !== 'All' || shiftType !== 'All');
+            
             let rawText = "";
             try {
                 // บังคับไม่ให้โหลด Cache เก่าของเบราว์เซอร์
@@ -929,7 +928,7 @@
                 const normalizedNgMapKg = {};
                 
                 (data.ngLabels || []).forEach((label, i) => {
-                    const stdLabel = toStdSymptom(label);
+                    const stdLabel = ngSymptoms.find(s => s.toLowerCase() === label.trim().toLowerCase()) || capitalizeFirst(label.trim());
                     const vPcs = data.ngValuesPcs ? data.ngValuesPcs[i] : (data.ngValues ? data.ngValues[i] : 0);
                     const vKg = data.ngValuesKg ? data.ngValuesKg[i] : 0;
                     
@@ -949,13 +948,13 @@
                         
                         const oldPcs = mData.ngBreakdownPcs || mData.ngBreakdown || {};
                         for (let k in oldPcs) {
-                            const stdLabel = toStdSymptom(k);
+                            const stdLabel = capitalizeFirst(k);
                             newBreakdownPcs[stdLabel] = (newBreakdownPcs[stdLabel] || 0) + oldPcs[k];
                         }
                         
                         const oldKg = mData.ngBreakdownKg || {};
                         for (let k in oldKg) {
-                            const stdLabel = toStdSymptom(k);
+                            const stdLabel = capitalizeFirst(k);
                             newBreakdownKg[stdLabel] = (newBreakdownKg[stdLabel] || 0) + oldKg[k];
                         }
                         
@@ -974,7 +973,13 @@
                 }
 
                 document.getElementById('stat-fg').innerText = fg.toLocaleString();
-                document.getElementById('stat-target').innerText = target.toLocaleString();
+                
+                // --- NEW: เพิ่ม indicator /day ในเป้าหมายหลัก ---
+                let targetDisplay = target.toLocaleString();
+                if (isPartialView && target > 0) {
+                    targetDisplay += ` <span class="text-sm text-gray-500 font-medium">/day</span>`;
+                }
+                document.getElementById('stat-target').innerHTML = targetDisplay;
                 
                 document.getElementById('stat-ng').innerText = `${ngPcs.toLocaleString()} ชิ้น`;
                 document.getElementById('stat-ng-sub').innerText = `(${ngKg.toFixed(2)} Kg)`;
@@ -996,7 +1001,7 @@
                 currentDashboardData = data;
                 renderCharts(data); 
                 renderTable(data); 
-                renderFgByModel(data);
+                renderFgByModel(data, isPartialView); // ส่งตัวแปรการกรองไปให้ฟังก์ชันด้วย
 
             } catch(e) { 
                 console.error("Dashboard Load Error: ", e); 
@@ -1015,7 +1020,8 @@
             }
         }
 
-        function renderFgByModel(data) {
+        // --- NEW: รับพารามิเตอร์เพื่อระบุว่าดูแบบแยกกะหรือไม่ ---
+        function renderFgByModel(data, isPartialView = false) {
             const container = document.getElementById('fgModelList');
             if(!container) return;
             const models = [
@@ -1033,6 +1039,12 @@
                 const achColor = ach >= 100 ? 'text-green-600' : (ach >= 80 ? 'text-orange-500' : 'text-red-500');
                 const barColor = ach >= 100 ? 'bg-green-500' : (ach >= 80 ? 'bg-orange-500' : 'bg-red-500');
 
+                // แทรก /day ถ้าเป็นการดูข้อมูลเฉพาะกะ
+                let planLabel = plan.toLocaleString();
+                if (isPartialView && plan > 0) {
+                    planLabel += ` <span class="text-gray-400 font-normal text-[10px]">/day</span>`;
+                }
+
                 html += `
                 <li class="py-3 flex flex-col gap-1">
                     <div class="flex justify-between items-center">
@@ -1041,7 +1053,7 @@
                     </div>
                     <div class="flex justify-between items-center text-xs">
                         <span class="text-gray-500">FG: <span class="font-bold text-blue-600">${fg.toLocaleString()}</span> ชิ้น</span>
-                        <span class="text-gray-500">Plan: <span class="font-bold text-indigo-600">${plan.toLocaleString()}</span> ชิ้น</span>
+                        <span class="text-gray-500">Plan: <span class="font-bold text-indigo-600">${planLabel}</span> ชิ้น</span>
                     </div>
                     <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
                         <div class="${barColor} h-1.5 rounded-full" style="width: ${Math.min(ach, 100)}%"></div>
@@ -1179,7 +1191,7 @@
                     const d = data.machineData[m];
                     if (d.ngBreakdownPcs) {
                         Object.keys(d.ngBreakdownPcs).forEach(k => {
-                            const stdK = toStdSymptom(k);
+                            const stdK = capitalizeFirst(k);
                             if (!dynamicColumns.some(s => s.toLowerCase() === stdK.toLowerCase())) {
                                 dynamicColumns.push(stdK);
                             }
@@ -1189,7 +1201,7 @@
             }
             
             // ทำให้แน่ใจว่า Column ไม่เบิ้ล 100%
-            dynamicColumns = [...new Set(dynamicColumns.map(s => toStdSymptom(s)))];
+            dynamicColumns = [...new Set(dynamicColumns.map(s => capitalizeFirst(s)))];
 
             const h = document.getElementById('table-header'); 
             const b = document.getElementById('table-body');
