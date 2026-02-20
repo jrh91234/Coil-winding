@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.43 Layout & Sync Fixed</title>
+    <title>CWM Production System - v3.45 Layout Debug Mode</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -35,9 +35,9 @@
     
     <nav class="bg-white shadow-md sticky top-0 z-20">
         <div class="flex max-w-6xl mx-auto">
-            <button onclick="switchTab('form')" id="tab-form" class="flex-1 py-4 text-center text-blue-600 font-bold border-b-4 border-blue-600">📝 บันทึกผลิต</button>
-            <button onclick="switchTab('planning')" id="tab-planning" class="flex-1 py-4 text-center text-gray-500 hover:bg-gray-50">📅 วางแผน (Plan)</button>
-            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="flex-1 py-4 text-center text-gray-500 hover:bg-gray-50">📊 Dashboard</button>
+            <button onclick="window.switchTab('form')" id="tab-form" class="flex-1 py-4 text-center text-blue-600 font-bold border-b-4 border-blue-600">📝 บันทึกผลิต</button>
+            <button onclick="window.switchTab('planning')" id="tab-planning" class="flex-1 py-4 text-center text-gray-500 hover:bg-gray-50">📅 วางแผน (Plan)</button>
+            <button onclick="window.switchTab('dashboard')" id="tab-dashboard" class="flex-1 py-4 text-center text-gray-500 hover:bg-gray-50">📊 Dashboard</button>
         </div>
     </nav>
     
@@ -46,7 +46,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.43</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.45</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -59,7 +59,7 @@
                         <div class="flex gap-1">
                             <input list="recorder-datalist" id="recorder" name="recorder" class="w-full p-2 border rounded text-sm" placeholder="พิมพ์ชื่อ..." required autocomplete="off">
                             <datalist id="recorder-datalist"></datalist>
-                            <button type="button" onclick="manageRecorders()" class="bg-white border border-blue-300 text-blue-600 px-2 rounded hover:bg-blue-50">⚙️</button>
+                            <button type="button" onclick="window.manageRecorders()" class="bg-white border border-blue-300 text-blue-600 px-2 rounded hover:bg-blue-50">⚙️</button>
                         </div>
                     </div>
                     <div>
@@ -70,8 +70,8 @@
                                 <option value="B">B</option>
                             </select>
                             <div class="flex flex-col text-[10px]">
-                                <label><input type="radio" name="shift_type_toggle" value="Day" onclick="updateHourSlots('Day')"> เช้า</label>
-                                <label><input type="radio" name="shift_type_toggle" value="Night" onclick="updateHourSlots('Night')"> ดึก</label>
+                                <label><input type="radio" name="shift_type_toggle" value="Day" onclick="window.updateHourSlots('Day')"> เช้า</label>
+                                <label><input type="radio" name="shift_type_toggle" value="Night" onclick="window.updateHourSlots('Night')"> ดึก</label>
                             </div>
                         </div>
                     </div>
@@ -84,14 +84,14 @@
                 <!-- ปุ่มกำหนดรุ่นให้เครื่องจักร -->
                 <div class="flex justify-between items-end mt-4 mb-2">
                     <h3 class="font-bold text-gray-700 text-sm">รายการผลิต</h3>
-                    <button type="button" onclick="openAssignModal()" class="text-xs bg-indigo-50 text-indigo-700 font-bold py-1.5 px-3 rounded border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1 shadow-sm">
+                    <button type="button" onclick="window.openAssignModal()" class="text-xs bg-indigo-50 text-indigo-700 font-bold py-1.5 px-3 rounded border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1 shadow-sm">
                         <span>⚙️</span> ตั้งค่าเครื่องจักร (Assign)
                     </button>
                 </div>
 
                 <div id="batchList" class="space-y-3"></div>
                 
-                <button type="button" onclick="addBatchRow()" class="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 font-bold hover:border-blue-400 hover:text-blue-500 mt-2">
+                <button type="button" onclick="window.addBatchRow()" class="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 font-bold hover:border-blue-400 hover:text-blue-500 mt-2">
                     + เพิ่มรายการ (Add Model/Machine)
                 </button>
                 
@@ -149,8 +149,9 @@
                     <option value="Night">Night</option>
                 </select>
                 <div class="flex gap-2 w-full md:w-auto">
-                    <button onclick="loadDashboard()" class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded text-sm font-bold shadow-md hover:bg-indigo-700 active:bg-indigo-800 transition-colors">🔍 ค้นหา</button>
-                    <button onclick="toggleLayout()" id="layoutBtn" class="flex-1 bg-white text-indigo-600 border border-indigo-200 px-4 py-2 rounded text-sm font-bold shadow-sm hover:bg-indigo-50 transition-colors">🔀 Layout: คู่</button>
+                    <button onclick="window.loadDashboard()" class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded text-sm font-bold shadow-md hover:bg-indigo-700 active:bg-indigo-800 transition-colors">🔍 ค้นหา</button>
+                    <!-- ปุ่มสำหรับสลับ Layout (ฝัง Debugger) -->
+                    <button onclick="document.getElementById('debug-panel').classList.remove('hidden'); document.getElementById('debug-output').innerText='กำลังกดปุ่มสลับ Layout...'; window.toggleLayout()" id="layoutBtn" class="flex-1 bg-white text-indigo-600 border border-indigo-200 px-4 py-2 rounded text-sm font-bold shadow-sm hover:bg-indigo-50 transition-colors">🔀 Layout: คู่</button>
                 </div>
             </div>
         </div>
@@ -160,10 +161,10 @@
             <p class="text-gray-500 font-medium mt-2">กำลังประมวลผลข้อมูล...</p>
         </div>
 
-        <!-- DEBUG PANEL -->
-        <div id="debug-panel" class="hidden bg-red-50 border border-red-200 p-4 rounded-xl shadow-inner">
+        <!-- DEBUG PANEL (Always visible during tests if triggered) -->
+        <div id="debug-panel" class="hidden bg-red-50 border border-red-200 p-4 rounded-xl shadow-inner mb-4">
             <div class="flex justify-between items-center mb-2">
-                <h3 class="text-red-800 font-bold text-sm">🛑 พบข้อผิดพลาด (Debug Diagnostics)</h3>
+                <h3 class="text-red-800 font-bold text-sm">🛑 ระบบ Debug ปุ่ม Layout</h3>
                 <button onclick="document.getElementById('debug-panel').classList.add('hidden')" class="text-red-500 hover:bg-red-200 px-2 rounded">ปิด</button>
             </div>
             <pre id="debug-output" class="text-[10px] md:text-xs text-red-900 overflow-auto max-h-64 whitespace-pre-wrap font-mono bg-white p-2 rounded border border-red-100"></pre>
@@ -231,7 +232,7 @@
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">📦 FG & ACH by Model (ยอดผลิต vs แผน)</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
                     <div class="flex-1 overflow-y-auto" id="fgModelList"></div>
                 </div>
@@ -239,55 +240,55 @@
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">📉 NG Analysis (Pareto)</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
-                    <div class="flex-1 relative"><canvas id="paretoChart"></canvas></div>
+                    <div class="flex-1 relative w-full"><canvas id="paretoChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Trend</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
-                    <div class="flex-1 relative"><canvas id="qcTrendChart"></canvas></div>
+                    <div class="flex-1 relative w-full"><canvas id="qcTrendChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
-                    <div class="flex-1 relative"><canvas id="yieldModelChart"></canvas></div>
+                    <div class="flex-1 relative w-full"><canvas id="yieldModelChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
-                    <div class="flex-1 relative"><canvas id="yieldMachineChart"></canvas></div>
+                    <div class="flex-1 relative w-full"><canvas id="yieldMachineChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">Hourly Production (FG & NG)</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
-                    <div class="flex-1 relative"><canvas id="hourlyChart"></canvas></div>
+                    <div class="flex-1 relative w-full"><canvas id="hourlyChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">NG Breakdown</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
-                    <div class="flex-1 relative"><canvas id="ngChart"></canvas></div>
+                    <div class="flex-1 relative w-full"><canvas id="ngChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card md:col-span-2 p-4">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3>
-                        <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
                     <div class="table-container">
                         <table class="w-full min-w-[1200px] divide-y divide-gray-200">
@@ -306,7 +307,7 @@
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[90vh]">
             <div class="flex justify-between items-center mb-4 flex-none">
                 <h3 class="text-lg font-bold text-gray-800">⚙️ กำหนดรุ่นให้เครื่องจักร</h3>
-                <button onclick="closeAssignModal()" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+                <button onclick="window.closeAssignModal()" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
             </div>
             <p class="text-xs text-gray-500 mb-3 flex-none">เมื่อเลือกเครื่องจักรในฟอร์ม ระบบจะดึงรุ่นที่ตั้งค่าไว้นี้มาให้อัตโนมัติ</p>
             
@@ -315,7 +316,7 @@
             </div>
             
             <div class="flex-none pt-3 border-t flex gap-2">
-                <button onclick="saveAssignment()" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold hover:bg-indigo-700">💾 บันทึกการตั้งค่า</button>
+                <button onclick="window.saveAssignment()" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold hover:bg-indigo-700">💾 บันทึกการตั้งค่า</button>
             </div>
         </div>
     </div>
@@ -324,8 +325,7 @@
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[80vh]">
             <div class="flex justify-between items-center mb-4 flex-none">
                 <h3 class="text-lg font-bold">บันทึกของเสีย (NG)</h3>
-                <!-- ปุ่มจัดการรายการ NG -->
-                <button type="button" onclick="manageSymptomsFromModal()" class="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded text-xs font-bold hover:bg-blue-100 shadow-sm">
+                <button type="button" onclick="window.manageSymptomsFromModal()" class="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded text-xs font-bold hover:bg-blue-100 shadow-sm">
                     ⚙️ จัดการรายการ
                 </button>
             </div>
@@ -333,10 +333,10 @@
             <div id="modal-ng-list" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1"></div>
             
             <div class="flex-none pt-2 border-t">
-                 <button type="button" onclick="addCustomNgField()" class="w-full mb-2 text-blue-600 text-xs font-bold border border-blue-200 rounded py-1 hover:bg-blue-50">+ ระบุอาการอื่น (Add Other)</button>
+                 <button type="button" onclick="window.addCustomNgField()" class="w-full mb-2 text-blue-600 text-xs font-bold border border-blue-200 rounded py-1 hover:bg-blue-50">+ ระบุอาการอื่น (Add Other)</button>
                  <div class="flex gap-2">
-                    <button onclick="closeNgModal(true)" class="flex-1 bg-green-600 text-white py-2 rounded-lg font-bold">ยืนยัน</button>
-                    <button onclick="closeNgModal(false)" class="flex-1 bg-gray-200 py-2 rounded-lg font-bold">ยกเลิก</button>
+                    <button onclick="window.closeNgModal(true)" class="flex-1 bg-green-600 text-white py-2 rounded-lg font-bold">ยืนยัน</button>
+                    <button onclick="window.closeNgModal(false)" class="flex-1 bg-gray-200 py-2 rounded-lg font-bold">ยกเลิก</button>
                  </div>
             </div>
         </div>
@@ -366,9 +366,9 @@
             <div id="manage-list-content" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1"></div>
             <div class="flex-none pt-2 border-t flex gap-2">
                  <input type="text" id="new-item-input" class="flex-1 p-2 border rounded text-sm" placeholder="พิมพ์ชื่อรายการใหม่...">
-                 <button onclick="addNewItemToList()" class="bg-green-600 text-white px-4 rounded font-bold hover:bg-green-700">เพิ่ม</button>
+                 <button onclick="window.addNewItemToList()" class="bg-green-600 text-white px-4 rounded font-bold hover:bg-green-700">เพิ่ม</button>
             </div>
-            <button onclick="closeManageListModal()" class="mt-2 w-full bg-gray-200 py-2 rounded font-bold hover:bg-gray-300">ปิด</button>
+            <button onclick="window.closeManageListModal()" class="mt-2 w-full bg-gray-200 py-2 rounded font-bold hover:bg-gray-300">ปิด</button>
         </div>
     </div>
 
@@ -392,8 +392,8 @@
         let charts = {};
         let currentManageType = '';
         
-        // --- ตัวแปรสำหรับคุม Layout ถูกเพิ่มเข้ามาแล้วที่นี่ ---
-        let isDualLayout = true; 
+        // --- ตัวแปรสำหรับคุม Layout (Global Scope) ---
+        window.isDualLayout = true;
 
         try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
 
@@ -451,18 +451,18 @@
                 machineMapping = JSON.parse(localStorage.getItem('CWM_MACHINE_MAPPING'));
             }
 
-            detectCurrentShift();
-            addBatchRow();
-            fetchOptions();
-            initSortable();
-            renderRecorderOptions();
-            renderProductOptions();
+            window.detectCurrentShift();
+            window.addBatchRow();
+            window.fetchOptions();
+            window.initSortable();
+            window.renderRecorderOptions();
+            window.renderProductOptions();
 
-            if(window.location.hash === '#dashboard') switchTab('dashboard');
-            else switchTab('form');
+            if(window.location.hash === '#dashboard') window.switchTab('dashboard');
+            else window.switchTab('form');
         };
         
-        async function fetchOptions() {
+        window.fetchOptions = async function() {
             try {
                 // บังคับไม่ให้โหลด Cache เก่าของเบราว์เซอร์
                 const res = await fetch(`${SCRIPT_URL}?action=GET_OPTIONS&_t=${Date.now()}`);
@@ -472,7 +472,7 @@
                 recList.innerHTML = '';
                 const allRecorders = new Set([...recorderList, ...(data.recorders || [])]);
                 recorderList = Array.from(allRecorders);
-                renderRecorderOptions();
+                window.renderRecorderOptions();
                 
                 if (data.ngTypes && data.ngTypes.length > 0) {
                    data.ngTypes.forEach(t => {
@@ -484,12 +484,11 @@
                    ngSymptoms = normalizeSymptomList(ngSymptoms);
                 }
                 
-                // --- ซิงค์การตั้งค่าเครื่องจักรจาก Cloud ลง Local อัตโนมัติ ---
+                // ซิงค์การตั้งค่าเครื่องจักรจาก Cloud ลง Local อัตโนมัติ
                 if (data.machineMapping) {
-                    machineMapping = data.machineMapping; // อัปเดตตัวแปรหลักด้วยข้อมูลจาก Cloud
-                    localStorage.setItem('CWM_MACHINE_MAPPING', JSON.stringify(machineMapping)); // เซฟทับ Local Storage
+                    machineMapping = data.machineMapping;
+                    localStorage.setItem('CWM_MACHINE_MAPPING', JSON.stringify(machineMapping));
                     
-                    // สั่งให้รายการฟอร์มที่เปิดอยู่ อัปเดตรุ่นล่าสุดตาม Cloud ทันที
                     const rows = document.getElementById('batchList').children;
                     for(let r of rows) {
                         const mSel = r.querySelector('.machine-select-trigger');
@@ -502,42 +501,91 @@
             } catch (e) { 
                 console.log("Error fetching options", e); 
             }
-        }
+        };
 
-        function initSortable() {
+        window.initSortable = function() {
             const grid = document.getElementById('sortable-grid');
             Sortable.create(grid, { 
                 handle: '.drag-handle', 
                 animation: 150, 
                 ghostClass: 'sortable-ghost', 
                 onEnd: function() { 
-                    Object.values(charts).forEach(c => { if(c) c.resize(); }); 
+                    Object.values(charts).forEach(c => { if(c && typeof c.resize === 'function') c.resize(); }); 
                 } 
             });
-        }
+        };
 
-        function toggleCardSize(btn) {
+        // --- NEW: ฟังก์ชันสลับ Layout แบบมีตัวดักจับ Debug ---
+        window.toggleLayout = function() {
+            const debugOut = document.getElementById('debug-output');
+            
+            try {
+                debugOut.innerText += "\n[System] ฟังก์ชัน toggleLayout ทำงานแล้ว...";
+                
+                window.isDualLayout = !window.isDualLayout;
+                debugOut.innerText += `\n[System] สถานะเลย์เอาต์ที่ต้องการ: ${window.isDualLayout ? 'คู่' : 'เดี่ยว'}`;
+                
+                const grid = document.getElementById('sortable-grid');
+                const btn = document.getElementById('layoutBtn');
+                
+                if (!grid) debugOut.innerText += "\n[Error] ไม่พบกล่อง sortable-grid";
+                if (!btn) debugOut.innerText += "\n[Error] ไม่พบปุ่ม layoutBtn";
+
+                if (!grid || !btn) return;
+
+                if (window.isDualLayout) {
+                    grid.classList.add('md:grid-cols-2');
+                    grid.classList.remove('md:grid-cols-1');
+                    btn.innerText = '🔀 Layout: คู่';
+                } else {
+                    grid.classList.remove('md:grid-cols-2');
+                    grid.classList.add('md:grid-cols-1');
+                    btn.innerText = '🔀 Layout: เดี่ยว';
+                }
+                
+                debugOut.innerText += "\n[System] เปลี่ยนคลาสสำเร็จ เริ่มรีไซส์กราฟ...";
+
+                // รอให้ DOM ขยับเสร็จแล้วสั่งกราฟ Resize ตัวเอง
+                setTimeout(() => {
+                    let count = 0;
+                    Object.values(charts).forEach(c => { 
+                        if(c && typeof c.resize === 'function') {
+                            c.resize(); 
+                            count++;
+                        }
+                    });
+                    debugOut.innerText += `\n[System] รีไซส์กราฟเสร็จสิ้น ${count} อัน (สำเร็จ!)`;
+                }, 150);
+
+            } catch (err) {
+                debugOut.innerText += `\n[Fatal Error] โค้ดพัง: ${err.message}`;
+            }
+        };
+
+        window.toggleCardSize = function(btn) {
             const card = btn.closest('.widget-card');
             if (card.classList.contains('md:col-span-2')) {
                 card.classList.remove('md:col-span-2'); 
             } else {
                 card.classList.add('md:col-span-2');
             }
-            const canvas = card.querySelector('canvas');
-            if(canvas) { 
-                const chartInstance = Chart.getChart(canvas); 
-                if(chartInstance) chartInstance.resize(); 
-            }
-        }
+            setTimeout(() => {
+                const canvas = card.querySelector('canvas');
+                if(canvas) { 
+                    const chartInstance = Chart.getChart(canvas); 
+                    if(chartInstance) chartInstance.resize(); 
+                }
+            }, 150);
+        };
 
-        function detectCurrentShift() {
+        window.detectCurrentShift = function() {
             const hour = new Date().getHours();
             let type = (hour >= 8 && hour < 20) ? "Day" : "Night";
             document.querySelector(`input[name="shift_type_toggle"][value="${type}"]`).checked = true;
-            updateHourSlots(type);
-        }
+            window.updateHourSlots(type);
+        };
 
-        function updateHourSlots(type) {
+        window.updateHourSlots = function(type) {
             const select = document.getElementById('hourSlot');
             const hours = (type === "Day") ? DAY_HOURS : NIGHT_HOURS;
             select.innerHTML = hours.map(h => `<option value="${h}">${h}</option>`).join('');
@@ -545,9 +593,9 @@
             const currentHourStr = new Date().getHours().toString().padStart(2, '0') + ":00";
             const match = hours.find(h => h.startsWith(currentHourStr));
             if(match) select.value = match;
-        }
+        };
 
-        function switchTab(tab) {
+        window.switchTab = function(tab) {
             ['form', 'planning', 'dashboard'].forEach(t => {
                 document.getElementById('section-'+t).classList.toggle('hidden', t !== tab);
                 const btn = document.getElementById('tab-'+t);
@@ -559,32 +607,10 @@
                     btn.classList.add('text-gray-500'); 
                 }
             });
-            if(tab==='dashboard') loadDashboard();
-        }
-
-        // --- NEW: ฟังก์ชันสลับ Layout ถูกเพิ่มเข้ามาแล้ว ---
-        function toggleLayout() {
-            isDualLayout = !isDualLayout;
-            const grid = document.getElementById('sortable-grid');
-            const btn = document.getElementById('layoutBtn');
-            
-            if (isDualLayout) {
-                grid.classList.add('md:grid-cols-2');
-                grid.classList.remove('md:grid-cols-1');
-                btn.innerText = '🔀 Layout: คู่';
-            } else {
-                grid.classList.remove('md:grid-cols-2');
-                grid.classList.add('md:grid-cols-1');
-                btn.innerText = '🔀 Layout: เดี่ยว';
-            }
-            
-            // สั่งให้กราฟทุกตัวคำนวณขนาดตัวเองใหม่ให้พอดีกับกล่อง
-            Object.values(charts).forEach(c => { 
-                if(c) c.resize(); 
-            });
-        }
+            if(tab==='dashboard') window.loadDashboard();
+        };
         
-        function openAssignModal() {
+        window.openAssignModal = function() {
             const container = document.getElementById('assign-list-container');
             container.innerHTML = '';
             
@@ -605,13 +631,13 @@
                 `;
             }
             document.getElementById('modal-assign').classList.remove('hidden');
-        }
+        };
 
-        function closeAssignModal() {
+        window.closeAssignModal = function() {
             document.getElementById('modal-assign').classList.add('hidden');
-        }
+        };
 
-        async function saveAssignment() {
+        window.saveAssignment = async function() {
             const selects = document.querySelectorAll('.assign-select-input');
             let hasChanges = false;
             let logEntries = [];
@@ -632,7 +658,7 @@
             });
             
             localStorage.setItem('CWM_MACHINE_MAPPING', JSON.stringify(machineMapping));
-            closeAssignModal();
+            window.closeAssignModal();
             
             const rows = document.getElementById('batchList').children;
             for(let r of rows) {
@@ -653,9 +679,9 @@
                 fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) })
                 .catch(e => console.log("Error logging assignment:", e));
             }
-        }
+        };
 
-        function addBatchRow() {
+        window.addBatchRow = function() {
             const container = document.getElementById('batchList');
             const rowId = 'row-' + Date.now() + Math.random().toString(36).substr(2, 5);
             let machineOpts = '<option value="">เลือกเครื่อง...</option>';
@@ -681,10 +707,10 @@
                     <input type="number" name="fgAmount" value="1000" class="w-full p-2 border rounded text-center font-bold text-green-600 bg-green-50 focus:bg-white" min="0">
                 </div>
                 <div class="w-full md:w-auto flex gap-2">
-                    <button type="button" onclick="openNgModal('${rowId}')" class="flex-1 md:flex-none bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded font-bold text-sm hover:bg-red-100 relative">
+                    <button type="button" onclick="window.openNgModal('${rowId}')" class="flex-1 md:flex-none bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded font-bold text-sm hover:bg-red-100 relative">
                         NG (Kg) <span id="ng-badge-${rowId}" class="hidden absolute -top-2 -right-2 bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">0</span>
                     </button>
-                    <button type="button" onclick="removeBatchRow('${rowId}')" class="text-gray-400 hover:text-red-500 px-2 text-xl">&times;</button>
+                    <button type="button" onclick="window.removeBatchRow('${rowId}')" class="text-gray-400 hover:text-red-500 px-2 text-xl">&times;</button>
                 </div>
             `;
             container.appendChild(div);
@@ -698,15 +724,15 @@
                     pSelect.value = machineMapping[selectedM];
                 }
             });
-        }
+        };
 
-        function removeBatchRow(id) { 
+        window.removeBatchRow = function(id) { 
             const el = document.getElementById(id);
             if(el) el.remove(); 
             delete batchNgData[id]; 
-        }
+        };
 
-        function openNgModal(rowId) {
+        window.openNgModal = function(rowId) {
             currentRowIdForNg = rowId;
             const modal = document.getElementById('modal-ng');
             const list = document.getElementById('modal-ng-list');
@@ -716,18 +742,18 @@
                 const existing = batchNgData[rowId].find(x => x.type === s);
                 const val = existing ? existing.qty : '';
                 const remark = existing ? existing.remark : '';
-                renderNgItem(list, s, val, remark);
+                window.renderNgItem(list, s, val, remark);
             });
 
             const customItems = batchNgData[rowId].filter(x => !ngSymptoms.some(s => s.toLowerCase() === x.type.toLowerCase()));
             customItems.forEach(item => { 
-                renderNgItem(list, item.type, item.qty, item.remark, true); 
+                window.renderNgItem(list, item.type, item.qty, item.remark, true); 
             });
 
             modal.classList.remove('hidden');
-        }
+        };
 
-        function renderNgItem(container, label, qty, remark, isCustom=false) {
+        window.renderNgItem = function(container, label, qty, remark, isCustom=false) {
             const div = document.createElement('div'); 
             div.className = "border-b pb-2 mb-2 ng-item-row";
             
@@ -746,15 +772,15 @@
                 <input type="text" class="ng-input-remark w-full p-1 border rounded text-xs bg-gray-50" value="${remark}" placeholder="หมายเหตุ...">
             `;
             container.appendChild(div);
-        }
+        };
 
-        function addCustomNgField() { 
+        window.addCustomNgField = function() { 
             const list = document.getElementById('modal-ng-list'); 
-            renderNgItem(list, "", "", "", true); 
+            window.renderNgItem(list, "", "", "", true); 
             list.scrollTop = list.scrollHeight; 
-        }
+        };
 
-        function saveCurrentNgInputs() {
+        window.saveCurrentNgInputs = function() {
             if(!currentRowIdForNg) return;
             const rows = document.querySelectorAll('.ng-item-row');
             const newData = [];
@@ -783,20 +809,20 @@
             } else { 
                 badge.classList.add('hidden'); 
             }
-        }
+        };
 
-        function closeNgModal(save) {
-            if(save) saveCurrentNgInputs();
+        window.closeNgModal = function(save) {
+            if(save) window.saveCurrentNgInputs();
             document.getElementById('modal-ng').classList.add('hidden');
             currentRowIdForNg = null;
-        }
+        };
 
-        function manageSymptomsFromModal() {
-            saveCurrentNgInputs(); 
-            manageSymptoms(); 
-        }
+        window.manageSymptomsFromModal = function() {
+            window.saveCurrentNgInputs(); 
+            window.manageSymptoms(); 
+        };
 
-        function renderRecorderOptions() { 
+        window.renderRecorderOptions = function() { 
             const datalist = document.getElementById('recorder-datalist'); 
             datalist.innerHTML = ''; 
             recorderList.forEach(r => { 
@@ -804,41 +830,41 @@
                 opt.value = r; 
                 datalist.appendChild(opt); 
             }); 
-        }
+        };
 
-        function renderProductOptions() { 
+        window.renderProductOptions = function() { 
             const s = document.getElementById('planProduct'); 
             if(s) s.innerHTML = productList.map(p=>`<option value="${p}">${p}</option>`).join(''); 
-        }
+        };
 
-        function manageRecorders() { 
+        window.manageRecorders = function() { 
             currentManageType = 'recorder'; 
-            openManageListModal('จัดการรายชื่อผู้บันทึก', recorderList); 
-        }
+            window.openManageListModal('จัดการรายชื่อผู้บันทึก', recorderList); 
+        };
 
-        function manageSymptoms() { 
+        window.manageSymptoms = function() { 
             currentManageType = 'symptom'; 
-            openManageListModal('จัดการรายการอาการ NG', ngSymptoms); 
-        }
+            window.openManageListModal('จัดการรายการอาการ NG', ngSymptoms); 
+        };
 
-        function openManageListModal(title, list) { 
+        window.openManageListModal = function(title, list) { 
             const modal = document.getElementById('modal-manage-list'); 
             document.getElementById('manage-list-title').innerText = title; 
-            renderManageListContent(list); 
+            window.renderManageListContent(list); 
             modal.classList.remove('hidden'); 
-        }
+        };
 
-        function renderManageListContent(list) { 
+        window.renderManageListContent = function(list) { 
             const container = document.getElementById('manage-list-content'); 
             container.innerHTML = list.map((item, i) => `
                 <div class="flex justify-between items-center bg-gray-50 p-2 rounded mb-1">
                     <span class="text-sm">${item}</span>
-                    <button onclick="deleteListItem(${i})" class="text-red-500 hover:bg-red-100 p-1 rounded">🗑️ ลบ</button>
+                    <button onclick="window.deleteListItem(${i})" class="text-red-500 hover:bg-red-100 p-1 rounded">🗑️ ลบ</button>
                 </div>
             `).join(''); 
-        }
+        };
 
-        function addNewItemToList() {
+        window.addNewItemToList = function() {
              const rawVal = document.getElementById('new-item-input').value.trim();
              if(!rawVal) return;
              
@@ -846,46 +872,46 @@
                  if (!recorderList.some(r => r.toLowerCase() === rawVal.toLowerCase())) { 
                      recorderList.push(rawVal); 
                      localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
-                     renderRecorderOptions(); 
-                     renderManageListContent(recorderList); 
+                     window.renderRecorderOptions(); 
+                     window.renderManageListContent(recorderList); 
                  } 
              } else if (currentManageType === 'symptom') { 
                  const stdVal = capitalizeFirst(rawVal);
                  if (!ngSymptoms.some(s => s.toLowerCase() === stdVal.toLowerCase())) { 
                      ngSymptoms.push(stdVal); 
                      localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
-                     renderManageListContent(ngSymptoms); 
+                     window.renderManageListContent(ngSymptoms); 
                  } 
              }
              document.getElementById('new-item-input').value = '';
 
              if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
-                 openNgModal(currentRowIdForNg);
+                 window.openNgModal(currentRowIdForNg);
              }
-        }
+        };
 
-        function deleteListItem(index) {
+        window.deleteListItem = function(index) {
              if (!confirm('ยืนยันการลบรายการนี้ใช่หรือไม่?')) return;
              
              if (currentManageType === 'recorder') { 
                  recorderList.splice(index, 1); 
                  localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
-                 renderRecorderOptions(); 
-                 renderManageListContent(recorderList); 
+                 window.renderRecorderOptions(); 
+                 window.renderManageListContent(recorderList); 
              } else if (currentManageType === 'symptom') { 
                  ngSymptoms.splice(index, 1); 
                  localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
-                 renderManageListContent(ngSymptoms); 
+                 window.renderManageListContent(ngSymptoms); 
              }
 
              if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
-                 openNgModal(currentRowIdForNg);
+                 window.openNgModal(currentRowIdForNg);
              }
-        }
+        };
 
-        function closeManageListModal() { 
+        window.closeManageListModal = function() { 
             document.getElementById('modal-manage-list').classList.add('hidden'); 
-        }
+        };
 
         document.getElementById('productionForm').onsubmit = async (e) => {
             e.preventDefault();
@@ -903,7 +929,7 @@
             if(currentRec && !recorderList.some(r => r.toLowerCase() === currentRec.toLowerCase())) { 
                 recorderList.push(currentRec); 
                 localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
-                renderRecorderOptions(); 
+                window.renderRecorderOptions(); 
             }
             
             const common = { 
@@ -1003,7 +1029,7 @@
                 alert("✅ บันทึกข้อมูลเรียบร้อย!"); 
                 document.getElementById('batchList').innerHTML = ''; 
                 batchNgData = {}; 
-                addBatchRow(); 
+                window.addBatchRow(); 
 
             } catch(e) { 
                 alert("Error ระหว่างตรวจสอบ: " + e.message); 
@@ -1045,7 +1071,7 @@
             }
         };
 
-        async function loadDashboard() {
+        window.loadDashboard = async function() {
             if(!SCRIPT_URL) return;
             document.getElementById('dashboard-content').classList.add('hidden');
             document.getElementById('dashboard-loader').classList.remove('hidden');
@@ -1060,7 +1086,6 @@
             
             let rawText = "";
             try {
-                // บังคับไม่ให้โหลด Cache เก่าของเบราว์เซอร์
                 const fetchUrl = `${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}&shiftType=${shiftType}&_t=${Date.now()}`;
                 const res = await fetch(fetchUrl);
                 
@@ -1151,9 +1176,9 @@
                 document.getElementById('stat-uph').innerText = uph;
 
                 currentDashboardData = data;
-                renderCharts(data); 
-                renderTable(data); 
-                renderFgByModel(data, isPartialView);
+                window.renderCharts(data); 
+                window.renderTable(data); 
+                window.renderFgByModel(data, isPartialView);
 
             } catch(e) { 
                 console.error("Dashboard Load Error: ", e); 
@@ -1170,9 +1195,9 @@
                 document.getElementById('dashboard-loader').classList.add('hidden'); 
                 document.getElementById('dashboard-content').classList.remove('hidden'); 
             }
-        }
+        };
 
-        function renderFgByModel(data, isPartialView = false) {
+        window.renderFgByModel = function(data, isPartialView = false) {
             const container = document.getElementById('fgModelList');
             if(!container) return;
             const models = [
@@ -1212,9 +1237,9 @@
             });
             html += '</ul>';
             container.innerHTML = html;
-        }
+        };
 
-        function renderCharts(data) {
+        window.renderCharts = function(data) {
              if(!charts) charts = {};
              const commonOpts = { responsive: true, maintainAspectRatio: false };
 
@@ -1332,9 +1357,9 @@
                      options: {...commonOpts, indexAxis:'y'} 
                  });
              }
-        }
+        };
 
-        function renderTable(data) {
+        window.renderTable = function(data) {
             let dynamicColumns = normalizeSymptomList(ngSymptoms);
             if (data.machineData) {
                 for (let m in data.machineData) {
@@ -1368,7 +1393,7 @@
                 const t = d.fg + ngPcs; 
                 const y = t > 0 ? ((d.fg/t)*100).toFixed(1) : "0.0";
                 
-                let html = `<td class="p-4 border-b font-bold cursor-pointer text-blue-600 hover:underline" onclick="showMachineDetail('${m}')">👉 ${m}</td>
+                let html = `<td class="p-4 border-b font-bold cursor-pointer text-blue-600 hover:underline" onclick="window.showMachineDetail('${m}')">👉 ${m}</td>
                     <td class="p-4 border-b">${d.fg}</td>
                     <td class="p-4 border-b text-red-600 font-bold">${ngPcs} <br><span class="text-[10px] text-gray-500 font-normal">(${ngKg.toFixed(2)} Kg)</span></td>
                     <td class="p-4 border-b">${y}%</td>`;
@@ -1383,9 +1408,9 @@
                 });
                 b.innerHTML += `<tr>${html}</tr>`;
             }
-        }
+        };
 
-        function showMachineDetail(machineName) {
+        window.showMachineDetail = function(machineName) {
             if(!currentDashboardData) return;
             const modal = document.getElementById('modal-machine-detail');
             const mData = currentDashboardData.machineData[machineName] || { fg: 0, ngTotal: 0, ngTotalKg: 0, ngTotalPcs: 0, hourlyFg: [], hourlyNgPcs: [], hourlyNg: [], hourlyNgKg: [], remarks: [] };
@@ -1427,7 +1452,7 @@
                     scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } 
                 } 
             });
-        }
+        };
     </script>
 </body>
 </html>
