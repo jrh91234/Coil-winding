@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.41 Machine Assignment</title>
+    <title>CWM Production System - v3.42 Layout & Sync Fixed</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -46,7 +46,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.41</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.42</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -81,7 +81,7 @@
                     </div>
                 </div>
                 
-                <!-- ปุ่มกำหนดรุ่นให้เครื่องจักร (NEW) -->
+                <!-- ปุ่มกำหนดรุ่นให้เครื่องจักร -->
                 <div class="flex justify-between items-end mt-4 mb-2">
                     <h3 class="font-bold text-gray-700 text-sm">รายการผลิต</h3>
                     <button type="button" onclick="openAssignModal()" class="text-xs bg-indigo-50 text-indigo-700 font-bold py-1.5 px-3 rounded border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1 shadow-sm">
@@ -227,10 +227,10 @@
             </div>
             
             <div id="sortable-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- FG by Model List -->
-                <div class="widget-card p-4 h-auto">
+                <!-- FG by Model List - Changed height from h-auto to h-80 for grid uniformity -->
+                <div class="widget-card p-4 h-80">
                     <div class="widget-header drag-handle mb-2">
-                        <h3 class="font-bold text-gray-700 text-sm">📦 FG & ACH by Model (ยอดผลิต vs แผน)</h3>
+                        <h3 class="font-bold text-gray-700 text-sm">📦 FG by Model (ยอดดีแยกรุ่น)</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
                     <div class="flex-1 overflow-y-auto" id="fgModelList"></div>
@@ -252,7 +252,8 @@
                     <div class="flex-1 relative"><canvas id="qcTrendChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card p-4 h-64">
+                <!-- Changed height from h-64 to h-80 -->
+                <div class="widget-card p-4 h-80">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
@@ -260,7 +261,8 @@
                     <div class="flex-1 relative"><canvas id="yieldModelChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card p-4 h-64">
+                <!-- Changed height from h-64 to h-80 -->
+                <div class="widget-card p-4 h-80">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3>
                         <button onclick="toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
@@ -301,7 +303,7 @@
     </main>
 
     <!-- Modals -->
-    <!-- Assign Modal (NEW) -->
+    <!-- Assign Modal -->
     <div id="modal-assign" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[90vh]">
             <div class="flex justify-between items-center mb-4 flex-none">
@@ -373,14 +375,12 @@
     </div>
 
     <script>
-        // ⚠️ สำคัญมาก: ตรวจสอบ URL นี้ให้ตรงกับตัวที่ Deploy ล่าสุด
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec";
         
         let ngSymptoms = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "อื่นๆ (Others)"];
         let productList = ["S1B29288-JR (10A)", "S1B71819-JR (16A)", "S1B29292-JR (20A)", "51207080HC-JR (25/32A)"];
         let recorderList = ["พนักงาน 1", "พนักงาน 2"];
         
-        // --- ตัวแปรสำหรับเก็บ Log การตั้งค่าเครื่องจักร ---
         let machineMapping = {};
         
         const DAY_HOURS = ["08:00-09:00", "09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "OT 17:30-18:00", "OT 18:00-19:00", "OT 19:00-20:00"];
@@ -445,7 +445,6 @@
                 recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
             }
             
-            // โหลด Machine Mapping จากเครื่องไว้
             if(localStorage.getItem('CWM_MACHINE_MAPPING')) {
                 machineMapping = JSON.parse(localStorage.getItem('CWM_MACHINE_MAPPING'));
             }
@@ -561,7 +560,6 @@
             if(tab==='dashboard') loadDashboard();
         }
         
-        // --- NEW: ระบบกำหนดเครื่องจักร ---
         function openAssignModal() {
             const container = document.getElementById('assign-list-container');
             container.innerHTML = '';
@@ -612,7 +610,6 @@
             localStorage.setItem('CWM_MACHINE_MAPPING', JSON.stringify(machineMapping));
             closeAssignModal();
             
-            // ทำให้แถวในฟอร์มปัจจุบันอัปเดตตามทันที
             const rows = document.getElementById('batchList').children;
             for(let r of rows) {
                 const mSel = r.querySelector('.machine-select-trigger');
@@ -622,7 +619,6 @@
                 }
             }
 
-            // ส่งข้อมูลไปเซฟที่หลังบ้าน
             if(hasChanges && logEntries.length > 0) {
                 const payload = { 
                     action: 'SAVE_ASSIGNMENT', 
@@ -630,7 +626,6 @@
                     logs: logEntries,
                     recorder: document.getElementById('recorder').value || "System"
                 };
-                // แอบยิงไปที่เซิร์ฟเวอร์แบบเบื้องหลัง ไม่ต้องรอโหลด
                 fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) })
                 .catch(e => console.log("Error logging assignment:", e));
             }
@@ -651,12 +646,10 @@
             div.innerHTML = `
                 <div class="flex-1 w-full">
                     <label class="text-[10px] text-gray-400 font-bold uppercase">Machine</label>
-                    <!-- เพิ่ม class machine-select-trigger -->
                     <select name="machine" class="machine-select-trigger w-full p-2 border rounded bg-gray-50 text-sm font-bold">${machineOpts}</select>
                 </div>
                 <div class="flex-1 w-full">
                     <label class="text-[10px] text-gray-400 font-bold uppercase">Product</label>
-                    <!-- เพิ่ม class product-select-target -->
                     <select name="productCode" class="product-select-target w-full p-2 border rounded bg-gray-50 text-sm">${prodOpts}</select>
                 </div>
                 <div class="w-24">
@@ -673,7 +666,6 @@
             container.appendChild(div);
             batchNgData[rowId] = [];
 
-            // --- NEW: Event Listener ทำให้การเลือกเครื่องจักร "ฉลาด" ---
             const mSelect = div.querySelector('.machine-select-trigger');
             const pSelect = div.querySelector('.product-select-target');
             mSelect.addEventListener('change', function() {
@@ -914,7 +906,7 @@
                 ngDetails.forEach(ng => { 
                     if (ng.type) {
                         const stdType = capitalizeFirst(ng.type);
-                        ng.type = stdType; // บังคับเซฟเป็นพิมพ์ใหญ่เพื่อความชัวร์
+                        ng.type = stdType; 
                         if (!ngSymptoms.some(s => s.toLowerCase() === stdType.toLowerCase()) && !newNgTypes.some(s => s.toLowerCase() === stdType.toLowerCase())) {
                             newNgTypes.push(stdType);
                         } 
@@ -1040,7 +1032,6 @@
             const shift = document.getElementById('filterShift').value.trim(); 
             const shiftType = document.getElementById('filterShiftType').value.trim();
             
-            // เช็คว่ากำลังดูข้อมูลแบบถูกกรอง (ไม่ได้ดูยอดเต็มทั้งวัน) หรือไม่
             const isPartialView = (shift !== 'All' || shiftType !== 'All');
             
             let rawText = "";
@@ -1112,7 +1103,6 @@
 
                 document.getElementById('stat-fg').innerText = fg.toLocaleString();
                 
-                // --- NEW: เพิ่ม indicator /day ในเป้าหมายหลัก ---
                 let targetDisplay = target.toLocaleString();
                 if (isPartialView && target > 0) {
                     targetDisplay += ` <span class="text-sm text-gray-500 font-medium">/day</span>`;
@@ -1139,7 +1129,7 @@
                 currentDashboardData = data;
                 renderCharts(data); 
                 renderTable(data); 
-                renderFgByModel(data, isPartialView); // ส่งตัวแปรการกรองไปให้ฟังก์ชันด้วย
+                renderFgByModel(data, isPartialView);
 
             } catch(e) { 
                 console.error("Dashboard Load Error: ", e); 
@@ -1158,7 +1148,6 @@
             }
         }
 
-        // --- NEW: รับพารามิเตอร์เพื่อระบุว่าดูแบบแยกกะหรือไม่ ---
         function renderFgByModel(data, isPartialView = false) {
             const container = document.getElementById('fgModelList');
             if(!container) return;
@@ -1177,7 +1166,6 @@
                 const achColor = ach >= 100 ? 'text-green-600' : (ach >= 80 ? 'text-orange-500' : 'text-red-500');
                 const barColor = ach >= 100 ? 'bg-green-500' : (ach >= 80 ? 'bg-orange-500' : 'bg-red-500');
 
-                // แทรก /day ถ้าเป็นการดูข้อมูลเฉพาะกะ
                 let planLabel = plan.toLocaleString();
                 if (isPartialView && plan > 0) {
                     planLabel += ` <span class="text-gray-400 font-normal text-[10px]">/day</span>`;
