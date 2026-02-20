@@ -392,6 +392,7 @@
         let machineDetailChart = null;
         let charts = {};
         let currentManageType = '';
+        let isDualLayout = true;
 
         try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
 
@@ -558,6 +559,28 @@
                 }
             });
             if(tab==='dashboard') loadDashboard();
+        }
+
+        // --- NEW: นำฟังก์ชัน toggleLayout กลับมา ---
+        function toggleLayout() {
+            isDualLayout = !isDualLayout;
+            const grid = document.getElementById('sortable-grid');
+            const btn = document.getElementById('layoutBtn');
+            
+            if (isDualLayout) {
+                grid.classList.add('md:grid-cols-2');
+                grid.classList.remove('md:grid-cols-1');
+                btn.innerText = '🔀 Layout: คู่';
+            } else {
+                grid.classList.remove('md:grid-cols-2');
+                grid.classList.add('md:grid-cols-1');
+                btn.innerText = '🔀 Layout: เดี่ยว';
+            }
+            
+            // สั่งให้กราฟทุกตัวคำนวณขนาดตัวเองใหม่ให้พอดีกับกล่อง
+            Object.values(charts).forEach(c => { 
+                if(c) c.resize(); 
+            });
         }
         
         function openAssignModal() {
