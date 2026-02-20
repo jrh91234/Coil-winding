@@ -384,7 +384,7 @@
         let machineMapping = {};
         
         const DAY_HOURS = ["08:00-09:00", "09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "OT 17:30-18:00", "OT 18:00-19:00", "OT 19:00-20:00"];
-        const NIGHT_HOURS = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:00-06:00", "OT 06:00-07:00", "OT 07:00-08:00"];
+        const NIGHT_HOURS = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:00-06:30", "OT 06:00-07:30", "OT 07:00-08:00"];
 
         let currentRowIdForNg = null;
         let batchNgData = {};
@@ -481,6 +481,22 @@
                        }
                    });
                    ngSymptoms = normalizeSymptomList(ngSymptoms);
+                }
+                
+                // --- NEW: ซิงค์การตั้งค่าเครื่องจักรจาก Cloud ลง Local อัตโนมัติ ---
+                if (data.machineMapping) {
+                    machineMapping = data.machineMapping; // อัปเดตตัวแปรหลักด้วยข้อมูลจาก Cloud
+                    localStorage.setItem('CWM_MACHINE_MAPPING', JSON.stringify(machineMapping)); // เซฟทับ Local Storage
+                    
+                    // สั่งให้รายการฟอร์มที่เปิดอยู่ อัปเดตรุ่นล่าสุดตาม Cloud ทันที
+                    const rows = document.getElementById('batchList').children;
+                    for(let r of rows) {
+                        const mSel = r.querySelector('.machine-select-trigger');
+                        const pSel = r.querySelector('.product-select-target');
+                        if(mSel && mSel.value && machineMapping[mSel.value]) {
+                            pSel.value = machineMapping[mSel.value];
+                        }
+                    }
                 }
             } catch (e) { 
                 console.log("Error fetching options", e); 
