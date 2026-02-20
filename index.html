@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.34 Logic & Validation</title>
+    <title>CWM Production System - v3.35 Case Insensitive Fix</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -46,7 +46,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.34</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.35</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -297,7 +297,7 @@
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[80vh]">
             <div class="flex justify-between items-center mb-4 flex-none">
                 <h3 class="text-lg font-bold">บันทึกของเสีย (NG)</h3>
-                <!-- NEW: ปุ่มจัดการรายการ NG -->
+                <!-- ปุ่มจัดการรายการ NG -->
                 <button type="button" onclick="manageSymptomsFromModal()" class="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded text-xs font-bold hover:bg-blue-100 shadow-sm">
                     ⚙️ จัดการรายการ
                 </button>
@@ -413,8 +413,12 @@
                 renderRecorderOptions();
                 
                 if (data.ngTypes && data.ngTypes.length > 0) {
-                   const newSet = new Set([...ngSymptoms, ...data.ngTypes]);
-                   ngSymptoms = Array.from(newSet);
+                   data.ngTypes.forEach(t => {
+                       // เช็คซ้ำแบบไม่สนใจพิมพ์เล็กพิมพ์ใหญ่
+                       if(!ngSymptoms.some(s => s.toLowerCase() === t.trim().toLowerCase())) {
+                           ngSymptoms.push(t.trim());
+                       }
+                   });
                 }
             } catch (e) { 
                 console.log("Error fetching options", e); 
@@ -534,7 +538,7 @@
                 renderNgItem(list, s, val, remark);
             });
 
-            const customItems = batchNgData[rowId].filter(x => !ngSymptoms.includes(x.type));
+            const customItems = batchNgData[rowId].filter(x => !ngSymptoms.some(s => s.toLowerCase() === x.type.toLowerCase()));
             customItems.forEach(item => { 
                 renderNgItem(list, item.type, item.qty, item.remark, true); 
             });
@@ -569,7 +573,6 @@
             list.scrollTop = list.scrollHeight; 
         }
 
-        // --- NEW: ฟังก์ชันเซฟค่า NG ชั่วคราวก่อนเปิดตั้งค่า ---
         function saveCurrentNgInputs() {
             if(!currentRowIdForNg) return;
             const rows = document.querySelectorAll('.ng-item-row');
@@ -607,13 +610,11 @@
             currentRowIdForNg = null;
         }
 
-        // --- NEW: จัดการรายการ NG จากหน้าต่าง Modal ---
         function manageSymptomsFromModal() {
-            saveCurrentNgInputs(); // จำค่าตัวเลขที่เพิ่งกรอกไว้
-            manageSymptoms(); // เปิดหน้าตั้งค่าทับซ้อน
+            saveCurrentNgInputs(); 
+            manageSymptoms(); 
         }
 
-        // --- Recorders & Lists ---
         function renderRecorderOptions() { 
             const datalist = document.getElementById('recorder-datalist'); 
             datalist.innerHTML = ''; 
@@ -660,14 +661,14 @@
              const val = document.getElementById('new-item-input').value.trim();
              if(!val) return;
              if (currentManageType === 'recorder') { 
-                 if (!recorderList.includes(val)) { 
+                 if (!recorderList.some(r => r.toLowerCase() === val.toLowerCase())) { 
                      recorderList.push(val); 
                      localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
                      renderRecorderOptions(); 
                      renderManageListContent(recorderList); 
                  } 
              } else if (currentManageType === 'symptom') { 
-                 if (!ngSymptoms.includes(val)) { 
+                 if (!ngSymptoms.some(s => s.toLowerCase() === val.toLowerCase())) { 
                      ngSymptoms.push(val); 
                      localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
                      renderManageListContent(ngSymptoms); 
@@ -675,7 +676,6 @@
              }
              document.getElementById('new-item-input').value = '';
 
-             // อัปเดตหน้าต่าง NG ทันทีถ้าเปิดค้างไว้
              if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
                  openNgModal(currentRowIdForNg);
              }
@@ -695,7 +695,6 @@
                  renderManageListContent(ngSymptoms); 
              }
 
-             // อัปเดตหน้าต่าง NG ทันทีถ้าเปิดค้างไว้
              if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
                  openNgModal(currentRowIdForNg);
              }
@@ -705,7 +704,6 @@
             document.getElementById('modal-manage-list').classList.add('hidden'); 
         }
 
-        // --- NEW: เพิ่มระบบ Validation ดึงข้อมูลก่อนบันทึก ---
         document.getElementById('productionForm').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('submitBtn'); 
@@ -719,7 +717,7 @@
             const date = fd.get('productionDate');
             const hourSlot = fd.get('hourSlot');
             
-            if(currentRec && !recorderList.includes(currentRec)) { 
+            if(currentRec && !recorderList.some(r => r.toLowerCase() === currentRec.toLowerCase())) { 
                 recorderList.push(currentRec); 
                 localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
                 renderRecorderOptions(); 
@@ -747,9 +745,12 @@
                 
                 const ngDetails = batchNgData[div.id] || [];
                 ngDetails.forEach(ng => { 
-                    if (ng.type && !ngSymptoms.includes(ng.type) && !newNgTypes.includes(ng.type)) {
-                        newNgTypes.push(ng.type);
-                    } 
+                    if (ng.type) {
+                        const tLower = ng.type.toLowerCase();
+                        if (!ngSymptoms.some(s => s.toLowerCase() === tLower) && !newNgTypes.some(s => s.toLowerCase() === tLower)) {
+                            newNgTypes.push(ng.type);
+                        } 
+                    }
                 });
                 items.push({ machine, productCode: product, fgAmount: fg, ngDetails });
             }
@@ -766,20 +767,16 @@
                 return; 
             }
 
-            // --- 🛑 VALIDATION BLOCK 🛑 ---
             try {
-                // ดึงข้อมูลภาพรวมของวันนั้นมาเช็คยอด (แอบดึงเงียบๆ)
                 const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${date}&end=${date}&shift=All&shiftType=All`);
                 const dbData = await res.json();
                 
-                // หาว่าชั่วโมงที่เรากำลังกรอก คือ index ที่เท่าไหร่ในกราฟ
                 const hourIdx = dbData.hourlyLabels ? dbData.hourlyLabels.indexOf(hourSlot) : -1;
                 
                 let validationMsg = `📊 สรุปยอดผลิตในระบบ ช่วงเวลา [${hourSlot}]\n\n`;
                 let hasError = false;
                 let errorMsg = "";
 
-                // เช็คยอดทีละเครื่อง
                 for (let item of items) {
                     let existingFg = 0;
                     if (hourIdx !== -1 && dbData.machineData && dbData.machineData[item.machine]) {
@@ -803,20 +800,18 @@
                     alert("⚠️ ปฏิเสธการบันทึก!\n\n" + errorMsg + "\nไม่อนุญาตให้บันทึกยอด FG เกิน 2,000 ตัวในชั่วโมงเดียวกัน กรุณาตรวจสอบใหม่อีกครั้ง");
                     btn.disabled = false; 
                     btn.innerText = txt; 
-                    return; // ยกเลิกการส่ง
+                    return; 
                 }
 
-                // ให้พนักงานยืนยันความถูกต้อง
                 const confirmSave = confirm(validationMsg + "✅ ข้อมูลถูกต้อง ยืนยันที่จะบันทึกใช่หรือไม่?");
                 if (!confirmSave) {
                     btn.disabled = false; 
                     btn.innerText = txt; 
-                    return; // ยกเลิกการส่ง
+                    return; 
                 }
 
                 btn.innerText = "กำลังบันทึกข้อมูลเข้าฐานข้อมูล...";
 
-                // --- บันทึกจริง ---
                 const payload = { action: 'SAVE_BATCH_PRODUCTION', common, items };
                 await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
                 
@@ -833,7 +828,6 @@
             }
         };
 
-        // --- Planning Form ---
         document.getElementById('planningForm').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('planSubmitBtn');
@@ -866,14 +860,12 @@
             }
         };
 
-        // --- Dashboard ---
         async function loadDashboard() {
             if(!SCRIPT_URL) return;
             document.getElementById('dashboard-content').classList.add('hidden');
             document.getElementById('dashboard-loader').classList.remove('hidden');
             document.getElementById('debug-panel').classList.add('hidden');
             
-            // เพิ่ม .trim() เพื่อตัดช่องว่างป้องกันข้อมูลเพี้ยนตอนค้นหา
             const start = document.getElementById('startDate').value.trim(); 
             const end = document.getElementById('endDate').value.trim();
             const shift = document.getElementById('filterShift').value.trim(); 
@@ -895,14 +887,55 @@
                 if (data.error) {
                     throw new Error("ข้อผิดพลาดจากเซิร์ฟเวอร์: " + data.error);
                 }
+
+                // --- START CASE-INSENSITIVE NORMALIZATION ---
+                // รวมข้อมูล NG จากฐานข้อมูลที่มีตัวพิมพ์เล็กพิมพ์ใหญ่ต่างกันเข้าด้วยกัน
+                const normalizedNgMapPcs = {};
+                const normalizedNgMapKg = {};
                 
-                // --- FALLBACKS (Robust Variables) ---
+                (data.ngLabels || []).forEach((label, i) => {
+                    // หาชื่อมาตรฐาน (เทียบแบบตัวเล็กทั้งหมด)
+                    const stdLabel = ngSymptoms.find(s => s.toLowerCase() === label.trim().toLowerCase()) || label.trim();
+                    const vPcs = data.ngValuesPcs ? data.ngValuesPcs[i] : (data.ngValues ? data.ngValues[i] : 0);
+                    const vKg = data.ngValuesKg ? data.ngValuesKg[i] : 0;
+                    
+                    normalizedNgMapPcs[stdLabel] = (normalizedNgMapPcs[stdLabel] || 0) + vPcs;
+                    normalizedNgMapKg[stdLabel] = (normalizedNgMapKg[stdLabel] || 0) + vKg;
+                });
+                
+                data.ngLabels = Object.keys(normalizedNgMapPcs);
+                data.ngValuesPcs = Object.values(normalizedNgMapPcs);
+                data.ngValuesKg = data.ngLabels.map(l => normalizedNgMapKg[l]);
+
+                if (data.machineData) {
+                    for (let m in data.machineData) {
+                        const mData = data.machineData[m];
+                        const newBreakdownPcs = {};
+                        const newBreakdownKg = {};
+                        
+                        const oldPcs = mData.ngBreakdownPcs || mData.ngBreakdown || {};
+                        for (let k in oldPcs) {
+                            const stdLabel = ngSymptoms.find(s => s.toLowerCase() === k.trim().toLowerCase()) || k.trim();
+                            newBreakdownPcs[stdLabel] = (newBreakdownPcs[stdLabel] || 0) + oldPcs[k];
+                        }
+                        
+                        const oldKg = mData.ngBreakdownKg || {};
+                        for (let k in oldKg) {
+                            const stdLabel = ngSymptoms.find(s => s.toLowerCase() === k.trim().toLowerCase()) || k.trim();
+                            newBreakdownKg[stdLabel] = (newBreakdownKg[stdLabel] || 0) + oldKg[k];
+                        }
+                        
+                        mData.ngBreakdownPcs = newBreakdownPcs;
+                        mData.ngBreakdownKg = newBreakdownKg;
+                    }
+                }
+                // --- END CASE-INSENSITIVE NORMALIZATION ---
+                
                 const fg = data.totalFg || 0;
                 const target = data.productionTarget || 0;
                 const ngPcs = data.totalNgPcs !== undefined ? data.totalNgPcs : (data.totalNg || 0);
                 const ngKg = data.totalNgKg || 0;
                 
-                // --- ดักจับและแจ้งเตือนเมื่อไม่มีข้อมูล ---
                 if (fg === 0 && ngPcs === 0 && target === 0) {
                     alert(`⚠️ ไม่พบข้อมูลการผลิตหรือแผนงานในช่วงเวลาที่เลือก\n\nวันที่: ${start} ถึง ${end}\nกะ: ${shift}\nประเภท: ${shiftType}\n\n*คำแนะนำ: หากต้องการดูข้อมูลทั้งหมด ให้ลองเปลี่ยนวันที่ หรือเลือกกะเป็น "ทั้งหมด (All)" ครับ`);
                 }
@@ -1092,10 +1125,26 @@
         }
 
         function renderTable(data) {
+            // สร้างคอลัมน์แบบไดนามิก โดยดึงรายการ NG ทั้งหมดมาสร้างหัวตาราง (ไม่ให้ตกหล่น)
+            let dynamicColumns = [...ngSymptoms];
+            if (data.machineData) {
+                for (let m in data.machineData) {
+                    const d = data.machineData[m];
+                    if (d.ngBreakdownPcs) {
+                        Object.keys(d.ngBreakdownPcs).forEach(k => {
+                            if (!dynamicColumns.some(s => s.toLowerCase() === k.toLowerCase())) {
+                                dynamicColumns.push(k);
+                            }
+                        });
+                    }
+                }
+            }
+
             const h = document.getElementById('table-header'); 
             const b = document.getElementById('table-body');
-            h.innerHTML = '<th>Machine</th><th>FG</th><th>NG (ชิ้น/Kg)</th><th>% Yield</th>' + ngSymptoms.map(s=>`<th>${s}</th>`).join('');
+            h.innerHTML = '<th>Machine</th><th>FG</th><th>NG (ชิ้น/Kg)</th><th>% Yield</th>' + dynamicColumns.map(s=>`<th>${s}</th>`).join('');
             b.innerHTML = '';
+            
             for(let i=1; i<=16; i++) {
                 const m = `CWM-${String(i).padStart(2,'0')}`; 
                 const d = (data.machineData && data.machineData[m]) ? data.machineData[m] : {fg:0, ngTotal:0, ngTotalKg:0, ngTotalPcs:0, ngBreakdownKg:{}, ngBreakdownPcs:{}};
@@ -1111,9 +1160,13 @@
                     <td class="p-4 border-b text-red-600 font-bold">${ngPcs} <br><span class="text-[10px] text-gray-500 font-normal">(${ngKg.toFixed(2)} Kg)</span></td>
                     <td class="p-4 border-b">${y}%</td>`;
                     
-                ngSymptoms.forEach(s => { 
-                    const cPcs = (d.ngBreakdownPcs && d.ngBreakdownPcs[s]) ? d.ngBreakdownPcs[s] : ((d.ngBreakdown && d.ngBreakdown[s]) ? d.ngBreakdown[s] : 0); 
-                    const cKg = d.ngBreakdownKg ? (d.ngBreakdownKg[s] || 0) : 0; 
+                dynamicColumns.forEach(s => { 
+                    // ค้นหาคีย์ด้วยการเทียบตัวพิมพ์เล็ก-ใหญ่
+                    const keyPcs = Object.keys(d.ngBreakdownPcs || {}).find(k => k.toLowerCase() === s.toLowerCase());
+                    const keyKg = Object.keys(d.ngBreakdownKg || {}).find(k => k.toLowerCase() === s.toLowerCase());
+                    
+                    const cPcs = keyPcs ? d.ngBreakdownPcs[keyPcs] : 0; 
+                    const cKg = keyKg ? d.ngBreakdownKg[keyKg] : 0; 
                     html += `<td class="${cPcs>0?'bg-red-50 text-red-700 font-bold':''}">${cPcs>0 ? cPcs + '<br><span class="text-[10px] text-gray-500 font-normal">(' + cKg.toFixed(2) + ' Kg)</span>' : '-'}</td>`; 
                 });
                 b.innerHTML += `<tr>${html}</tr>`;
