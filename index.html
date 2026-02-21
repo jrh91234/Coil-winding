@@ -75,8 +75,8 @@
             <button onclick="window.switchTab('planning'); window.toggleMenu()" id="tab-planning" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg">📅 วางแผน (Plan)</button>
             <button onclick="window.switchTab('dashboard'); window.toggleMenu()" id="tab-dashboard" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg">📊 Dashboard</button>
             
-            <!-- 🌟 เปลี่ยนจากปุ่มสลับแท็บ เป็นลิงก์ (a tag) ไปเปิดแอปใหม่ -->
-            <a href="https://jrh91234.github.io/CMW-rawmat/" target="_blank" onclick="window.toggleMenu()" id="tab-rw" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg block">📦 รับเข้า (RW) ↗️</a>
+            <!-- 🌟 ปุ่มลิงก์ไปแอป RW (แก้ปัญหา iOS Add to Home Screen ไม่ยอมเปิดแท็บใหม่) -->
+            <button onclick="window.toggleMenu(); window.location.href='https://jrh91234.github.io/CMW-rawmat/';" id="tab-rw" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg w-full">📦 รับเข้า (RW) ↗️</button>
         </div>
     </nav>
     
