@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.48 Ultimate Update</title>
+    <title>CWM Production System - v3.50 Ultimate Update</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -63,7 +63,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.48</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.50</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -427,13 +427,13 @@
         </div>
     </div>
 
-    <!-- Undo Toast Notification (เพิ่มใหม่) -->
+    <!-- Undo Toast Notification -->
     <div id="undo-toast" class="fixed bottom-5 right-5 bg-gray-900 text-white px-5 py-4 rounded-xl shadow-2xl flex items-center gap-4 transition-all transform translate-y-24 opacity-0 pointer-events-none z-50 duration-300">
         <div class="flex-1">
             <p class="text-sm font-bold text-green-400">✅ บันทึกข้อมูลสำเร็จ</p>
             <p class="text-xs text-gray-300 mt-0.5">หากบันทึกผิด สามารถกดยกเลิกได้</p>
         </div>
-        <button onclick="window.undoLastSubmit()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-md transition-colors pointer-events-auto">
+        <button id="btn-undo-action" onclick="window.undoLastSubmit()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-md transition-colors pointer-events-auto">
             ↩️ ยกเลิก (Undo)
         </button>
         <button onclick="window.closeUndoToast()" class="text-gray-400 hover:text-white p-1 pointer-events-auto">
@@ -463,7 +463,7 @@
         
         // --- ตัวแปรสำหรับคุม Layout (Global Scope) ---
         window.isDualLayout = true;
-        window.lastBatchId = null; // ตัวแปรเก็บรหัส Batch ล่าสุดสำหรับ Undo
+        window.lastBatchId = null;
 
         try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
 
@@ -1089,9 +1089,13 @@
             document.getElementById('modal-manage-list').classList.add('hidden'); 
         };
 
-        // --- เพิ่มฟังก์ชันควบคุม Toast Undo ---
+        // --- เพิ่มฟังก์ชันควบคุม Toast Undo ที่อัปเดตให้เสถียรขึ้น ---
         window.showUndoToast = function() {
             const toast = document.getElementById('undo-toast');
+            const btn = document.getElementById('btn-undo-action');
+            // รีเซ็ตสถานะปุ่มกลับมาเป็นปกติทุกครั้งที่โชว์
+            btn.innerHTML = "↩️ ยกเลิก (Undo)";
+            btn.disabled = false;
             toast.classList.remove('translate-y-24', 'opacity-0', 'pointer-events-none');
         };
 
@@ -1104,9 +1108,9 @@
         window.undoLastSubmit = async function() {
             if(!window.lastBatchId) return;
             
-            const btn = document.querySelector('#undo-toast button');
-            const originalText = btn.innerText;
-            btn.innerText = "⏳ กำลังยกเลิก...";
+            const btn = document.getElementById('btn-undo-action');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = "⏳ กำลังยกเลิก...";
             btn.disabled = true;
 
             try {
@@ -1114,13 +1118,16 @@
                     action: 'UNDO_BATCH_PRODUCTION', 
                     batchId: window.lastBatchId 
                 };
+                // สั่งไปที่ Google Apps Script
                 await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
                 
                 alert("🗑️ ยกเลิกข้อมูลชุดล่าสุดเรียบร้อยแล้ว!");
                 window.closeUndoToast();
             } catch(e) { 
                 alert("❌ เกิดข้อผิดพลาดในการยกเลิก: " + e.message); 
-                btn.innerText = originalText;
+            } finally {
+                // คืนค่าปุ่มหากเผื่อเกิด Error
+                btn.innerHTML = originalText;
                 btn.disabled = false;
             }
         };
