@@ -390,12 +390,19 @@
     <div id="modal-manage-list" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[80vh]">
             <h3 id="manage-list-title" class="text-lg font-bold mb-4 flex-none">Manage List</h3>
-            <div id="manage-list-content" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1"></div>
-            <div class="flex-none pt-2 border-t flex gap-2">
-                 <input type="text" id="new-item-input" class="flex-1 p-2 border rounded text-sm" placeholder="พิมพ์ชื่อรายการใหม่...">
-                 <button onclick="window.addNewItemToList()" class="bg-green-600 text-white px-4 rounded font-bold hover:bg-green-700">เพิ่ม</button>
+            <div id="manage-list-content" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1 border border-gray-100 rounded bg-white"></div>
+            
+            <!-- ส่วนการเพิ่ม / บันทึกรายการ -->
+            <div class="flex-none pt-3 border-t flex flex-col gap-2">
+                 <div class="flex gap-2">
+                     <input type="text" id="new-item-input" class="flex-1 p-2 border rounded text-sm" placeholder="พิมพ์ชื่อรายการใหม่...">
+                     <button onclick="window.addNewItemToList()" class="bg-green-600 text-white px-4 rounded font-bold hover:bg-green-700">เพิ่ม</button>
+                 </div>
+                 <div class="flex gap-2 mt-2">
+                     <button id="btn-save-cloud" onclick="window.saveListToCloud()" class="flex-1 bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700 shadow-sm">☁️ อัปเดตขึ้น Cloud</button>
+                     <button onclick="window.closeManageListModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded font-bold hover:bg-gray-300">ปิด</button>
+                 </div>
             </div>
-            <button onclick="window.closeManageListModal()" class="mt-2 w-full bg-gray-200 py-2 rounded font-bold hover:bg-gray-300">ปิด</button>
         </div>
     </div>
 
@@ -913,8 +920,8 @@
             const container = document.getElementById('manage-list-content'); 
             container.innerHTML = list.map((item, i) => `
                 <div class="flex justify-between items-center bg-gray-50 p-2 rounded mb-1">
-                    <span class="text-sm">${item}</span>
-                    <button onclick="window.deleteListItem(${i})" class="text-red-500 hover:bg-red-100 p-1 rounded">🗑️ ลบ</button>
+                    <span class="text-sm font-medium text-gray-700">${item}</span>
+                    <button onclick="window.deleteListItem(${i})" class="text-red-500 hover:bg-red-100 px-2 py-1 rounded text-xs">🗑️ ลบ</button>
                 </div>
             `).join(''); 
         };
@@ -946,7 +953,7 @@
         };
 
         window.deleteListItem = function(index) {
-             if (!confirm('ยืนยันการลบรายการนี้ใช่หรือไม่?')) return;
+             if (!confirm('ยืนยันการลบรายการนี้ (ออกจาก Local)?')) return;
              
              if (currentManageType === 'recorder') { 
                  recorderList.splice(index, 1); 
@@ -962,6 +969,43 @@
              if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
                  window.openNgModal(currentRowIdForNg);
              }
+        };
+
+        // ฟังก์ชันสำหรับบันทึกรายการที่จัดการใน Local แล้ว ดันขึ้น Cloud
+        window.saveListToCloud = async function() {
+            const btn = document.getElementById('btn-save-cloud');
+            const originalText = btn.innerHTML;
+            
+            btn.innerHTML = "⏳ กำลังอัปเดต...";
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            try {
+                // แยก Action เพื่อให้ Google Apps Script รับรู้ได้ถูกว่ากำลังบันทึกอะไร
+                const actionName = (currentManageType === 'symptom') ? 'SAVE_NG_SYMPTOMS' : 'SAVE_RECORDERS';
+                const dataList = (currentManageType === 'symptom') ? ngSymptoms : recorderList;
+
+                const payload = { 
+                    action: actionName, 
+                    timestamp: new Date().toLocaleString('th-TH'),
+                    data: dataList,
+                    recorder: document.getElementById('recorder').value || "System"
+                };
+                
+                await fetch(SCRIPT_URL, { 
+                    method: 'POST', 
+                    mode: 'no-cors', 
+                    body: JSON.stringify(payload) 
+                }); 
+                
+                alert("☁️ อัปเดตข้อมูลขึ้น Cloud เรียบร้อยแล้ว!\n(ระบบจะจำรายการเหล่านี้ไปใช้กับเครื่องอื่นด้วย)");
+            } catch (error) {
+                alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อ Cloud: " + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
         };
 
         window.closeManageListModal = function() { 
