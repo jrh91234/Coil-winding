@@ -51,10 +51,12 @@
 <body class="bg-gray-100 min-h-screen font-sans pb-10">
     
     <nav class="bg-white shadow-md sticky top-0 z-20">
-        <div class="flex max-w-6xl mx-auto">
-            <button onclick="window.switchTab('form')" id="tab-form" class="flex-1 py-4 text-center text-blue-600 font-bold border-b-4 border-blue-600">📝 บันทึกผลิต</button>
-            <button onclick="window.switchTab('planning')" id="tab-planning" class="flex-1 py-4 text-center text-gray-500 hover:bg-gray-50">📅 วางแผน (Plan)</button>
-            <button onclick="window.switchTab('dashboard')" id="tab-dashboard" class="flex-1 py-4 text-center text-gray-500 hover:bg-gray-50">📊 Dashboard</button>
+        <div class="flex max-w-6xl mx-auto overflow-x-auto whitespace-nowrap scrollbar-hide">
+            <button onclick="window.switchTab('form')" id="tab-form" class="flex-1 py-4 px-2 text-center text-blue-600 font-bold border-b-4 border-blue-600 text-sm md:text-base min-w-[100px]">📝 บันทึกผลิต</button>
+            <button onclick="window.switchTab('planning')" id="tab-planning" class="flex-1 py-4 px-2 text-center text-gray-500 hover:bg-gray-50 text-sm md:text-base min-w-[100px]">📅 วางแผน</button>
+            <button onclick="window.switchTab('dashboard')" id="tab-dashboard" class="flex-1 py-4 px-2 text-center text-gray-500 hover:bg-gray-50 text-sm md:text-base min-w-[100px]">📊 Dashboard</button>
+            <!-- เมนู RW ที่เพิ่มใหม่ -->
+            <button onclick="window.switchTab('rw')" id="tab-rw" class="flex-1 py-4 px-2 text-center text-gray-500 hover:bg-gray-50 text-sm md:text-base min-w-[100px]">📦 รับเข้า (RW)</button>
         </div>
     </nav>
     
@@ -345,6 +347,76 @@
                         </table>
                     </div>
                 </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- SECTION 4: RW (Raw Material) -->
+    <main id="section-rw" class="max-w-md mx-auto p-4 space-y-4 hidden">
+        <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-yellow-500 animate-fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h1 class="text-lg font-bold text-gray-800">📸 รับเข้าวัตถุดิบ (OCR)</h1>
+                <span class="text-xs bg-yellow-100 px-2 py-1 rounded text-yellow-700 font-bold">Beta</span>
+            </div>
+            <p class="text-xs text-gray-500 mb-4">อัปโหลดหรือถ่ายรูป Label หน้ากล่องลวดทองแดง เพื่อให้ระบบดึงข้อมูลอัตโนมัติ</p>
+            
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 flex flex-col items-center justify-center space-y-4">
+                
+                <!-- Image Preview Area -->
+                <div id="rw-preview-container" class="w-full aspect-square bg-white border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center overflow-hidden relative shadow-inner">
+                    <span class="text-gray-400 text-sm text-center px-4" id="rw-placeholder-text">
+                        <span class="text-3xl block mb-2">📷</span>
+                        ยังไม่มีรูปภาพ<br>กรุณาเลือกไฟล์หรือถ่ายรูป
+                    </span>
+                    <img id="rw-image-preview" class="hidden absolute inset-0 w-full h-full object-contain" />
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="flex gap-3 w-full">
+                    <label class="flex-1 bg-white border-2 border-gray-300 text-gray-700 font-bold py-3 px-2 rounded-xl text-center cursor-pointer hover:bg-gray-50 hover:border-gray-400 transition-all shadow-sm flex flex-col items-center justify-center text-sm">
+                        <span class="text-xl mb-1">📁</span> เลือกไฟล์รูป
+                        <input type="file" id="rw-file-upload" accept="image/*" class="hidden" onchange="window.previewRwImage(event)">
+                    </label>
+                    
+                    <label class="flex-1 bg-yellow-500 border-2 border-yellow-500 text-white font-bold py-3 px-2 rounded-xl text-center cursor-pointer hover:bg-yellow-600 hover:border-yellow-600 transition-all shadow-sm flex flex-col items-center justify-center text-sm">
+                        <span class="text-xl mb-1">📸</span> ถ่ายรูปใหม่
+                        <!-- capture="environment" ช่วยเปิดกล้องหลังอัตโนมัติในมือถือ -->
+                        <input type="file" id="rw-camera-capture" accept="image/*" capture="environment" class="hidden" onchange="window.previewRwImage(event)">
+                    </label>
+                </div>
+                
+                <!-- Process Button -->
+                <button id="rw-process-btn" class="w-full bg-gray-800 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-gray-900 transition-colors hidden flex items-center justify-center gap-2" onclick="window.processRwOcr()">
+                    <span>🤖</span> สกัดข้อมูลด้วย AI (OCR)
+                </button>
+            </div>
+
+            <!-- OCR Result Mock Area -->
+            <div id="rw-ocr-result" class="mt-4 hidden space-y-3 animate-fade-in">
+                 <h3 class="font-bold text-gray-700 text-sm border-b pb-2 flex items-center gap-1">
+                     <span>✨</span> ผลการอ่านข้อมูล (ตัวอย่าง)
+                 </h3>
+                 <div class="grid grid-cols-2 gap-3 text-sm">
+                      <div class="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                          <span class="text-xs text-blue-500 block mb-1 font-bold uppercase">Part No.</span>
+                          <b id="ocr-part" class="text-gray-800 text-base">-</b>
+                      </div>
+                      <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                          <span class="text-xs text-indigo-500 block mb-1 font-bold uppercase">Lot No.</span>
+                          <b id="ocr-lot" class="text-gray-800 text-base">-</b>
+                      </div>
+                      <div class="bg-green-50 p-3 rounded-lg border border-green-100">
+                          <span class="text-xs text-green-500 block mb-1 font-bold uppercase">Weight (Kg)</span>
+                          <b id="ocr-weight" class="text-gray-800 text-base">-</b>
+                      </div>
+                      <div class="bg-purple-50 p-3 rounded-lg border border-purple-100">
+                          <span class="text-xs text-purple-500 block mb-1 font-bold uppercase">Reel No.</span>
+                          <b id="ocr-reel" class="text-gray-800 text-base">-</b>
+                      </div>
+                 </div>
+                 <button class="w-full mt-2 bg-blue-600 text-white font-bold py-3 rounded-xl shadow hover:bg-blue-700 transition-colors">
+                     💾 บันทึกรับเข้า (ยังไม่เปิดใช้งาน)
+                 </button>
             </div>
         </div>
     </main>
@@ -737,7 +809,7 @@
         };
 
         window.switchTab = function(tab) {
-            ['form', 'planning', 'dashboard'].forEach(t => {
+            ['form', 'planning', 'dashboard', 'rw'].forEach(t => {
                 document.getElementById('section-'+t).classList.toggle('hidden', t !== tab);
                 const btn = document.getElementById('tab-'+t);
                 if(t === tab) { 
@@ -749,6 +821,44 @@
                 }
             });
             if(tab==='dashboard') window.loadDashboard();
+        };
+
+        // --- ฟังก์ชันพรีวิวและประมวลผลรูป RW ---
+        window.previewRwImage = function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.getElementById('rw-image-preview');
+                    img.src = e.target.result;
+                    img.classList.remove('hidden');
+                    document.getElementById('rw-placeholder-text').classList.add('hidden');
+                    document.getElementById('rw-process-btn').classList.remove('hidden');
+                    document.getElementById('rw-ocr-result').classList.add('hidden'); // ซ่อนผลลัพธ์เก่า (ถ้ามี)
+                };
+                reader.readAsDataURL(file);
+            }
+            // Reset input เพื่อให้เลือกไฟล์เดิมซ้ำได้ถ้าต้องการ
+            event.target.value = '';
+        };
+
+        window.processRwOcr = function() {
+            const btn = document.getElementById('rw-process-btn');
+            btn.innerHTML = `<span>⏳</span> กำลังประมวลผล...`;
+            btn.disabled = true;
+            
+            // จำลองการดึงข้อมูลจาก AI OCR ด้วยการ delay 1.5 วินาที
+            setTimeout(() => {
+                btn.innerHTML = `<span>🤖</span> สกัดข้อมูลด้วย AI (OCR)`;
+                btn.disabled = false;
+                document.getElementById('rw-ocr-result').classList.remove('hidden');
+                
+                // ข้อมูลตัวอย่างจากรูปกล่องลวดทองแดง
+                document.getElementById('ocr-part').innerText = "51150220";
+                document.getElementById('ocr-lot').innerText = "ED26010121";
+                document.getElementById('ocr-weight').innerText = "18.86";
+                document.getElementById('ocr-reel').innerText = "4901";
+            }, 1500);
         };
         
         window.openAssignModal = function() {
