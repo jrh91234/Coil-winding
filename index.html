@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.47 Bulletproof Charts</title>
+    <title>CWM Production System - v3.48 Ultimate Update</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -50,7 +50,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.47</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.48</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -63,7 +63,7 @@
                         <div class="flex gap-1">
                             <input list="recorder-datalist" id="recorder" name="recorder" class="w-full p-2 border rounded text-sm" placeholder="พิมพ์ชื่อ..." required autocomplete="off">
                             <datalist id="recorder-datalist"></datalist>
-                            <button type="button" onclick="window.manageRecorders()" class="bg-white border border-blue-300 text-blue-600 px-2 rounded hover:bg-blue-50">⚙️</button>
+                            <button type="button" onclick="window.manageRecorders()" class="bg-white border border-blue-300 text-blue-600 px-2 rounded hover:bg-blue-50" title="จัดการชื่อพนักงาน">⚙️</button>
                         </div>
                     </div>
                     <div>
@@ -392,13 +392,13 @@
             <h3 id="manage-list-title" class="text-lg font-bold mb-4 flex-none">Manage List</h3>
             <div id="manage-list-content" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1 border border-gray-100 rounded bg-white"></div>
             
-            <!-- ส่วนการเพิ่ม / บันทึกรายการ -->
             <div class="flex-none pt-3 border-t flex flex-col gap-2">
                  <div class="flex gap-2">
                      <input type="text" id="new-item-input" class="flex-1 p-2 border rounded text-sm" placeholder="พิมพ์ชื่อรายการใหม่...">
                      <button onclick="window.addNewItemToList()" class="bg-green-600 text-white px-4 rounded font-bold hover:bg-green-700">เพิ่ม</button>
                  </div>
                  <div class="flex gap-2 mt-2">
+                     <!-- ปุ่มบันทึกขึ้น Cloud -->
                      <button id="btn-save-cloud" onclick="window.saveListToCloud()" class="flex-1 bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700 shadow-sm">☁️ อัปเดตขึ้น Cloud</button>
                      <button onclick="window.closeManageListModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded font-bold hover:bg-gray-300">ปิด</button>
                  </div>
@@ -971,7 +971,6 @@
              }
         };
 
-        // ฟังก์ชันสำหรับบันทึกรายการที่จัดการใน Local แล้ว ดันขึ้น Cloud
         window.saveListToCloud = async function() {
             const btn = document.getElementById('btn-save-cloud');
             const originalText = btn.innerHTML;
@@ -981,7 +980,6 @@
             btn.classList.add('opacity-50', 'cursor-not-allowed');
 
             try {
-                // แยก Action เพื่อให้ Google Apps Script รับรู้ได้ถูกว่ากำลังบันทึกอะไร
                 const actionName = (currentManageType === 'symptom') ? 'SAVE_NG_SYMPTOMS' : 'SAVE_RECORDERS';
                 const dataList = (currentManageType === 'symptom') ? ngSymptoms : recorderList;
 
@@ -1274,10 +1272,9 @@
                 const yieldVal = total > 0 ? ((fg / total) * 100).toFixed(2) : 0;
                 document.getElementById('stat-yield').innerText = yieldVal + "%";
                 
-                // ✅ แก้ไขสูตรคำนวณ UPH เพื่อให้แม่นยำแม้จะดึงข้อมูลแบบรายเดือน
+                // คำนวณ UPH ใหม่ (เอาจำนวนวันที่ดึงได้คูณด้วยชั่วโมงที่มีงาน)
                 let workDays = data.datesFound ? Object.keys(data.datesFound).length : 0;
                 if (workDays === 0) {
-                    // Fallback กรณี backend ไม่ได้ส่ง datesFound กลับมา ให้คำนวณเอาจากจำนวนวันที่เลือกแทน
                     const sDate = new Date(start);
                     const eDate = new Date(end);
                     workDays = Math.round((eDate - sDate) / (1000 * 60 * 60 * 24)) + 1;
@@ -1288,7 +1285,6 @@
                 if(data.hourlyData) activeSlots = data.hourlyData.filter(v => v > 0).length;
                 if(activeSlots === 0) activeSlots = 1;
 
-                // สูตรใหม่: ยอดรวม / (จำนวนวันที่ทำงาน x จำนวนชั่วโมงที่เดินเครื่องเฉลี่ย)
                 const uph = (fg / (workDays * activeSlots)).toFixed(0);
                 document.getElementById('stat-uph').innerText = uph;
 
@@ -1354,7 +1350,6 @@
             try {
                  if(!charts) charts = {};
                  
-                 // เพิ่ม Plugins Zoom ใน Options มาตรฐานสำหรับทุกกราฟ
                  const commonOpts = { 
                      responsive: true, 
                      maintainAspectRatio: false,
@@ -1366,7 +1361,6 @@
                      }
                  };
                  
-                 // ดึงปลั๊กอิน ChartDataLabels มาใช้อย่างปลอดภัย
                  const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
                  const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
 
@@ -1400,14 +1394,13 @@
                  if(ctxH) {
                      if(charts.hourly) charts.hourly.destroy();
                      
-                     // ✅ ทำความสะอาด Label แกน X ให้ดึงเวลา "จบชั่วโมง" มาแสดงตามที่คุณต้องการ
+                     // ตัดข้อความแกน X ให้แสดงเวลาจบ
                      const cleanHourlyLabels = (data.hourlyLabels || []).map(label => {
                          const parts = label.split('-');
                          if (parts.length > 1) {
                              const match = parts[1].match(/(\d{2}):/);
                              return match ? match[1] + ":00" : label;
                          }
-                         // เผื่อกรณีไม่มีเครื่องหมาย - ให้ดึงตัวเลขตัวแรกเหมือนเดิม
                          const fallbackMatch = label.match(/(\d{2}):/);
                          return fallbackMatch ? fallbackMatch[1] + ":00" : label;
                      });
@@ -1459,7 +1452,7 @@
                              labels: trendData.map(d=>d.date), 
                              datasets: [{label:'% NG Rate', data:trendData.map(d=>d.ngRate), borderColor:'#f97316'}] 
                          }, 
-                         // ✅ เพิ่มตั้งค่า x: { offset: true } เพื่อให้กราฟเส้นที่มีข้อมูลเพียงวันเดียว ถูกดันมาอยู่ตรงกลาง
+                         // ดันให้อยู่ตรงกลางถ้ามีวันเดียว
                          options: { ...commonOpts, scales: { x: { offset: true } } } 
                      });
                  }
@@ -1468,31 +1461,27 @@
                  if(ctxNG) {
                     if(charts.ng) charts.ng.destroy();
                     
-                    // คำนวณยอด NG รวมเพื่อใช้หา %
                     const totalNGPcs = valsPcs.reduce((a, b) => a + b, 0);
                     
                     charts.ng = new Chart(ctxNG, { 
                         type: 'doughnut',
-                        plugins: activePlugins, // เปิดใช้งาน DataLabels Plugin 
+                        plugins: activePlugins,
                         data: { 
                             labels: labels, 
                             datasets: [{ 
                                 data: valsPcs, 
-                                // เพิ่มสีเผื่อไว้กรณีมี NG ประเภทอื่นๆ 
                                 backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#8b5cf6', '#ec4899', '#14b8a6'],
-                                borderWidth: 0 // ซ่อนเส้นขอบ (เส้นแบ่งระหว่างชิ้นพาย)
+                                borderWidth: 0
                             }] 
                         }, 
                         options: {
                             ...commonOpts,
-                            // บังคับซ่อนแกนอย่างสมบูรณ์เผื่อ Plugin อื่นไปกระทบ
                             scales: { 
                                 x: { display: false }, 
                                 y: { display: false } 
                             },
                             plugins: {
                                 ...commonOpts.plugins,
-                                // ตั้งค่าส่วนการแสดงผลข้อมูล % บนกราฟ Pie
                                 datalabels: {
                                     color: '#ffffff',
                                     font: { weight: 'bold', size: 12 },
@@ -1519,13 +1508,11 @@
                                  data: Object.values(pData).map(d => {
                                      const ngCount = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
                                      const t = d.fg + ngCount; 
-                                     // ✅ แก้ไขตรงนี้: เพิ่ม parseFloat เพื่อให้เป็นตัวเลข
                                      return t > 0 ? parseFloat(((d.fg/t)*100).toFixed(1)) : 0;
                                  }), 
                                  backgroundColor: '#10b981' 
                              }] 
                          }, 
-                         // ✅ แก้ไขตรงนี้: กำหนด properties ของ scales ให้แกน x รองรับค่าตัวเลขถึง 100 อย่างถูกต้อง
                          options: {...commonOpts, indexAxis:'y', scales: { x: { max: 100, beginAtZero: true } } } 
                      });
                  }
@@ -1555,7 +1542,6 @@
                 }
             }
             
-            // ทำให้แน่ใจว่า Column ไม่เบิ้ล 100%
             dynamicColumns = [...new Set(dynamicColumns.map(s => capitalizeFirst(s)))];
 
             const h = document.getElementById('table-header'); 
@@ -1616,7 +1602,6 @@
             
             const hNgPcs = mData.hourlyNgPcs || mData.hourlyNg || [];
             
-            // ✅ ทำความสะอาด Label แบบเดียวกับกราฟหน้าหลัก (ดึงเวลาตอนจบ)
             const cleanHourlyLabels = (currentDashboardData.hourlyLabels || []).map(label => {
                  const parts = label.split('-');
                  if (parts.length > 1) {
