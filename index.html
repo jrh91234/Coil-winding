@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.45 Layout Debug Mode</title>
+    <title>CWM Production System - v3.47 Bulletproof Charts</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -29,6 +29,10 @@
         .drag-handle { cursor: grab; }
         .drag-handle:active { cursor: grabbing; }
         .sortable-ghost { opacity: 0.4; background-color: #f3f4f6; border: 2px dashed #cbd5e1; }
+        
+        /* กฎเหล็กบังคับให้ Layout เป็นคอลัมน์เดี่ยว และล้างคำสั่ง col-span ทิ้งทั้งหมด */
+        .layout-single { grid-template-columns: minmax(0, 1fr) !important; }
+        .layout-single > div { grid-column: span 1 / span 1 !important; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen font-sans pb-10">
@@ -46,7 +50,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.45</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.47</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -150,7 +154,7 @@
                 </select>
                 <div class="flex gap-2 w-full md:w-auto">
                     <button onclick="window.loadDashboard()" class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded text-sm font-bold shadow-md hover:bg-indigo-700 active:bg-indigo-800 transition-colors">🔍 ค้นหา</button>
-                    <!-- ปุ่มสำหรับสลับ Layout (ฝัง Debugger) -->
+                    <!-- ปุ่มสำหรับสลับ Layout -->
                     <button onclick="document.getElementById('debug-panel').classList.remove('hidden'); document.getElementById('debug-output').innerText='กำลังกดปุ่มสลับ Layout...'; window.toggleLayout()" id="layoutBtn" class="flex-1 bg-white text-indigo-600 border border-indigo-200 px-4 py-2 rounded text-sm font-bold shadow-sm hover:bg-indigo-50 transition-colors">🔀 Layout: คู่</button>
                 </div>
             </div>
@@ -161,11 +165,11 @@
             <p class="text-gray-500 font-medium mt-2">กำลังประมวลผลข้อมูล...</p>
         </div>
 
-        <!-- DEBUG PANEL (Always visible during tests if triggered) -->
+        <!-- DEBUG PANEL -->
         <div id="debug-panel" class="hidden bg-red-50 border border-red-200 p-4 rounded-xl shadow-inner mb-4">
             <div class="flex justify-between items-center mb-2">
-                <h3 class="text-red-800 font-bold text-sm">🛑 ระบบ Debug ปุ่ม Layout</h3>
-                <button onclick="document.getElementById('debug-panel').classList.add('hidden')" class="text-red-500 hover:bg-red-200 px-2 rounded">ปิด</button>
+                <h3 class="text-red-800 font-bold text-sm">🛑 ระบบ Debug & Logs</h3>
+                <button onclick="document.getElementById('debug-panel').classList.add('hidden')" class="text-red-500 hover:bg-red-200 px-2 rounded font-bold">ปิด</button>
             </div>
             <pre id="debug-output" class="text-[10px] md:text-xs text-red-900 overflow-auto max-h-64 whitespace-pre-wrap font-mono bg-white p-2 rounded border border-red-100"></pre>
         </div>
@@ -228,7 +232,7 @@
             </div>
             
             <div id="sortable-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- ทุกกราฟปรับความสูงเป็น h-[350px] เพื่อความเท่ากันเป๊ะใน PC -->
+                <!-- เพิ่ม min-h ให้ wrapper ป้องกันกราฟยุบตัว -->
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2">
                         <h3 class="font-bold text-gray-700 text-sm">📦 FG & ACH by Model (ยอดผลิต vs แผน)</h3>
@@ -242,7 +246,7 @@
                         <h3 class="font-bold text-gray-700 text-sm">📉 NG Analysis (Pareto)</h3>
                         <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
-                    <div class="flex-1 relative w-full"><canvas id="paretoChart"></canvas></div>
+                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="paretoChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
@@ -250,7 +254,7 @@
                         <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Trend</h3>
                         <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
-                    <div class="flex-1 relative w-full"><canvas id="qcTrendChart"></canvas></div>
+                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
@@ -258,7 +262,7 @@
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3>
                         <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
-                    <div class="flex-1 relative w-full"><canvas id="yieldModelChart"></canvas></div>
+                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="yieldModelChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
@@ -266,7 +270,7 @@
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3>
                         <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
-                    <div class="flex-1 relative w-full"><canvas id="yieldMachineChart"></canvas></div>
+                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="yieldMachineChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
@@ -274,7 +278,7 @@
                         <h3 class="font-bold text-gray-700 text-sm">Hourly Production (FG & NG)</h3>
                         <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
-                    <div class="flex-1 relative w-full"><canvas id="hourlyChart"></canvas></div>
+                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="hourlyChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
@@ -282,7 +286,7 @@
                         <h3 class="font-bold text-gray-700 text-sm">NG Breakdown</h3>
                         <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
                     </div>
-                    <div class="flex-1 relative w-full"><canvas id="ngChart"></canvas></div>
+                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card md:col-span-2 p-4">
@@ -515,7 +519,7 @@
             });
         };
 
-        // --- NEW: ฟังก์ชันสลับ Layout แบบมีตัวดักจับ Debug ---
+        // --- ฟังก์ชันสลับ Layout ที่แก้ไข CSS Grid ให้เด็ดขาด ---
         window.toggleLayout = function() {
             const debugOut = document.getElementById('debug-output');
             
@@ -528,18 +532,17 @@
                 const grid = document.getElementById('sortable-grid');
                 const btn = document.getElementById('layoutBtn');
                 
-                if (!grid) debugOut.innerText += "\n[Error] ไม่พบกล่อง sortable-grid";
-                if (!btn) debugOut.innerText += "\n[Error] ไม่พบปุ่ม layoutBtn";
-
                 if (!grid || !btn) return;
 
                 if (window.isDualLayout) {
+                    // เปิด 2 คอลัมน์ (โหมดปกติของ Tailwind)
                     grid.classList.add('md:grid-cols-2');
-                    grid.classList.remove('md:grid-cols-1');
+                    grid.classList.remove('layout-single'); // ถอดกฏบังคับเดี่ยวออก
                     btn.innerText = '🔀 Layout: คู่';
                 } else {
+                    // เปิด 1 คอลัมน์ (ใช้ CSS Custom คุมเด็ดขาด)
                     grid.classList.remove('md:grid-cols-2');
-                    grid.classList.add('md:grid-cols-1');
+                    grid.classList.add('layout-single'); // ใส่กฏบังคับเดี่ยว
                     btn.innerText = '🔀 Layout: เดี่ยว';
                 }
                 
@@ -1075,7 +1078,8 @@
             if(!SCRIPT_URL) return;
             document.getElementById('dashboard-content').classList.add('hidden');
             document.getElementById('dashboard-loader').classList.remove('hidden');
-            document.getElementById('debug-panel').classList.add('hidden');
+            const debugPanel = document.getElementById('debug-panel');
+            const debugOut = document.getElementById('debug-output');
             
             const start = document.getElementById('startDate').value.trim(); 
             const end = document.getElementById('endDate').value.trim();
@@ -1086,6 +1090,8 @@
             
             let rawText = "";
             try {
+                debugOut.innerText = `[Dashboard] Loading data for ${start} to ${end}...`;
+                
                 const fetchUrl = `${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}&shiftType=${shiftType}&_t=${Date.now()}`;
                 const res = await fetch(fetchUrl);
                 
@@ -1147,7 +1153,10 @@
                 const ngKg = data.totalNgKg || 0;
                 
                 if (fg === 0 && ngPcs === 0 && target === 0) {
-                    alert(`⚠️ ไม่พบข้อมูลการผลิตหรือแผนงานในช่วงเวลาที่เลือก\n\nวันที่: ${start} ถึง ${end}\nกะ: ${shift}\nประเภท: ${shiftType}\n\n*ข้อแนะนำ: \n1. ลองเลือกกะเป็น "ทั้งหมด (All)"\n2. อาจเป็นปัญหา Cache ของระบบเบราว์เซอร์ (กดตกลงเพื่อลองใหม่)`);
+                    debugOut.innerText += `\n[Warning] ข้อมูลในวันที่ ${start} เป็น 0 ทั้งหมด กราฟจะแสดงเป็นพื้นที่ว่าง (โปรดเช็คว่าเลือกวันที่ถูกต้องหรือไม่)`;
+                    alert(`⚠️ ไม่พบข้อมูลการผลิตหรือแผนงานในช่วงเวลาที่เลือก\n\nวันที่: ${start} ถึง ${end}\nกะ: ${shift}\nประเภท: ${shiftType}\n\n*ข้อแนะนำ: \nหากเพิ่งตัดเข้าวันใหม่ ให้ลองเปลี่ยนช่องวันที่กลับเป็นเมื่อวานครับ`);
+                } else {
+                    debugOut.innerText += `\n[Success] พบข้อมูล FG=${fg}, NG=${ngPcs}`;
                 }
 
                 document.getElementById('stat-fg').innerText = fg.toLocaleString();
@@ -1182,14 +1191,8 @@
 
             } catch(e) { 
                 console.error("Dashboard Load Error: ", e); 
-                
-                const debugPanel = document.getElementById('debug-panel');
-                const debugOut = document.getElementById('debug-output');
-                if (debugPanel && debugOut) {
-                    debugOut.innerText = `[Error Message]\n${e.message}\n\n[Stack Trace]\n${e.stack || "No Stack Trace"}\n\n[Raw Response Text (First 500 chars)]\n${rawText.substring(0, 500)}`;
-                    debugPanel.classList.remove('hidden');
-                }
-                
+                debugPanel.classList.remove('hidden');
+                debugOut.innerText += `\n[Error Message]\n${e.message}\n\n[Stack Trace]\n${e.stack || "No Stack Trace"}\n\n[Raw Response Text]\n${rawText.substring(0, 500)}`;
                 alert("เกิดข้อผิดพลาดในการดึงข้อมูล กรุณาตรวจสอบที่แผง Debug สีแดงด้านบน");
             } finally { 
                 document.getElementById('dashboard-loader').classList.add('hidden'); 
@@ -1240,123 +1243,136 @@
         };
 
         window.renderCharts = function(data) {
-             if(!charts) charts = {};
-             const commonOpts = { responsive: true, maintainAspectRatio: false };
-
-             const labels = data.ngLabels || [];
-             const valsPcs = data.ngValuesPcs || data.ngValues || []; 
-             const valsKg = data.ngValuesKg || [];
-
-             const ctxP = document.getElementById('paretoChart');
-             if(ctxP) {
-                 if(charts.pareto) charts.pareto.destroy();
-                 const ngItems = labels.map((l, i) => ({ label: l, pcs: valsPcs[i] || 0, kg: valsKg[i] || 0 })).sort((a,b)=>b.pcs-a.pcs);
-                 const totalNG = ngItems.reduce((a,b)=>a+b.pcs,0);
-                 let acc = 0; 
-                 const cumulative = ngItems.map(i=>{ acc+=i.pcs; return totalNG>0?((acc/totalNG)*100).toFixed(1):0; });
+            try {
+                 if(!charts) charts = {};
+                 const commonOpts = { responsive: true, maintainAspectRatio: false };
                  
-                 charts.pareto = new Chart(ctxP, { 
-                     type: 'bar', plugins: [ChartDataLabels],
-                     data: { 
-                         labels: ngItems.map(i=>i.label), 
-                         datasets: [
-                             { label: '% สะสม', data: cumulative, type: 'line', borderColor: '#8b5cf6', yAxisID: 'y1', datalabels: { display: false } },
-                             { label: 'NG (ชิ้น)', data: ngItems.map(i=>i.pcs), backgroundColor: '#ef4444', yAxisID: 'y', datalabels: { align: 'end', anchor: 'end', formatter: (v) => v + ' ชิ้น' } }
-                         ]
-                     },
-                     options: { ...commonOpts, layout: { padding: { top: 20 } }, scales: { y: { beginAtZero: true, grace: '10%' }, y1: { beginAtZero: true, max: 105, position: 'right', grid: { display: false } } } }
-                 });
-             }
+                 // ดึงปลั๊กอิน ChartDataLabels มาใช้อย่างปลอดภัย
+                 const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
+                 const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
 
-             const hNgPcs = data.hourlyNgPcsData || data.hourlyNgData || []; 
-             const ctxH = document.getElementById('hourlyChart');
-             if(ctxH) {
-                 if(charts.hourly) charts.hourly.destroy();
-                 charts.hourly = new Chart(ctxH, { 
-                     type: 'bar', 
-                     data: { 
-                         labels: data.hourlyLabels || [], 
-                         datasets: [
-                             {label:'FG', data:data.hourlyData || [], backgroundColor:'#3b82f6'}, 
-                             {label:'NG (ชิ้น)', data:hNgPcs, backgroundColor:'#ef4444'}
-                         ] 
-                     }, 
-                     options: {...commonOpts, scales:{x:{stacked:true}, y:{stacked:true}}} 
-                 });
-             }
+                 const labels = data.ngLabels || [];
+                 const valsPcs = data.ngValuesPcs || data.ngValues || []; 
+                 const valsKg = data.ngValuesKg || [];
 
-             const ctxYieldM = document.getElementById('yieldMachineChart');
-             if(ctxYieldM) {
-                if(charts.yieldMachine) charts.yieldMachine.destroy();
-                const macs = []; for(let i=1;i<=16;i++) macs.push(`CWM-${String(i).padStart(2,'0')}`);
-                charts.yieldMachine = new Chart(ctxYieldM, { 
-                    type: 'bar', 
-                    data: { 
-                        labels: macs, 
-                        datasets: [{ 
-                            label: '% Yield', 
-                            data: macs.map(m=>{
-                                const d = (data.machineData && data.machineData[m]) ? data.machineData[m] : null; 
-                                if(!d) return 0; 
-                                const ngCount = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
-                                const t = d.fg + ngCount; 
-                                return t > 0 ? ((d.fg/t)*100).toFixed(1) : 0;
-                            }), 
-                            backgroundColor: '#6366f1' 
-                        }] 
-                    }, 
-                    options: {...commonOpts, scales:{y:{max:100}}} 
-                });
-             }
+                 const ctxP = document.getElementById('paretoChart');
+                 if(ctxP) {
+                     if(charts.pareto) charts.pareto.destroy();
+                     const ngItems = labels.map((l, i) => ({ label: l, pcs: valsPcs[i] || 0, kg: valsKg[i] || 0 })).sort((a,b)=>b.pcs-a.pcs);
+                     const totalNG = ngItems.reduce((a,b)=>a+b.pcs,0);
+                     let acc = 0; 
+                     const cumulative = ngItems.map(i=>{ acc+=i.pcs; return totalNG>0?((acc/totalNG)*100).toFixed(1):0; });
+                     
+                     charts.pareto = new Chart(ctxP, { 
+                         type: 'bar', plugins: activePlugins,
+                         data: { 
+                             labels: ngItems.map(i=>i.label), 
+                             datasets: [
+                                 { label: '% สะสม', data: cumulative, type: 'line', borderColor: '#8b5cf6', yAxisID: 'y1', datalabels: { display: false } },
+                                 { label: 'NG (ชิ้น)', data: ngItems.map(i=>i.pcs), backgroundColor: '#ef4444', yAxisID: 'y', datalabels: { align: 'end', anchor: 'end', formatter: (v) => v + ' ชิ้น' } }
+                             ]
+                         },
+                         options: { ...commonOpts, layout: { padding: { top: 20 } }, scales: { y: { beginAtZero: true, grace: '10%' }, y1: { beginAtZero: true, max: 105, position: 'right', grid: { display: false } } } }
+                     });
+                 }
 
-             const ctxQC = document.getElementById('qcTrendChart');
-             if(ctxQC) {
-                if(charts.qcTrend) charts.qcTrend.destroy();
-                 const trendData = data.dailyTrend || [];
-                 charts.qcTrend = new Chart(ctxQC, { 
-                     type: 'line', 
-                     data: { 
-                         labels: trendData.map(d=>d.date), 
-                         datasets: [{label:'% NG Rate', data:trendData.map(d=>d.ngRate), borderColor:'#f97316'}] 
-                     }, 
-                     options: commonOpts 
-                 });
-             }
+                 const hNgPcs = data.hourlyNgPcsData || data.hourlyNgData || []; 
+                 const ctxH = document.getElementById('hourlyChart');
+                 if(ctxH) {
+                     if(charts.hourly) charts.hourly.destroy();
+                     charts.hourly = new Chart(ctxH, { 
+                         type: 'bar', 
+                         data: { 
+                             labels: data.hourlyLabels || [], 
+                             datasets: [
+                                 {label:'FG', data:data.hourlyData || [], backgroundColor:'#3b82f6'}, 
+                                 {label:'NG (ชิ้น)', data:hNgPcs, backgroundColor:'#ef4444'}
+                             ] 
+                         }, 
+                         options: {...commonOpts, scales:{x:{stacked:true}, y:{stacked:true}}} 
+                     });
+                 }
 
-             const ctxNG = document.getElementById('ngChart');
-             if(ctxNG) {
-                if(charts.ng) charts.ng.destroy();
-                charts.ng = new Chart(ctxNG, { 
-                    type: 'doughnut', 
-                    data: { 
-                        labels: labels, 
-                        datasets: [{ data: valsPcs, backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4'] }] 
-                    }, 
-                    options: commonOpts 
-                });
-             }
+                 const ctxYieldM = document.getElementById('yieldMachineChart');
+                 if(ctxYieldM) {
+                    if(charts.yieldMachine) charts.yieldMachine.destroy();
+                    const macs = []; for(let i=1;i<=16;i++) macs.push(`CWM-${String(i).padStart(2,'0')}`);
+                    charts.yieldMachine = new Chart(ctxYieldM, { 
+                        type: 'bar', 
+                        data: { 
+                            labels: macs, 
+                            datasets: [{ 
+                                label: '% Yield', 
+                                data: macs.map(m=>{
+                                    const d = (data.machineData && data.machineData[m]) ? data.machineData[m] : null; 
+                                    if(!d) return 0; 
+                                    const ngCount = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
+                                    const t = d.fg + ngCount; 
+                                    return t > 0 ? ((d.fg/t)*100).toFixed(1) : 0;
+                                }), 
+                                backgroundColor: '#6366f1' 
+                            }] 
+                        }, 
+                        options: {...commonOpts, scales:{y:{max:100}}} 
+                    });
+                 }
 
-             const ctxYM = document.getElementById('yieldModelChart');
-             if(ctxYM) {
-                 if(charts.yieldModel) charts.yieldModel.destroy();
-                 const pData = data.productData || {};
-                 charts.yieldModel = new Chart(ctxYM, { 
-                     type: 'bar', 
-                     data: { 
-                         labels: Object.keys(pData), 
-                         datasets: [{ 
-                             label: '% Yield', 
-                             data: Object.values(pData).map(d => {
-                                 const ngCount = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
-                                 const t = d.fg + ngCount; 
-                                 return t > 0 ? ((d.fg/t)*100).toFixed(1) : 0;
-                             }), 
-                             backgroundColor: '#10b981' 
-                         }] 
-                     }, 
-                     options: {...commonOpts, indexAxis:'y'} 
-                 });
-             }
+                 const ctxQC = document.getElementById('qcTrendChart');
+                 if(ctxQC) {
+                    if(charts.qcTrend) charts.qcTrend.destroy();
+                     const trendData = data.dailyTrend || [];
+                     charts.qcTrend = new Chart(ctxQC, { 
+                         type: 'line', 
+                         data: { 
+                             labels: trendData.map(d=>d.date), 
+                             datasets: [{label:'% NG Rate', data:trendData.map(d=>d.ngRate), borderColor:'#f97316'}] 
+                         }, 
+                         options: commonOpts 
+                     });
+                 }
+
+                 const ctxNG = document.getElementById('ngChart');
+                 if(ctxNG) {
+                    if(charts.ng) charts.ng.destroy();
+                    charts.ng = new Chart(ctxNG, { 
+                        type: 'doughnut', 
+                        data: { 
+                            labels: labels, 
+                            datasets: [{ data: valsPcs, backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4'] }] 
+                        }, 
+                        options: commonOpts 
+                    });
+                 }
+
+                 const ctxYM = document.getElementById('yieldModelChart');
+                 if(ctxYM) {
+                     if(charts.yieldModel) charts.yieldModel.destroy();
+                     const pData = data.productData || {};
+                     charts.yieldModel = new Chart(ctxYM, { 
+                         type: 'bar', 
+                         data: { 
+                             labels: Object.keys(pData), 
+                             datasets: [{ 
+                                 label: '% Yield', 
+                                 data: Object.values(pData).map(d => {
+                                     const ngCount = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
+                                     const t = d.fg + ngCount; 
+                                     return t > 0 ? ((d.fg/t)*100).toFixed(1) : 0;
+                                 }), 
+                                 backgroundColor: '#10b981' 
+                             }] 
+                         }, 
+                         options: {...commonOpts, indexAxis:'y'} 
+                     });
+                 }
+            } catch (err) {
+                 const debugOut = document.getElementById('debug-output');
+                 if (debugOut) {
+                     document.getElementById('debug-panel').classList.remove('hidden');
+                     debugOut.innerText += `\n[Chart Rendering Error] ${err.message}`;
+                 }
+                 console.error(err);
+            }
         };
 
         window.renderTable = function(data) {
