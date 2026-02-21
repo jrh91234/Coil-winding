@@ -1601,25 +1601,76 @@
                          return fallbackMatch ? fallbackMatch[1] + ":00" : label;
                      });
 
+                     let hourlyDatasets = [];
+                     
+                     // 🌟 ถ้ามีข้อมูลแยกตามโมเดล (backend.gs ต้องถูกอัปเดตแล้ว)
+                     if (data.hourlyByModel && Object.keys(data.hourlyByModel).length > 0) {
+                         const fgColors = ['#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8', '#1e3a8a']; // โทนฟ้า/น้ำเงิน
+                         const ngColors = ['#fca5a5', '#f87171', '#ef4444', '#dc2626', '#b91c1c', '#7f1d1d']; // โทนแดง/ส้ม
+                         
+                         let cIdx = 0;
+                         // 1. นำ FG ทุกโมเดลมากองไว้ด้านล่างก่อน
+                         for (const [model, d] of Object.entries(data.hourlyByModel)) {
+                             hourlyDatasets.push({
+                                 label: `FG - ${model}`,
+                                 data: d.fg,
+                                 backgroundColor: fgColors[cIdx % fgColors.length],
+                                 stack: 'Stack 0',
+                                 borderWidth: 1,
+                                 borderColor: 'rgba(255,255,255,0.2)'
+                             });
+                             cIdx++;
+                         }
+                         
+                         cIdx = 0;
+                         // 2. นำ NG ทุกโมเดลซ้อนทับด้านบนสุด
+                         for (const [model, d] of Object.entries(data.hourlyByModel)) {
+                             hourlyDatasets.push({
+                                 label: `NG - ${model}`,
+                                 data: d.ng,
+                                 backgroundColor: ngColors[cIdx % ngColors.length],
+                                 stack: 'Stack 0',
+                                 borderWidth: 1,
+                                 borderColor: 'rgba(255,255,255,0.2)'
+                             });
+                             cIdx++;
+                         }
+                     } else {
+                         // Fallback กรณี Backend ยังไม่ได้อัปเดต
+                         hourlyDatasets = [
+                             {label:'FG (รวม)', data:data.hourlyData || [], backgroundColor:'#3b82f6', stack: 'Stack 0'}, 
+                             {label:'NG (เสียเป็นชิ้น)', data:hNgPcs, backgroundColor:'#ef4444', stack: 'Stack 0'}
+                         ];
+                     }
+
                      charts.hourly = new Chart(ctxH, { 
                          type: 'bar', 
                          data: { 
                              labels: cleanHourlyLabels, 
-                             datasets: [
-                                 {label:'FG', data:data.hourlyData || [], backgroundColor:'#3b82f6'}, 
-                                 {label:'NG (ชิ้น)', data:hNgPcs, backgroundColor:'#ef4444'}
-                             ] 
+                             datasets: hourlyDatasets
                          }, 
                          options: {
                              ...commonOpts, 
                              scales:{x:{stacked:true}, y:{stacked:true}},
                              plugins: {
                                  ...commonOpts.plugins,
+                                 tooltip: {
+                                     mode: 'index',
+                                     intersect: false,
+                                     filter: function(tooltipItem) {
+                                         // 🌟 ซ่อนรายการในกล่อง Tooltip ถ้าชั่วโมงนั้นมียอดเป็น 0
+                                         return tooltipItem.raw > 0;
+                                     }
+                                 },
                                  datalabels: {
-                                     display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
+                                     display: function(ctx) { 
+                                         const c = ctx.chart.canvas.closest('.widget-card'); 
+                                         const isMax = c ? c.classList.contains('maximized-card') : true; 
+                                         return isMax && ctx.dataset.data[ctx.dataIndex] > 0; 
+                                     },
                                      color: '#ffffff', // ให้ตัวเลขเป็นสีขาวเพื่อให้ตัดกับพื้นสีเข้ม
-                                     font: { weight: 'bold', size: 11 },
-                                     formatter: (value) => value > 0 ? value : null // ซ่อนถ้าค่าเป็น 0
+                                     font: { weight: 'bold', size: 10 },
+                                     formatter: (value) => value > 0 ? value : null
                                  }
                              }
                          } 
