@@ -1230,10 +1230,22 @@
                 const yieldVal = total > 0 ? ((fg / total) * 100).toFixed(2) : 0;
                 document.getElementById('stat-yield').innerText = yieldVal + "%";
                 
-                let activeHours = 0; 
-                if(data.hourlyData) activeHours = data.hourlyData.filter(v => v > 0).length;
-                if(activeHours === 0) activeHours = 1;
-                const uph = (fg / activeHours).toFixed(0);
+                // ✅ แก้ไขสูตรคำนวณ UPH เพื่อให้แม่นยำแม้จะดึงข้อมูลแบบรายเดือน
+                let workDays = data.datesFound ? Object.keys(data.datesFound).length : 0;
+                if (workDays === 0) {
+                    // Fallback กรณี backend ไม่ได้ส่ง datesFound กลับมา ให้คำนวณเอาจากจำนวนวันที่เลือกแทน
+                    const sDate = new Date(start);
+                    const eDate = new Date(end);
+                    workDays = Math.round((eDate - sDate) / (1000 * 60 * 60 * 24)) + 1;
+                }
+                if (workDays <= 0 || isNaN(workDays)) workDays = 1;
+
+                let activeSlots = 0; 
+                if(data.hourlyData) activeSlots = data.hourlyData.filter(v => v > 0).length;
+                if(activeSlots === 0) activeSlots = 1;
+
+                // สูตรใหม่: ยอดรวม / (จำนวนวันที่ทำงาน x จำนวนชั่วโมงที่เดินเครื่องเฉลี่ย)
+                const uph = (fg / (workDays * activeSlots)).toFixed(0);
                 document.getElementById('stat-uph').innerText = uph;
 
                 currentDashboardData = data;
@@ -1343,10 +1355,17 @@
                  const ctxH = document.getElementById('hourlyChart');
                  if(ctxH) {
                      if(charts.hourly) charts.hourly.destroy();
+                     
+                     // ✅ ทำความสะอาด Label แกน X ให้เหลือเฉพาะตัวเลขชั่วโมงแรก (เอา :30 หรือตัวหนังสืออื่นๆ ออก)
+                     const cleanHourlyLabels = (data.hourlyLabels || []).map(label => {
+                         const match = label.match(/(\d{2}):/);
+                         return match ? match[1] + ":00" : label;
+                     });
+
                      charts.hourly = new Chart(ctxH, { 
                          type: 'bar', 
                          data: { 
-                             labels: data.hourlyLabels || [], 
+                             labels: cleanHourlyLabels, 
                              datasets: [
                                  {label:'FG', data:data.hourlyData || [], backgroundColor:'#3b82f6'}, 
                                  {label:'NG (ชิ้น)', data:hNgPcs, backgroundColor:'#ef4444'}
@@ -1390,7 +1409,8 @@
                              labels: trendData.map(d=>d.date), 
                              datasets: [{label:'% NG Rate', data:trendData.map(d=>d.ngRate), borderColor:'#f97316'}] 
                          }, 
-                         options: commonOpts 
+                         // ✅ เพิ่มตั้งค่า x: { offset: true } เพื่อให้กราฟเส้นที่มีข้อมูลเพียงวันเดียว ถูกดันมาอยู่ตรงกลาง
+                         options: { ...commonOpts, scales: { x: { offset: true } } } 
                      });
                  }
 
@@ -1546,10 +1566,16 @@
             
             const hNgPcs = mData.hourlyNgPcs || mData.hourlyNg || [];
             
+            // ✅ ทำความสะอาด Label แบบเดียวกับกราฟหน้าหลัก
+            const cleanHourlyLabels = (currentDashboardData.hourlyLabels || []).map(label => {
+                 const match = label.match(/(\d{2}):/);
+                 return match ? match[1] + ":00" : label;
+            });
+            
             machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), { 
                 type: 'bar', 
                 data: { 
-                    labels: currentDashboardData.hourlyLabels || [], 
+                    labels: cleanHourlyLabels, 
                     datasets: [
                         { label: 'FG (งานดี)', data: mData.hourlyFg || [], backgroundColor: '#3b82f6', borderRadius: 2 }, 
                         { label: 'NG (เสียเป็นชิ้น)', data: hNgPcs, backgroundColor: '#ef4444', borderRadius: 2 }
@@ -1560,7 +1586,6 @@
                     maintainAspectRatio: false, 
                     plugins: { 
                         legend: { display: true },
-                        // เพิ่มการตั้งค่า Zoom ลงในกราฟ Machine Detail แยกต่างหาก
                         zoom: {
                             pan: { enabled: true, mode: 'xy' },
                             zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
