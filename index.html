@@ -691,12 +691,15 @@
                 btn.title = 'ย่อหน้าจอ';
             }
             
-            // รอแอนิเมชัน CSS แล้วสั่งให้กราฟวาดสเกลใหม่
+            // รอแอนิเมชัน CSS แล้วสั่งให้กราฟวาดสเกลและข้อมูลใหม่
             setTimeout(() => {
                 const canvas = card.querySelector('canvas');
                 if(canvas) { 
                     const chartInstance = Chart.getChart(canvas); 
-                    if(chartInstance) chartInstance.resize(); 
+                    if(chartInstance) {
+                        chartInstance.resize(); 
+                        chartInstance.update(); // Update เพื่อให้ datalabels เช็คเงื่อนไขการแสดงผลใหม่
+                    }
                 }
             }, 150);
         };
@@ -1443,7 +1446,10 @@
                              labels: ngItems.map(i=>i.label), 
                              datasets: [
                                  { label: '% สะสม', data: cumulative, type: 'line', borderColor: '#8b5cf6', yAxisID: 'y1', datalabels: { display: false } },
-                                 { label: 'NG (ชิ้น)', data: ngItems.map(i=>i.pcs), backgroundColor: '#ef4444', yAxisID: 'y', datalabels: { align: 'end', anchor: 'end', formatter: (v) => v > 0 ? v + ' ชิ้น' : null } }
+                                 { label: 'NG (ชิ้น)', data: ngItems.map(i=>i.pcs), backgroundColor: '#ef4444', yAxisID: 'y', datalabels: { 
+                                     display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
+                                     align: 'end', anchor: 'end', formatter: (v) => v > 0 ? v + ' ชิ้น' : null 
+                                 } }
                              ]
                          },
                          options: { ...commonOpts, layout: { padding: { top: 20 } }, scales: { y: { beginAtZero: true, grace: '10%' }, y1: { beginAtZero: true, max: 105, position: 'right', grid: { display: false } } } }
@@ -1481,6 +1487,7 @@
                              plugins: {
                                  ...commonOpts.plugins,
                                  datalabels: {
+                                     display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
                                      color: '#ffffff', // ให้ตัวเลขเป็นสีขาวเพื่อให้ตัดกับพื้นสีเข้ม
                                      font: { weight: 'bold', size: 11 },
                                      formatter: (value) => value > 0 ? value : null // ซ่อนถ้าค่าเป็น 0
@@ -1517,6 +1524,7 @@
                             plugins: {
                                 ...commonOpts.plugins,
                                 datalabels: {
+                                    display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
                                     color: '#4338ca', // สีน้ำเงินเข้ม
                                     anchor: 'end',    // ผลักออกจากศูนย์กลาง
                                     align: 'top',     // ให้อยู่ด้านบนของแท่ง
@@ -1546,6 +1554,7 @@
                              plugins: {
                                  ...commonOpts.plugins,
                                  datalabels: {
+                                     display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
                                      color: '#c2410c',
                                      align: 'top',
                                      anchor: 'end',
@@ -1583,6 +1592,7 @@
                             plugins: {
                                 ...commonOpts.plugins,
                                 datalabels: {
+                                    display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
                                     color: '#ffffff',
                                     font: { weight: 'bold', size: 12 },
                                     formatter: (value) => {
@@ -1621,6 +1631,7 @@
                              plugins: {
                                  ...commonOpts.plugins,
                                  datalabels: {
+                                     display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
                                      color: '#065f46', // สีเขียวเข้ม
                                      anchor: 'end', // ดันออกนอกแท่งกราฟ
                                      align: 'right', // ให้อยู่ทางขวาของปลายแท่ง
@@ -1746,6 +1757,8 @@
                             zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
                         },
                         datalabels: {
+                            // โชว์เสมอสำหรับหน้าจอ Modal Detail แบบขยายใหญ่
+                            display: true,
                             color: '#ffffff',
                             font: { weight: 'bold', size: 11 },
                             formatter: (value) => value > 0 ? value : null
