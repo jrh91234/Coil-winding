@@ -1357,12 +1357,14 @@
                                  data: Object.values(pData).map(d => {
                                      const ngCount = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
                                      const t = d.fg + ngCount; 
-                                     return t > 0 ? ((d.fg/t)*100).toFixed(1) : 0;
+                                     // ✅ แก้ไขตรงนี้: เพิ่ม parseFloat เพื่อให้เป็นตัวเลข
+                                     return t > 0 ? parseFloat(((d.fg/t)*100).toFixed(1)) : 0;
                                  }), 
                                  backgroundColor: '#10b981' 
                              }] 
                          }, 
-                         options: {...commonOpts, indexAxis:'y'} 
+                         // ✅ แก้ไขตรงนี้: กำหนด properties ของ scales ให้แกน x รองรับค่าตัวเลขถึง 100 อย่างถูกต้อง
+                         options: {...commonOpts, indexAxis:'y', scales: { x: { max: 100, beginAtZero: true } } } 
                      });
                  }
             } catch (err) {
