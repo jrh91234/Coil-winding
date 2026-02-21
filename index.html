@@ -1356,10 +1356,16 @@
                  if(ctxH) {
                      if(charts.hourly) charts.hourly.destroy();
                      
-                     // ✅ ทำความสะอาด Label แกน X ให้เหลือเฉพาะตัวเลขชั่วโมงแรก (เอา :30 หรือตัวหนังสืออื่นๆ ออก)
+                     // ✅ ทำความสะอาด Label แกน X ให้ดึงเวลา "จบชั่วโมง" มาแสดงตามที่คุณต้องการ
                      const cleanHourlyLabels = (data.hourlyLabels || []).map(label => {
-                         const match = label.match(/(\d{2}):/);
-                         return match ? match[1] + ":00" : label;
+                         const parts = label.split('-');
+                         if (parts.length > 1) {
+                             const match = parts[1].match(/(\d{2}):/);
+                             return match ? match[1] + ":00" : label;
+                         }
+                         // เผื่อกรณีไม่มีเครื่องหมาย - ให้ดึงตัวเลขตัวแรกเหมือนเดิม
+                         const fallbackMatch = label.match(/(\d{2}):/);
+                         return fallbackMatch ? fallbackMatch[1] + ":00" : label;
                      });
 
                      charts.hourly = new Chart(ctxH, { 
@@ -1566,10 +1572,15 @@
             
             const hNgPcs = mData.hourlyNgPcs || mData.hourlyNg || [];
             
-            // ✅ ทำความสะอาด Label แบบเดียวกับกราฟหน้าหลัก
+            // ✅ ทำความสะอาด Label แบบเดียวกับกราฟหน้าหลัก (ดึงเวลาตอนจบ)
             const cleanHourlyLabels = (currentDashboardData.hourlyLabels || []).map(label => {
-                 const match = label.match(/(\d{2}):/);
-                 return match ? match[1] + ":00" : label;
+                 const parts = label.split('-');
+                 if (parts.length > 1) {
+                     const match = parts[1].match(/(\d{2}):/);
+                     return match ? match[1] + ":00" : label;
+                 }
+                 const fallbackMatch = label.match(/(\d{2}):/);
+                 return fallbackMatch ? fallbackMatch[1] + ":00" : label;
             });
             
             machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), { 
