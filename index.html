@@ -138,7 +138,7 @@
     <!-- SECTION 3: DASHBOARD -->
     <main id="section-dashboard" class="max-w-6xl mx-auto p-4 space-y-6 hidden">
          <div class="bg-white p-4 rounded-xl shadow-md border-t-4 border-indigo-500">
-            <h2 class="text-gray-700 font-bold text-sm mb-3">📅 ตัวเลือกการกรอง <span class="text-xs font-normal text-gray-500">(ดึงข้อมูลตั้งแต่ 08:00น. ถึง 08:00น. ของอีกวัน)</span></h2>
+            <h2 class="text-gray-700 font-bold text-sm mb-3">📅 ตัวเลือกการกรอง <span class="text-xs font-normal text-gray-500">(ดึงข้อมูลตั้งแต่ 08:00น. ถึง 08:00น. ของอีกวัน)</span><span class="text-xs font-normal text-blue-500 ml-2 border-l pl-2 border-gray-300">💡 หมุนลูกกลิ้งเมาส์/บีบนิ้วเพื่อซูมกราฟ & ดับเบิลคลิกบนกราฟเพื่อรีเซ็ต</span></h2>
             <div class="flex flex-col md:flex-row gap-3 items-end">
                 <input type="date" id="startDate" class="w-full md:w-auto p-2 border rounded text-sm">
                 <input type="date" id="endDate" class="w-full md:w-auto p-2 border rounded text-sm">
@@ -461,6 +461,16 @@
             window.initSortable();
             window.renderRecorderOptions();
             window.renderProductOptions();
+
+            // เพิ่ม Event Listener ให้ดับเบิลคลิกที่แคนวาสเพื่อรีเซ็ตการซูมกราฟ
+            document.addEventListener('dblclick', function(e) {
+                if (e.target.tagName === 'CANVAS') {
+                    const chartInstance = Chart.getChart(e.target);
+                    if (chartInstance && typeof chartInstance.resetZoom === 'function') {
+                        chartInstance.resetZoom();
+                    }
+                }
+            });
 
             if(window.location.hash === '#dashboard') window.switchTab('dashboard');
             else window.switchTab('form');
@@ -1245,7 +1255,18 @@
         window.renderCharts = function(data) {
             try {
                  if(!charts) charts = {};
-                 const commonOpts = { responsive: true, maintainAspectRatio: false };
+                 
+                 // เพิ่ม Plugins Zoom ใน Options มาตรฐานสำหรับทุกกราฟ
+                 const commonOpts = { 
+                     responsive: true, 
+                     maintainAspectRatio: false,
+                     plugins: {
+                         zoom: {
+                             pan: { enabled: true, mode: 'xy' },
+                             zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
+                         }
+                     }
+                 };
                  
                  // ดึงปลั๊กอิน ChartDataLabels มาใช้อย่างปลอดภัย
                  const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
@@ -1466,7 +1487,14 @@
                 options: { 
                     responsive: true, 
                     maintainAspectRatio: false, 
-                    plugins: { legend: { display: true } }, 
+                    plugins: { 
+                        legend: { display: true },
+                        // เพิ่มการตั้งค่า Zoom ลงในกราฟ Machine Detail แยกต่างหาก
+                        zoom: {
+                            pan: { enabled: true, mode: 'xy' },
+                            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
+                        }
+                    }, 
                     scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } 
                 } 
             });
