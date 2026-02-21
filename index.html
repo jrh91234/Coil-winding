@@ -1397,13 +1397,42 @@
                  const ctxNG = document.getElementById('ngChart');
                  if(ctxNG) {
                     if(charts.ng) charts.ng.destroy();
+                    
+                    // คำนวณยอด NG รวมเพื่อใช้หา %
+                    const totalNGPcs = valsPcs.reduce((a, b) => a + b, 0);
+                    
                     charts.ng = new Chart(ctxNG, { 
-                        type: 'doughnut', 
+                        type: 'doughnut',
+                        plugins: activePlugins, // เปิดใช้งาน DataLabels Plugin 
                         data: { 
                             labels: labels, 
-                            datasets: [{ data: valsPcs, backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4'] }] 
+                            datasets: [{ 
+                                data: valsPcs, 
+                                // เพิ่มสีเผื่อไว้กรณีมี NG ประเภทอื่นๆ 
+                                backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#8b5cf6', '#ec4899', '#14b8a6'],
+                                borderWidth: 0 // ซ่อนเส้นขอบ (เส้นแบ่งระหว่างชิ้นพาย)
+                            }] 
                         }, 
-                        options: commonOpts 
+                        options: {
+                            ...commonOpts,
+                            // บังคับซ่อนแกนอย่างสมบูรณ์เผื่อ Plugin อื่นไปกระทบ
+                            scales: { 
+                                x: { display: false }, 
+                                y: { display: false } 
+                            },
+                            plugins: {
+                                ...commonOpts.plugins,
+                                // ตั้งค่าส่วนการแสดงผลข้อมูล % บนกราฟ Pie
+                                datalabels: {
+                                    color: '#ffffff',
+                                    font: { weight: 'bold', size: 12 },
+                                    formatter: (value) => {
+                                        if (totalNGPcs === 0 || value === 0) return null;
+                                        return ((value / totalNGPcs) * 100).toFixed(1) + '%';
+                                    }
+                                }
+                            }
+                        } 
                     });
                  }
 
