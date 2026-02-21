@@ -337,7 +337,10 @@
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
-                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="hourlyChart"></canvas></div>
+                    <!-- 🌟 ภาชนะสำหรับใส่ Custom Legend (ซ้าย FG / ขวา NG) -->
+                    <ul id="hourly-legend-ul" class="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1.5 mb-2 max-h-24 overflow-y-auto pr-1"></ul>
+                    
+                    <div class="flex-1 relative w-full min-h-[150px]"><canvas id="hourlyChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
@@ -1654,6 +1657,7 @@
                              scales:{x:{stacked:true}, y:{stacked:true}},
                              plugins: {
                                  ...commonOpts.plugins,
+                                 legend: { display: false }, // 🌟 ซ่อน Legend ปกติเพื่อใช้ Custom HTML Legend ด้านล่างแทน
                                  tooltip: {
                                      mode: 'index',
                                      intersect: false,
@@ -1673,7 +1677,56 @@
                                      formatter: (value) => value > 0 ? value : null
                                  }
                              }
-                         } 
+                         },
+                         // 🌟 เสียบปลั๊กอินสำหรับวาด Legend สร้าง HTML แบ่ง 2 คอลัมน์ (ซ้าย FG, ขวา NG)
+                         plugins: [
+                             ...(activePlugins || []),
+                             {
+                                 id: 'customHtmlLegend',
+                                 afterUpdate: function(chart) {
+                                     const container = document.getElementById('hourly-legend-ul');
+                                     if (!container) return;
+                                     container.innerHTML = ''; // เคลียร์เนื้อหาเก่า
+                                     
+                                     // ดึง Label ปัจจุบันมาจาก Chart.js
+                                     const items = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                                     
+                                     // แยกครึ่งเพื่อนำมาสลับจับคู่กัน (FG กับ NG จะมีจำนวนเท่ากันเสมอ)
+                                     const half = Math.ceil(items.length / 2);
+                                     let interleaved = [];
+                                     for(let i = 0; i < half; i++) {
+                                         interleaved.push(items[i]);                 // คอลัมน์ซ้าย (FG)
+                                         if(items[i+half]) interleaved.push(items[i+half]); // คอลัมน์ขวา (NG)
+                                     }
+                                     
+                                     interleaved.forEach(item => {
+                                         const li = document.createElement('li');
+                                         li.className = `flex items-center cursor-pointer text-[10px] md:text-xs ${item.hidden ? 'line-through text-gray-300' : 'text-gray-700'} hover:text-blue-600 transition-colors`;
+                                         
+                                         // สั่งให้คลิกแล้วซ่อน/แสดงกราฟได้
+                                         li.onclick = () => {
+                                             const isHidden = chart.isDatasetVisible(item.datasetIndex);
+                                             chart.setDatasetVisibility(item.datasetIndex, !isHidden);
+                                             chart.update();
+                                         };
+                                         
+                                         const box = document.createElement('span');
+                                         box.className = 'w-3 h-3 md:w-4 md:h-4 inline-block mr-1.5 flex-none rounded-sm shadow-sm';
+                                         box.style.backgroundColor = item.fillStyle;
+                                         box.style.border = item.lineWidth > 0 ? `${item.lineWidth}px solid ${item.strokeStyle}` : '1px solid rgba(0,0,0,0.1)';
+                                         
+                                         const text = document.createElement('span');
+                                         text.className = 'truncate leading-none';
+                                         text.title = item.text; // แสดงชื่อเต็มเมื่อเอาเมาส์ชี้
+                                         text.innerText = item.text;
+                                         
+                                         li.appendChild(box);
+                                         li.appendChild(text);
+                                         container.appendChild(li);
+                                     });
+                                 }
+                             }
+                         ]
                      });
                  }
 
