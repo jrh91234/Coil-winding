@@ -1443,7 +1443,7 @@
                              labels: ngItems.map(i=>i.label), 
                              datasets: [
                                  { label: '% สะสม', data: cumulative, type: 'line', borderColor: '#8b5cf6', yAxisID: 'y1', datalabels: { display: false } },
-                                 { label: 'NG (ชิ้น)', data: ngItems.map(i=>i.pcs), backgroundColor: '#ef4444', yAxisID: 'y', datalabels: { align: 'end', anchor: 'end', formatter: (v) => v + ' ชิ้น' } }
+                                 { label: 'NG (ชิ้น)', data: ngItems.map(i=>i.pcs), backgroundColor: '#ef4444', yAxisID: 'y', datalabels: { align: 'end', anchor: 'end', formatter: (v) => v > 0 ? v + ' ชิ้น' : null } }
                              ]
                          },
                          options: { ...commonOpts, layout: { padding: { top: 20 } }, scales: { y: { beginAtZero: true, grace: '10%' }, y1: { beginAtZero: true, max: 105, position: 'right', grid: { display: false } } } }
@@ -1475,7 +1475,18 @@
                                  {label:'NG (ชิ้น)', data:hNgPcs, backgroundColor:'#ef4444'}
                              ] 
                          }, 
-                         options: {...commonOpts, scales:{x:{stacked:true}, y:{stacked:true}}} 
+                         options: {
+                             ...commonOpts, 
+                             scales:{x:{stacked:true}, y:{stacked:true}},
+                             plugins: {
+                                 ...commonOpts.plugins,
+                                 datalabels: {
+                                     color: '#ffffff', // ให้ตัวเลขเป็นสีขาวเพื่อให้ตัดกับพื้นสีเข้ม
+                                     font: { weight: 'bold', size: 11 },
+                                     formatter: (value) => value > 0 ? value : null // ซ่อนถ้าค่าเป็น 0
+                                 }
+                             }
+                         } 
                      });
                  }
 
@@ -1499,7 +1510,21 @@
                                 backgroundColor: '#6366f1' 
                             }] 
                         }, 
-                        options: {...commonOpts, scales:{y:{max:100}}} 
+                        options: {
+                            ...commonOpts, 
+                            scales:{y:{max:100}},
+                            layout: { padding: { top: 30 } }, // เพิ่มขอบบนกันตัวหนังสือขาด
+                            plugins: {
+                                ...commonOpts.plugins,
+                                datalabels: {
+                                    color: '#4338ca', // สีน้ำเงินเข้ม
+                                    anchor: 'end',    // ผลักออกจากศูนย์กลาง
+                                    align: 'top',     // ให้อยู่ด้านบนของแท่ง
+                                    font: { weight: 'bold' },
+                                    formatter: (value) => value > 0 ? value + '%' : null
+                                }
+                            }
+                        } 
                     });
                  }
 
@@ -1514,7 +1539,21 @@
                              datasets: [{label:'% NG Rate', data:trendData.map(d=>d.ngRate), borderColor:'#f97316'}] 
                          }, 
                          // ดันให้อยู่ตรงกลางถ้ามีวันเดียว
-                         options: { ...commonOpts, scales: { x: { offset: true } } } 
+                         options: { 
+                             ...commonOpts, 
+                             scales: { x: { offset: true } },
+                             layout: { padding: { top: 20 } },
+                             plugins: {
+                                 ...commonOpts.plugins,
+                                 datalabels: {
+                                     color: '#c2410c',
+                                     align: 'top',
+                                     anchor: 'end',
+                                     font: { weight: 'bold' },
+                                     formatter: (value) => value > 0 ? value + '%' : null
+                                 }
+                             }
+                         } 
                      });
                  }
 
@@ -1574,7 +1613,22 @@
                                  backgroundColor: '#10b981' 
                              }] 
                          }, 
-                         options: {...commonOpts, indexAxis:'y', scales: { x: { max: 100, beginAtZero: true } } } 
+                         options: {
+                             ...commonOpts, 
+                             indexAxis:'y', 
+                             scales: { x: { max: 100, beginAtZero: true } },
+                             layout: { padding: { right: 40 } }, // ขยายขอบขวาป้องกันตัวหนังสือขาด
+                             plugins: {
+                                 ...commonOpts.plugins,
+                                 datalabels: {
+                                     color: '#065f46', // สีเขียวเข้ม
+                                     anchor: 'end', // ดันออกนอกแท่งกราฟ
+                                     align: 'right', // ให้อยู่ทางขวาของปลายแท่ง
+                                     font: { weight: 'bold' },
+                                     formatter: (value) => value > 0 ? value + '%' : null
+                                 }
+                             }
+                         } 
                      });
                  }
             } catch (err) {
@@ -1690,6 +1744,11 @@
                         zoom: {
                             pan: { enabled: true, mode: 'xy' },
                             zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
+                        },
+                        datalabels: {
+                            color: '#ffffff',
+                            font: { weight: 'bold', size: 11 },
+                            formatter: (value) => value > 0 ? value : null
                         }
                     }, 
                     scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } 
