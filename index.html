@@ -427,6 +427,20 @@
         </div>
     </div>
 
+    <!-- Undo Toast Notification (เพิ่มใหม่) -->
+    <div id="undo-toast" class="fixed bottom-5 right-5 bg-gray-900 text-white px-5 py-4 rounded-xl shadow-2xl flex items-center gap-4 transition-all transform translate-y-24 opacity-0 pointer-events-none z-50 duration-300">
+        <div class="flex-1">
+            <p class="text-sm font-bold text-green-400">✅ บันทึกข้อมูลสำเร็จ</p>
+            <p class="text-xs text-gray-300 mt-0.5">หากบันทึกผิด สามารถกดยกเลิกได้</p>
+        </div>
+        <button onclick="window.undoLastSubmit()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-md transition-colors pointer-events-auto">
+            ↩️ ยกเลิก (Undo)
+        </button>
+        <button onclick="window.closeUndoToast()" class="text-gray-400 hover:text-white p-1 pointer-events-auto">
+            <span class="text-xl leading-none">&times;</span>
+        </button>
+    </div>
+
     <script>
         // ⚠️ สำคัญมาก: ตรวจสอบ URL นี้ให้ตรงกับตัวที่ Deploy ล่าสุด
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec";
@@ -449,6 +463,7 @@
         
         // --- ตัวแปรสำหรับคุม Layout (Global Scope) ---
         window.isDualLayout = true;
+        window.lastBatchId = null; // ตัวแปรเก็บรหัส Batch ล่าสุดสำหรับ Undo
 
         try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
 
@@ -1074,6 +1089,42 @@
             document.getElementById('modal-manage-list').classList.add('hidden'); 
         };
 
+        // --- เพิ่มฟังก์ชันควบคุม Toast Undo ---
+        window.showUndoToast = function() {
+            const toast = document.getElementById('undo-toast');
+            toast.classList.remove('translate-y-24', 'opacity-0', 'pointer-events-none');
+        };
+
+        window.closeUndoToast = function() {
+            const toast = document.getElementById('undo-toast');
+            toast.classList.add('translate-y-24', 'opacity-0', 'pointer-events-none');
+            window.lastBatchId = null;
+        };
+
+        window.undoLastSubmit = async function() {
+            if(!window.lastBatchId) return;
+            
+            const btn = document.querySelector('#undo-toast button');
+            const originalText = btn.innerText;
+            btn.innerText = "⏳ กำลังยกเลิก...";
+            btn.disabled = true;
+
+            try {
+                const payload = { 
+                    action: 'UNDO_BATCH_PRODUCTION', 
+                    batchId: window.lastBatchId 
+                };
+                await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
+                
+                alert("🗑️ ยกเลิกข้อมูลชุดล่าสุดเรียบร้อยแล้ว!");
+                window.closeUndoToast();
+            } catch(e) { 
+                alert("❌ เกิดข้อผิดพลาดในการยกเลิก: " + e.message); 
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        };
+
         document.getElementById('productionForm').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('submitBtn'); 
@@ -1093,13 +1144,17 @@
                 window.renderRecorderOptions(); 
             }
             
+            // สร้างรหัส Batch ไม่ซ้ำกันเพื่อใช้สำหรับฟีเจอร์ Undo
+            const newBatchId = 'BATCH-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+
             const common = { 
                 timestamp: new Date().toLocaleString('th-TH'), 
                 productionDate: date, 
                 shift: fd.get('shift'), 
                 shiftType: shiftType, 
                 recorder: currentRec, 
-                hourSlot: hourSlot 
+                hourSlot: hourSlot,
+                batchId: newBatchId // แนบ Batch ID ไปด้วย
             };
             
             const items = []; 
@@ -1187,17 +1242,24 @@
                 const payload = { action: 'SAVE_BATCH_PRODUCTION', common, items };
                 await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
                 
-                alert("✅ บันทึกข้อมูลเรียบร้อย!"); 
+                // ล้างฟอร์ม
                 document.getElementById('batchList').innerHTML = ''; 
                 batchNgData = {}; 
                 window.addBatchRow(); 
 
+                // ปิดปุ่มเก่า คืนค่า
+                btn.disabled = false; 
+                btn.innerText = txt;
+
+                // 🌟 เรียก Toast ขึ้นมาโชว์ให้โอกาสพนักงานกด Undo
+                window.lastBatchId = newBatchId;
+                window.showUndoToast();
+
             } catch(e) { 
                 alert("Error ระหว่างตรวจสอบ: " + e.message); 
-            } finally { 
                 btn.disabled = false; 
                 btn.innerText = txt; 
-            }
+            } 
         };
 
         document.getElementById('planningForm').onsubmit = async (e) => {
