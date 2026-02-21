@@ -25,7 +25,7 @@
         td { @apply px-6 py-4 border-b text-sm text-gray-700 whitespace-nowrap; }
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .widget-card { background-color: #ffffff !important; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; height: 100%; }
+        .widget-card { background-color: #ffffff !important; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; height: 100%; transition: height 0.3s ease; }
         .drag-handle { cursor: grab; }
         .drag-handle:active { cursor: grabbing; }
         .sortable-ghost { opacity: 0.4; background-color: #f3f4f6; border: 2px dashed #cbd5e1; }
@@ -234,65 +234,88 @@
             <div id="sortable-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- เพิ่ม min-h ให้ wrapper ป้องกันกราฟยุบตัว -->
                 <div class="widget-card p-4 h-[350px]">
-                    <div class="widget-header drag-handle mb-2">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">📦 FG & ACH by Model (ยอดผลิต vs แผน)</h3>
-                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                        </div>
                     </div>
                     <div class="flex-1 overflow-y-auto" id="fgModelList"></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
-                    <div class="widget-header drag-handle mb-2">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">📉 NG Analysis (Pareto)</h3>
-                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                        </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="paretoChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
-                    <div class="widget-header drag-handle mb-2">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Trend</h3>
-                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                        </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
-                    <div class="widget-header drag-handle mb-2">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3>
-                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                        </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="yieldModelChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
-                    <div class="widget-header drag-handle mb-2">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3>
-                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                        </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="yieldMachineChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
-                    <div class="widget-header drag-handle mb-2">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">Hourly Production (FG & NG)</h3>
-                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                        </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="hourlyChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
-                    <div class="widget-header drag-handle mb-2">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">NG Breakdown</h3>
-                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                        </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card md:col-span-2 p-4">
-                    <div class="widget-header drag-handle mb-2">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3>
-                        <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-gray-600">↔</button>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                        </div>
                     </div>
                     <div class="table-container">
                         <table class="w-full min-w-[1200px] divide-y divide-gray-200">
@@ -589,6 +612,25 @@
                     if(chartInstance) chartInstance.resize(); 
                 }
             }, 150);
+        };
+
+        // --- ฟังก์ชันปรับความสูงกราฟแบบ On-the-fly ---
+        window.toggleCardHeight = function(btn) {
+            const card = btn.closest('.widget-card');
+            if (card.classList.contains('h-[350px]')) {
+                card.classList.remove('h-[350px]');
+                card.classList.add('h-[600px]'); 
+            } else if (card.classList.contains('h-[600px]')) {
+                card.classList.remove('h-[600px]');
+                card.classList.add('h-[350px]');
+            }
+            setTimeout(() => {
+                const canvas = card.querySelector('canvas');
+                if(canvas) { 
+                    const chartInstance = Chart.getChart(canvas); 
+                    if(chartInstance) chartInstance.resize(); 
+                }
+            }, 150); // รอ animation 0.15s ให้ทำงานเสร็จก่อนสั่ง canvas redraw
         };
 
         window.detectCurrentShift = function() {
