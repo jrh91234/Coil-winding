@@ -76,7 +76,7 @@
             <button onclick="window.switchTab('dashboard'); window.toggleMenu()" id="tab-dashboard" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg">📊 Dashboard</button>
             
             <!-- 🌟 ปุ่มลิงก์ไปแอป RW (แก้ปัญหา iOS Add to Home Screen ไม่ยอมเปิดแท็บใหม่) -->
-            <button onclick="window.toggleMenu(); window.location.href='https://jrh91234.github.io/CMW-rawmat/';" id="tab-rw" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg w-full">📦 รับเข้า (RW) ↗️</button>
+            <button onclick="window.toggleMenu(); window.location.href='ใส่ลิงก์ระบบ_RW_ของคุณที่นี่';" id="tab-rw" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg w-full">📦 รับเข้า (RW) ↗️</button>
         </div>
     </nav>
     
@@ -972,11 +972,30 @@
 
             batchNgData[currentRowIdForNg] = newData;
             const badge = document.getElementById(`ng-badge-${currentRowIdForNg}`);
+            const fgInput = document.querySelector(`#${currentRowIdForNg} input[name="fgAmount"]`);
+            
             if(total > 0) { 
                 badge.innerText = total.toFixed(2); 
                 badge.classList.remove('hidden'); 
+                
+                // ล็อคและเปลี่ยนค่า FG เป็น 0 ทันทีเมื่อมีการลงยอด NG
+                if (fgInput) {
+                    fgInput.value = 0;
+                    fgInput.readOnly = true;
+                    fgInput.classList.remove('bg-green-50', 'text-green-600', 'focus:bg-white');
+                    fgInput.classList.add('bg-gray-100', 'text-gray-400', 'cursor-not-allowed', 'opacity-60');
+                    fgInput.title = "ช่องนี้ถูกล็อคเนื่องจากมีการลง NG (หากต้องการลง FG กรุณาเพิ่มรายการใหม่)";
+                }
             } else { 
                 badge.classList.add('hidden'); 
+                
+                // ปลดล็อค FG เมื่อไม่มี NG แล้ว
+                if (fgInput && fgInput.readOnly) {
+                    fgInput.readOnly = false;
+                    fgInput.classList.remove('bg-gray-100', 'text-gray-400', 'cursor-not-allowed', 'opacity-60');
+                    fgInput.classList.add('bg-green-50', 'text-green-600', 'focus:bg-white');
+                    fgInput.title = "";
+                }
             }
         };
 
@@ -1795,7 +1814,15 @@
                 const t = d.fg + ngPcs; 
                 const y = t > 0 ? ((d.fg/t)*100).toFixed(1) : "0.0";
                 
-                let html = `<td class="p-4 border-b font-bold cursor-pointer text-blue-600 hover:underline" onclick="window.showMachineDetail('${m}')">👉 ${m}</td>
+                // นำ Product ที่ Assign ไว้มาแสดงใต้ชื่อ Machine
+                const productAssigned = machineMapping[m] || 'ไม่ได้ระบุรุ่น';
+                
+                let html = `<td class="p-4 border-b font-bold cursor-pointer text-blue-600 hover:underline" onclick="window.showMachineDetail('${m}')">
+                        <div class="flex flex-col">
+                            <span>👉 ${m}</span>
+                            <span class="text-[10px] text-gray-500 font-normal mt-0.5">📦 ${productAssigned}</span>
+                        </div>
+                    </td>
                     <td class="p-4 border-b">${d.fg}</td>
                     <td class="p-4 border-b text-red-600 font-bold">${ngPcs} <br><span class="text-[10px] text-gray-500 font-normal">(${ngKg.toFixed(2)} Kg)</span></td>
                     <td class="p-4 border-b">${y}%</td>`;
