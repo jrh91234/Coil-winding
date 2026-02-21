@@ -33,6 +33,19 @@
         /* กฎเหล็กบังคับให้ Layout เป็นคอลัมน์เดี่ยว และล้างคำสั่ง col-span ทิ้งทั้งหมด */
         .layout-single { grid-template-columns: minmax(0, 1fr) !important; }
         .layout-single > div { grid-column: span 1 / span 1 !important; }
+
+        /* คลาสสำหรับขยายกราฟเต็มหน้าจอ */
+        .maximized-card {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 9999 !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            padding: 1.5rem !important;
+            background-color: #ffffff !important;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen font-sans pb-10">
@@ -239,6 +252,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 overflow-y-auto" id="fgModelList"></div>
@@ -250,6 +264,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="paretoChart"></canvas></div>
@@ -261,6 +276,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
@@ -272,6 +288,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="yieldModelChart"></canvas></div>
@@ -283,6 +300,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="yieldMachineChart"></canvas></div>
@@ -294,6 +312,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="hourlyChart"></canvas></div>
@@ -305,6 +324,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngChart"></canvas></div>
@@ -315,9 +335,10 @@
                         <h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3>
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
-                    <div class="table-container">
+                    <div class="table-container flex-1 overflow-y-auto">
                         <table class="w-full min-w-[1200px] divide-y divide-gray-200">
                             <thead class="bg-gray-50"><tr id="table-header"><th>Machine</th><th>FG</th><th>NG (ชิ้น / Kg)</th><th>% Yield</th></tr></thead>
                             <tbody id="table-body" class="bg-white divide-y divide-gray-200"></tbody>
@@ -502,6 +523,17 @@
                 }
             });
 
+            // เพิ่ม Event Listener สำหรับปุ่ม ESC เพื่อออกจากการขยายเต็มจอ
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    const maxCard = document.querySelector('.maximized-card');
+                    if (maxCard) {
+                        const btn = maxCard.querySelector('button[title="ย่อหน้าจอ"]');
+                        if (btn) window.toggleCardMaximize(btn);
+                    }
+                }
+            });
+
             if(window.location.hash === '#dashboard') window.switchTab('dashboard');
             else window.switchTab('form');
         };
@@ -637,7 +669,36 @@
                     const chartInstance = Chart.getChart(canvas); 
                     if(chartInstance) chartInstance.resize(); 
                 }
-            }, 150); // รอ animation 0.15s ให้ทำงานเสร็จก่อนสั่ง canvas redraw
+            }, 150);
+        };
+
+        // --- ฟังก์ชันขยายหน้าต่างแบบเต็มหน้าจอ (Maximize) ---
+        window.toggleCardMaximize = function(btn) {
+            const card = btn.closest('.widget-card');
+            const isMaximized = card.classList.contains('maximized-card');
+            
+            if (isMaximized) {
+                // ยกเลิกขยายเต็มหน้าจอ
+                card.classList.remove('maximized-card');
+                document.body.style.overflow = ''; // คืนค่าการเลื่อนหน้าจอหลัก
+                btn.innerHTML = '⛶'; // เปลี่ยนไอคอนกลับเป็นรูปขยาย
+                btn.title = 'ขยายเต็มจอ';
+            } else {
+                // ขยายเต็มหน้าจอ
+                card.classList.add('maximized-card');
+                document.body.style.overflow = 'hidden'; // ซ่อน Scrollbar ของหน้าจอหลักด้านหลัง
+                btn.innerHTML = '✖'; // เปลี่ยนไอคอนเป็นรูปปิด
+                btn.title = 'ย่อหน้าจอ';
+            }
+            
+            // รอแอนิเมชัน CSS แล้วสั่งให้กราฟวาดสเกลใหม่
+            setTimeout(() => {
+                const canvas = card.querySelector('canvas');
+                if(canvas) { 
+                    const chartInstance = Chart.getChart(canvas); 
+                    if(chartInstance) chartInstance.resize(); 
+                }
+            }, 150);
         };
 
         window.detectCurrentShift = function() {
