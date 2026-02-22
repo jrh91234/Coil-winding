@@ -1453,6 +1453,22 @@
                     }
                 }
                 
+                // 🌟 เพิ่ม Normalization ให้ Product Data (เพื่อให้รองรับ Breakdown ใน Tooltip)
+                if (data.productData) {
+                    for (let p in data.productData) {
+                        const pData = data.productData[p];
+                        const newBreakdownPcs = {};
+                        
+                        const oldPcs = pData.ngBreakdownPcs || {};
+                        for (let k in oldPcs) {
+                            const stdLabel = capitalizeFirst(k);
+                            newBreakdownPcs[stdLabel] = (newBreakdownPcs[stdLabel] || 0) + oldPcs[k];
+                        }
+                        
+                        pData.ngBreakdownPcs = newBreakdownPcs;
+                    }
+                }
+                
                 const fg = data.totalFg || 0;
                 const target = data.productionTarget || 0;
                 const ngPcs = data.totalNgPcs !== undefined ? data.totalNgPcs : (data.totalNg || 0);
@@ -1944,6 +1960,42 @@
                              layout: { padding: { right: 40 } }, // ขยายขอบขวาป้องกันตัวหนังสือขาด
                              plugins: {
                                  ...commonOpts.plugins,
+                                 // 🌟 เพิ่ม Tooltip Breakdown สำหรับ Product Model
+                                 tooltip: {
+                                     callbacks: {
+                                         label: function(context) {
+                                             return `Yield: ${context.parsed.x}%`; // เป็นแนวนอนใช้ parsed.x
+                                         },
+                                         afterLabel: function(context) {
+                                             const productName = context.label;
+                                             const prData = (data.productData && data.productData[productName]) ? data.productData[productName] : null;
+                                             if(!prData) return [];
+                                             
+                                             const fg = prData.fg || 0;
+                                             const ngTotal = prData.ngTotalPcs !== undefined ? prData.ngTotalPcs : (prData.ngTotal || 0);
+                                             
+                                             let lines = [
+                                                 `----------------------`,
+                                                 `✅ FG: ${fg.toLocaleString()} ชิ้น`,
+                                                 `❌ NG รวม: ${ngTotal.toLocaleString()} ชิ้น`
+                                             ];
+                                             
+                                             if(prData.ngBreakdownPcs && Object.keys(prData.ngBreakdownPcs).length > 0) {
+                                                 const sortedNg = Object.entries(prData.ngBreakdownPcs)
+                                                     .filter(([k, v]) => v > 0)
+                                                     .sort((a, b) => b[1] - a[1]);
+                                                 
+                                                 if(sortedNg.length > 0) {
+                                                     lines.push(`-- รายละเอียด NG --`);
+                                                     sortedNg.forEach(([k, v]) => {
+                                                         lines.push(`   • ${k}: ${v.toLocaleString()} ชิ้น`);
+                                                     });
+                                                 }
+                                             }
+                                             return lines;
+                                         }
+                                     }
+                                 },
                                  datalabels: {
                                      display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
                                      color: '#065f46', // สีเขียวเข้ม
