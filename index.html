@@ -294,6 +294,18 @@
                 
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
+                        <h3 class="font-bold text-gray-700 text-sm">📊 Daily Output (FG & NG)</h3>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="dailyOutputChart"></canvas></div>
+                </div>
+                
+                <div class="widget-card p-4 h-[350px]">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Trend</h3>
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
@@ -1585,6 +1597,35 @@
                              ]
                          },
                          options: { ...commonOpts, layout: { padding: { top: 20 } }, scales: { y: { beginAtZero: true, grace: '10%' }, y1: { beginAtZero: true, max: 105, position: 'right', grid: { display: false } } } }
+                     });
+                 }
+
+                 const ctxDaily = document.getElementById('dailyOutputChart');
+                 if(ctxDaily) {
+                     if(charts.dailyOutput) charts.dailyOutput.destroy();
+                     const trendData = data.dailyTrend || [];
+                     charts.dailyOutput = new Chart(ctxDaily, { 
+                         type: 'bar', 
+                         data: { 
+                             labels: trendData.map(d=>d.date), 
+                             datasets: [
+                                 {label:'FG (งานดี)', data:trendData.map(d=>d.fg || 0), backgroundColor:'#3b82f6', borderRadius: 2},
+                                 {label:'NG (เสียเป็นชิ้น)', data:trendData.map(d=>d.ng || 0), backgroundColor:'#ef4444', borderRadius: 2}
+                             ] 
+                         }, 
+                         options: { 
+                             ...commonOpts, 
+                             scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+                             plugins: {
+                                 ...commonOpts.plugins,
+                                 datalabels: {
+                                     display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
+                                     color: '#ffffff',
+                                     font: { weight: 'bold', size: 11 },
+                                     formatter: (value) => value > 0 ? value : null
+                                 }
+                             }
+                         } 
                      });
                  }
 
