@@ -1821,17 +1821,16 @@
                                             ];
                                             
                                             if(mData.ngBreakdownPcs && Object.keys(mData.ngBreakdownPcs).length > 0) {
-                                                let hasNg = false;
-                                                let ngLines = [];
-                                                for(const [k, v] of Object.entries(mData.ngBreakdownPcs)) {
-                                                    if(v > 0) {
-                                                        hasNg = true;
-                                                        ngLines.push(`   • ${k}: ${v.toLocaleString()} ชิ้น`);
-                                                    }
-                                                }
-                                                if(hasNg) {
+                                                // กรองเฉพาะที่มีค่ามากกว่า 0 และเรียงลำดับจากมากไปน้อย
+                                                const sortedNg = Object.entries(mData.ngBreakdownPcs)
+                                                    .filter(([k, v]) => v > 0)
+                                                    .sort((a, b) => b[1] - a[1]);
+                                                
+                                                if(sortedNg.length > 0) {
                                                     lines.push(`-- รายละเอียด NG --`);
-                                                    lines = lines.concat(ngLines);
+                                                    sortedNg.forEach(([k, v]) => {
+                                                        lines.push(`   • ${k}: ${v.toLocaleString()} ชิ้น`);
+                                                    });
                                                 }
                                             }
                                             return lines;
