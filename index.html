@@ -1801,6 +1801,43 @@
                             layout: { padding: { top: 30 } }, // เพิ่มขอบบนกันตัวหนังสือขาด
                             plugins: {
                                 ...commonOpts.plugins,
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return `Yield: ${context.parsed.y}%`;
+                                        },
+                                        afterLabel: function(context) {
+                                            const machineName = context.label;
+                                            const mData = (data.machineData && data.machineData[machineName]) ? data.machineData[machineName] : null;
+                                            if(!mData) return [];
+                                            
+                                            const fg = mData.fg || 0;
+                                            const ngTotal = mData.ngTotalPcs !== undefined ? mData.ngTotalPcs : (mData.ngTotal || 0);
+                                            
+                                            let lines = [
+                                                `----------------------`,
+                                                `✅ FG: ${fg.toLocaleString()} ชิ้น`,
+                                                `❌ NG รวม: ${ngTotal.toLocaleString()} ชิ้น`
+                                            ];
+                                            
+                                            if(mData.ngBreakdownPcs && Object.keys(mData.ngBreakdownPcs).length > 0) {
+                                                let hasNg = false;
+                                                let ngLines = [];
+                                                for(const [k, v] of Object.entries(mData.ngBreakdownPcs)) {
+                                                    if(v > 0) {
+                                                        hasNg = true;
+                                                        ngLines.push(`   • ${k}: ${v.toLocaleString()} ชิ้น`);
+                                                    }
+                                                }
+                                                if(hasNg) {
+                                                    lines.push(`-- รายละเอียด NG --`);
+                                                    lines = lines.concat(ngLines);
+                                                }
+                                            }
+                                            return lines;
+                                        }
+                                    }
+                                },
                                 datalabels: {
                                     display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
                                     color: '#4338ca', // สีน้ำเงินเข้ม
