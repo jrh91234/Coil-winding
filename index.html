@@ -292,30 +292,33 @@
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="paretoChart"></canvas></div>
                 </div>
-                
-                <!-- 🌟 กราฟใหม่: แหล่งกำเนิด NG (แยกตามเครื่องจักร) -->
+
+                <!-- 🌟 กราฟจำลอง (Simulator) -->
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
-                        <h3 class="font-bold text-gray-700 text-sm">🏭 แหล่งกำเนิด NG (แยกตามเครื่องจักร)</h3>
+                        <h3 class="font-bold text-gray-700 text-sm">🔮 Yield Simulator (จำลองการลด NG)</h3>
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
-                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngByMachineChart"></canvas></div>
-                </div>
-                
-                <div class="widget-card p-4 h-[350px]">
-                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
-                        <h3 class="font-bold text-gray-700 text-sm">📊 Daily Output (FG & NG)</h3>
-                        <div class="flex gap-2">
-                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
-                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                    <div class="flex-1 flex flex-col h-full overflow-hidden">
+                        <div class="text-xs text-gray-500 mb-2">ติ๊กเลือกอาการ NG ที่ต้องการจำลองว่า "ถูกแก้ไข/ตัดทิ้ง" เพื่อดู % Yield ที่เปลี่ยนไป</div>
+                        <div id="simulator-checkboxes" class="flex-1 overflow-y-auto mb-3 border p-2 rounded-lg bg-gray-50 grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1 text-xs shadow-inner content-start">
+                            <!-- Checkboxes will be injected here -->
+                        </div>
+                        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-xl border border-blue-100 shadow-sm mt-auto">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-bold text-gray-700 text-sm">New Yield Rate:</span>
+                                <span id="sim-yield" class="font-bold text-green-600 text-xl">0.00%</span>
+                            </div>
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-gray-600 font-medium">ยอด NG ที่เซฟได้:</span>
+                                <span id="sim-ng-saved" class="font-bold text-red-500">0 ชิ้น</span>
+                            </div>
                         </div>
                     </div>
-                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="dailyOutputChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
@@ -328,19 +331,6 @@
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
-                </div>
-                
-                <!-- 🌟 กราฟใหม่: Trend อาการ NG (รายวัน) -->
-                <div class="widget-card p-4 h-[350px]">
-                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
-                        <h3 class="font-bold text-gray-700 text-sm">📈 Trend อาการ NG (รายวัน)</h3>
-                        <div class="flex gap-2">
-                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
-                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
-                        </div>
-                    </div>
-                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngSymptomTrendChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
@@ -1546,6 +1536,7 @@
                 window.renderCharts(data); 
                 window.renderTable(data); 
                 window.renderFgByModel(data, isPartialView);
+                window.renderSimulator(data); // 🌟 เรียกใช้งาน Simulator
 
             } catch(e) { 
                 console.error("Dashboard Load Error: ", e); 
@@ -1598,6 +1589,66 @@
             });
             html += '</ul>';
             container.innerHTML = html;
+        };
+
+        // 🌟 สคริปต์สำหรับวาด UI ของ Simulator
+        window.renderSimulator = function(data) {
+            const container = document.getElementById('simulator-checkboxes');
+            if (!container) return;
+
+            const labels = data.ngLabels || [];
+            const valsPcs = data.ngValuesPcs || data.ngValues || [];
+
+            // เรียงลำดับ NG จากมากไปน้อย
+            const ngItems = labels.map((l, i) => ({ label: l, pcs: valsPcs[i] || 0 })).sort((a,b)=>b.pcs-a.pcs);
+
+            let html = '';
+            ngItems.forEach((item) => {
+                if(item.pcs > 0) {
+                    html += `
+                    <label class="flex items-center space-x-2 cursor-pointer p-1 hover:bg-gray-200 rounded transition-colors">
+                        <input type="checkbox" class="sim-cb w-4 h-4 text-blue-600 rounded flex-none" value="${item.label}" data-pcs="${item.pcs}" onchange="window.updateSimulator()">
+                        <span class="truncate leading-tight flex-1" title="${item.label}">${item.label} (<span class="text-red-500 font-bold">${item.pcs}</span>)</span>
+                    </label>
+                    `;
+                }
+            });
+            
+            container.innerHTML = html || '<div class="text-gray-400 col-span-2 text-center py-4">ไม่มีข้อมูล NG ในรอบนี้</div>';
+
+            // เริ่มต้นการคำนวณครั้งแรก
+            window.updateSimulator();
+        };
+
+        // 🌟 สคริปต์สำหรับคำนวณ Simulator เมื่อมีการติ๊ก Checkbox
+        window.updateSimulator = function() {
+            if (!currentDashboardData) return;
+
+            const fg = currentDashboardData.totalFg || 0;
+            const originalNg = currentDashboardData.totalNgPcs !== undefined ? currentDashboardData.totalNgPcs : (currentDashboardData.totalNg || 0);
+
+            let savedNg = 0;
+            // หา Checkbox ที่ถูกติ๊กทั้งหมด
+            const checkboxes = document.querySelectorAll('.sim-cb:checked');
+            checkboxes.forEach(cb => {
+                savedNg += parseInt(cb.dataset.pcs) || 0;
+            });
+
+            const newNg = originalNg - savedNg;
+            
+            // คำนวณ Yield เดิม
+            const totalOriginal = fg + originalNg;
+            const originalYield = totalOriginal > 0 ? (fg / totalOriginal) * 100 : 0;
+
+            // คำนวณ Yield ใหม่หลังหักลบ NG ที่แก้ได้
+            const totalNew = fg + newNg;
+            const newYield = totalNew > 0 ? (fg / totalNew) * 100 : 0;
+
+            const yieldDiff = newYield - originalYield;
+
+            // อัปเดตการแสดงผล
+            document.getElementById('sim-yield').innerHTML = `${newYield.toFixed(2)}% <span class="text-sm font-medium ${yieldDiff > 0 ? 'text-green-500' : 'text-gray-400'}">(+${yieldDiff.toFixed(2)}%)</span>`;
+            document.getElementById('sim-ng-saved').innerHTML = `${savedNg.toLocaleString()} ชิ้น <span class="text-gray-400 font-normal ml-1">(เหลือ NG: ${newNg.toLocaleString()})</span>`;
         };
 
         window.renderCharts = function(data) {
