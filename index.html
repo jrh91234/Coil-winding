@@ -321,18 +321,6 @@
                     </div>
                 </div>
                 
-                <div class="widget-card p-4 h-[350px]">
-                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
-                        <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Trend</h3>
-                        <div class="flex gap-2">
-                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
-                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
-                        </div>
-                    </div>
-                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
-                </div>
-                
                 <!-- 🌟 เปลี่ยน Yield by Model แบบเดิมให้เป็น Model Analysis รองรับ Dropdown สลับกราฟ -->
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
@@ -373,6 +361,56 @@
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="yieldMachineChart"></canvas></div>
+                </div>
+
+                <div class="widget-card p-4 h-[350px]">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
+                        <h3 class="font-bold text-gray-700 text-sm">📊 Daily Output (FG & NG)</h3>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="dailyOutputChart"></canvas></div>
+                </div>
+                
+                <div class="widget-card p-4 h-[350px]">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
+                        <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Trend</h3>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
+                </div>
+
+                <!-- 🌟 กู้คืนกราฟ: Trend อาการ NG (รายวัน) -->
+                <div class="widget-card p-4 h-[350px]">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
+                        <h3 class="font-bold text-gray-700 text-sm">📈 Trend อาการ NG (รายวัน)</h3>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngSymptomTrendChart"></canvas></div>
+                </div>
+                
+                <!-- 🌟 กู้คืนกราฟ: แหล่งกำเนิด NG (แยกตามเครื่องจักร) -->
+                <div class="widget-card p-4 h-[350px]">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
+                        <h3 class="font-bold text-gray-700 text-sm">🏭 แหล่งกำเนิด NG (แยกตามเครื่องจักร)</h3>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngByMachineChart"></canvas></div>
                 </div>
                 
                 <div class="widget-card p-4 h-[350px]">
@@ -468,9 +506,21 @@
                 <h3 id="machine-detail-title" class="font-bold text-lg">Machine Detail</h3>
                 <button onclick="document.getElementById('modal-machine-detail').classList.add('hidden')" class="text-white hover:text-gray-200 text-2xl font-bold">&times;</button>
             </div>
-            <div class="p-4 overflow-y-auto flex-1">
-                <div class="h-64 md:h-80 w-full relative"><canvas id="machineDetailChart"></canvas></div>
-                <div id="machine-detail-stats" class="mt-4 grid grid-cols-2 gap-4 text-center"></div>
+            <div class="p-4 overflow-y-auto flex-1 flex flex-col">
+                <div id="machine-detail-stats" class="mb-4 grid grid-cols-2 gap-4 text-center"></div>
+                
+                <!-- 🌟 เพิ่ม Dropdown เพื่อสลับกราฟในหน้าต่างเครื่องจักร -->
+                <div class="flex justify-between items-center mb-2 bg-gray-100 p-2 rounded">
+                    <h4 class="font-bold text-gray-700 text-sm">📈 กราฟการผลิต</h4>
+                    <select id="machineChartToggle" onchange="window.switchMachineChart()" class="text-xs border border-gray-300 rounded p-1 text-gray-700 bg-white font-bold cursor-pointer">
+                        <option value="hourly">⏱️ ดูรายชั่วโมง (Hourly)</option>
+                        <option value="daily">📅 ดูเทรนด์รายวัน (Daily Trend)</option>
+                    </select>
+                </div>
+
+                <div id="machine-hourly-wrapper" class="h-64 md:h-80 w-full relative"><canvas id="machineDetailChart"></canvas></div>
+                <div id="machine-daily-wrapper" class="h-64 md:h-80 w-full relative hidden"><canvas id="machineDailyTrendChart"></canvas></div>
+
                 <div id="machine-detail-remarks" class="mt-4 border-t pt-2 hidden">
                     <h4 class="font-bold text-gray-700 text-left">📝 หมายเหตุของเสีย (NG Remarks)</h4>
                     <div id="machine-remarks-list" class="text-left text-sm text-gray-600 mt-2 max-h-32 overflow-y-auto bg-gray-50 p-2 rounded"></div>
@@ -530,6 +580,7 @@
         let batchNgData = {};
         let currentDashboardData = null;
         let machineDetailChart = null;
+        let machineDailyChartInst = null; // เพิ่มตัวแปรกราฟรายวันสำหรับ Modal เครื่องจักร
         let charts = {};
         let currentManageType = '';
         
@@ -2492,10 +2543,22 @@
             }
         };
 
+        // 🌟 ฟังก์ชันสลับกราฟในหน้าต่างเครื่องจักร (รายชั่วโมง / รายวัน)
+        window.switchMachineChart = function() {
+            const val = document.getElementById('machineChartToggle').value;
+            if(val === 'hourly') {
+                document.getElementById('machine-hourly-wrapper').classList.remove('hidden');
+                document.getElementById('machine-daily-wrapper').classList.add('hidden');
+            } else {
+                document.getElementById('machine-hourly-wrapper').classList.add('hidden');
+                document.getElementById('machine-daily-wrapper').classList.remove('hidden');
+            }
+        };
+
         window.showMachineDetail = function(machineName) {
             if(!currentDashboardData) return;
             const modal = document.getElementById('modal-machine-detail');
-            const mData = currentDashboardData.machineData[machineName] || { fg: 0, ngTotal: 0, ngTotalKg: 0, ngTotalPcs: 0, hourlyFg: [], hourlyNgPcs: [], hourlyNg: [], hourlyNgKg: [], remarks: [] };
+            const mData = currentDashboardData.machineData[machineName] || { fg: 0, ngTotal: 0, ngTotalKg: 0, ngTotalPcs: 0, hourlyFg: [], hourlyNgPcs: [], hourlyNg: [], hourlyNgKg: [], remarks: [], daily: {} };
             
             const ngPcs = mData.ngTotalPcs !== undefined ? mData.ngTotalPcs : (mData.ngTotal || 0);
             const ngKg = mData.ngTotalKg || 0;
@@ -2512,9 +2575,14 @@
                 rSec.classList.add('hidden'); 
             }
             
+            // รีเซ็ตค่าการแสดงผลกราฟให้เป็น รายชั่วโมง เป็นค่าเริ่มต้นเสมอเมื่อเปิดหน้าต่างใหม่
+            document.getElementById('machineChartToggle').value = 'hourly';
+            window.switchMachineChart();
+            
             modal.classList.remove('hidden');
             
             if(machineDetailChart) machineDetailChart.destroy();
+            if(machineDailyChartInst) machineDailyChartInst.destroy();
             
             const hNgPcs = mData.hourlyNgPcs || mData.hourlyNg || [];
             
@@ -2528,6 +2596,7 @@
                  return fallbackMatch ? fallbackMatch[1] + ":00" : label;
             });
             
+            // 1. วาดกราฟรายชั่วโมง
             machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), { 
                 type: 'bar', 
                 data: { 
@@ -2556,6 +2625,60 @@
                     }, 
                     scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } 
                 } 
+            });
+
+            // 2. วาดกราฟเทรนด์รายวัน (History Trend ของเครื่องจักร)
+            const dailyData = mData.daily || {};
+            const dailyKeys = Object.keys(dailyData).sort();
+            
+            const dailyYields = dailyKeys.map(k => {
+                const t = dailyData[k].fg + dailyData[k].ngPcs;
+                return t > 0 ? parseFloat(((dailyData[k].fg / t) * 100).toFixed(1)) : 0;
+            });
+
+            machineDailyChartInst = new Chart(document.getElementById('machineDailyTrendChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: dailyKeys,
+                    datasets: [
+                        {
+                            type: 'line',
+                            label: '% Yield รายวัน',
+                            data: dailyYields,
+                            borderColor: '#10b981',
+                            backgroundColor: '#10b981',
+                            yAxisID: 'y1',
+                            tension: 0.3,
+                            borderWidth: 2
+                        },
+                        { label: 'FG (งานดี)', data: dailyKeys.map(k => dailyData[k].fg), backgroundColor: '#3b82f6', yAxisID: 'y', stack: 'Stack 0' },
+                        { label: 'NG (เสียเป็นชิ้น)', data: dailyKeys.map(k => dailyData[k].ngPcs), backgroundColor: '#ef4444', yAxisID: 'y', stack: 'Stack 0' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true },
+                        y: { stacked: true, beginAtZero: true, position: 'left' },
+                        y1: { beginAtZero: true, max: 100, position: 'right', grid: { display: false } }
+                    },
+                    plugins: {
+                        zoom: {
+                            pan: { enabled: true, mode: 'xy' },
+                            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
+                        },
+                        datalabels: {
+                            display: function(context) {
+                                return context.dataset.type === 'line' && context.dataset.data[context.dataIndex] > 0;
+                            },
+                            align: 'top',
+                            color: '#065f46',
+                            font: { weight: 'bold', size: 10 },
+                            formatter: (v) => v + '%'
+                        }
+                    }
+                }
             });
         };
     </script>
