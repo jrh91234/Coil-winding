@@ -333,9 +333,20 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
                 </div>
                 
+                <!-- 🌟 เปลี่ยน Yield by Model แบบเดิมให้เป็น Model Analysis รองรับ Dropdown สลับกราฟ -->
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
-                        <h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3>
+                        <div class="flex flex-col">
+                            <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">
+                                📊 Model Analysis
+                                <select id="modelChartSelector" onchange="window.renderModelChart()" class="text-[10px] font-normal border border-gray-300 rounded p-1 text-gray-600 bg-white outline-none cursor-pointer hover:bg-gray-50 transition-colors">
+                                    <option value="yield">% Yield by Model</option>
+                                    <option value="ng_pcs">NG by Model (ชิ้น)</option>
+                                    <option value="ng_kg">NG by Model (Kg)</option>
+                                    <option value="ng_both">NG by Model (ชิ้น & Kg)</option>
+                                </select>
+                            </h3>
+                        </div>
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
@@ -582,12 +593,23 @@
             window.renderRecorderOptions();
             window.renderProductOptions();
 
-            // เพิ่ม Event Listener ให้ดับเบิลคลิกที่แคนวาสเพื่อรีเซ็ตการซูมกราฟ
+            // 🌟 เพิ่ม Event Listener ให้ดับเบิลคลิกที่แคนวาสเพื่อรีเซ็ตการซูม (ทั้ง Plugin และ Manual Min/Max)
             document.addEventListener('dblclick', function(e) {
                 if (e.target.tagName === 'CANVAS') {
                     const chartInstance = Chart.getChart(e.target);
-                    if (chartInstance && typeof chartInstance.resetZoom === 'function') {
-                        chartInstance.resetZoom();
+                    if (chartInstance) {
+                        // 1. Reset ซูมจาก Plugin (Wheel/Pinch)
+                        if (typeof chartInstance.resetZoom === 'function') {
+                            chartInstance.resetZoom();
+                        }
+                        // 2. Reset ซูมจาก Click To Zoom (ลบค่า min, max ทิ้ง)
+                        if (chartInstance.options.scales) {
+                            Object.keys(chartInstance.options.scales).forEach(key => {
+                                delete chartInstance.options.scales[key].min;
+                                delete chartInstance.options.scales[key].max;
+                            });
+                            chartInstance.update();
+                        }
                     }
                 }
             });
@@ -1396,6 +1418,178 @@
             }
         };
 
+        // 🌟 ฟังก์ชันวาดกราฟ Model (ใช้รวมทั้ง Yield และ NG)
+        window.renderModelChart = function() {
+            if (!currentDashboardData || !charts) return;
+            
+            const data = currentDashboardData;
+            const pData = data.productData || {};
+            const labels = Object.keys(pData);
+            const selector = document.getElementById('modelChartSelector');
+            const type = selector ? selector.value : 'yield';
+
+            const ctxYM = document.getElementById('yieldModelChart');
+            if(!ctxYM) return;
+            if(charts.yieldModel) charts.yieldModel.destroy();
+
+            // ฟังก์ชันตัวช่วยแปลง Pcs เป็น Kg แบบย้อนกลับ
+            const getKgFromPcs = (prod, pcs) => {
+                if (!pcs || pcs <= 0) return 0;
+                let w = 0.003;
+                if(prod.includes("10A")) w = 0.00228;
+                else if(prod.includes("16A")) w = 0.0028;
+                else if(prod.includes("20A")) w = 0.0036;
+                else if(prod.includes("25/32A")) w = 0.0045;
+                return pcs * w;
+            };
+
+            let datasets = [];
+            let scales = { y: { stacked: false } };
+
+            if (type === 'yield') {
+                datasets = [{ 
+                    label: '% Yield', 
+                    data: Object.values(pData).map(d => {
+                        const ngCount = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
+                        const t = d.fg + ngCount; 
+                        return t > 0 ? parseFloat(((d.fg/t)*100).toFixed(1)) : 0;
+                    }), 
+                    backgroundColor: '#10b981' 
+                }];
+                scales.x = { max: 100, beginAtZero: true };
+            } else if (type === 'ng_pcs') {
+                datasets = [{ 
+                    label: 'NG (ชิ้น)', 
+                    data: Object.entries(pData).map(([prod, d]) => d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0)), 
+                    backgroundColor: '#ef4444' 
+                }];
+                scales.x = { beginAtZero: true };
+            } else if (type === 'ng_kg') {
+                datasets = [{ 
+                    label: 'NG (Kg)', 
+                    data: Object.entries(pData).map(([prod, d]) => {
+                        const pcs = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
+                        return parseFloat(getKgFromPcs(prod, pcs).toFixed(2));
+                    }), 
+                    backgroundColor: '#f59e0b' 
+                }];
+                scales.x = { beginAtZero: true };
+            } else if (type === 'ng_both') {
+                datasets = [
+                    { 
+                        label: 'NG (ชิ้น)', 
+                        data: Object.entries(pData).map(([prod, d]) => d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0)), 
+                        backgroundColor: '#ef4444',
+                        xAxisID: 'x'
+                    },
+                    { 
+                        label: 'NG (Kg)', 
+                        data: Object.entries(pData).map(([prod, d]) => {
+                            const pcs = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
+                            return parseFloat(getKgFromPcs(prod, pcs).toFixed(2));
+                        }), 
+                        backgroundColor: '#f59e0b',
+                        xAxisID: 'x1'
+                    }
+                ];
+                scales.x = { position: 'bottom', beginAtZero: true, title: {display: true, text: 'จำนวน (ชิ้น)'} };
+                scales.x1 = { position: 'top', beginAtZero: true, grid: { drawOnChartArea: false }, title: {display: true, text: 'น้ำหนัก (Kg)'} };
+            }
+
+            const commonOpts = { 
+                 responsive: true, 
+                 maintainAspectRatio: false,
+                 onClick: (e, elements, chart) => {
+                     if (elements && elements.length > 0 && chart.options.scales) {
+                         const axisId = chart.options.indexAxis === 'y' ? 'y' : 'x';
+                         const index = elements[0].index;
+                         if(chart.options.scales[axisId]) {
+                             chart.options.scales[axisId].min = index;
+                             chart.options.scales[axisId].max = index;
+                             chart.update();
+                         }
+                     }
+                 },
+                 plugins: {
+                     zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } }
+                 }
+            };
+
+            let dlFormatter = (value) => value > 0 ? value : null;
+            if (type === 'yield') dlFormatter = (value) => value > 0 ? value + '%' : null;
+            else if (type === 'ng_pcs') dlFormatter = (value) => value > 0 ? value + ' ชิ้น' : null;
+            else if (type === 'ng_kg') dlFormatter = (value) => value > 0 ? value + ' Kg' : null;
+            else if (type === 'ng_both') dlFormatter = (value, ctx) => value > 0 ? value + (ctx.datasetIndex === 0 ? ' ชิ้น' : ' Kg') : null;
+
+            const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
+            const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
+
+            charts.yieldModel = new Chart(ctxYM, { 
+                type: 'bar', 
+                plugins: activePlugins,
+                data: { labels: labels, datasets: datasets }, 
+                options: {
+                    ...commonOpts, 
+                    indexAxis:'y', 
+                    scales: scales,
+                    layout: { padding: { right: 40, top: type==='ng_both'? 20 : 0 } }, 
+                    plugins: {
+                        ...commonOpts.plugins,
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let unit = '%';
+                                    if(type === 'ng_pcs' || (type === 'ng_both' && context.datasetIndex === 0)) unit = ' ชิ้น';
+                                    if(type === 'ng_kg' || (type === 'ng_both' && context.datasetIndex === 1)) unit = ' Kg';
+                                    return `${context.dataset.label}: ${context.parsed.x}${unit}`;
+                                },
+                                afterLabel: function(context) {
+                                    const productName = context.label;
+                                    const prData = (data.productData && data.productData[productName]) ? data.productData[productName] : null;
+                                    if(!prData) return [];
+                                    
+                                    const fg = prData.fg || 0;
+                                    const ngTotal = prData.ngTotalPcs !== undefined ? prData.ngTotalPcs : (prData.ngTotal || 0);
+                                    
+                                    let lines = [
+                                        `----------------------`,
+                                        `✅ FG: ${fg.toLocaleString()} ชิ้น`,
+                                        `❌ NG รวม: ${ngTotal.toLocaleString()} ชิ้น`
+                                    ];
+                                    
+                                    if(prData.ngBreakdownPcs && Object.keys(prData.ngBreakdownPcs).length > 0) {
+                                        const sortedNg = Object.entries(prData.ngBreakdownPcs)
+                                            .filter(([k, v]) => v > 0)
+                                            .sort((a, b) => b[1] - a[1]);
+                                        
+                                        if(sortedNg.length > 0) {
+                                            lines.push(`-- รายละเอียด NG --`);
+                                            sortedNg.forEach(([k, v]) => {
+                                                lines.push(`   • ${k}: ${v.toLocaleString()} ชิ้น`);
+                                            });
+                                        }
+                                    }
+                                    return lines;
+                                }
+                            }
+                        },
+                        datalabels: {
+                            display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
+                            color: (ctx) => {
+                                if (type === 'yield') return '#065f46';
+                                if (type === 'ng_pcs' || (type==='ng_both' && ctx.datasetIndex === 0)) return '#b91c1c';
+                                return '#b45309';
+                            },
+                            anchor: 'end',
+                            align: 'right',
+                            font: { weight: 'bold' },
+                            formatter: dlFormatter
+                        }
+                    }
+                } 
+            });
+        };
+
         window.loadDashboard = async function() {
             if(!SCRIPT_URL) return;
             document.getElementById('dashboard-content').classList.add('hidden');
@@ -1655,9 +1849,21 @@
             try {
                  if(!charts) charts = {};
                  
+                 // 🌟 เพิ่มลอจิก Click to zoom ตรงนี้ ให้กระจายไปทุกกราฟเลย
                  const commonOpts = { 
                      responsive: true, 
                      maintainAspectRatio: false,
+                     onClick: (e, elements, chart) => {
+                         if (elements && elements.length > 0 && chart.options.scales) {
+                             const axisId = chart.options.indexAxis === 'y' ? 'y' : 'x';
+                             const index = elements[0].index;
+                             if(chart.options.scales[axisId]) {
+                                 chart.options.scales[axisId].min = index;
+                                 chart.options.scales[axisId].max = index;
+                                 chart.update();
+                             }
+                         }
+                     },
                      plugins: {
                          zoom: {
                              pan: { enabled: true, mode: 'xy' },
@@ -2179,80 +2385,10 @@
                         } 
                     });
                  }
+                 
+                 // 🌟 วาดกราฟ Yield by Model (และ NG แบบสลับได้) ทันทีตอนโหลดข้อมูล
+                 window.renderModelChart();
 
-                 const ctxYM = document.getElementById('yieldModelChart');
-                 if(ctxYM) {
-                     if(charts.yieldModel) charts.yieldModel.destroy();
-                     const pData = data.productData || {};
-                     charts.yieldModel = new Chart(ctxYM, { 
-                         type: 'bar', 
-                         data: { 
-                             labels: Object.keys(pData), 
-                             datasets: [{ 
-                                 label: '% Yield', 
-                                 data: Object.values(pData).map(d => {
-                                     const ngCount = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
-                                     const t = d.fg + ngCount; 
-                                     return t > 0 ? parseFloat(((d.fg/t)*100).toFixed(1)) : 0;
-                                 }), 
-                                 backgroundColor: '#10b981' 
-                             }] 
-                         }, 
-                         options: {
-                             ...commonOpts, 
-                             indexAxis:'y', 
-                             scales: { x: { max: 100, beginAtZero: true } },
-                             layout: { padding: { right: 40 } }, // ขยายขอบขวาป้องกันตัวหนังสือขาด
-                             plugins: {
-                                 ...commonOpts.plugins,
-                                 // 🌟 เพิ่ม Tooltip Breakdown สำหรับ Product Model
-                                 tooltip: {
-                                     callbacks: {
-                                         label: function(context) {
-                                             return `Yield: ${context.parsed.x}%`; // เป็นแนวนอนใช้ parsed.x
-                                         },
-                                         afterLabel: function(context) {
-                                             const productName = context.label;
-                                             const prData = (data.productData && data.productData[productName]) ? data.productData[productName] : null;
-                                             if(!prData) return [];
-                                             
-                                             const fg = prData.fg || 0;
-                                             const ngTotal = prData.ngTotalPcs !== undefined ? prData.ngTotalPcs : (prData.ngTotal || 0);
-                                             
-                                             let lines = [
-                                                 `----------------------`,
-                                                 `✅ FG: ${fg.toLocaleString()} ชิ้น`,
-                                                 `❌ NG รวม: ${ngTotal.toLocaleString()} ชิ้น`
-                                             ];
-                                             
-                                             if(prData.ngBreakdownPcs && Object.keys(prData.ngBreakdownPcs).length > 0) {
-                                                 const sortedNg = Object.entries(prData.ngBreakdownPcs)
-                                                     .filter(([k, v]) => v > 0)
-                                                     .sort((a, b) => b[1] - a[1]);
-                                                 
-                                                 if(sortedNg.length > 0) {
-                                                     lines.push(`-- รายละเอียด NG --`);
-                                                     sortedNg.forEach(([k, v]) => {
-                                                         lines.push(`   • ${k}: ${v.toLocaleString()} ชิ้น`);
-                                                     });
-                                                 }
-                                             }
-                                             return lines;
-                                         }
-                                     }
-                                 },
-                                 datalabels: {
-                                     display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
-                                     color: '#065f46', // สีเขียวเข้ม
-                                     anchor: 'end', // ดันออกนอกแท่งกราฟ
-                                     align: 'right', // ให้อยู่ทางขวาของปลายแท่ง
-                                     font: { weight: 'bold' },
-                                     formatter: (value) => value > 0 ? value + '%' : null
-                                 }
-                             }
-                         } 
-                     });
-                 }
             } catch (err) {
                  const debugOut = document.getElementById('debug-output');
                  if (debugOut) {
