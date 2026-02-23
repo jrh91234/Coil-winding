@@ -330,6 +330,19 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
                 </div>
                 
+                <!-- 🌟 กราฟใหม่: Trend อาการ NG (รายวัน) -->
+                <div class="widget-card p-4 h-[350px]">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
+                        <h3 class="font-bold text-gray-700 text-sm">📈 Trend อาการ NG (รายวัน)</h3>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngSymptomTrendChart"></canvas></div>
+                </div>
+                
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Model</h3>
@@ -1997,6 +2010,83 @@
                                  }
                              }
                          } 
+                     });
+                 }
+
+                 // 🌟 สคริปต์วาดกราฟใหม่: Trend อาการ NG แต่ละประเภทแบบรายวัน (Line Chart)
+                 const ctxNgTrend = document.getElementById('ngSymptomTrendChart');
+                 if(ctxNgTrend) {
+                     if(charts.ngSymptomTrend) charts.ngSymptomTrend.destroy();
+                     const trendData = data.dailyTrend || [];
+                     
+                     // ดึงชื่ออาการทั้งหมดที่มีในช่วงเวลานี้มารวมกันไม่ให้ตกหล่น
+                     let allTrendNgTypes = new Set();
+                     trendData.forEach(d => {
+                         if(d.ngBreakdown) {
+                             Object.keys(d.ngBreakdown).forEach(k => allTrendNgTypes.add(k));
+                         }
+                     });
+                     const uniqueNgTypes = Array.from(allTrendNgTypes).sort();
+                     
+                     // ชุดสีสำหรับแบ่งเส้นกราฟแต่ละอาการ
+                     const lineColors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6'];
+                     
+                     let trendDatasets = uniqueNgTypes.map((type, idx) => {
+                         return {
+                             label: type,
+                             data: trendData.map(d => (d.ngBreakdown && d.ngBreakdown[type]) ? d.ngBreakdown[type] : 0),
+                             borderColor: lineColors[idx % lineColors.length],
+                             backgroundColor: lineColors[idx % lineColors.length],
+                             tension: 0.3,
+                             borderWidth: 2,
+                             pointRadius: 3,
+                             pointHoverRadius: 6,
+                             fill: false
+                         };
+                     });
+                     
+                     charts.ngSymptomTrend = new Chart(ctxNgTrend, {
+                         type: 'line',
+                         data: {
+                             labels: trendData.map(d=>d.date),
+                             datasets: trendDatasets
+                         },
+                         options: {
+                             ...commonOpts,
+                             scales: { x: { offset: true }, y: { beginAtZero: true } },
+                             layout: { padding: { top: 20, right: 20 } },
+                             plugins: {
+                                 ...commonOpts.plugins,
+                                 legend: { 
+                                     display: true, 
+                                     position: 'bottom', 
+                                     labels: { boxWidth: 12, font: {size: 10} } 
+                                 },
+                                 tooltip: {
+                                     mode: 'index',
+                                     intersect: false,
+                                     itemSort: function(a, b) {
+                                         return b.raw - a.raw; // เรียงอาการที่เกิดเยอะสุดขึ้นบนใน Tooltip
+                                     },
+                                     filter: function(tooltipItem) {
+                                         return tooltipItem.raw > 0; // ซ่อนอาการที่ยอดเป็น 0
+                                     }
+                                 },
+                                 datalabels: {
+                                     display: function(ctx) { 
+                                         const c = ctx.chart.canvas.closest('.widget-card'); 
+                                         const isMax = c ? c.classList.contains('maximized-card') : false;
+                                         return isMax && ctx.dataset.data[ctx.dataIndex] > 0; 
+                                     },
+                                     align: 'top',
+                                     color: function(context) {
+                                         return context.dataset.borderColor;
+                                     },
+                                     font: { weight: 'bold', size: 11 },
+                                     formatter: (value) => value > 0 ? value : null
+                                 }
+                             }
+                         }
                      });
                  }
 
