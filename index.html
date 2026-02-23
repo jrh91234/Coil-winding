@@ -336,16 +336,23 @@
                 <!-- 🌟 เปลี่ยน Yield by Model แบบเดิมให้เป็น Model Analysis รองรับ Dropdown สลับกราฟ -->
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
-                        <div class="flex flex-col">
+                        <div class="flex flex-col gap-1">
                             <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">
-                                📊 Model Analysis
-                                <select id="modelChartSelector" onchange="window.renderModelChart()" class="text-[10px] font-normal border border-gray-300 rounded p-1 text-gray-600 bg-white outline-none cursor-pointer hover:bg-gray-50 transition-colors">
-                                    <option value="yield">% Yield by Model</option>
-                                    <option value="ng_pcs">NG by Model (ชิ้น)</option>
-                                    <option value="ng_kg">NG by Model (Kg)</option>
-                                    <option value="ng_both">NG by Model (ชิ้น & Kg)</option>
-                                </select>
+                                📊 Model / Raw Mat Analysis
                             </h3>
+                            <div class="flex gap-1">
+                                <!-- 🌟 Dropdown ใหม่ สำหรับสลับดูระหว่าง Model กับ Raw Mat -->
+                                <select id="modelViewBySelector" onchange="window.renderModelChart()" class="text-[10px] font-normal border border-blue-300 rounded p-1 text-blue-700 bg-blue-50 outline-none cursor-pointer hover:bg-blue-100 transition-colors font-bold">
+                                    <option value="model">📌 View by Model</option>
+                                    <option value="rawmat">🧵 View by Raw Mat</option>
+                                </select>
+                                <select id="modelChartSelector" onchange="window.renderModelChart()" class="text-[10px] font-normal border border-gray-300 rounded p-1 text-gray-600 bg-white outline-none cursor-pointer hover:bg-gray-50 transition-colors">
+                                    <option value="yield">% Yield</option>
+                                    <option value="ng_pcs">NG (ชิ้น)</option>
+                                    <option value="ng_kg">NG (Kg)</option>
+                                    <option value="ng_both">NG (ชิ้น & Kg)</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
@@ -1426,7 +1433,24 @@
             const pData = data.productData || {};
             const labels = Object.keys(pData);
             const selector = document.getElementById('modelChartSelector');
+            const viewBySelector = document.getElementById('modelViewBySelector');
             const type = selector ? selector.value : 'yield';
+            const viewBy = viewBySelector ? viewBySelector.value : 'model';
+
+            // 🌟 Mapping Raw Mat ให้จับคู่กับ Model
+            const rawMatMap = {
+                "S1B29288-JR (10A)": "51150220",
+                "S1B71819-JR (16A)": "51150221",
+                "S1B29292-JR (20A)": "51150222",
+                "51207080HC-JR (25/32A)": "ไม่ระบุ (25/32A)" 
+            };
+
+            const displayLabels = labels.map(model => {
+                if (viewBy === 'rawmat') {
+                    return rawMatMap[model] || model;
+                }
+                return model;
+            });
 
             const ctxYM = document.getElementById('yieldModelChart');
             if(!ctxYM) return;
@@ -1527,7 +1551,7 @@
             charts.yieldModel = new Chart(ctxYM, { 
                 type: 'bar', 
                 plugins: activePlugins,
-                data: { labels: labels, datasets: datasets }, 
+                data: { labels: displayLabels, datasets: datasets }, 
                 options: {
                     ...commonOpts, 
                     indexAxis:'y', 
@@ -1537,6 +1561,16 @@
                         ...commonOpts.plugins,
                         tooltip: {
                             callbacks: {
+                                title: function(context) {
+                                    const idx = context[0].dataIndex;
+                                    const originalModel = labels[idx];
+                                    const displayLabel = context[0].label;
+                                    // 🌟 แสดงทั้ง Raw Mat และ Model ใน Tooltip
+                                    if (viewBy === 'rawmat') {
+                                        return `Raw Mat: ${displayLabel}\nModel: ${originalModel}`;
+                                    }
+                                    return displayLabel;
+                                },
                                 label: function(context) {
                                     let unit = '%';
                                     if(type === 'ng_pcs' || (type === 'ng_both' && context.datasetIndex === 0)) unit = ' ชิ้น';
@@ -1544,7 +1578,8 @@
                                     return `${context.dataset.label}: ${context.parsed.x}${unit}`;
                                 },
                                 afterLabel: function(context) {
-                                    const productName = context.label;
+                                    const idx = context.dataIndex;
+                                    const productName = labels[idx]; // 🌟 ใช้ชื่อ Original Model ในการดึง Data หลังบ้านเสมอ
                                     const prData = (data.productData && data.productData[productName]) ? data.productData[productName] : null;
                                     if(!prData) return [];
                                     
