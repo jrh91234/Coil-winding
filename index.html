@@ -51,8 +51,8 @@
             body { background-color: white !important; font-size: 12pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             
             body.printing-auto-report > *:not(#modal-auto-report) { display: none !important; }
-            body.printing-auto-report #modal-auto-report { position: absolute !important; top: 0; left: 0; display: block !important; opacity: 1 !important; background: white !important; width: 100%; height: auto; }
-            body.printing-auto-report #modal-auto-report > div { width: 100% !important; max-width: 100% !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; max-height: none !important; }
+            body.printing-auto-report #modal-auto-report { position: absolute !important; top: 0; left: 0; display: block !important; opacity: 1 !important; background: white !important; width: 100%; height: auto; overflow: visible !important; }
+            body.printing-auto-report #modal-auto-report > div { width: 100% !important; max-width: 100% !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; max-height: none !important; overflow: visible !important; }
             body.printing-auto-report .auto-report-hide { display: none !important; }
             
             nav, #section-form, #section-planning, .loader, #debug-panel, #undo-toast { display: none !important; }
@@ -83,6 +83,7 @@
                     <span class="text-2xl">🏭</span>
                     <span class="font-bold text-lg text-blue-800 tracking-wide">CWM System</span>
                 </div>
+                <!-- ปุ่ม Hamburger -->
                 <button onclick="window.toggleMenu()" class="text-gray-600 hover:text-blue-600 focus:outline-none p-2 rounded-lg hover:bg-blue-50 transition-colors">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16"></path>
@@ -91,6 +92,7 @@
             </div>
         </div>
         
+        <!-- Dropdown Menu (ซ่อนอยู่โดยค่าเริ่มต้น) -->
         <div id="dropdown-menu" class="hidden absolute left-0 right-0 bg-white shadow-xl border-t border-gray-100 flex flex-col z-20">
             <button onclick="window.switchTab('form'); window.toggleMenu()" id="tab-form" class="py-4 px-6 text-left text-blue-600 font-bold border-l-4 border-blue-600 bg-blue-50 hover:bg-blue-50 transition-colors text-lg">📝 บันทึกผลิต</button>
             <button onclick="window.switchTab('planning'); window.toggleMenu()" id="tab-planning" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg">📅 วางแผน (Plan)</button>
@@ -101,7 +103,6 @@
     
     <!-- SECTION 1: FORM -->
     <main id="section-form" class="max-w-4xl mx-auto p-4 space-y-4 print-hide">
-        <!-- (Form Content Remains Same) -->
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
@@ -192,6 +193,12 @@
     
     <!-- SECTION 3: DASHBOARD -->
     <main id="section-dashboard" class="max-w-6xl mx-auto p-4 space-y-6 hidden">
+         <!-- หัวกระดาษเวลาพิมพ์ (ซ่อนอยู่ตอนใช้งานปกติ) -->
+         <div id="print-header">
+             <h1 class="text-2xl font-bold text-gray-800">CWM Production Report</h1>
+             <p class="text-gray-600" id="print-date-subtitle">ข้อมูลการผลิต</p>
+         </div>
+
          <div class="bg-white p-4 rounded-xl shadow-md border-t-4 border-indigo-500 print-hide">
             <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-3">
                 <h2 class="text-gray-700 font-bold text-sm mb-2 lg:mb-0 print-hide">📅 ตัวเลือกการกรอง <span class="text-xs font-normal text-gray-500">(ดึงข้อมูลตั้งแต่ 08:00น. ถึง 08:00น. ของอีกวัน)</span><span class="text-xs font-normal text-blue-500 ml-2 border-l pl-2 border-gray-300">💡 หมุนลูกกลิ้งเมาส์/บีบนิ้วเพื่อซูมกราฟ & ดับเบิลคลิกบนกราฟเพื่อรีเซ็ต</span></h2>
@@ -298,7 +305,6 @@
             </div>
             
             <div id="sortable-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- เพิ่ม min-h ให้ wrapper ป้องกันกราฟยุบตัว -->
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">📦 FG & ACH by Model (ยอดผลิต vs แผน)</h3>
@@ -323,7 +329,6 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="paretoChart"></canvas></div>
                 </div>
 
-                <!-- 🌟 กราฟจำลอง (Simulator) -->
                 <div class="widget-card p-4 h-[350px] print-hide">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">🔮 Yield Simulator (จำลองการลด NG)</h3>
@@ -358,7 +363,6 @@
                                 📊 Model / Raw Mat Analysis
                             </h3>
                             <div class="flex gap-1">
-                                <!-- 🌟 Dropdown สำหรับสลับดูระหว่าง Model กับ Raw Mat -->
                                 <select id="modelViewBySelector" onchange="window.renderModelChart()" class="text-[10px] font-normal border border-blue-300 rounded p-1 text-blue-700 bg-blue-50 outline-none cursor-pointer hover:bg-blue-100 transition-colors font-bold print-hide">
                                     <option value="model">📌 View by Model</option>
                                     <option value="rawmat">🧵 View by Raw Mat</option>
@@ -460,7 +464,7 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngByMachineChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card p-4 h-[350px] print-hide">
+                <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">Hourly Production (FG & NG)</h3>
                         <div class="flex gap-2">
@@ -469,13 +473,11 @@
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
-                    <!-- 🌟 ภาชนะสำหรับใส่ Custom Legend (ซ้าย FG / ขวา NG) -->
                     <ul id="hourly-legend-ul" class="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1.5 mb-2 max-h-24 overflow-y-auto pr-1"></ul>
-                    
                     <div class="flex-1 relative w-full min-h-[150px]"><canvas id="hourlyChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card p-4 h-[350px] print-hide">
+                <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">NG Breakdown</h3>
                         <div class="flex gap-2">
@@ -626,7 +628,6 @@
     </div>
 
     <script>
-        // ⚠️ สำคัญมาก: ตรวจสอบ URL นี้ให้ตรงกับตัวที่ Deploy ล่าสุด
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec";
         
         let ngSymptoms = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "อื่นๆ (Others)"];
@@ -1522,7 +1523,6 @@
             }
         };
 
-        // 🌟 ฟังก์ชันพิมพ์ Report PDF ธรรมดา
         window.printReport = function() {
             const sDate = document.getElementById('startDate').value;
             const eDate = document.getElementById('endDate').value;
@@ -1537,7 +1537,7 @@
             window.print();
         };
 
-        // 🌟 ฟังก์ชันเปิดหน้า Auto Report (AI Summary) ฉบับมาตรฐานโรงงาน
+        // 🌟 ฟังก์ชันเปิดหน้า Auto Report (AI Summary) ฉบับมาตรฐานโรงงานแบบหลายหน้า
         window.openAutoReport = function() {
             if (!currentDashboardData) {
                 alert("⚠️ กรุณากดปุ่ม 🔍ค้นหา เพื่อดึงข้อมูลสำหรับสร้างรายงานก่อนครับ");
@@ -1548,7 +1548,7 @@
             const modal = document.getElementById('modal-auto-report');
             const content = document.getElementById('auto-report-content');
 
-            // 1. ประมวลผลข้อมูล KPI (Data Insights)
+            // --- 1. ประมวลผลข้อมูลเชิงลึก (AI Insights) ---
             const totalFG = data.totalFg || 0;
             const totalNG = data.totalNgPcs !== undefined ? data.totalNgPcs : (data.totalNg || 0);
             const ngKg = data.totalNgKg || 0;
@@ -1563,53 +1563,85 @@
             else if (achPct >= 80) achHtml = `<span class="text-orange-500 font-bold">${achPct}% (Warning)</span>`;
             else achHtml = `<span class="text-red-600 font-bold">${achPct}% (Below Target)</span>`;
 
-            // หาอาการ NG ที่เยอะที่สุด
+            // เรียงลำดับ NG ทั้งหมดเพื่อหา Top 3
             const labels = data.ngLabels || [];
             const vals = data.ngValuesPcs || data.ngValues || [];
-            let topNg = { label: 'ไม่มีของเสีย', pcs: 0 };
-            if(labels.length > 0) {
-                let maxIdx = 0;
-                for(let i=1; i<vals.length; i++) {
-                    if(vals[i] > vals[maxIdx]) maxIdx = i;
-                }
-                if(vals[maxIdx] > 0) {
-                    topNg = { label: labels[maxIdx], pcs: vals[maxIdx] };
-                }
+            const ngItems = labels.map((l, i) => ({ label: l, pcs: vals[i] || 0 })).filter(i => i.pcs > 0).sort((a,b)=>b.pcs-a.pcs);
+            
+            let topNgHtml = '';
+            if(ngItems.length > 0) {
+                topNgHtml = `<ul class="list-disc pl-5 mt-2 space-y-1">`;
+                ngItems.slice(0, 3).forEach((item, idx) => {
+                    let pct = totalNG > 0 ? ((item.pcs / totalNG) * 100).toFixed(1) : 0;
+                    topNgHtml += `<li>อันดับ ${idx+1}: <b>${item.label}</b> จำนวน ${item.pcs.toLocaleString()} ชิ้น (${pct}%)</li>`;
+                });
+                topNgHtml += `</ul>`;
+            } else {
+                topNgHtml = `<p class="mt-2 text-green-600 font-bold">🎉 ยอดเยี่ยม ไม่พบของเสียในระบบ</p>`;
             }
 
             // หาเครื่องจักรที่ของเสียเยอะที่สุด และ Yield ต่ำสุด
             let topMacNg = { name: 'ไม่มี', ng: 0 };
             let lowestYieldMac = { name: 'ไม่มี', yield: 100 };
+            let highestYieldMac = { name: 'ไม่มี', yield: 0 };
             
             if(data.machineData) {
                 for(let m in data.machineData) {
                     const md = data.machineData[m];
                     const mNg = md.ngTotalPcs !== undefined ? md.ngTotalPcs : (md.ngTotal || 0);
                     const mT = md.fg + mNg;
-                    const mY = mT > 0 ? ((md.fg/mT)*100) : 100;
+                    const mY = mT > 0 ? ((md.fg/mT)*100) : 0;
                     
                     if(mNg > topMacNg.ng) topMacNg = { name: m, ng: mNg };
-                    if(mY < lowestYieldMac.yield && mT > 0) lowestYieldMac = { name: m, yield: mY.toFixed(2) };
+                    if(mT > 0) {
+                        if(mY < lowestYieldMac.yield) lowestYieldMac = { name: m, yield: mY.toFixed(2) };
+                        if(mY > highestYieldMac.yield) highestYieldMac = { name: m, yield: mY.toFixed(2) };
+                    }
                 }
             }
 
-            // 2. จับภาพกราฟทั้งหมดจาก Canvas เป็นรูปภาพ (Base64)
+            // หา Model ที่ดีที่สุดและแย่ที่สุด
+            let bestModel = {name: '-', yield: 0};
+            let worstModel = {name: '-', yield: 100};
+            if(data.productData) {
+                for(let p in data.productData) {
+                    let d = data.productData[p];
+                    let n = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
+                    let t = d.fg + n;
+                    let y = t > 0 ? (d.fg/t)*100 : 0;
+                    if(t > 0) {
+                        if(y >= bestModel.yield) bestModel = {name: p, yield: y.toFixed(2)};
+                        if(y <= worstModel.yield) worstModel = {name: p, yield: y.toFixed(2)};
+                    }
+                }
+            }
+
+            // หา Peak Hour
+            let peakHour = {label: '-', fg: 0};
+            if(data.hourlyData && data.hourlyLabels) {
+                data.hourlyData.forEach((val, idx) => {
+                    if(val > peakHour.fg) {
+                        peakHour = {label: data.hourlyLabels[idx], fg: val};
+                    }
+                });
+            }
+
+            // --- 2. ดึงภาพกราฟ ---
             const getChartImg = (id) => {
                 const canvas = document.getElementById(id);
-                if (canvas && canvas.toDataURL) {
-                    return canvas.toDataURL('image/png', 1.0); // ใช้คุณภาพ 1.0 (สูงสุด)
-                }
-                return '';
+                return (canvas && canvas.toDataURL) ? canvas.toDataURL('image/png', 1.0) : '';
             };
 
             const imgDailyOutput = getChartImg('dailyOutputChart');
             const imgTrendNG = getChartImg('qcTrendChart');
             const imgPareto = getChartImg('paretoChart');
+            const imgNgTrend = getChartImg('ngSymptomTrendChart');
             const imgNgMac = getChartImg('ngByMachineChart');
             const imgYieldModel = getChartImg('yieldModelChart');
             const imgYieldMac = getChartImg('yieldMachineChart');
+            const imgHourly = getChartImg('hourlyChart');
 
-            // 3. เตรียมข้อความส่วนหัวกระดาษ
+            // --- 3. เตรียมข้อความส่วนหัวกระดาษ ---
             const sDate = document.getElementById('startDate').value;
             const eDate = document.getElementById('endDate').value;
             const dateStr = sDate === eDate ? sDate : `${sDate} ถึง ${eDate}`;
@@ -1617,133 +1649,167 @@
             const shiftType = document.getElementById('filterShiftType').options[document.getElementById('filterShiftType').selectedIndex].text;
             const printTime = new Date().toLocaleString('th-TH');
 
-            // 4. ประกอบร่างเป็น HTML แบบมาตรฐานโรงงาน
+            // --- 4. ประกอบร่าง HTML แบบหลายหน้า (Multi-page Layout) ---
             let html = `
-                <!-- หัวกระดาษ (Report Header) -->
-                <div class="border-b-2 border-gray-800 pb-4 mb-6">
-                    <div class="flex justify-between items-end">
+                <!-- 📄 PAGE 1: Summary & Trends -->
+                <div class="print-page">
+                    <!-- Report Header -->
+                    <div class="border-b-2 border-gray-800 pb-4 mb-6">
+                        <div class="flex justify-between items-end">
+                            <div>
+                                <h1 class="text-3xl font-black text-gray-900 uppercase tracking-tight">Production & Quality Report</h1>
+                                <p class="text-gray-600 mt-1 font-medium">รายงานสรุปผลการผลิตและควบคุมคุณภาพเชิงลึก</p>
+                            </div>
+                            <div class="text-right text-sm">
+                                <p><b>Company:</b> CWM Manufacturing</p>
+                                <p><b>Printed:</b> ${printTime}</p>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex gap-6 text-sm bg-gray-100 p-2 rounded border border-gray-200">
+                            <span class="font-bold">📅 วันที่: <span class="font-normal text-blue-700">${dateStr}</span></span>
+                            <span class="font-bold">🕒 กะการทำงาน: <span class="font-normal text-blue-700">${shiftName} (${shiftType})</span></span>
+                        </div>
+                    </div>
+
+                    <!-- Executive Summary KPI -->
+                    <div class="mb-6">
+                        <h3 class="text-lg font-bold text-gray-800 border-l-4 border-blue-600 pl-2 mb-3 bg-gray-50 py-1">1. สรุปประสิทธิภาพภาพรวม (Executive Summary)</h3>
+                        <div class="grid grid-cols-5 gap-3 text-center">
+                            <div class="border border-gray-300 rounded p-3 bg-white">
+                                <p class="text-[10px] text-gray-500 font-bold uppercase">Target (Plan)</p>
+                                <p class="text-xl font-bold text-indigo-700">${target.toLocaleString()}</p>
+                            </div>
+                            <div class="border border-gray-300 rounded p-3 bg-white">
+                                <p class="text-[10px] text-gray-500 font-bold uppercase">Total Good (FG)</p>
+                                <p class="text-xl font-bold text-blue-600">${totalFG.toLocaleString()}</p>
+                            </div>
+                            <div class="border border-gray-300 rounded p-3 bg-white">
+                                <p class="text-[10px] text-gray-500 font-bold uppercase">Achievement</p>
+                                <p class="text-lg">${achHtml}</p>
+                            </div>
+                            <div class="border border-gray-300 rounded p-3 bg-red-50">
+                                <p class="text-[10px] text-red-600 font-bold uppercase">Total Defect (NG)</p>
+                                <p class="text-xl font-bold text-red-600">${totalNG.toLocaleString()} <span class="text-xs font-normal">ชิ้น</span></p>
+                            </div>
+                            <div class="border border-gray-300 rounded p-3 bg-green-50">
+                                <p class="text-[10px] text-green-700 font-bold uppercase">Overall Yield</p>
+                                <p class="text-xl font-bold text-green-700">${yieldPct}%</p>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-700 mt-3 indent-8 leading-relaxed">
+                            จากการประมวลผลข้อมูล (Data Analytics) รอบปัจจุบัน อัตราผลตอบแทน (Yield) อยู่ที่ระดับ <b>${yieldPct}%</b> 
+                            โดยยอดผลิตงานดี (FG) อยู่ที่ <b>${totalFG.toLocaleString()}</b> ชิ้น และพบของเสีย <b>${totalNG.toLocaleString()}</b> ชิ้น 
+                            ${totalFG > 0 ? `ชั่วโมงที่มีการผลิตสูงสุด (Peak Hour) คือช่วง <b>${peakHour.label}</b> (ยอดผลิต ${peakHour.fg.toLocaleString()} ชิ้น)` : ''}
+                        </p>
+                    </div>
+
+                    <!-- Production Trend -->
+                    <div class="mb-8 page-break-inside-avoid">
+                        <h3 class="text-lg font-bold text-gray-800 border-l-4 border-indigo-500 pl-2 mb-3 bg-gray-50 py-1">2. แนวโน้มผลผลิตและอัตราของเสียรายวัน</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="border border-gray-200 p-2 rounded">
+                                <p class="text-xs font-bold text-center mb-2 text-gray-600">Daily Output (FG vs NG)</p>
+                                ${imgDailyOutput ? `<img src="${imgDailyOutput}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
+                            </div>
+                            <div class="border border-gray-200 p-2 rounded">
+                                <p class="text-xs font-bold text-center mb-2 text-gray-600">Daily NG Rate Trend (%)</p>
+                                ${imgTrendNG ? `<img src="${imgTrendNG}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 📄 PAGE 2: Quality Analysis -->
+                <div class="page-break-before print-page">
+                    <div class="mb-8 page-break-inside-avoid">
+                        <h3 class="text-lg font-bold text-gray-800 border-l-4 border-red-500 pl-2 mb-3 bg-gray-50 py-1">3. การวิเคราะห์ปัญหาคุณภาพเชิงลึก (Quality Issue Analysis)</h3>
+                        
+                        <div class="bg-red-50 border border-red-200 p-4 rounded text-sm mb-4 text-gray-800 shadow-sm">
+                            <b>💡 ข้อค้นพบด้านคุณภาพ (Top Defect Insights):</b>
+                            ${topNgHtml}
+                            <div class="mt-3 text-red-700 font-medium">
+                                * ข้อเสนอแนะเชิงกลยุทธ์: แหล่งกำเนิดปัญหาหลักมาจากเครื่อง <b>${topMacNg.name}</b> ที่สร้างของเสียถึง <b>${topMacNg.ng.toLocaleString()} ชิ้น</b> ควรดำเนินการตรวจสอบเครื่องจักรนี้เป็นกรณีเร่งด่วนเพื่อยกระดับ Yield ภาพรวม
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div class="border border-gray-200 p-2 rounded">
+                                <p class="text-xs font-bold text-center mb-2 text-gray-600">Pareto Analysis (สะสมความถี่ปัญหา)</p>
+                                ${imgPareto ? `<img src="${imgPareto}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
+                            </div>
+                            <div class="border border-gray-200 p-2 rounded">
+                                <p class="text-xs font-bold text-center mb-2 text-gray-600">Trend ปัญหา NG แยกตามอาการ (รายวัน)</p>
+                                ${imgNgTrend ? `<img src="${imgNgTrend}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
+                            </div>
+                        </div>
+                        
+                        <div class="border border-gray-200 p-2 rounded page-break-inside-avoid">
+                            <p class="text-xs font-bold text-center mb-2 text-gray-600">วิเคราะห์แหล่งกำเนิด NG แยกตามเครื่องจักร (Defect Source Mapping)</p>
+                            ${imgNgMac ? `<img src="${imgNgMac}" class="w-full h-auto max-w-4xl mx-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 📄 PAGE 3: Machine & Model Performance -->
+                <div class="page-break-before print-page">
+                    <div class="mb-8 page-break-inside-avoid">
+                        <h3 class="text-lg font-bold text-gray-800 border-l-4 border-green-500 pl-2 mb-3 bg-gray-50 py-1">4. ประสิทธิภาพแยกตามเครื่องจักรและรุ่นสินค้า (Performance Breakdown)</h3>
+                        
+                        <div class="bg-green-50 border border-green-200 p-3 rounded text-sm mb-4 text-gray-800 shadow-sm flex flex-col md:flex-row gap-4">
+                            <div class="flex-1">
+                                <b>📈 Machine Performance:</b><br>
+                                เครื่องที่ดีที่สุด: <b>${highestYieldMac.name}</b> (Yield: ${highestYieldMac.yield}%)<br>
+                                เครื่องที่แย่ที่สุด: <b class="text-red-600">${lowestYieldMac.name}</b> (Yield: ${lowestYieldMac.yield}%)
+                            </div>
+                            <div class="flex-1">
+                                <b>📦 Model Performance:</b><br>
+                                รุ่นที่ดีที่สุด: <b>${bestModel.name}</b> (Yield: ${bestModel.yield}%)<br>
+                                รุ่นที่แย่ที่สุด: <b class="text-red-600">${worstModel.name}</b> (Yield: ${worstModel.yield}%)
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div class="border border-gray-200 p-2 rounded">
+                                <p class="text-xs font-bold text-center mb-2 text-gray-600">% Yield by Model</p>
+                                ${imgYieldModel ? `<img src="${imgYieldModel}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
+                            </div>
+                            <div class="border border-gray-200 p-2 rounded">
+                                <p class="text-xs font-bold text-center mb-2 text-gray-600">% Yield by Machine</p>
+                                ${imgYieldMac ? `<img src="${imgYieldMac}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
+                            </div>
+                        </div>
+                        
+                        <div class="border border-gray-200 p-2 rounded page-break-inside-avoid">
+                            <p class="text-xs font-bold text-center mb-2 text-gray-600">Hourly Production Profile (อัตราการผลิตรายชั่วโมง)</p>
+                            ${imgHourly ? `<img src="${imgHourly}" class="w-full h-auto max-w-4xl mx-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        </div>
+                    </div>
+
+                    <!-- Signatures -->
+                    <div class="mt-12 pt-8 grid grid-cols-3 gap-4 text-center page-break-inside-avoid">
                         <div>
-                            <h1 class="text-3xl font-black text-gray-900 uppercase tracking-tight">Production & Quality Report</h1>
-                            <p class="text-gray-600 mt-1 font-medium">รายงานสรุปผลการผลิตและควบคุมคุณภาพประจำวัน</p>
+                            <div class="h-16 border-b border-gray-400 mb-2 w-3/4 mx-auto"></div>
+                            <p class="text-sm font-bold">Reported By</p>
+                            <p class="text-xs text-gray-500">(Production Leader)</p>
                         </div>
-                        <div class="text-right text-sm">
-                            <p><b>Company:</b> CWM Manufacturing</p>
-                            <p><b>Printed:</b> ${printTime}</p>
+                        <div>
+                            <div class="h-16 border-b border-gray-400 mb-2 w-3/4 mx-auto"></div>
+                            <p class="text-sm font-bold">Checked By</p>
+                            <p class="text-xs text-gray-500">(QA/QC Manager)</p>
                         </div>
-                    </div>
-                    <div class="mt-4 flex gap-6 text-sm bg-gray-100 p-2 rounded border border-gray-200">
-                        <span class="font-bold">📅 วันที่: <span class="font-normal text-blue-700">${dateStr}</span></span>
-                        <span class="font-bold">🕒 กะการทำงาน: <span class="font-normal text-blue-700">${shiftName} (${shiftType})</span></span>
-                    </div>
-                </div>
-
-                <!-- Section 1: KPI Dashboard -->
-                <div class="mb-8">
-                    <h3 class="text-lg font-bold text-gray-800 border-l-4 border-blue-600 pl-2 mb-3 bg-gray-50 py-1">1. สรุปประสิทธิภาพการผลิต (Performance KPI)</h3>
-                    <div class="grid grid-cols-5 gap-3 text-center">
-                        <div class="border border-gray-300 rounded p-3 bg-white">
-                            <p class="text-[10px] text-gray-500 font-bold uppercase">Target (Plan)</p>
-                            <p class="text-xl font-bold text-indigo-700">${target.toLocaleString()}</p>
-                        </div>
-                        <div class="border border-gray-300 rounded p-3 bg-white">
-                            <p class="text-[10px] text-gray-500 font-bold uppercase">Total Good (FG)</p>
-                            <p class="text-xl font-bold text-blue-600">${totalFG.toLocaleString()}</p>
-                        </div>
-                        <div class="border border-gray-300 rounded p-3 bg-white">
-                            <p class="text-[10px] text-gray-500 font-bold uppercase">Achievement</p>
-                            <p class="text-lg">${achHtml}</p>
-                        </div>
-                        <div class="border border-gray-300 rounded p-3 bg-red-50">
-                            <p class="text-[10px] text-red-600 font-bold uppercase">Total Defect (NG)</p>
-                            <p class="text-xl font-bold text-red-600">${totalNG.toLocaleString()} <span class="text-xs font-normal">ชิ้น</span></p>
-                        </div>
-                        <div class="border border-gray-300 rounded p-3 bg-green-50">
-                            <p class="text-[10px] text-green-700 font-bold uppercase">Overall Yield</p>
-                            <p class="text-xl font-bold text-green-700">${yieldPct}%</p>
+                        <div>
+                            <div class="h-16 border-b border-gray-400 mb-2 w-3/4 mx-auto"></div>
+                            <p class="text-sm font-bold">Approved By</p>
+                            <p class="text-xs text-gray-500">(Plant Manager)</p>
                         </div>
                     </div>
-                </div>
-
-                <!-- Section 2: Production Trend -->
-                <div class="mb-8 page-break-inside-avoid">
-                    <h3 class="text-lg font-bold text-gray-800 border-l-4 border-indigo-500 pl-2 mb-3 bg-gray-50 py-1">2. แนวโน้มการผลิตและอัตราของเสีย (Production Trend)</h3>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="border border-gray-200 p-2 rounded">
-                            <p class="text-xs font-bold text-center mb-2 text-gray-600">Daily Output (FG vs NG)</p>
-                            ${imgDailyOutput ? `<img src="${imgDailyOutput}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
-                        </div>
-                        <div class="border border-gray-200 p-2 rounded">
-                            <p class="text-xs font-bold text-center mb-2 text-gray-600">Daily NG Rate Trend (%)</p>
-                            ${imgTrendNG ? `<img src="${imgTrendNG}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
-                        </div>
-                    </div>
-                </div>
-
-                <div class="page-break-before"></div>
-
-                <!-- Section 3: Quality Analysis -->
-                <div class="mb-8 page-break-inside-avoid">
-                    <h3 class="text-lg font-bold text-gray-800 border-l-4 border-red-500 pl-2 mb-3 bg-gray-50 py-1">3. การวิเคราะห์ปัญหาคุณภาพ (Quality Issue Analysis)</h3>
                     
-                    <div class="bg-red-50 border border-red-200 p-3 rounded text-sm mb-4 text-gray-800">
-                        <b>📝 Executive Insight:</b> ปัญหาอันดับ 1 ในรอบนี้คือ <b>"${topNg.label}"</b> จำนวน <b>${topNg.pcs.toLocaleString()} ชิ้น</b> 
-                        คิดเป็นร้อยละ <b>${totalNG > 0 ? ((topNg.pcs/totalNG)*100).toFixed(1) : 0}%</b> ของยอดของเสียทั้งหมด 
-                        <br><i>* แหล่งกำเนิดหลัก (เครื่องที่ทำของเสียรวมสูงสุด) คือเครื่อง <b>${topMacNg.name}</b> (${topMacNg.ng.toLocaleString()} ชิ้น)</i>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="border border-gray-200 p-2 rounded">
-                            <p class="text-xs font-bold text-center mb-2 text-gray-600">Top Defect Analysis (Pareto)</p>
-                            ${imgPareto ? `<img src="${imgPareto}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
-                        </div>
-                        <div class="border border-gray-200 p-2 rounded">
-                            <p class="text-xs font-bold text-center mb-2 text-gray-600">Defect Source by Machine (แหล่งกำเนิด NG)</p>
-                            ${imgNgMac ? `<img src="${imgNgMac}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Section 4: Machine & Model Performance -->
-                <div class="mb-8 page-break-inside-avoid">
-                    <h3 class="text-lg font-bold text-gray-800 border-l-4 border-green-500 pl-2 mb-3 bg-gray-50 py-1">4. ประสิทธิภาพแยกตามเครื่องจักรและรุ่นสินค้า (Performance Breakdown)</h3>
-                    
-                    <div class="bg-green-50 border border-green-200 p-3 rounded text-sm mb-4 text-gray-800">
-                        <b>📝 Executive Insight:</b> เครื่องจักรที่มีค่า Yield ต่ำที่สุดที่ต้องพิจารณาตรวจสอบคือเครื่อง <b>${lowestYieldMac.name}</b> (Yield: <b>${lowestYieldMac.yield}%</b>)
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="border border-gray-200 p-2 rounded">
-                            <p class="text-xs font-bold text-center mb-2 text-gray-600">Yield by Model</p>
-                            ${imgYieldModel ? `<img src="${imgYieldModel}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
-                        </div>
-                        <div class="border border-gray-200 p-2 rounded">
-                            <p class="text-xs font-bold text-center mb-2 text-gray-600">Yield by Machine</p>
-                            ${imgYieldMac ? `<img src="${imgYieldMac}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Signatures -->
-                <div class="mt-12 pt-8 border-t border-gray-300 grid grid-cols-3 gap-4 text-center page-break-inside-avoid">
-                    <div>
-                        <div class="h-16 border-b border-gray-400 mb-2 w-3/4 mx-auto"></div>
-                        <p class="text-sm font-bold">Reported By</p>
-                        <p class="text-xs text-gray-500">(Production Leader)</p>
-                    </div>
-                    <div>
-                        <div class="h-16 border-b border-gray-400 mb-2 w-3/4 mx-auto"></div>
-                        <p class="text-sm font-bold">Checked By</p>
-                        <p class="text-xs text-gray-500">(QA/QC Manager)</p>
-                    </div>
-                    <div>
-                        <div class="h-16 border-b border-gray-400 mb-2 w-3/4 mx-auto"></div>
-                        <p class="text-sm font-bold">Approved By</p>
-                        <p class="text-xs text-gray-500">(Plant Manager)</p>
+                    <div class="text-center text-xs text-gray-400 mt-10 pt-4 border-t">
+                        Generated by CWM Auto Report System - ${printTime}
                     </div>
                 </div>
             `;
 
-            // แสดงหน้าต่าง Report
             content.innerHTML = html;
             modal.classList.remove('hidden');
             modal.classList.add('flex');
@@ -1752,11 +1818,9 @@
                 modal.classList.remove('opacity-0');
             }, 10);
             
-            // ยกเลิกการล็อกการ Scroll ชั่วคราวเพื่อให้ผู้ใช้เลื่อนดูรีพอร์ตก่อนพิมพ์ได้
             document.body.style.overflow = '';
         };
 
-        // 🌟 ฟังก์ชันปิดหน้าต่าง Auto Report
         window.closeAutoReport = function() {
             const modal = document.getElementById('modal-auto-report');
             modal.classList.add('opacity-0');
@@ -1767,18 +1831,15 @@
             }, 300);
         };
 
-        // 🌟 ฟังก์ชันพิมพ์เฉพาะส่วน Auto Report
         window.printAutoReport = function() {
             document.body.classList.add('printing-auto-report');
             window.print();
             
-            // ลบคลาสออกหลังจากพิมพ์เสร็จ (หน่วงเวลาเล็กน้อยให้หน้าต่าง Print เด้งขึ้นมาก่อน)
             setTimeout(() => {
                 document.body.classList.remove('printing-auto-report');
             }, 1000);
         };
 
-        // 🌟 ฟังก์ชันดาวน์โหลดเป็น Excel (CSV)
         window.exportCSV = function() {
             if (!currentDashboardData) {
                 alert("⚠️ กรุณากดปุ่มค้นหาข้อมูล (ดึง Dashboard) ก่อนทำการส่งออก Excel");
@@ -1787,7 +1848,6 @@
             
             const data = currentDashboardData;
             
-            // ใส่ BOM (Byte Order Mark) เพื่อให้ Excel อ่านภาษาไทยได้ถูกต้อง
             let csvContent = "\ufeff"; 
             csvContent += "Machine,Product Assigned,FG (Pcs),NG (Pcs),NG (Kg),% Yield\n";
             
@@ -1803,11 +1863,9 @@
                 
                 const productAssigned = machineMapping[m] || 'Unassigned';
                 
-                // ประกอบเป็น 1 แถวของ CSV
                 csvContent += `${m},${productAssigned},${d.fg},${ngPcs},${ngKg.toFixed(2)},${y}%\n`;
             }
             
-            // สร้างไฟล์จำลองแล้วสั่งดาวน์โหลด
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
@@ -1894,7 +1952,6 @@
                     }
                 }
                 
-                // 🌟 เพิ่ม Normalization ให้ Product Data (เพื่อให้รองรับ Breakdown ใน Tooltip)
                 if (data.productData) {
                     for (let p in data.productData) {
                         const pData = data.productData[p];
@@ -1910,7 +1967,6 @@
                     }
                 }
 
-                // 🌟 Normalize ชื่ออาการให้ตรงกันสำหรับข้อมูล Daily Trend
                 if (data.dailyTrend) {
                     data.dailyTrend.forEach(d => {
                         if (d.ngBreakdown) {
@@ -1955,7 +2011,6 @@
                 const yieldVal = total > 0 ? ((fg / total) * 100).toFixed(2) : 0;
                 document.getElementById('stat-yield').innerText = yieldVal + "%";
                 
-                // คำนวณ UPH ใหม่ (เอาจำนวนวันที่ดึงได้คูณด้วยชั่วโมงที่มีงาน)
                 let workDays = data.datesFound ? Object.keys(data.datesFound).length : 0;
                 if (workDays === 0) {
                     const sDate = new Date(start);
@@ -1975,7 +2030,7 @@
                 window.renderCharts(data); 
                 window.renderTable(data); 
                 window.renderFgByModel(data, isPartialView);
-                window.renderSimulator(data); // 🌟 เรียกใช้งาน Simulator
+                window.renderSimulator(data); 
 
             } catch(e) { 
                 console.error("Dashboard Load Error: ", e); 
@@ -2030,7 +2085,6 @@
             container.innerHTML = html;
         };
 
-        // 🌟 สคริปต์สำหรับวาด UI ของ Simulator
         window.renderSimulator = function(data) {
             const container = document.getElementById('simulator-checkboxes');
             if (!container) return;
@@ -2038,7 +2092,6 @@
             const labels = data.ngLabels || [];
             const valsPcs = data.ngValuesPcs || data.ngValues || [];
 
-            // เรียงลำดับ NG จากมากไปน้อย
             const ngItems = labels.map((l, i) => ({ label: l, pcs: valsPcs[i] || 0 })).sort((a,b)=>b.pcs-a.pcs);
 
             let html = '';
@@ -2055,11 +2108,9 @@
             
             container.innerHTML = html || '<div class="text-gray-400 col-span-2 text-center py-4">ไม่มีข้อมูล NG ในรอบนี้</div>';
 
-            // เริ่มต้นการคำนวณครั้งแรก
             window.updateSimulator();
         };
 
-        // 🌟 สคริปต์สำหรับคำนวณ Simulator เมื่อมีการติ๊ก Checkbox
         window.updateSimulator = function() {
             if (!currentDashboardData) return;
 
@@ -2067,7 +2118,6 @@
             const originalNg = currentDashboardData.totalNgPcs !== undefined ? currentDashboardData.totalNgPcs : (currentDashboardData.totalNg || 0);
 
             let savedNg = 0;
-            // หา Checkbox ที่ถูกติ๊กทั้งหมด
             const checkboxes = document.querySelectorAll('.sim-cb:checked');
             checkboxes.forEach(cb => {
                 savedNg += parseInt(cb.dataset.pcs) || 0;
@@ -2075,22 +2125,18 @@
 
             const newNg = originalNg - savedNg;
             
-            // คำนวณ Yield เดิม
             const totalOriginal = fg + originalNg;
             const originalYield = totalOriginal > 0 ? (fg / totalOriginal) * 100 : 0;
 
-            // คำนวณ Yield ใหม่หลังหักลบ NG ที่แก้ได้
             const totalNew = fg + newNg;
             const newYield = totalNew > 0 ? (fg / totalNew) * 100 : 0;
 
             const yieldDiff = newYield - originalYield;
 
-            // อัปเดตการแสดงผล
             document.getElementById('sim-yield').innerHTML = `${newYield.toFixed(2)}% <span class="text-sm font-medium ${yieldDiff > 0 ? 'text-green-500' : 'text-gray-400'}">(+${yieldDiff.toFixed(2)}%)</span>`;
             document.getElementById('sim-ng-saved').innerHTML = `${savedNg.toLocaleString()} ชิ้น <span class="text-gray-400 font-normal ml-1">(เหลือ NG: ${newNg.toLocaleString()})</span>`;
         };
 
-        // 🌟 ฟังก์ชันวาดกราฟ Model (ใช้รวมทั้ง Yield และ NG)
         window.renderModelChart = function() {
             if (!currentDashboardData || !charts) return;
             
@@ -2102,7 +2148,6 @@
             const type = selector ? selector.value : 'yield';
             const viewBy = viewBySelector ? viewBySelector.value : 'model';
 
-            // 🌟 Mapping Raw Mat ให้จับคู่กับ Model
             const rawMatMap = {
                 "S1B29288-JR (10A)": "51150220",
                 "S1B71819-JR (16A)": "51150221",
@@ -2121,7 +2166,6 @@
             if(!ctxYM) return;
             if(charts.yieldModel) charts.yieldModel.destroy();
 
-            // ฟังก์ชันตัวช่วยแปลง Pcs เป็น Kg แบบย้อนกลับ
             const getKgFromPcs = (prod, pcs) => {
                 if (!pcs || pcs <= 0) return 0;
                 let w = 0.003;
@@ -2230,7 +2274,6 @@
                                     const idx = context[0].dataIndex;
                                     const originalModel = labels[idx];
                                     const displayLabel = context[0].label;
-                                    // 🌟 แสดงทั้ง Raw Mat และ Model ใน Tooltip
                                     if (viewBy === 'rawmat') {
                                         return `Raw Mat: ${displayLabel}\nModel: ${originalModel}`;
                                     }
@@ -2244,7 +2287,7 @@
                                 },
                                 afterLabel: function(context) {
                                     const idx = context.dataIndex;
-                                    const productName = labels[idx]; // 🌟 ใช้ชื่อ Original Model ในการดึง Data หลังบ้านเสมอ
+                                    const productName = labels[idx]; 
                                     const prData = (data.productData && data.productData[productName]) ? data.productData[productName] : null;
                                     if(!prData) return [];
                                     
@@ -2290,7 +2333,6 @@
             });
         };
 
-        // 🌟 ฟังก์ชันวาดกราฟ Daily Output (แยกออกมาเพื่อรองรับ Dropdown)
         window.renderDailyOutputChart = function() {
             if (!currentDashboardData || !charts) return;
             const data = currentDashboardData;
@@ -2298,7 +2340,7 @@
             if (!ctxDaily) return;
 
             const selector = document.getElementById('dailyOutputSelector');
-            const mode = selector ? selector.value : 'pcs'; // 'pcs' หรือ 'percent'
+            const mode = selector ? selector.value : 'pcs';
 
             if(charts.dailyOutput) charts.dailyOutput.destroy();
             const trendData = data.dailyTrend || [];
@@ -2382,7 +2424,6 @@
             });
         };
 
-        // 🌟 ฟังก์ชันวาดกราฟ Trend อาการ NG แบบรายวันแยกออกมา เพื่อให้เรียกใช้ตอนเปลี่ยน Dropdown ได้ง่าย
         window.renderNgTrendChart = function() {
             if (!currentDashboardData || !charts) return;
             const data = currentDashboardData;
@@ -2390,12 +2431,11 @@
             if (!ctxNgTrend) return;
 
             const selector = document.getElementById('ngTrendSelector');
-            const mode = selector ? selector.value : 'pcs'; // 'pcs' หรือ 'percent'
+            const mode = selector ? selector.value : 'pcs';
 
             if (charts.ngSymptomTrend) charts.ngSymptomTrend.destroy();
             const trendData = data.dailyTrend || [];
             
-            // ดึงชื่ออาการทั้งหมดที่มีในช่วงเวลานี้มารวมกันและหาผลรวมเพื่อเรียงลำดับ
             let ngTypeTotals = {};
             trendData.forEach(d => {
                 if(d.ngBreakdown) {
@@ -2404,10 +2444,8 @@
                     });
                 }
             });
-            // 🌟 เรียงลำดับจากมากไปน้อย
             const uniqueNgTypes = Object.keys(ngTypeTotals).sort((a, b) => ngTypeTotals[b] - ngTypeTotals[a]);
             
-            // ชุดสีสำหรับแบ่งเส้นกราฟแต่ละอาการ
             const lineColors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6'];
             
             let trendDatasets = uniqueNgTypes.map((type, idx) => {
@@ -2481,10 +2519,10 @@
                             mode: 'index',
                             intersect: false,
                             itemSort: function(a, b) {
-                                return b.raw - a.raw; // เรียงอาการที่เกิดเยอะสุดขึ้นบนใน Tooltip
+                                return b.raw - a.raw; 
                             },
                             filter: function(tooltipItem) {
-                                return tooltipItem.raw > 0; // ซ่อนอาการที่ยอดเป็น 0
+                                return tooltipItem.raw > 0;
                             },
                             callbacks: {
                                 label: function(context) {
@@ -2514,7 +2552,6 @@
             try {
                  if(!charts) charts = {};
                  
-                 // 🌟 เพิ่มลอจิก Click to zoom ตรงนี้ ให้กระจายไปทุกกราฟเลย
                  const commonOpts = { 
                      responsive: true, 
                      maintainAspectRatio: false,
@@ -2544,7 +2581,6 @@
                  const valsPcs = data.ngValuesPcs || data.ngValues || []; 
                  const valsKg = data.ngValuesKg || [];
 
-                 // คำนวณ ngItems ไว้เป็นตัวแปรรวมเพื่อให้กราฟอื่นดึงไปใช้จัดเรียงได้ด้วย
                  const ngItems = labels.map((l, i) => ({ label: l, pcs: valsPcs[i] || 0, kg: valsKg[i] || 0 })).sort((a,b)=>b.pcs-a.pcs);
                  const totalNG = ngItems.reduce((a,b)=>a+b.pcs,0);
                  let acc = 0; 
@@ -2569,15 +2605,12 @@
                      });
                  }
 
-                 // 🌟 กราฟใหม่: แหล่งกำเนิด NG (NG แยกตาม Machine)
                  const ctxNgMac = document.getElementById('ngByMachineChart');
                  if(ctxNgMac) {
                      if(charts.ngMachine) charts.ngMachine.destroy();
                      
-                     // ใช้ Label อาการ NG ที่เรียงลำดับความถี่แล้วจาก Pareto กรองเอาเฉพาะที่มีค่า
                      const sortedNgLabels = ngItems.filter(i => i.pcs > 0).map(i => i.label);
                      
-                     // ชุดสีสำหรับแบ่งเครื่องจักร
                      const macColors = [
                          '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', 
                          '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'
@@ -2585,20 +2618,17 @@
                      let macDatasets = [];
                      let colorIdx = 0;
                      
-                     // ดึงรายชื่อ Machine ออกมาและเรียงลำดับ
                      const allMacs = Object.keys(data.machineData || {}).sort();
                      
                      allMacs.forEach(m => {
                          const mData = data.machineData[m];
                          let hasNg = false;
-                         // ดึงยอด NG ของเครื่องนั้นๆ ตามลำดับอาการใน sortedNgLabels
                          const ngDataForMac = sortedNgLabels.map(ngLabel => {
                              const val = mData.ngBreakdownPcs ? (mData.ngBreakdownPcs[ngLabel] || 0) : 0;
                              if(val > 0) hasNg = true;
                              return val;
                          });
                          
-                         // ถ้าเครื่องนี้มียอด NG โผล่มาบ้าง ค่อยเอาเข้า dataset
                          if (hasNg) {
                              macDatasets.push({
                                  label: m,
@@ -2622,19 +2652,18 @@
                              plugins: {
                                  ...commonOpts.plugins,
                                  legend: { 
-                                     display: window.innerWidth > 768, // แสดง Legend เฉพาะจอใหญ่กันรก
+                                     display: window.innerWidth > 768,
                                      position: 'right',
                                      labels: { boxWidth: 12, font: { size: 10 } }
                                  },
                                  tooltip: {
                                      mode: 'index',
                                      intersect: false,
-                                     // 🌟 เรียงลำดับโชว์เครื่องที่ทำเสียเยอะสุดขึ้นก่อนใน Tooltip
                                      itemSort: function(a, b) {
                                          return b.raw - a.raw; 
                                      },
                                      filter: function(tooltipItem) {
-                                         return tooltipItem.raw > 0; // ซ่อนเครื่องที่มียอดเป็น 0
+                                         return tooltipItem.raw > 0;
                                      },
                                      callbacks: {
                                          title: function(context) {
@@ -2659,7 +2688,6 @@
                      });
                  }
 
-                 // 🌟 วาดกราฟ Daily Output 
                  window.renderDailyOutputChart();
 
                  const hNgPcs = data.hourlyNgPcsData || data.hourlyNgData || []; 
@@ -2667,7 +2695,6 @@
                  if(ctxH) {
                      if(charts.hourly) charts.hourly.destroy();
                      
-                     // ตัดข้อความแกน X ให้แสดงเวลาจบ
                      const cleanHourlyLabels = (data.hourlyLabels || []).map(label => {
                          const parts = label.split('-');
                          if (parts.length > 1) {
@@ -2680,13 +2707,11 @@
 
                      let hourlyDatasets = [];
                      
-                     // 🌟 ถ้ามีข้อมูลแยกตามโมเดล (backend.gs ต้องถูกอัปเดตแล้ว)
                      if (data.hourlyByModel && Object.keys(data.hourlyByModel).length > 0) {
-                         const fgColors = ['#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8', '#1e3a8a']; // โทนฟ้า/น้ำเงิน
-                         const ngColors = ['#fca5a5', '#f87171', '#ef4444', '#dc2626', '#b91c1c', '#7f1d1d']; // โทนแดง/ส้ม
+                         const fgColors = ['#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8', '#1e3a8a']; 
+                         const ngColors = ['#fca5a5', '#f87171', '#ef4444', '#dc2626', '#b91c1c', '#7f1d1d'];
                          
                          let cIdx = 0;
-                         // 1. นำ FG ทุกโมเดลมากองไว้ด้านล่างก่อน
                          for (const [model, d] of Object.entries(data.hourlyByModel)) {
                              hourlyDatasets.push({
                                  label: `FG - ${model}`,
@@ -2700,7 +2725,6 @@
                          }
                          
                          cIdx = 0;
-                         // 2. นำ NG ทุกโมเดลซ้อนทับด้านบนสุด
                          for (const [model, d] of Object.entries(data.hourlyByModel)) {
                              hourlyDatasets.push({
                                  label: `NG - ${model}`,
@@ -2713,7 +2737,6 @@
                              cIdx++;
                          }
                      } else {
-                         // Fallback กรณี Backend ยังไม่ได้อัปเดต
                          hourlyDatasets = [
                              {label:'FG (รวม)', data:data.hourlyData || [], backgroundColor:'#3b82f6', stack: 'Stack 0'}, 
                              {label:'NG (เสียเป็นชิ้น)', data:hNgPcs, backgroundColor:'#ef4444', stack: 'Stack 0'}
@@ -2731,12 +2754,11 @@
                              scales:{x:{stacked:true}, y:{stacked:true}},
                              plugins: {
                                  ...commonOpts.plugins,
-                                 legend: { display: false }, // 🌟 ซ่อน Legend ปกติเพื่อใช้ Custom HTML Legend ด้านล่างแทน
+                                 legend: { display: false }, 
                                  tooltip: {
                                      mode: 'index',
                                      intersect: false,
                                      filter: function(tooltipItem) {
-                                         // 🌟 ซ่อนรายการในกล่อง Tooltip ถ้าชั่วโมงนั้นมียอดเป็น 0
                                          return tooltipItem.raw > 0;
                                      }
                                  },
@@ -2746,13 +2768,12 @@
                                          const isMax = c ? c.classList.contains('maximized-card') : true; 
                                          return isMax && ctx.dataset.data[ctx.dataIndex] > 0; 
                                      },
-                                     color: '#ffffff', // ให้ตัวเลขเป็นสีขาวเพื่อให้ตัดกับพื้นสีเข้ม
+                                     color: '#ffffff',
                                      font: { weight: 'bold', size: 10 },
                                      formatter: (value) => value > 0 ? value : null
                                  }
                              }
                          },
-                         // 🌟 เสียบปลั๊กอินสำหรับวาด Legend สร้าง HTML แบ่ง 2 คอลัมน์ (ซ้าย FG, ขวา NG)
                          plugins: [
                              ...(activePlugins || []),
                              {
@@ -2760,24 +2781,21 @@
                                  afterUpdate: function(chart) {
                                      const container = document.getElementById('hourly-legend-ul');
                                      if (!container) return;
-                                     container.innerHTML = ''; // เคลียร์เนื้อหาเก่า
+                                     container.innerHTML = ''; 
                                      
-                                     // ดึง Label ปัจจุบันมาจาก Chart.js
                                      const items = Chart.defaults.plugins.legend.labels.generateLabels(chart);
                                      
-                                     // แยกครึ่งเพื่อนำมาสลับจับคู่กัน (FG กับ NG จะมีจำนวนเท่ากันเสมอ)
                                      const half = Math.ceil(items.length / 2);
                                      let interleaved = [];
                                      for(let i = 0; i < half; i++) {
-                                         interleaved.push(items[i]);                 // คอลัมน์ซ้าย (FG)
-                                         if(items[i+half]) interleaved.push(items[i+half]); // คอลัมน์ขวา (NG)
+                                         interleaved.push(items[i]);                 
+                                         if(items[i+half]) interleaved.push(items[i+half]); 
                                      }
                                      
                                      interleaved.forEach(item => {
                                          const li = document.createElement('li');
                                          li.className = `flex items-center cursor-pointer text-[10px] md:text-xs ${item.hidden ? 'line-through text-gray-300' : 'text-gray-700'} hover:text-blue-600 transition-colors`;
                                          
-                                         // สั่งให้คลิกแล้วซ่อน/แสดงกราฟได้
                                          li.onclick = () => {
                                              const isHidden = chart.isDatasetVisible(item.datasetIndex);
                                              chart.setDatasetVisibility(item.datasetIndex, !isHidden);
@@ -2791,7 +2809,7 @@
                                          
                                          const text = document.createElement('span');
                                          text.className = 'truncate leading-none';
-                                         text.title = item.text; // แสดงชื่อเต็มเมื่อเอาเมาส์ชี้
+                                         text.title = item.text; 
                                          text.innerText = item.text;
                                          
                                          li.appendChild(box);
@@ -2827,7 +2845,6 @@
                         options: {
                             ...commonOpts, 
                             scales:{y:{max:100}},
-                            // 🌟 ปรับ padding ด้านบนให้มากขึ้นเพื่อไม่ให้ตัวเลขชนกับ Legend
                             layout: { padding: { top: 40 } }, 
                             plugins: {
                                 ...commonOpts.plugins,
@@ -2851,7 +2868,6 @@
                                             ];
                                             
                                             if(mData.ngBreakdownPcs && Object.keys(mData.ngBreakdownPcs).length > 0) {
-                                                // กรองเฉพาะที่มีค่ามากกว่า 0 และเรียงลำดับจากมากไปน้อย
                                                 const sortedNg = Object.entries(mData.ngBreakdownPcs)
                                                     .filter(([k, v]) => v > 0)
                                                     .sort((a, b) => b[1] - a[1]);
@@ -2869,9 +2885,9 @@
                                 },
                                 datalabels: {
                                     display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
-                                    color: '#4338ca', // สีน้ำเงินเข้ม
-                                    anchor: 'end',    // ผลักออกจากศูนย์กลาง
-                                    align: 'top',     // ให้อยู่ด้านบนของแท่ง
+                                    color: '#4338ca', 
+                                    anchor: 'end',    
+                                    align: 'top',     
                                     font: { weight: 'bold' },
                                     formatter: (value) => value > 0 ? value + '%' : null
                                 }
@@ -2890,7 +2906,6 @@
                              labels: trendData.map(d=>d.date), 
                              datasets: [{label:'% NG Rate', data:trendData.map(d=>d.ngRate), borderColor:'#f97316'}] 
                          }, 
-                         // ดันให้อยู่ตรงกลางถ้ามีวันเดียว
                          options: { 
                              ...commonOpts, 
                              scales: { x: { offset: true } },
@@ -2910,14 +2925,12 @@
                      });
                  }
 
-                 // 🌟 วาดกราฟ Trend NG รายวันผ่านฟังก์ชันแทนเพื่อกันซ้ำซ้อน
                  window.renderNgTrendChart();
 
                  const ctxNG = document.getElementById('ngChart');
                  if(ctxNG) {
                     if(charts.ng) charts.ng.destroy();
                     
-                    // 🌟 ใช้ ngItems ที่ถูกเรียงลำดับแล้ว (จากมากไปน้อย) กรองเฉพาะอันที่มีค่า
                     const sortedLabels = ngItems.filter(item => item.pcs > 0).map(item => item.label);
                     const sortedData = ngItems.filter(item => item.pcs > 0).map(item => item.pcs);
                     const totalNGPcs = sortedData.reduce((a, b) => a + b, 0);
@@ -2955,7 +2968,6 @@
                     });
                  }
                  
-                 // 🌟 วาดกราฟ Yield by Model (และ NG แบบสลับได้) ทันทีตอนโหลดข้อมูล
                  window.renderModelChart();
 
             } catch (err) {
@@ -3001,7 +3013,6 @@
                 const t = d.fg + ngPcs; 
                 const y = t > 0 ? ((d.fg/t)*100).toFixed(1) : "0.0";
                 
-                // นำ Product ที่ Assign ไว้มาแสดงใต้ชื่อ Machine
                 const productAssigned = machineMapping[m] || 'ไม่ได้ระบุรุ่น';
                 
                 let html = `<td class="p-4 border-b font-bold cursor-pointer text-blue-600 hover:underline" onclick="window.showMachineDetail('${m}')">
@@ -3026,7 +3037,6 @@
             }
         };
 
-        // 🌟 ฟังก์ชันสลับกราฟในหน้าต่างเครื่องจักร (รายชั่วโมง / รายวัน)
         window.switchMachineChart = function() {
             const val = document.getElementById('machineChartToggle').value;
             if(val === 'hourly') {
@@ -3058,7 +3068,6 @@
                 rSec.classList.add('hidden'); 
             }
             
-            // รีเซ็ตค่าการแสดงผลกราฟให้เป็น รายชั่วโมง เป็นค่าเริ่มต้นเสมอเมื่อเปิดหน้าต่างใหม่
             document.getElementById('machineChartToggle').value = 'hourly';
             window.switchMachineChart();
             
@@ -3079,7 +3088,6 @@
                  return fallbackMatch ? fallbackMatch[1] + ":00" : label;
             });
             
-            // 1. วาดกราฟรายชั่วโมง
             machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), { 
                 type: 'bar', 
                 data: { 
@@ -3099,7 +3107,6 @@
                             zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
                         },
                         datalabels: {
-                            // โชว์เสมอสำหรับหน้าจอ Modal Detail แบบขยายใหญ่
                             display: true,
                             color: '#ffffff',
                             font: { weight: 'bold', size: 11 },
@@ -3110,7 +3117,6 @@
                 } 
             });
 
-            // 2. วาดกราฟเทรนด์รายวัน (History Trend ของเครื่องจักร)
             const dailyData = mData.daily || {};
             const dailyKeys = Object.keys(dailyData).sort();
             
