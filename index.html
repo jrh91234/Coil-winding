@@ -47,6 +47,31 @@
             padding: 1.5rem !important;
             background-color: #ffffff !important;
         }
+
+        /* 🌟 CSS สำหรับการพิมพ์ (Print Report) */
+        @media print {
+            body { background-color: white !important; }
+            nav, #section-form, #section-planning, .loader, #debug-panel, #undo-toast { display: none !important; }
+            /* ซ่อนส่วนควบคุมการกรองข้อมูลและปุ่มต่างๆ */
+            .print-hide { display: none !important; }
+            /* ซ่อนปุ่มย่อ/ขยาย/ปรับขนาดในการ์ดกราฟ */
+            .widget-header button { display: none !important; }
+            /* ขยายเนื้อหา Dashboard ให้เต็ม */
+            #section-dashboard { max-width: 100% !important; padding: 0 !important; margin: 0 !important; display: block !important; }
+            .bg-white.p-4.rounded-xl.shadow-md { box-shadow: none !important; border: none !important; padding: 0 !important; margin-bottom: 20px !important; }
+            
+            /* บังคับกราฟไม่ให้ถูกตัดขาดกลางหน้า */
+            .widget-card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; page-break-inside: avoid !important; margin-bottom: 20px !important; break-inside: avoid !important; }
+            #sortable-grid { display: block !important; }
+            #sortable-grid > div { width: 100% !important; height: auto !important; min-height: 350px !important; margin-bottom: 20px !important; }
+            
+            /* ปรับตารางให้พิมพ์ได้เต็ม */
+            .table-container { overflow: visible !important; box-shadow: none !important; border: none !important; }
+            
+            /* แสดงหัวกระดาษรายงาน */
+            #print-header { display: block !important; text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+        }
+        #print-header { display: none; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen font-sans pb-10">
@@ -173,9 +198,28 @@
     
     <!-- SECTION 3: DASHBOARD -->
     <main id="section-dashboard" class="max-w-6xl mx-auto p-4 space-y-6 hidden">
+         <!-- หัวกระดาษเวลาพิมพ์ (ซ่อนอยู่ตอนใช้งานปกติ) -->
+         <div id="print-header">
+             <h1 class="text-2xl font-bold text-gray-800">CWM Production Report</h1>
+             <p class="text-gray-600" id="print-date-subtitle">ข้อมูลการผลิต</p>
+         </div>
+
          <div class="bg-white p-4 rounded-xl shadow-md border-t-4 border-indigo-500">
-            <h2 class="text-gray-700 font-bold text-sm mb-3">📅 ตัวเลือกการกรอง <span class="text-xs font-normal text-gray-500">(ดึงข้อมูลตั้งแต่ 08:00น. ถึง 08:00น. ของอีกวัน)</span><span class="text-xs font-normal text-blue-500 ml-2 border-l pl-2 border-gray-300">💡 หมุนลูกกลิ้งเมาส์/บีบนิ้วเพื่อซูมกราฟ & ดับเบิลคลิกบนกราฟเพื่อรีเซ็ต</span></h2>
-            <div class="flex flex-col md:flex-row gap-3 items-end">
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-3">
+                <h2 class="text-gray-700 font-bold text-sm mb-2 lg:mb-0 print-hide">📅 ตัวเลือกการกรอง <span class="text-xs font-normal text-gray-500">(ดึงข้อมูลตั้งแต่ 08:00น. ถึง 08:00น. ของอีกวัน)</span><span class="text-xs font-normal text-blue-500 ml-2 border-l pl-2 border-gray-300">💡 หมุนลูกกลิ้งเมาส์/บีบนิ้วเพื่อซูมกราฟ & ดับเบิลคลิกบนกราฟเพื่อรีเซ็ต</span></h2>
+                
+                <!-- 🌟 กลุ่มปุ่ม Report -->
+                <div class="flex gap-2 w-full lg:w-auto print-hide">
+                    <button onclick="window.printReport()" class="flex-1 lg:flex-none bg-gray-800 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-gray-900 transition-colors shadow-sm flex items-center justify-center gap-1">
+                        🖨️ พิมพ์/บันทึก PDF
+                    </button>
+                    <button onclick="window.exportCSV()" class="flex-1 lg:flex-none bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-green-700 transition-colors shadow-sm flex items-center justify-center gap-1">
+                        📗 ดาวน์โหลด Excel
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex flex-col md:flex-row gap-3 items-end print-hide">
                 <input type="date" id="startDate" class="w-full md:w-auto p-2 border rounded text-sm">
                 <input type="date" id="endDate" class="w-full md:w-auto p-2 border rounded text-sm">
                 <select id="filterShift" class="w-full md:w-auto p-2 border rounded text-sm">
@@ -202,7 +246,7 @@
         </div>
 
         <!-- DEBUG PANEL -->
-        <div id="debug-panel" class="hidden bg-red-50 border border-red-200 p-4 rounded-xl shadow-inner mb-4">
+        <div id="debug-panel" class="hidden bg-red-50 border border-red-200 p-4 rounded-xl shadow-inner mb-4 print-hide">
             <div class="flex justify-between items-center mb-2">
                 <h3 class="text-red-800 font-bold text-sm">🛑 ระบบ Debug & Logs</h3>
                 <button onclick="document.getElementById('debug-panel').classList.add('hidden')" class="text-red-500 hover:bg-red-200 px-2 rounded font-bold">ปิด</button>
@@ -275,7 +319,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 overflow-y-auto" id="fgModelList"></div>
@@ -287,20 +331,20 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="paretoChart"></canvas></div>
                 </div>
 
                 <!-- 🌟 กราฟจำลอง (Simulator) -->
-                <div class="widget-card p-4 h-[350px]">
+                <div class="widget-card p-4 h-[350px] print-hide">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">🔮 Yield Simulator (จำลองการลด NG)</h3>
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 flex flex-col h-full overflow-hidden">
@@ -330,11 +374,11 @@
                             </h3>
                             <div class="flex gap-1">
                                 <!-- 🌟 Dropdown สำหรับสลับดูระหว่าง Model กับ Raw Mat -->
-                                <select id="modelViewBySelector" onchange="window.renderModelChart()" class="text-[10px] font-normal border border-blue-300 rounded p-1 text-blue-700 bg-blue-50 outline-none cursor-pointer hover:bg-blue-100 transition-colors font-bold">
+                                <select id="modelViewBySelector" onchange="window.renderModelChart()" class="text-[10px] font-normal border border-blue-300 rounded p-1 text-blue-700 bg-blue-50 outline-none cursor-pointer hover:bg-blue-100 transition-colors font-bold print-hide">
                                     <option value="model">📌 View by Model</option>
                                     <option value="rawmat">🧵 View by Raw Mat</option>
                                 </select>
-                                <select id="modelChartSelector" onchange="window.renderModelChart()" class="text-[10px] font-normal border border-gray-300 rounded p-1 text-gray-600 bg-white outline-none cursor-pointer hover:bg-gray-50 transition-colors">
+                                <select id="modelChartSelector" onchange="window.renderModelChart()" class="text-[10px] font-normal border border-gray-300 rounded p-1 text-gray-600 bg-white outline-none cursor-pointer hover:bg-gray-50 transition-colors print-hide">
                                     <option value="yield">% Yield</option>
                                     <option value="ng_pcs">NG (ชิ้น)</option>
                                     <option value="ng_kg">NG (Kg)</option>
@@ -345,7 +389,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="yieldModelChart"></canvas></div>
@@ -357,7 +401,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="yieldMachineChart"></canvas></div>
@@ -369,7 +413,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="dailyOutputChart"></canvas></div>
@@ -381,7 +425,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
@@ -395,7 +439,7 @@
                                 📈 Trend อาการ NG (รายวัน)
                             </h3>
                             <div class="flex gap-1 mt-1">
-                                <select id="ngTrendSelector" onchange="window.renderNgTrendChart()" class="text-[10px] font-normal border border-gray-300 rounded p-1 text-gray-600 bg-white outline-none cursor-pointer hover:bg-gray-50 transition-colors">
+                                <select id="ngTrendSelector" onchange="window.renderNgTrendChart()" class="text-[10px] font-normal border border-gray-300 rounded p-1 text-gray-600 bg-white outline-none cursor-pointer hover:bg-gray-50 transition-colors print-hide">
                                     <option value="pcs">จำนวนเสีย (ชิ้น)</option>
                                     <option value="percent">% เทียบยอดผลิต</option>
                                 </select>
@@ -404,7 +448,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngSymptomTrendChart"></canvas></div>
@@ -417,7 +461,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngByMachineChart"></canvas></div>
@@ -429,7 +473,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <!-- 🌟 ภาชนะสำหรับใส่ Custom Legend (ซ้าย FG / ขวา NG) -->
@@ -444,7 +488,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngChart"></canvas></div>
@@ -455,7 +499,7 @@
                         <h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3>
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="table-container flex-1 overflow-y-auto">
@@ -1505,6 +1549,67 @@
             }
         };
 
+        // 🌟 ฟังก์ชันพิมพ์ Report PDF
+        window.printReport = function() {
+            // อัปเดตข้อมูลวันที่ลงในหัวกระดาษก่อนพิมพ์
+            const sDate = document.getElementById('startDate').value;
+            const eDate = document.getElementById('endDate').value;
+            const shift = document.getElementById('filterShift').options[document.getElementById('filterShift').selectedIndex].text;
+            const shiftType = document.getElementById('filterShiftType').options[document.getElementById('filterShiftType').selectedIndex].text;
+            
+            let subtitle = `วันที่: ${sDate}`;
+            if(sDate !== eDate) subtitle += ` ถึง ${eDate}`;
+            subtitle += ` | กะ: ${shift} | ช่วงเวลา: ${shiftType}`;
+            
+            document.getElementById('print-date-subtitle').innerText = subtitle;
+            
+            // สั่งเปิดหน้าต่าง Print ของเบราว์เซอร์
+            window.print();
+        };
+
+        // 🌟 ฟังก์ชันดาวน์โหลดเป็น Excel (CSV)
+        window.exportCSV = function() {
+            if (!currentDashboardData) {
+                alert("⚠️ กรุณากดปุ่มค้นหาข้อมูล (ดึง Dashboard) ก่อนทำการส่งออก Excel");
+                return;
+            }
+            
+            const data = currentDashboardData;
+            
+            // ใส่ BOM (Byte Order Mark) เพื่อให้ Excel อ่านภาษาไทยได้ถูกต้อง
+            let csvContent = "\ufeff"; 
+            csvContent += "Machine,Product Assigned,FG (Pcs),NG (Pcs),NG (Kg),% Yield\n";
+            
+            for(let i=1; i<=16; i++) {
+                const m = `CWM-${String(i).padStart(2,'0')}`; 
+                const d = (data.machineData && data.machineData[m]) ? data.machineData[m] : {fg:0, ngTotal:0, ngTotalKg:0, ngTotalPcs:0};
+                
+                const ngPcs = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
+                const ngKg = d.ngTotalKg || 0;
+                
+                const t = d.fg + ngPcs; 
+                const y = t > 0 ? ((d.fg/t)*100).toFixed(2) : "0.00";
+                
+                const productAssigned = machineMapping[m] || 'Unassigned';
+                
+                // ประกอบเป็น 1 แถวของ CSV
+                csvContent += `${m},${productAssigned},${d.fg},${ngPcs},${ngKg.toFixed(2)},${y}%\n`;
+            }
+            
+            // สร้างไฟล์จำลองแล้วสั่งดาวน์โหลด
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            
+            const sDate = document.getElementById('startDate').value;
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", `CWM_Report_${sDate}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
         window.loadDashboard = async function() {
             if(!SCRIPT_URL) return;
             document.getElementById('dashboard-content').classList.add('hidden');
@@ -1957,131 +2062,6 @@
                         }
                     }
                 } 
-            });
-        };
-
-        // 🌟 ฟังก์ชันวาดกราฟ Trend อาการ NG แบบรายวันแยกออกมา เพื่อให้เรียกใช้ตอนเปลี่ยน Dropdown ได้ง่าย
-        window.renderNgTrendChart = function() {
-            if (!currentDashboardData || !charts) return;
-            const data = currentDashboardData;
-            const ctxNgTrend = document.getElementById('ngSymptomTrendChart');
-            if (!ctxNgTrend) return;
-
-            const selector = document.getElementById('ngTrendSelector');
-            const mode = selector ? selector.value : 'pcs'; // 'pcs' หรือ 'percent'
-
-            if (charts.ngSymptomTrend) charts.ngSymptomTrend.destroy();
-            const trendData = data.dailyTrend || [];
-            
-            // ดึงชื่ออาการทั้งหมดที่มีในช่วงเวลานี้มารวมกันไม่ให้ตกหล่น
-            let allTrendNgTypes = new Set();
-            trendData.forEach(d => {
-                if(d.ngBreakdown) {
-                    Object.keys(d.ngBreakdown).forEach(k => allTrendNgTypes.add(k));
-                }
-            });
-            const uniqueNgTypes = Array.from(allTrendNgTypes).sort();
-            
-            // ชุดสีสำหรับแบ่งเส้นกราฟแต่ละอาการ
-            const lineColors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6'];
-            
-            let trendDatasets = uniqueNgTypes.map((type, idx) => {
-                return {
-                    label: type,
-                    data: trendData.map(d => {
-                        const rawPcs = (d.ngBreakdown && d.ngBreakdown[type]) ? d.ngBreakdown[type] : 0;
-                        if (mode === 'percent') {
-                            const total = (d.fg || 0) + (d.ng || 0);
-                            return total > 0 ? parseFloat(((rawPcs / total) * 100).toFixed(2)) : 0;
-                        }
-                        return rawPcs;
-                    }),
-                    borderColor: lineColors[idx % lineColors.length],
-                    backgroundColor: lineColors[idx % lineColors.length],
-                    tension: 0.3,
-                    borderWidth: 2,
-                    pointRadius: 3,
-                    pointHoverRadius: 6,
-                    fill: false
-                };
-            });
-            
-            const commonOpts = { 
-                 responsive: true, 
-                 maintainAspectRatio: false,
-                 onClick: (e, elements, chart) => {
-                     if (elements && elements.length > 0 && chart.options.scales) {
-                         const axisId = chart.options.indexAxis === 'y' ? 'y' : 'x';
-                         const index = elements[0].index;
-                         if(chart.options.scales[axisId]) {
-                             chart.options.scales[axisId].min = index;
-                             chart.options.scales[axisId].max = index;
-                             chart.update();
-                         }
-                     }
-                 },
-                 plugins: {
-                     zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } }
-                 }
-            };
-
-            const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
-            const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
-
-            charts.ngSymptomTrend = new Chart(ctxNgTrend, {
-                type: 'line',
-                plugins: activePlugins,
-                data: {
-                    labels: trendData.map(d=>d.date),
-                    datasets: trendDatasets
-                },
-                options: {
-                    ...commonOpts,
-                    scales: { 
-                        x: { offset: true }, 
-                        y: { 
-                            beginAtZero: true, 
-                            title: { display: true, text: mode === 'percent' ? '% เทียบยอดผลิต' : 'จำนวน (ชิ้น)' }
-                        } 
-                    },
-                    layout: { padding: { top: 20, right: 20 } },
-                    plugins: {
-                        ...commonOpts.plugins,
-                        legend: { 
-                            display: true, 
-                            position: 'bottom', 
-                            labels: { boxWidth: 12, font: {size: 10} } 
-                        },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false,
-                            itemSort: function(a, b) {
-                                return b.raw - a.raw; // เรียงอาการที่เกิดเยอะสุดขึ้นบนใน Tooltip
-                            },
-                            filter: function(tooltipItem) {
-                                return tooltipItem.raw > 0; // ซ่อนอาการที่ยอดเป็น 0
-                            },
-                            callbacks: {
-                                label: function(context) {
-                                    return `${context.dataset.label}: ${context.parsed.y}${mode === 'percent' ? '%' : ' ชิ้น'}`;
-                                }
-                            }
-                        },
-                        datalabels: {
-                            display: function(ctx) { 
-                                const c = ctx.chart.canvas.closest('.widget-card'); 
-                                const isMax = c ? c.classList.contains('maximized-card') : false;
-                                return isMax && ctx.dataset.data[ctx.dataIndex] > 0; 
-                            },
-                            align: 'top',
-                            color: function(context) {
-                                return context.dataset.borderColor;
-                            },
-                            font: { weight: 'bold', size: 11 },
-                            formatter: (value) => value > 0 ? value + (mode === 'percent' ? '%' : '') : null
-                        }
-                    }
-                }
             });
         };
 
