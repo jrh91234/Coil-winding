@@ -12,7 +12,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <style>
         body { -webkit-tap-highlight-color: transparent; }
-        /* ปรับ active class ให้เหมาะกับเมนูแนวตั้ง (เปลี่ยนขอบล่างเป็นขอบซ้ายแทน) */
         .tab-active { @apply border-l-4 border-blue-600 text-blue-600 font-bold bg-blue-50; }
         .hidden { display: none; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -31,11 +30,9 @@
         .drag-handle:active { cursor: grabbing; }
         .sortable-ghost { opacity: 0.4; background-color: #f3f4f6; border: 2px dashed #cbd5e1; }
         
-        /* กฎเหล็กบังคับให้ Layout เป็นคอลัมน์เดี่ยว และล้างคำสั่ง col-span ทิ้งทั้งหมด */
         .layout-single { grid-template-columns: minmax(0, 1fr) !important; }
         .layout-single > div { grid-column: span 1 / span 1 !important; }
 
-        /* คลาสสำหรับขยายกราฟเต็มหน้าจอ */
         .maximized-card {
             position: fixed !important;
             inset: 0 !important;
@@ -48,12 +45,13 @@
             background-color: #ffffff !important;
         }
 
-        /* 🌟 CSS สำหรับการพิมพ์ (Print Report) */
+        /* 🌟 CSS สำหรับการพิมพ์รายงานแบบมาตราฐานโรงงาน */
         @media print {
-            body { background-color: white !important; }
-            /* เมื่ออยู่ในโหมดพิมพ์ Auto Report ให้ซ่อนทุกอย่างนอกจาก Modal Report */
+            @page { margin: 10mm; size: A4 portrait; }
+            body { background-color: white !important; font-size: 12pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            
             body.printing-auto-report > *:not(#modal-auto-report) { display: none !important; }
-            body.printing-auto-report #modal-auto-report { position: relative !important; display: block !important; opacity: 1 !important; background: transparent !important; }
+            body.printing-auto-report #modal-auto-report { position: absolute !important; top: 0; left: 0; display: block !important; opacity: 1 !important; background: white !important; width: 100%; height: auto; }
             body.printing-auto-report #modal-auto-report > div { width: 100% !important; max-width: 100% !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; max-height: none !important; }
             body.printing-auto-report .auto-report-hide { display: none !important; }
             
@@ -62,12 +60,15 @@
             .widget-header button { display: none !important; }
             #section-dashboard { max-width: 100% !important; padding: 0 !important; margin: 0 !important; display: block !important; }
             .bg-white.p-4.rounded-xl.shadow-md { box-shadow: none !important; border: none !important; padding: 0 !important; margin-bottom: 20px !important; }
-            .widget-card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; page-break-inside: avoid !important; margin-bottom: 20px !important; break-inside: avoid !important; }
+            .widget-card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; break-inside: avoid !important; margin-bottom: 20px !important; }
             #sortable-grid { display: block !important; }
             #sortable-grid > div { width: 100% !important; height: auto !important; min-height: 350px !important; margin-bottom: 20px !important; }
             .table-container { overflow: visible !important; box-shadow: none !important; border: none !important; }
-            #print-header { display: block !important; text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            
+            .page-break-before { page-break-before: always !important; break-before: page !important; }
             .page-break-inside-avoid { page-break-inside: avoid !important; break-inside: avoid !important; }
+            
+            #print-header { display: none; }
         }
         #print-header { display: none; }
     </style>
@@ -75,15 +76,13 @@
 <body class="bg-gray-100 min-h-screen font-sans pb-10">
     
     <!-- Navbar แบบ Hamberger Menu -->
-    <nav class="bg-white shadow-md sticky top-0 z-30">
+    <nav class="bg-white shadow-md sticky top-0 z-30 print-hide">
         <div class="max-w-6xl mx-auto px-4">
             <div class="flex justify-between items-center py-3">
-                <!-- โลโก้หรือชื่อระบบด้านซ้าย -->
                 <div class="flex items-center gap-2">
                     <span class="text-2xl">🏭</span>
                     <span class="font-bold text-lg text-blue-800 tracking-wide">CWM System</span>
                 </div>
-                <!-- ปุ่ม Hamburger -->
                 <button onclick="window.toggleMenu()" class="text-gray-600 hover:text-blue-600 focus:outline-none p-2 rounded-lg hover:bg-blue-50 transition-colors">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16"></path>
@@ -92,19 +91,17 @@
             </div>
         </div>
         
-        <!-- Dropdown Menu (ซ่อนอยู่โดยค่าเริ่มต้น) -->
         <div id="dropdown-menu" class="hidden absolute left-0 right-0 bg-white shadow-xl border-t border-gray-100 flex flex-col z-20">
             <button onclick="window.switchTab('form'); window.toggleMenu()" id="tab-form" class="py-4 px-6 text-left text-blue-600 font-bold border-l-4 border-blue-600 bg-blue-50 hover:bg-blue-50 transition-colors text-lg">📝 บันทึกผลิต</button>
             <button onclick="window.switchTab('planning'); window.toggleMenu()" id="tab-planning" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg">📅 วางแผน (Plan)</button>
             <button onclick="window.switchTab('dashboard'); window.toggleMenu()" id="tab-dashboard" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg">📊 Dashboard</button>
-            
-            <!-- 🌟 ปุ่มลิงก์ไปแอป RW (แก้ปัญหา iOS Add to Home Screen ไม่ยอมเปิดแท็บใหม่) -->
             <button onclick="window.toggleMenu(); window.location.href='https://jrh91234.github.io/CMW-rawmat/';" id="tab-rw" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg w-full text-left">📦 รับเข้า (RW) ↗️</button>
         </div>
     </nav>
     
     <!-- SECTION 1: FORM -->
-    <main id="section-form" class="max-w-4xl mx-auto p-4 space-y-4">
+    <main id="section-form" class="max-w-4xl mx-auto p-4 space-y-4 print-hide">
+        <!-- (Form Content Remains Same) -->
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
@@ -144,7 +141,6 @@
                     </div>
                 </div>
                 
-                <!-- ปุ่มกำหนดรุ่นให้เครื่องจักร -->
                 <div class="flex justify-between items-end mt-4 mb-2">
                     <h3 class="font-bold text-gray-700 text-sm">รายการผลิต</h3>
                     <button type="button" onclick="window.openAssignModal()" class="text-xs bg-indigo-50 text-indigo-700 font-bold py-1.5 px-3 rounded border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1 shadow-sm">
@@ -168,7 +164,7 @@
     </main>
 
     <!-- SECTION 2: PLANNING -->
-    <main id="section-planning" class="max-w-2xl mx-auto p-4 space-y-4 hidden">
+    <main id="section-planning" class="max-w-2xl mx-auto p-4 space-y-4 hidden print-hide">
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-indigo-500">
             <h1 class="text-lg font-bold text-gray-800 mb-4">📅 วางแผนการผลิต</h1>
             <form id="planningForm" class="space-y-4">
@@ -196,24 +192,13 @@
     
     <!-- SECTION 3: DASHBOARD -->
     <main id="section-dashboard" class="max-w-6xl mx-auto p-4 space-y-6 hidden">
-         <!-- หัวกระดาษเวลาพิมพ์ (ซ่อนอยู่ตอนใช้งานปกติ) -->
-         <div id="print-header">
-             <h1 class="text-2xl font-bold text-gray-800">CWM Production Report</h1>
-             <p class="text-gray-600" id="print-date-subtitle">ข้อมูลการผลิต</p>
-         </div>
-
-         <div class="bg-white p-4 rounded-xl shadow-md border-t-4 border-indigo-500">
+         <div class="bg-white p-4 rounded-xl shadow-md border-t-4 border-indigo-500 print-hide">
             <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-3">
                 <h2 class="text-gray-700 font-bold text-sm mb-2 lg:mb-0 print-hide">📅 ตัวเลือกการกรอง <span class="text-xs font-normal text-gray-500">(ดึงข้อมูลตั้งแต่ 08:00น. ถึง 08:00น. ของอีกวัน)</span><span class="text-xs font-normal text-blue-500 ml-2 border-l pl-2 border-gray-300">💡 หมุนลูกกลิ้งเมาส์/บีบนิ้วเพื่อซูมกราฟ & ดับเบิลคลิกบนกราฟเพื่อรีเซ็ต</span></h2>
                 
-                <!-- 🌟 กลุ่มปุ่ม Report -->
                 <div class="flex flex-wrap gap-2 w-full lg:w-auto print-hide">
-                    <!-- 🌟 ปุ่มสร้าง Auto Report -->
                     <button onclick="window.openAutoReport()" class="flex-1 lg:flex-none bg-indigo-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm flex items-center justify-center gap-1">
                         🤖 Auto Report (AI Summary)
-                    </button>
-                    <button onclick="window.printReport()" class="flex-1 lg:flex-none bg-gray-800 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-gray-900 transition-colors shadow-sm flex items-center justify-center gap-1">
-                        🖨️ พิมพ์หน้านี้
                     </button>
                     <button onclick="window.exportCSV()" class="flex-1 lg:flex-none bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-green-700 transition-colors shadow-sm flex items-center justify-center gap-1">
                         📗 ดาวน์โหลด Excel
@@ -247,7 +232,6 @@
             <p class="text-gray-500 font-medium mt-2">กำลังประมวลผลข้อมูล...</p>
         </div>
 
-        <!-- DEBUG PANEL -->
         <div id="debug-panel" class="hidden bg-red-50 border border-red-200 p-4 rounded-xl shadow-inner mb-4 print-hide">
             <div class="flex justify-between items-center mb-2">
                 <h3 class="text-red-800 font-bold text-sm">🛑 ระบบ Debug & Logs</h3>
@@ -367,7 +351,6 @@
                     </div>
                 </div>
                 
-                <!-- 🌟 เปลี่ยน Yield by Model แบบเดิมให้เป็น Model Analysis รองรับ Dropdown สลับกราฟ -->
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <div class="flex flex-col gap-1">
@@ -409,7 +392,6 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="yieldMachineChart"></canvas></div>
                 </div>
 
-                <!-- 🌟 กราฟแก้ไขใหม่: Daily Output (FG & NG) สลับจำนวน/% -->
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <div class="flex flex-col gap-1">
@@ -434,7 +416,7 @@
                 
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
-                        <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Trend</h3>
+                        <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Rate Trend</h3>
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความกว้าง">↔</button>
@@ -444,7 +426,6 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
                 </div>
 
-                <!-- 🌟 กราฟแก้ไขใหม่: Trend อาการ NG (รายวัน) พร้อมตัวเลือกสลับโหมดชิ้น/% -->
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <div class="flex flex-col gap-1">
@@ -467,7 +448,6 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngSymptomTrendChart"></canvas></div>
                 </div>
                 
-                <!-- 🌟 แหล่งกำเนิด NG (แยกตามเครื่องจักร) -->
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">🏭 แหล่งกำเนิด NG (แยกตามเครื่องจักร)</h3>
@@ -480,7 +460,7 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngByMachineChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card p-4 h-[350px]">
+                <div class="widget-card p-4 h-[350px] print-hide">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">Hourly Production (FG & NG)</h3>
                         <div class="flex gap-2">
@@ -495,7 +475,7 @@
                     <div class="flex-1 relative w-full min-h-[150px]"><canvas id="hourlyChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card p-4 h-[350px]">
+                <div class="widget-card p-4 h-[350px] print-hide">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">NG Breakdown</h3>
                         <div class="flex gap-2">
@@ -507,7 +487,7 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card md:col-span-2 p-4">
+                <div class="widget-card md:col-span-2 p-4 print-hide">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3>
                         <div class="flex gap-2">
@@ -526,23 +506,26 @@
         </div>
     </main>
 
-    <!-- 🌟 Modal สำหรับระบบ Auto Report (AI Summary) -->
+    <!-- 🌟 Modal สำหรับระบบ Auto Report (AI Summary) มาตรฐานโรงงาน -->
     <div id="modal-auto-report" class="fixed inset-0 bg-gray-100 z-50 hidden flex-col overflow-y-auto">
         <div class="bg-white shadow-md p-4 sticky top-0 z-10 flex justify-between items-center auto-report-hide border-b border-gray-200">
-            <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">🤖 AI Report Preview</h2>
+            <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">🤖 Factory Standard Report Preview</h2>
             <div class="flex gap-2">
-                <button onclick="window.printAutoReport()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-indigo-700 transition-colors">🖨️ พิมพ์ / บันทึก PDF</button>
+                <button onclick="window.printAutoReport()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-indigo-700 transition-colors flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                    พิมพ์ / บันทึก PDF
+                </button>
                 <button onclick="window.closeAutoReport()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-300 transition-colors">❌ ปิด</button>
             </div>
         </div>
-        <div class="p-6 max-w-4xl mx-auto w-full bg-white my-6 shadow-xl rounded-xl" id="auto-report-content">
+        <div class="p-6 md:p-10 max-w-[210mm] mx-auto w-full bg-white my-6 shadow-2xl rounded-sm" id="auto-report-content" style="min-height: 297mm;">
             <!-- ข้อมูลรายงานจะถูกสร้างและใส่ในนี้ด้วย JavaScript -->
         </div>
     </div>
 
     <!-- Modals -->
     <!-- Assign Modal -->
-    <div id="modal-assign" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+    <div id="modal-assign" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 print-hide">
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[90vh]">
             <div class="flex justify-between items-center mb-4 flex-none">
                 <h3 class="text-lg font-bold text-gray-800">⚙️ กำหนดรุ่นให้เครื่องจักร</h3>
@@ -550,9 +533,7 @@
             </div>
             <p class="text-xs text-gray-500 mb-3 flex-none">เมื่อเลือกเครื่องจักรในฟอร์ม ระบบจะดึงรุ่นที่ตั้งค่าไว้นี้มาให้อัตโนมัติ</p>
             
-            <div id="assign-list-container" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1 pr-2">
-                <!-- Data will be injected here -->
-            </div>
+            <div id="assign-list-container" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1 pr-2"></div>
             
             <div class="flex-none pt-3 border-t flex gap-2">
                 <button onclick="window.saveAssignment()" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold hover:bg-indigo-700">💾 บันทึกการตั้งค่า</button>
@@ -560,7 +541,8 @@
         </div>
     </div>
 
-    <div id="modal-ng" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+    <!-- NG Modal -->
+    <div id="modal-ng" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 print-hide">
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[80vh]">
             <div class="flex justify-between items-center mb-4 flex-none">
                 <h3 class="text-lg font-bold">บันทึกของเสีย (NG)</h3>
@@ -581,7 +563,8 @@
         </div>
     </div>
     
-    <div id="modal-machine-detail" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center hidden backdrop-blur-sm p-2">
+    <!-- Machine Detail Modal -->
+    <div id="modal-machine-detail" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center hidden backdrop-blur-sm p-2 print-hide">
         <div class="bg-white w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
             <div class="bg-blue-600 p-4 border-b flex justify-between items-center text-white">
                 <h3 id="machine-detail-title" class="font-bold text-lg">Machine Detail</h3>
@@ -590,7 +573,6 @@
             <div class="p-4 overflow-y-auto flex-1 flex flex-col">
                 <div id="machine-detail-stats" class="mb-4 grid grid-cols-2 gap-4 text-center"></div>
                 
-                <!-- 🌟 เพิ่ม Dropdown เพื่อสลับกราฟในหน้าต่างเครื่องจักร -->
                 <div class="flex justify-between items-center mb-2 bg-gray-100 p-2 rounded">
                     <h4 class="font-bold text-gray-700 text-sm">📈 กราฟการผลิต</h4>
                     <select id="machineChartToggle" onchange="window.switchMachineChart()" class="text-xs border border-gray-300 rounded p-1 text-gray-700 bg-white font-bold cursor-pointer">
@@ -611,7 +593,7 @@
     </div>
 
     <!-- Modal for Manage Lists -->
-    <div id="modal-manage-list" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+    <div id="modal-manage-list" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 print-hide">
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[80vh]">
             <h3 id="manage-list-title" class="text-lg font-bold mb-4 flex-none">Manage List</h3>
             <div id="manage-list-content" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1 border border-gray-100 rounded bg-white"></div>
@@ -622,7 +604,6 @@
                      <button onclick="window.addNewItemToList()" class="bg-green-600 text-white px-4 rounded font-bold hover:bg-green-700">เพิ่ม</button>
                  </div>
                  <div class="flex gap-2 mt-2">
-                     <!-- ปุ่มบันทึกขึ้น Cloud -->
                      <button id="btn-save-cloud" onclick="window.saveListToCloud()" class="flex-1 bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700 shadow-sm">☁️ อัปเดตขึ้น Cloud</button>
                      <button onclick="window.closeManageListModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded font-bold hover:bg-gray-300">ปิด</button>
                  </div>
@@ -631,7 +612,7 @@
     </div>
 
     <!-- Undo Toast Notification -->
-    <div id="undo-toast" class="fixed bottom-5 right-5 bg-gray-900 text-white px-5 py-4 rounded-xl shadow-2xl flex items-center gap-4 transition-all transform translate-y-24 opacity-0 pointer-events-none z-50 duration-300">
+    <div id="undo-toast" class="fixed bottom-5 right-5 bg-gray-900 text-white px-5 py-4 rounded-xl shadow-2xl flex items-center gap-4 transition-all transform translate-y-24 opacity-0 pointer-events-none z-50 duration-300 print-hide">
         <div class="flex-1">
             <p class="text-sm font-bold text-green-400">✅ บันทึกข้อมูลสำเร็จ</p>
             <p class="text-xs text-gray-300 mt-0.5">หากบันทึกผิด สามารถกดยกเลิกได้</p>
@@ -661,11 +642,10 @@
         let batchNgData = {};
         let currentDashboardData = null;
         let machineDetailChart = null;
-        let machineDailyChartInst = null; // เพิ่มตัวแปรกราฟรายวันสำหรับ Modal เครื่องจักร
+        let machineDailyChartInst = null; 
         let charts = {};
         let currentManageType = '';
         
-        // --- ตัวแปรสำหรับคุม Layout (Global Scope) ---
         window.isDualLayout = true;
         window.lastBatchId = null;
 
@@ -732,16 +712,13 @@
             window.renderRecorderOptions();
             window.renderProductOptions();
 
-            // 🌟 เพิ่ม Event Listener ให้ดับเบิลคลิกที่แคนวาสเพื่อรีเซ็ตการซูม (ทั้ง Plugin และ Manual Min/Max)
             document.addEventListener('dblclick', function(e) {
                 if (e.target.tagName === 'CANVAS') {
                     const chartInstance = Chart.getChart(e.target);
                     if (chartInstance) {
-                        // 1. Reset ซูมจาก Plugin (Wheel/Pinch)
                         if (typeof chartInstance.resetZoom === 'function') {
                             chartInstance.resetZoom();
                         }
-                        // 2. Reset ซูมจาก Click To Zoom (ลบค่า min, max ทิ้ง)
                         if (chartInstance.options.scales) {
                             Object.keys(chartInstance.options.scales).forEach(key => {
                                 delete chartInstance.options.scales[key].min;
@@ -753,7 +730,6 @@
                 }
             });
 
-            // เพิ่ม Event Listener สำหรับปุ่ม ESC เพื่อออกจากการขยายเต็มจอ
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') {
                     const maxCard = document.querySelector('.maximized-card');
@@ -770,7 +746,6 @@
         
         window.fetchOptions = async function() {
             try {
-                // บังคับไม่ให้โหลด Cache เก่าของเบราว์เซอร์
                 const res = await fetch(`${SCRIPT_URL}?action=GET_OPTIONS&_t=${Date.now()}`);
                 const data = await res.json();
                 
@@ -788,7 +763,6 @@
                    ngSymptoms = normalizeSymptomList(ngSymptoms);
                 }
                 
-                // ซิงค์การตั้งค่าเครื่องจักรจาก Cloud ลง Local อัตโนมัติ
                 if (data.machineMapping) {
                     machineMapping = data.machineMapping;
                     localStorage.setItem('CWM_MACHINE_MAPPING', JSON.stringify(machineMapping));
@@ -819,19 +793,15 @@
             });
         };
 
-        // --- ฟังก์ชันเปิด/ปิด Hamburger Menu ---
         window.toggleMenu = function() {
             const menu = document.getElementById('dropdown-menu');
             menu.classList.toggle('hidden');
         };
 
-        // --- ฟังก์ชันสลับ Layout ที่แก้ไข CSS Grid ให้เด็ดขาด ---
         window.toggleLayout = function() {
             const debugOut = document.getElementById('debug-output');
-            
             try {
                 debugOut.innerText += "\n[System] ฟังก์ชัน toggleLayout ทำงานแล้ว...";
-                
                 window.isDualLayout = !window.isDualLayout;
                 debugOut.innerText += `\n[System] สถานะเลย์เอาต์ที่ต้องการ: ${window.isDualLayout ? 'คู่' : 'เดี่ยว'}`;
                 
@@ -841,20 +811,17 @@
                 if (!grid || !btn) return;
 
                 if (window.isDualLayout) {
-                    // เปิด 2 คอลัมน์ (โหมดปกติของ Tailwind)
                     grid.classList.add('md:grid-cols-2');
-                    grid.classList.remove('layout-single'); // ถอดกฏบังคับเดี่ยวออก
+                    grid.classList.remove('layout-single'); 
                     btn.innerText = '🔀 Layout: คู่';
                 } else {
-                    // เปิด 1 คอลัมน์ (ใช้ CSS Custom คุมเด็ดขาด)
                     grid.classList.remove('md:grid-cols-2');
-                    grid.classList.add('layout-single'); // ใส่กฏบังคับเดี่ยว
+                    grid.classList.add('layout-single'); 
                     btn.innerText = '🔀 Layout: เดี่ยว';
                 }
                 
                 debugOut.innerText += "\n[System] เปลี่ยนคลาสสำเร็จ เริ่มรีไซส์กราฟ...";
 
-                // รอให้ DOM ขยับเสร็จแล้วสั่งกราฟ Resize ตัวเอง
                 setTimeout(() => {
                     let count = 0;
                     Object.values(charts).forEach(c => { 
@@ -865,7 +832,6 @@
                     });
                     debugOut.innerText += `\n[System] รีไซส์กราฟเสร็จสิ้น ${count} อัน (สำเร็จ!)`;
                 }, 150);
-
             } catch (err) {
                 debugOut.innerText += `\n[Fatal Error] โค้ดพัง: ${err.message}`;
             }
@@ -887,7 +853,6 @@
             }, 150);
         };
 
-        // --- ฟังก์ชันปรับความสูงกราฟแบบ On-the-fly ---
         window.toggleCardHeight = function(btn) {
             const card = btn.closest('.widget-card');
             if (card.classList.contains('h-[350px]')) {
@@ -906,12 +871,10 @@
             }, 150);
         };
 
-        // --- ฟังก์ชันขยายหน้าต่างแบบเต็มหน้าจอ (Maximize) ---
         window.toggleCardMaximize = function(btn) {
             const card = btn.closest('.widget-card');
             const isMaximized = card.classList.contains('maximized-card');
             
-            // 🌟 สร้างหรือหา element สำหรับแสดงวันที่ช่วงที่เลือก
             let dateLabel = card.querySelector('.max-date-label');
             if (!dateLabel) {
                 dateLabel = document.createElement('div');
@@ -921,37 +884,33 @@
             }
             
             if (isMaximized) {
-                // ยกเลิกขยายเต็มหน้าจอ
                 card.classList.remove('maximized-card');
-                document.body.style.overflow = ''; // คืนค่าการเลื่อนหน้าจอหลัก
-                btn.innerHTML = '⛶'; // เปลี่ยนไอคอนกลับเป็นรูปขยาย
+                document.body.style.overflow = ''; 
+                btn.innerHTML = '⛶'; 
                 btn.title = 'ขยายเต็มจอ';
-                dateLabel.classList.add('hidden'); // ซ่อนวันที่
+                dateLabel.classList.add('hidden'); 
             } else {
-                // ขยายเต็มหน้าจอ
                 card.classList.add('maximized-card');
-                document.body.style.overflow = 'hidden'; // ซ่อน Scrollbar ของหน้าจอหลักด้านหลัง
-                btn.innerHTML = '✖'; // เปลี่ยนไอคอนเป็นรูปปิด
+                document.body.style.overflow = 'hidden'; 
+                btn.innerHTML = '✖'; 
                 btn.title = 'ย่อหน้าจอ';
                 
-                // 🌟 ดึงค่าวันที่มาแสดงผล
                 const sDate = document.getElementById('startDate').value;
                 const eDate = document.getElementById('endDate').value;
                 const shift = document.getElementById('filterShift').options[document.getElementById('filterShift').selectedIndex].text;
                 const shiftType = document.getElementById('filterShiftType').options[document.getElementById('filterShiftType').selectedIndex].text;
                 
                 dateLabel.innerHTML = `📅 ข้อมูลวันที่: <span class="text-gray-700 font-bold">${sDate}</span> ถึง <span class="text-gray-700 font-bold">${eDate}</span> <span class="mx-2 text-gray-300">|</span> กะ: <span class="text-gray-700 font-bold">${shift}</span> <span class="mx-2 text-gray-300">|</span> ช่วง: <span class="text-gray-700 font-bold">${shiftType}</span>`;
-                dateLabel.classList.remove('hidden'); // แสดงวันที่
+                dateLabel.classList.remove('hidden'); 
             }
             
-            // รอแอนิเมชัน CSS แล้วสั่งให้กราฟวาดสเกลและข้อมูลใหม่
             setTimeout(() => {
                 const canvas = card.querySelector('canvas');
                 if(canvas) { 
                     const chartInstance = Chart.getChart(canvas); 
                     if(chartInstance) {
                         chartInstance.resize(); 
-                        chartInstance.update(); // Update เพื่อให้ datalabels เช็คเงื่อนไขการแสดงผลใหม่
+                        chartInstance.update(); 
                     }
                 }
             }, 150);
@@ -1188,7 +1147,6 @@
                 badge.innerText = total.toFixed(2); 
                 badge.classList.remove('hidden'); 
                 
-                // ล็อคและเปลี่ยนค่า FG เป็น 0 ทันทีเมื่อมีการลงยอด NG
                 if (fgInput) {
                     fgInput.value = 0;
                     fgInput.readOnly = true;
@@ -1199,7 +1157,6 @@
             } else { 
                 badge.classList.add('hidden'); 
                 
-                // ปลดล็อค FG เมื่อไม่มี NG แล้ว
                 if (fgInput && fgInput.readOnly) {
                     fgInput.readOnly = false;
                     fgInput.classList.remove('bg-gray-100', 'text-gray-400', 'cursor-not-allowed', 'opacity-60');
@@ -1351,11 +1308,9 @@
             document.getElementById('modal-manage-list').classList.add('hidden'); 
         };
 
-        // --- เพิ่มฟังก์ชันควบคุม Toast Undo ที่อัปเดตให้เสถียรและนุ่มนวลขึ้น ---
         window.showUndoToast = function() {
             const toast = document.getElementById('undo-toast');
             const btn = document.getElementById('btn-undo-action');
-            // รีเซ็ตสถานะปุ่มกลับมาเป็นปกติทุกครั้งที่โชว์
             btn.innerHTML = "↩️ ยกเลิก (Undo)";
             btn.disabled = false;
             btn.classList.remove('bg-green-600', 'hover:bg-green-700');
@@ -1382,18 +1337,14 @@
                     action: 'UNDO_BATCH_PRODUCTION', 
                     batchId: window.lastBatchId 
                 };
-                // สั่งไปที่ Google Apps Script
                 await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
                 
-                // เปลี่ยนข้อความและสีปุ่มเพื่อแจ้งสถานะสำเร็จ
                 btn.innerHTML = "✅ ยกเลิกสำเร็จ!";
                 btn.classList.remove('bg-red-600', 'hover:bg-red-700');
                 btn.classList.add('bg-green-600', 'hover:bg-green-700');
                 
-                // รอให้ผู้ใช้เห็นว่าสำเร็จ 1.5 วินาที แล้วค่อยซ่อน Toast
                 setTimeout(() => {
                     window.closeUndoToast();
-                    // คืนค่าสีปุ่มกลับเป็นสีแดงเตรียมพร้อมสำหรับรอบหน้าหลังจาก Toast ซ่อนไปแล้ว
                     setTimeout(() => {
                         btn.classList.remove('bg-green-600', 'hover:bg-green-700');
                         btn.classList.add('bg-red-600', 'hover:bg-red-700');
@@ -1426,7 +1377,6 @@
                 window.renderRecorderOptions(); 
             }
             
-            // สร้างรหัส Batch ไม่ซ้ำกันเพื่อใช้สำหรับฟีเจอร์ Undo
             const newBatchId = 'BATCH-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
 
             const common = { 
@@ -1436,7 +1386,7 @@
                 shiftType: shiftType, 
                 recorder: currentRec, 
                 hourSlot: hourSlot,
-                batchId: newBatchId // แนบ Batch ID ไปด้วย
+                batchId: newBatchId 
             };
             
             const items = []; 
@@ -1476,7 +1426,6 @@
             }
 
             try {
-                // บังคับไม่ให้โหลด Cache เก่าของเบราว์เซอร์
                 const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${date}&end=${date}&shift=All&shiftType=All&_t=${Date.now()}`);
                 const dbData = await res.json();
                 
@@ -1524,16 +1473,13 @@
                 const payload = { action: 'SAVE_BATCH_PRODUCTION', common, items };
                 await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
                 
-                // ล้างฟอร์ม
                 document.getElementById('batchList').innerHTML = ''; 
                 batchNgData = {}; 
                 window.addBatchRow(); 
 
-                // ปิดปุ่มเก่า คืนค่า
                 btn.disabled = false; 
                 btn.innerText = txt;
 
-                // 🌟 เรียก Toast ขึ้นมาโชว์ให้โอกาสพนักงานกด Undo
                 window.lastBatchId = newBatchId;
                 window.showUndoToast();
 
@@ -1591,7 +1537,7 @@
             window.print();
         };
 
-        // 🌟 ฟังก์ชันเปิดหน้า Auto Report (AI Summary)
+        // 🌟 ฟังก์ชันเปิดหน้า Auto Report (AI Summary) ฉบับมาตรฐานโรงงาน
         window.openAutoReport = function() {
             if (!currentDashboardData) {
                 alert("⚠️ กรุณากดปุ่ม 🔍ค้นหา เพื่อดึงข้อมูลสำหรับสร้างรายงานก่อนครับ");
@@ -1602,11 +1548,20 @@
             const modal = document.getElementById('modal-auto-report');
             const content = document.getElementById('auto-report-content');
 
-            // 1. ประมวลผลข้อมูล (Data Insights)
+            // 1. ประมวลผลข้อมูล KPI (Data Insights)
             const totalFG = data.totalFg || 0;
             const totalNG = data.totalNgPcs !== undefined ? data.totalNgPcs : (data.totalNg || 0);
+            const ngKg = data.totalNgKg || 0;
             const totalQty = totalFG + totalNG;
-            const yieldPct = totalQty > 0 ? ((totalFG/totalQty)*100).toFixed(2) : 0;
+            const yieldPct = totalQty > 0 ? ((totalFG/totalQty)*100).toFixed(2) : "0.00";
+            const target = data.productionTarget || 0;
+            const achPct = target > 0 ? ((totalFG/target)*100).toFixed(1) : "0.0";
+            
+            let achHtml = '';
+            if (target === 0) achHtml = `<span class="text-gray-500">N/A</span>`;
+            else if (achPct >= 100) achHtml = `<span class="text-green-600 font-bold">${achPct}% (Achieved)</span>`;
+            else if (achPct >= 80) achHtml = `<span class="text-orange-500 font-bold">${achPct}% (Warning)</span>`;
+            else achHtml = `<span class="text-red-600 font-bold">${achPct}% (Below Target)</span>`;
 
             // หาอาการ NG ที่เยอะที่สุด
             const labels = data.ngLabels || [];
@@ -1622,80 +1577,169 @@
                 }
             }
 
-            // หาเครื่องจักรที่ของเสียเยอะที่สุด
-            let topMac = { name: 'ไม่มี', ng: 0, yield: 0 };
+            // หาเครื่องจักรที่ของเสียเยอะที่สุด และ Yield ต่ำสุด
+            let topMacNg = { name: 'ไม่มี', ng: 0 };
+            let lowestYieldMac = { name: 'ไม่มี', yield: 100 };
+            
             if(data.machineData) {
                 for(let m in data.machineData) {
                     const md = data.machineData[m];
                     const mNg = md.ngTotalPcs !== undefined ? md.ngTotalPcs : (md.ngTotal || 0);
-                    if(mNg > topMac.ng) {
-                        const mT = md.fg + mNg;
-                        topMac = { name: m, ng: mNg, yield: mT > 0 ? ((md.fg/mT)*100).toFixed(2) : 0 };
-                    }
+                    const mT = md.fg + mNg;
+                    const mY = mT > 0 ? ((md.fg/mT)*100) : 100;
+                    
+                    if(mNg > topMacNg.ng) topMacNg = { name: m, ng: mNg };
+                    if(mY < lowestYieldMac.yield && mT > 0) lowestYieldMac = { name: m, yield: mY.toFixed(2) };
                 }
             }
 
-            // 2. จับภาพกราฟจาก Canvas เป็นรูปภาพ (Base64)
+            // 2. จับภาพกราฟทั้งหมดจาก Canvas เป็นรูปภาพ (Base64)
             const getChartImg = (id) => {
                 const canvas = document.getElementById(id);
-                return canvas ? canvas.toDataURL('image/png') : '';
+                if (canvas && canvas.toDataURL) {
+                    return canvas.toDataURL('image/png', 1.0); // ใช้คุณภาพ 1.0 (สูงสุด)
+                }
+                return '';
             };
 
-            const paretoImg = getChartImg('paretoChart');
-            const dailyOutputImg = getChartImg('dailyOutputChart');
-            const yieldMacImg = getChartImg('yieldMachineChart');
+            const imgDailyOutput = getChartImg('dailyOutputChart');
+            const imgTrendNG = getChartImg('qcTrendChart');
+            const imgPareto = getChartImg('paretoChart');
+            const imgNgMac = getChartImg('ngByMachineChart');
+            const imgYieldModel = getChartImg('yieldModelChart');
+            const imgYieldMac = getChartImg('yieldMachineChart');
 
             // 3. เตรียมข้อความส่วนหัวกระดาษ
             const sDate = document.getElementById('startDate').value;
             const eDate = document.getElementById('endDate').value;
             const dateStr = sDate === eDate ? sDate : `${sDate} ถึง ${eDate}`;
+            const shiftName = document.getElementById('filterShift').options[document.getElementById('filterShift').selectedIndex].text;
+            const shiftType = document.getElementById('filterShiftType').options[document.getElementById('filterShiftType').selectedIndex].text;
+            const printTime = new Date().toLocaleString('th-TH');
 
-            // 4. ประกอบร่างเป็น HTML พร้อมข้อความบรรยาย
+            // 4. ประกอบร่างเป็น HTML แบบมาตรฐานโรงงาน
             let html = `
-                <div class="text-center mb-6 border-b pb-4">
-                    <h2 class="text-2xl font-bold text-gray-800">📊 Executive Production Report</h2>
-                    <p class="text-gray-600 mt-1">สรุปผลการทำงานประจำวันที่: <span class="font-bold">${dateStr}</span></p>
+                <!-- หัวกระดาษ (Report Header) -->
+                <div class="border-b-2 border-gray-800 pb-4 mb-6">
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <h1 class="text-3xl font-black text-gray-900 uppercase tracking-tight">Production & Quality Report</h1>
+                            <p class="text-gray-600 mt-1 font-medium">รายงานสรุปผลการผลิตและควบคุมคุณภาพประจำวัน</p>
+                        </div>
+                        <div class="text-right text-sm">
+                            <p><b>Company:</b> CWM Manufacturing</p>
+                            <p><b>Printed:</b> ${printTime}</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-6 text-sm bg-gray-100 p-2 rounded border border-gray-200">
+                        <span class="font-bold">📅 วันที่: <span class="font-normal text-blue-700">${dateStr}</span></span>
+                        <span class="font-bold">🕒 กะการทำงาน: <span class="font-normal text-blue-700">${shiftName} (${shiftType})</span></span>
+                    </div>
                 </div>
 
-                <div class="mb-6 p-5 bg-blue-50 rounded-xl border border-blue-200 shadow-inner">
-                    <h3 class="font-bold text-blue-800 mb-2 text-lg">📌 สรุปภาพรวม (Executive Summary)</h3>
-                    <p class="text-gray-700 leading-relaxed">
-                        ในรอบการประเมินนี้มียอดการผลิตงานดี (FG) ทั้งสิ้น <b>${totalFG.toLocaleString()}</b> ชิ้น 
-                        และพบของเสีย (NG) จำนวน <b>${totalNG.toLocaleString()}</b> ชิ้น 
-                        ส่งผลให้อัตราผลตอบแทน <b>(Yield) ภาพรวมอยู่ที่ ${yieldPct}%</b>
-                    </p>
+                <!-- Section 1: KPI Dashboard -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-bold text-gray-800 border-l-4 border-blue-600 pl-2 mb-3 bg-gray-50 py-1">1. สรุปประสิทธิภาพการผลิต (Performance KPI)</h3>
+                    <div class="grid grid-cols-5 gap-3 text-center">
+                        <div class="border border-gray-300 rounded p-3 bg-white">
+                            <p class="text-[10px] text-gray-500 font-bold uppercase">Target (Plan)</p>
+                            <p class="text-xl font-bold text-indigo-700">${target.toLocaleString()}</p>
+                        </div>
+                        <div class="border border-gray-300 rounded p-3 bg-white">
+                            <p class="text-[10px] text-gray-500 font-bold uppercase">Total Good (FG)</p>
+                            <p class="text-xl font-bold text-blue-600">${totalFG.toLocaleString()}</p>
+                        </div>
+                        <div class="border border-gray-300 rounded p-3 bg-white">
+                            <p class="text-[10px] text-gray-500 font-bold uppercase">Achievement</p>
+                            <p class="text-lg">${achHtml}</p>
+                        </div>
+                        <div class="border border-gray-300 rounded p-3 bg-red-50">
+                            <p class="text-[10px] text-red-600 font-bold uppercase">Total Defect (NG)</p>
+                            <p class="text-xl font-bold text-red-600">${totalNG.toLocaleString()} <span class="text-xs font-normal">ชิ้น</span></p>
+                        </div>
+                        <div class="border border-gray-300 rounded p-3 bg-green-50">
+                            <p class="text-[10px] text-green-700 font-bold uppercase">Overall Yield</p>
+                            <p class="text-xl font-bold text-green-700">${yieldPct}%</p>
+                        </div>
+                    </div>
                 </div>
 
+                <!-- Section 2: Production Trend -->
                 <div class="mb-8 page-break-inside-avoid">
-                    <h3 class="font-bold text-gray-800 mb-3 border-l-4 border-indigo-500 pl-2">1. แนวโน้มการผลิตและของเสียรายวัน</h3>
-                    ${dailyOutputImg ? `<img src="${dailyOutputImg}" class="w-full max-w-3xl mx-auto border rounded-lg shadow-sm mb-4" />` : '<p class="text-gray-400 italic">ไม่สามารถโหลดกราฟได้</p>'}
-                    <p class="text-sm text-gray-700 indent-8 leading-relaxed">
-                        กราฟแสดงปริมาณผลผลิตในแต่ละวัน จากข้อมูลพบว่าการรักษาความสม่ำเสมอของผลผลิตและการควบคุมของเสียยังเป็นตัวแปรสำคัญที่ส่งผลต่อประสิทธิภาพโดยรวม
-                    </p>
+                    <h3 class="text-lg font-bold text-gray-800 border-l-4 border-indigo-500 pl-2 mb-3 bg-gray-50 py-1">2. แนวโน้มการผลิตและอัตราของเสีย (Production Trend)</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="border border-gray-200 p-2 rounded">
+                            <p class="text-xs font-bold text-center mb-2 text-gray-600">Daily Output (FG vs NG)</p>
+                            ${imgDailyOutput ? `<img src="${imgDailyOutput}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        </div>
+                        <div class="border border-gray-200 p-2 rounded">
+                            <p class="text-xs font-bold text-center mb-2 text-gray-600">Daily NG Rate Trend (%)</p>
+                            ${imgTrendNG ? `<img src="${imgTrendNG}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        </div>
+                    </div>
                 </div>
 
+                <div class="page-break-before"></div>
+
+                <!-- Section 3: Quality Analysis -->
                 <div class="mb-8 page-break-inside-avoid">
-                    <h3 class="font-bold text-gray-800 mb-3 border-l-4 border-red-500 pl-2">2. การวิเคราะห์ปัญหาของเสียหลัก (Top Defect Analysis)</h3>
-                    ${paretoImg ? `<img src="${paretoImg}" class="w-full max-w-3xl mx-auto border rounded-lg shadow-sm mb-4" />` : '<p class="text-gray-400 italic">ไม่สามารถโหลดกราฟได้</p>'}
-                    <p class="text-sm text-gray-700 indent-8 leading-relaxed">
-                        ปัญหาของเสียที่มีนัยสำคัญมากที่สุดในรอบนี้คือ <b>"${topNg.label}"</b> โดยพบจำนวนถึง <b>${topNg.pcs.toLocaleString()}</b> ชิ้น 
-                        คิดเป็น <b>${totalNG > 0 ? ((topNg.pcs/totalNG)*100).toFixed(1) : 0}%</b> ของยอดของเสียทั้งหมด 
-                        <span class="text-red-600 font-medium">ข้อเสนอแนะ: ควรพิจารณาสืบสวนหาสาเหตุหลัก (Root Cause) ของปัญหานี้เป็นอันดับแรก เพื่อดึง Yield ภาพรวมให้กลับมาสูงขึ้น</span>
-                    </p>
+                    <h3 class="text-lg font-bold text-gray-800 border-l-4 border-red-500 pl-2 mb-3 bg-gray-50 py-1">3. การวิเคราะห์ปัญหาคุณภาพ (Quality Issue Analysis)</h3>
+                    
+                    <div class="bg-red-50 border border-red-200 p-3 rounded text-sm mb-4 text-gray-800">
+                        <b>📝 Executive Insight:</b> ปัญหาอันดับ 1 ในรอบนี้คือ <b>"${topNg.label}"</b> จำนวน <b>${topNg.pcs.toLocaleString()} ชิ้น</b> 
+                        คิดเป็นร้อยละ <b>${totalNG > 0 ? ((topNg.pcs/totalNG)*100).toFixed(1) : 0}%</b> ของยอดของเสียทั้งหมด 
+                        <br><i>* แหล่งกำเนิดหลัก (เครื่องที่ทำของเสียรวมสูงสุด) คือเครื่อง <b>${topMacNg.name}</b> (${topMacNg.ng.toLocaleString()} ชิ้น)</i>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="border border-gray-200 p-2 rounded">
+                            <p class="text-xs font-bold text-center mb-2 text-gray-600">Top Defect Analysis (Pareto)</p>
+                            ${imgPareto ? `<img src="${imgPareto}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        </div>
+                        <div class="border border-gray-200 p-2 rounded">
+                            <p class="text-xs font-bold text-center mb-2 text-gray-600">Defect Source by Machine (แหล่งกำเนิด NG)</p>
+                            ${imgNgMac ? `<img src="${imgNgMac}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        </div>
+                    </div>
                 </div>
 
+                <!-- Section 4: Machine & Model Performance -->
                 <div class="mb-8 page-break-inside-avoid">
-                    <h3 class="font-bold text-gray-800 mb-3 border-l-4 border-green-500 pl-2">3. ประสิทธิภาพแยกตามเครื่องจักร (% Yield by Machine)</h3>
-                    ${yieldMacImg ? `<img src="${yieldMacImg}" class="w-full max-w-3xl mx-auto border rounded-lg shadow-sm mb-4" />` : '<p class="text-gray-400 italic">ไม่สามารถโหลดกราฟได้</p>'}
-                    <p class="text-sm text-gray-700 indent-8 leading-relaxed">
-                        เมื่อวิเคราะห์การทำงานแยกตามเครื่องจักร พบว่าเครื่องที่สูญเสียมากที่สุดคือ <b>${topMac.name}</b> 
-                        (ยอดของเสีย: ${topMac.ng.toLocaleString()} ชิ้น, Yield: ${topMac.yield}%) 
-                        ควรเข้าตรวจสอบสภาพเครื่องจักร, อุปกรณ์ หรือ Parameter ของเครื่องนี้โดยละเอียด
-                    </p>
+                    <h3 class="text-lg font-bold text-gray-800 border-l-4 border-green-500 pl-2 mb-3 bg-gray-50 py-1">4. ประสิทธิภาพแยกตามเครื่องจักรและรุ่นสินค้า (Performance Breakdown)</h3>
+                    
+                    <div class="bg-green-50 border border-green-200 p-3 rounded text-sm mb-4 text-gray-800">
+                        <b>📝 Executive Insight:</b> เครื่องจักรที่มีค่า Yield ต่ำที่สุดที่ต้องพิจารณาตรวจสอบคือเครื่อง <b>${lowestYieldMac.name}</b> (Yield: <b>${lowestYieldMac.yield}%</b>)
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="border border-gray-200 p-2 rounded">
+                            <p class="text-xs font-bold text-center mb-2 text-gray-600">Yield by Model</p>
+                            ${imgYieldModel ? `<img src="${imgYieldModel}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        </div>
+                        <div class="border border-gray-200 p-2 rounded">
+                            <p class="text-xs font-bold text-center mb-2 text-gray-600">Yield by Machine</p>
+                            ${imgYieldMac ? `<img src="${imgYieldMac}" class="w-full h-auto" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="text-center text-xs text-gray-400 mt-10 pt-4 border-t">
-                    สร้างโดย CWM Auto Report System - ${new Date().toLocaleString('th-TH')}
+
+                <!-- Signatures -->
+                <div class="mt-12 pt-8 border-t border-gray-300 grid grid-cols-3 gap-4 text-center page-break-inside-avoid">
+                    <div>
+                        <div class="h-16 border-b border-gray-400 mb-2 w-3/4 mx-auto"></div>
+                        <p class="text-sm font-bold">Reported By</p>
+                        <p class="text-xs text-gray-500">(Production Leader)</p>
+                    </div>
+                    <div>
+                        <div class="h-16 border-b border-gray-400 mb-2 w-3/4 mx-auto"></div>
+                        <p class="text-sm font-bold">Checked By</p>
+                        <p class="text-xs text-gray-500">(QA/QC Manager)</p>
+                    </div>
+                    <div>
+                        <div class="h-16 border-b border-gray-400 mb-2 w-3/4 mx-auto"></div>
+                        <p class="text-sm font-bold">Approved By</p>
+                        <p class="text-xs text-gray-500">(Plant Manager)</p>
+                    </div>
                 </div>
             `;
 
@@ -1708,7 +1752,8 @@
                 modal.classList.remove('opacity-0');
             }, 10);
             
-            document.body.style.overflow = 'hidden';
+            // ยกเลิกการล็อกการ Scroll ชั่วคราวเพื่อให้ผู้ใช้เลื่อนดูรีพอร์ตก่อนพิมพ์ได้
+            document.body.style.overflow = '';
         };
 
         // 🌟 ฟังก์ชันปิดหน้าต่าง Auto Report
