@@ -51,25 +51,23 @@
         /* 🌟 CSS สำหรับการพิมพ์ (Print Report) */
         @media print {
             body { background-color: white !important; }
+            /* เมื่ออยู่ในโหมดพิมพ์ Auto Report ให้ซ่อนทุกอย่างนอกจาก Modal Report */
+            body.printing-auto-report > *:not(#modal-auto-report) { display: none !important; }
+            body.printing-auto-report #modal-auto-report { position: relative !important; display: block !important; opacity: 1 !important; background: transparent !important; }
+            body.printing-auto-report #modal-auto-report > div { width: 100% !important; max-width: 100% !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; max-height: none !important; }
+            body.printing-auto-report .auto-report-hide { display: none !important; }
+            
             nav, #section-form, #section-planning, .loader, #debug-panel, #undo-toast { display: none !important; }
-            /* ซ่อนส่วนควบคุมการกรองข้อมูลและปุ่มต่างๆ */
             .print-hide { display: none !important; }
-            /* ซ่อนปุ่มย่อ/ขยาย/ปรับขนาดในการ์ดกราฟ */
             .widget-header button { display: none !important; }
-            /* ขยายเนื้อหา Dashboard ให้เต็ม */
             #section-dashboard { max-width: 100% !important; padding: 0 !important; margin: 0 !important; display: block !important; }
             .bg-white.p-4.rounded-xl.shadow-md { box-shadow: none !important; border: none !important; padding: 0 !important; margin-bottom: 20px !important; }
-            
-            /* บังคับกราฟไม่ให้ถูกตัดขาดกลางหน้า */
             .widget-card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; page-break-inside: avoid !important; margin-bottom: 20px !important; break-inside: avoid !important; }
             #sortable-grid { display: block !important; }
             #sortable-grid > div { width: 100% !important; height: auto !important; min-height: 350px !important; margin-bottom: 20px !important; }
-            
-            /* ปรับตารางให้พิมพ์ได้เต็ม */
             .table-container { overflow: visible !important; box-shadow: none !important; border: none !important; }
-            
-            /* แสดงหัวกระดาษรายงาน */
             #print-header { display: block !important; text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            .page-break-inside-avoid { page-break-inside: avoid !important; break-inside: avoid !important; }
         }
         #print-header { display: none; }
     </style>
@@ -209,9 +207,13 @@
                 <h2 class="text-gray-700 font-bold text-sm mb-2 lg:mb-0 print-hide">📅 ตัวเลือกการกรอง <span class="text-xs font-normal text-gray-500">(ดึงข้อมูลตั้งแต่ 08:00น. ถึง 08:00น. ของอีกวัน)</span><span class="text-xs font-normal text-blue-500 ml-2 border-l pl-2 border-gray-300">💡 หมุนลูกกลิ้งเมาส์/บีบนิ้วเพื่อซูมกราฟ & ดับเบิลคลิกบนกราฟเพื่อรีเซ็ต</span></h2>
                 
                 <!-- 🌟 กลุ่มปุ่ม Report -->
-                <div class="flex gap-2 w-full lg:w-auto print-hide">
+                <div class="flex flex-wrap gap-2 w-full lg:w-auto print-hide">
+                    <!-- 🌟 ปุ่มสร้าง Auto Report -->
+                    <button onclick="window.openAutoReport()" class="flex-1 lg:flex-none bg-indigo-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm flex items-center justify-center gap-1">
+                        🤖 Auto Report (AI Summary)
+                    </button>
                     <button onclick="window.printReport()" class="flex-1 lg:flex-none bg-gray-800 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-gray-900 transition-colors shadow-sm flex items-center justify-center gap-1">
-                        🖨️ พิมพ์/บันทึก PDF
+                        🖨️ พิมพ์หน้านี้
                     </button>
                     <button onclick="window.exportCSV()" class="flex-1 lg:flex-none bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-green-700 transition-colors shadow-sm flex items-center justify-center gap-1">
                         📗 ดาวน์โหลด Excel
@@ -317,8 +319,8 @@
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">📦 FG & ACH by Model (ยอดผลิต vs แผน)</h3>
                         <div class="flex gap-2">
-                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
-                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความกว้าง">↔</button>
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
@@ -329,8 +331,8 @@
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">📉 NG Analysis (Pareto)</h3>
                         <div class="flex gap-2">
-                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
-                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความกว้าง">↔</button>
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
@@ -344,7 +346,7 @@
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
-                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
                     <div class="flex-1 flex flex-col h-full overflow-hidden">
@@ -387,8 +389,8 @@
                             </div>
                         </div>
                         <div class="flex gap-2">
-                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
-                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความกว้าง">↔</button>
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
@@ -399,8 +401,8 @@
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3>
                         <div class="flex gap-2">
-                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
-                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความกว้าง">↔</button>
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
@@ -422,8 +424,8 @@
                             </div>
                         </div>
                         <div class="flex gap-2">
-                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
-                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความกว้าง">↔</button>
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
@@ -434,8 +436,8 @@
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Trend</h3>
                         <div class="flex gap-2">
-                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
-                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความกว้าง">↔</button>
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
@@ -457,8 +459,8 @@
                             </div>
                         </div>
                         <div class="flex gap-2">
-                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
-                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความกว้าง">↔</button>
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
@@ -470,8 +472,8 @@
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">🏭 แหล่งกำเนิด NG (แยกตามเครื่องจักร)</h3>
                         <div class="flex gap-2">
-                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
-                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความกว้าง">↔</button>
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
@@ -482,8 +484,8 @@
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">Hourly Production (FG & NG)</h3>
                         <div class="flex gap-2">
-                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
-                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความกว้าง">↔</button>
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
@@ -497,8 +499,8 @@
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">NG Breakdown</h3>
                         <div class="flex gap-2">
-                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
-                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความสูง">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความกว้าง">↔</button>
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
@@ -509,7 +511,7 @@
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3>
                         <div class="flex gap-2">
-                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ปรับความกว้าง">↔</button>
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide" title="ขยายเต็มจอ">⛶</button>
                         </div>
                     </div>
@@ -523,6 +525,20 @@
             </div>
         </div>
     </main>
+
+    <!-- 🌟 Modal สำหรับระบบ Auto Report (AI Summary) -->
+    <div id="modal-auto-report" class="fixed inset-0 bg-gray-100 z-50 hidden flex-col overflow-y-auto">
+        <div class="bg-white shadow-md p-4 sticky top-0 z-10 flex justify-between items-center auto-report-hide border-b border-gray-200">
+            <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">🤖 AI Report Preview</h2>
+            <div class="flex gap-2">
+                <button onclick="window.printAutoReport()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-indigo-700 transition-colors">🖨️ พิมพ์ / บันทึก PDF</button>
+                <button onclick="window.closeAutoReport()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-300 transition-colors">❌ ปิด</button>
+            </div>
+        </div>
+        <div class="p-6 max-w-4xl mx-auto w-full bg-white my-6 shadow-xl rounded-xl" id="auto-report-content">
+            <!-- ข้อมูลรายงานจะถูกสร้างและใส่ในนี้ด้วย JavaScript -->
+        </div>
+    </div>
 
     <!-- Modals -->
     <!-- Assign Modal -->
@@ -1560,9 +1576,8 @@
             }
         };
 
-        // 🌟 ฟังก์ชันพิมพ์ Report PDF
+        // 🌟 ฟังก์ชันพิมพ์ Report PDF ธรรมดา
         window.printReport = function() {
-            // อัปเดตข้อมูลวันที่ลงในหัวกระดาษก่อนพิมพ์
             const sDate = document.getElementById('startDate').value;
             const eDate = document.getElementById('endDate').value;
             const shift = document.getElementById('filterShift').options[document.getElementById('filterShift').selectedIndex].text;
@@ -1573,9 +1588,149 @@
             subtitle += ` | กะ: ${shift} | ช่วงเวลา: ${shiftType}`;
             
             document.getElementById('print-date-subtitle').innerText = subtitle;
-            
-            // สั่งเปิดหน้าต่าง Print ของเบราว์เซอร์
             window.print();
+        };
+
+        // 🌟 ฟังก์ชันเปิดหน้า Auto Report (AI Summary)
+        window.openAutoReport = function() {
+            if (!currentDashboardData) {
+                alert("⚠️ กรุณากดปุ่ม 🔍ค้นหา เพื่อดึงข้อมูลสำหรับสร้างรายงานก่อนครับ");
+                return;
+            }
+
+            const data = currentDashboardData;
+            const modal = document.getElementById('modal-auto-report');
+            const content = document.getElementById('auto-report-content');
+
+            // 1. ประมวลผลข้อมูล (Data Insights)
+            const totalFG = data.totalFg || 0;
+            const totalNG = data.totalNgPcs !== undefined ? data.totalNgPcs : (data.totalNg || 0);
+            const totalQty = totalFG + totalNG;
+            const yieldPct = totalQty > 0 ? ((totalFG/totalQty)*100).toFixed(2) : 0;
+
+            // หาอาการ NG ที่เยอะที่สุด
+            const labels = data.ngLabels || [];
+            const vals = data.ngValuesPcs || data.ngValues || [];
+            let topNg = { label: 'ไม่มีของเสีย', pcs: 0 };
+            if(labels.length > 0) {
+                let maxIdx = 0;
+                for(let i=1; i<vals.length; i++) {
+                    if(vals[i] > vals[maxIdx]) maxIdx = i;
+                }
+                if(vals[maxIdx] > 0) {
+                    topNg = { label: labels[maxIdx], pcs: vals[maxIdx] };
+                }
+            }
+
+            // หาเครื่องจักรที่ของเสียเยอะที่สุด
+            let topMac = { name: 'ไม่มี', ng: 0, yield: 0 };
+            if(data.machineData) {
+                for(let m in data.machineData) {
+                    const md = data.machineData[m];
+                    const mNg = md.ngTotalPcs !== undefined ? md.ngTotalPcs : (md.ngTotal || 0);
+                    if(mNg > topMac.ng) {
+                        const mT = md.fg + mNg;
+                        topMac = { name: m, ng: mNg, yield: mT > 0 ? ((md.fg/mT)*100).toFixed(2) : 0 };
+                    }
+                }
+            }
+
+            // 2. จับภาพกราฟจาก Canvas เป็นรูปภาพ (Base64)
+            const getChartImg = (id) => {
+                const canvas = document.getElementById(id);
+                return canvas ? canvas.toDataURL('image/png') : '';
+            };
+
+            const paretoImg = getChartImg('paretoChart');
+            const dailyOutputImg = getChartImg('dailyOutputChart');
+            const yieldMacImg = getChartImg('yieldMachineChart');
+
+            // 3. เตรียมข้อความส่วนหัวกระดาษ
+            const sDate = document.getElementById('startDate').value;
+            const eDate = document.getElementById('endDate').value;
+            const dateStr = sDate === eDate ? sDate : `${sDate} ถึง ${eDate}`;
+
+            // 4. ประกอบร่างเป็น HTML พร้อมข้อความบรรยาย
+            let html = `
+                <div class="text-center mb-6 border-b pb-4">
+                    <h2 class="text-2xl font-bold text-gray-800">📊 Executive Production Report</h2>
+                    <p class="text-gray-600 mt-1">สรุปผลการทำงานประจำวันที่: <span class="font-bold">${dateStr}</span></p>
+                </div>
+
+                <div class="mb-6 p-5 bg-blue-50 rounded-xl border border-blue-200 shadow-inner">
+                    <h3 class="font-bold text-blue-800 mb-2 text-lg">📌 สรุปภาพรวม (Executive Summary)</h3>
+                    <p class="text-gray-700 leading-relaxed">
+                        ในรอบการประเมินนี้มียอดการผลิตงานดี (FG) ทั้งสิ้น <b>${totalFG.toLocaleString()}</b> ชิ้น 
+                        และพบของเสีย (NG) จำนวน <b>${totalNG.toLocaleString()}</b> ชิ้น 
+                        ส่งผลให้อัตราผลตอบแทน <b>(Yield) ภาพรวมอยู่ที่ ${yieldPct}%</b>
+                    </p>
+                </div>
+
+                <div class="mb-8 page-break-inside-avoid">
+                    <h3 class="font-bold text-gray-800 mb-3 border-l-4 border-indigo-500 pl-2">1. แนวโน้มการผลิตและของเสียรายวัน</h3>
+                    ${dailyOutputImg ? `<img src="${dailyOutputImg}" class="w-full max-w-3xl mx-auto border rounded-lg shadow-sm mb-4" />` : '<p class="text-gray-400 italic">ไม่สามารถโหลดกราฟได้</p>'}
+                    <p class="text-sm text-gray-700 indent-8 leading-relaxed">
+                        กราฟแสดงปริมาณผลผลิตในแต่ละวัน จากข้อมูลพบว่าการรักษาความสม่ำเสมอของผลผลิตและการควบคุมของเสียยังเป็นตัวแปรสำคัญที่ส่งผลต่อประสิทธิภาพโดยรวม
+                    </p>
+                </div>
+
+                <div class="mb-8 page-break-inside-avoid">
+                    <h3 class="font-bold text-gray-800 mb-3 border-l-4 border-red-500 pl-2">2. การวิเคราะห์ปัญหาของเสียหลัก (Top Defect Analysis)</h3>
+                    ${paretoImg ? `<img src="${paretoImg}" class="w-full max-w-3xl mx-auto border rounded-lg shadow-sm mb-4" />` : '<p class="text-gray-400 italic">ไม่สามารถโหลดกราฟได้</p>'}
+                    <p class="text-sm text-gray-700 indent-8 leading-relaxed">
+                        ปัญหาของเสียที่มีนัยสำคัญมากที่สุดในรอบนี้คือ <b>"${topNg.label}"</b> โดยพบจำนวนถึง <b>${topNg.pcs.toLocaleString()}</b> ชิ้น 
+                        คิดเป็น <b>${totalNG > 0 ? ((topNg.pcs/totalNG)*100).toFixed(1) : 0}%</b> ของยอดของเสียทั้งหมด 
+                        <span class="text-red-600 font-medium">ข้อเสนอแนะ: ควรพิจารณาสืบสวนหาสาเหตุหลัก (Root Cause) ของปัญหานี้เป็นอันดับแรก เพื่อดึง Yield ภาพรวมให้กลับมาสูงขึ้น</span>
+                    </p>
+                </div>
+
+                <div class="mb-8 page-break-inside-avoid">
+                    <h3 class="font-bold text-gray-800 mb-3 border-l-4 border-green-500 pl-2">3. ประสิทธิภาพแยกตามเครื่องจักร (% Yield by Machine)</h3>
+                    ${yieldMacImg ? `<img src="${yieldMacImg}" class="w-full max-w-3xl mx-auto border rounded-lg shadow-sm mb-4" />` : '<p class="text-gray-400 italic">ไม่สามารถโหลดกราฟได้</p>'}
+                    <p class="text-sm text-gray-700 indent-8 leading-relaxed">
+                        เมื่อวิเคราะห์การทำงานแยกตามเครื่องจักร พบว่าเครื่องที่สูญเสียมากที่สุดคือ <b>${topMac.name}</b> 
+                        (ยอดของเสีย: ${topMac.ng.toLocaleString()} ชิ้น, Yield: ${topMac.yield}%) 
+                        ควรเข้าตรวจสอบสภาพเครื่องจักร, อุปกรณ์ หรือ Parameter ของเครื่องนี้โดยละเอียด
+                    </p>
+                </div>
+                
+                <div class="text-center text-xs text-gray-400 mt-10 pt-4 border-t">
+                    สร้างโดย CWM Auto Report System - ${new Date().toLocaleString('th-TH')}
+                </div>
+            `;
+
+            // แสดงหน้าต่าง Report
+            content.innerHTML = html;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+            }, 10);
+            
+            document.body.style.overflow = 'hidden';
+        };
+
+        // 🌟 ฟังก์ชันปิดหน้าต่าง Auto Report
+        window.closeAutoReport = function() {
+            const modal = document.getElementById('modal-auto-report');
+            modal.classList.add('opacity-0');
+            setTimeout(() => {
+                modal.classList.remove('flex');
+                modal.classList.add('hidden');
+                document.body.style.overflow = '';
+            }, 300);
+        };
+
+        // 🌟 ฟังก์ชันพิมพ์เฉพาะส่วน Auto Report
+        window.printAutoReport = function() {
+            document.body.classList.add('printing-auto-report');
+            window.print();
+            
+            // ลบคลาสออกหลังจากพิมพ์เสร็จ (หน่วงเวลาเล็กน้อยให้หน้าต่าง Print เด้งขึ้นมาก่อน)
+            setTimeout(() => {
+                document.body.classList.remove('printing-auto-report');
+            }, 1000);
         };
 
         // 🌟 ฟังก์ชันดาวน์โหลดเป็น Excel (CSV)
