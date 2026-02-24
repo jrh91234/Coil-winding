@@ -407,9 +407,20 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="yieldMachineChart"></canvas></div>
                 </div>
 
+                <!-- 🌟 กราฟแก้ไขใหม่: Daily Output (FG & NG) สลับจำนวน/% -->
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
-                        <h3 class="font-bold text-gray-700 text-sm">📊 Daily Output (FG & NG)</h3>
+                        <div class="flex flex-col gap-1">
+                            <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">
+                                📊 Daily Output (FG & NG)
+                            </h3>
+                            <div class="flex gap-1 mt-1">
+                                <select id="dailyOutputSelector" onchange="window.renderDailyOutputChart()" class="text-[10px] font-normal border border-gray-300 rounded p-1 text-gray-600 bg-white outline-none cursor-pointer hover:bg-gray-50 transition-colors print-hide">
+                                    <option value="pcs">จำนวน (ชิ้น)</option>
+                                    <option value="percent">สัดส่วน (%)</option>
+                                </select>
+                            </div>
+                        </div>
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความสูง">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none" title="ปรับความกว้าง">↔</button>
@@ -2079,6 +2090,98 @@
             });
         };
 
+        // 🌟 ฟังก์ชันวาดกราฟ Daily Output (แยกออกมาเพื่อรองรับ Dropdown)
+        window.renderDailyOutputChart = function() {
+            if (!currentDashboardData || !charts) return;
+            const data = currentDashboardData;
+            const ctxDaily = document.getElementById('dailyOutputChart');
+            if (!ctxDaily) return;
+
+            const selector = document.getElementById('dailyOutputSelector');
+            const mode = selector ? selector.value : 'pcs'; // 'pcs' หรือ 'percent'
+
+            if(charts.dailyOutput) charts.dailyOutput.destroy();
+            const trendData = data.dailyTrend || [];
+
+            let fgData = [];
+            let ngData = [];
+
+            trendData.forEach(d => {
+                let fg = d.fg || 0;
+                let ng = d.ng || 0;
+                if (mode === 'percent') {
+                    let total = fg + ng;
+                    fgData.push(total > 0 ? parseFloat(((fg/total)*100).toFixed(1)) : 0);
+                    ngData.push(total > 0 ? parseFloat(((ng/total)*100).toFixed(1)) : 0);
+                } else {
+                    fgData.push(fg);
+                    ngData.push(ng);
+                }
+            });
+
+            const commonOpts = { 
+                 responsive: true, 
+                 maintainAspectRatio: false,
+                 onClick: (e, elements, chart) => {
+                     if (elements && elements.length > 0 && chart.options.scales) {
+                         const axisId = chart.options.indexAxis === 'y' ? 'y' : 'x';
+                         const index = elements[0].index;
+                         if(chart.options.scales[axisId]) {
+                             chart.options.scales[axisId].min = index;
+                             chart.options.scales[axisId].max = index;
+                             chart.update();
+                         }
+                     }
+                 },
+                 plugins: {
+                     zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } }
+                 }
+            };
+
+            const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
+            const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
+
+            let scales = { x: { stacked: true }, y: { stacked: true, beginAtZero: true } };
+            if (mode === 'percent') {
+                scales.y.max = 100;
+                scales.y.title = { display: true, text: 'สัดส่วน (%)' };
+            } else {
+                scales.y.title = { display: true, text: 'จำนวน (ชิ้น)' };
+            }
+
+            charts.dailyOutput = new Chart(ctxDaily, { 
+                 type: 'bar',
+                 plugins: activePlugins,
+                 data: { 
+                     labels: trendData.map(d=>d.date), 
+                     datasets: [
+                         {label:'FG (งานดี)', data:fgData, backgroundColor:'#3b82f6', borderRadius: 2},
+                         {label:'NG (เสียเป็นชิ้น)', data:ngData, backgroundColor:'#ef4444', borderRadius: 2}
+                     ] 
+                 }, 
+                 options: { 
+                     ...commonOpts, 
+                     scales: scales,
+                     plugins: {
+                         ...commonOpts.plugins,
+                         tooltip: {
+                             callbacks: {
+                                 label: function(context) {
+                                     return `${context.dataset.label}: ${context.parsed.y}${mode === 'percent' ? '%' : ' ชิ้น'}`;
+                                 }
+                             }
+                         },
+                         datalabels: {
+                             display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
+                             color: '#ffffff',
+                             font: { weight: 'bold', size: 11 },
+                             formatter: (value) => value > 0 ? value + (mode === 'percent' ? '%' : '') : null
+                         }
+                     }
+                 } 
+            });
+        };
+
         // 🌟 ฟังก์ชันวาดกราฟ Trend อาการ NG แบบรายวันแยกออกมา เพื่อให้เรียกใช้ตอนเปลี่ยน Dropdown ได้ง่าย
         window.renderNgTrendChart = function() {
             if (!currentDashboardData || !charts) return;
@@ -2353,34 +2456,8 @@
                      });
                  }
 
-                 const ctxDaily = document.getElementById('dailyOutputChart');
-                 if(ctxDaily) {
-                     if(charts.dailyOutput) charts.dailyOutput.destroy();
-                     const trendData = data.dailyTrend || [];
-                     charts.dailyOutput = new Chart(ctxDaily, { 
-                         type: 'bar', 
-                         data: { 
-                             labels: trendData.map(d=>d.date), 
-                             datasets: [
-                                 {label:'FG (งานดี)', data:trendData.map(d=>d.fg || 0), backgroundColor:'#3b82f6', borderRadius: 2},
-                                 {label:'NG (เสียเป็นชิ้น)', data:trendData.map(d=>d.ng || 0), backgroundColor:'#ef4444', borderRadius: 2}
-                             ] 
-                         }, 
-                         options: { 
-                             ...commonOpts, 
-                             scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
-                             plugins: {
-                                 ...commonOpts.plugins,
-                                 datalabels: {
-                                     display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
-                                     color: '#ffffff',
-                                     font: { weight: 'bold', size: 11 },
-                                     formatter: (value) => value > 0 ? value : null
-                                 }
-                             }
-                         } 
-                     });
-                 }
+                 // 🌟 วาดกราฟ Daily Output 
+                 window.renderDailyOutputChart();
 
                  const hNgPcs = data.hourlyNgPcsData || data.hourlyNgData || []; 
                  const ctxH = document.getElementById('hourlyChart');
