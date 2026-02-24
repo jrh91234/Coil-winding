@@ -1698,6 +1698,20 @@
                         pData.ngBreakdownPcs = newBreakdownPcs;
                     }
                 }
+
+                // 🌟 Normalize ชื่ออาการให้ตรงกันสำหรับข้อมูล Daily Trend
+                if (data.dailyTrend) {
+                    data.dailyTrend.forEach(d => {
+                        if (d.ngBreakdown) {
+                            const newBd = {};
+                            for (let k in d.ngBreakdown) {
+                                const stdLabel = ngSymptoms.find(s => s.toLowerCase() === k.trim().toLowerCase()) || capitalizeFirst(k.trim());
+                                newBd[stdLabel] = (newBd[stdLabel] || 0) + d.ngBreakdown[k];
+                            }
+                            d.ngBreakdown = newBd;
+                        }
+                    });
+                }
                 
                 const fg = data.totalFg || 0;
                 const target = data.productionTarget || 0;
@@ -2062,6 +2076,131 @@
                         }
                     }
                 } 
+            });
+        };
+
+        // 🌟 ฟังก์ชันวาดกราฟ Trend อาการ NG แบบรายวันแยกออกมา เพื่อให้เรียกใช้ตอนเปลี่ยน Dropdown ได้ง่าย
+        window.renderNgTrendChart = function() {
+            if (!currentDashboardData || !charts) return;
+            const data = currentDashboardData;
+            const ctxNgTrend = document.getElementById('ngSymptomTrendChart');
+            if (!ctxNgTrend) return;
+
+            const selector = document.getElementById('ngTrendSelector');
+            const mode = selector ? selector.value : 'pcs'; // 'pcs' หรือ 'percent'
+
+            if (charts.ngSymptomTrend) charts.ngSymptomTrend.destroy();
+            const trendData = data.dailyTrend || [];
+            
+            // ดึงชื่ออาการทั้งหมดที่มีในช่วงเวลานี้มารวมกันไม่ให้ตกหล่น
+            let allTrendNgTypes = new Set();
+            trendData.forEach(d => {
+                if(d.ngBreakdown) {
+                    Object.keys(d.ngBreakdown).forEach(k => allTrendNgTypes.add(k));
+                }
+            });
+            const uniqueNgTypes = Array.from(allTrendNgTypes).sort();
+            
+            // ชุดสีสำหรับแบ่งเส้นกราฟแต่ละอาการ
+            const lineColors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6'];
+            
+            let trendDatasets = uniqueNgTypes.map((type, idx) => {
+                return {
+                    label: type,
+                    data: trendData.map(d => {
+                        const rawPcs = (d.ngBreakdown && d.ngBreakdown[type]) ? d.ngBreakdown[type] : 0;
+                        if (mode === 'percent') {
+                            const total = (d.fg || 0) + (d.ng || 0);
+                            return total > 0 ? parseFloat(((rawPcs / total) * 100).toFixed(2)) : 0;
+                        }
+                        return rawPcs;
+                    }),
+                    borderColor: lineColors[idx % lineColors.length],
+                    backgroundColor: lineColors[idx % lineColors.length],
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 6,
+                    fill: false
+                };
+            });
+            
+            const commonOpts = { 
+                 responsive: true, 
+                 maintainAspectRatio: false,
+                 onClick: (e, elements, chart) => {
+                     if (elements && elements.length > 0 && chart.options.scales) {
+                         const axisId = chart.options.indexAxis === 'y' ? 'y' : 'x';
+                         const index = elements[0].index;
+                         if(chart.options.scales[axisId]) {
+                             chart.options.scales[axisId].min = index;
+                             chart.options.scales[axisId].max = index;
+                             chart.update();
+                         }
+                     }
+                 },
+                 plugins: {
+                     zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } }
+                 }
+            };
+
+            const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
+            const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
+
+            charts.ngSymptomTrend = new Chart(ctxNgTrend, {
+                type: 'line',
+                plugins: activePlugins,
+                data: {
+                    labels: trendData.map(d=>d.date),
+                    datasets: trendDatasets
+                },
+                options: {
+                    ...commonOpts,
+                    scales: { 
+                        x: { offset: true }, 
+                        y: { 
+                            beginAtZero: true, 
+                            title: { display: true, text: mode === 'percent' ? '% เทียบยอดผลิต' : 'จำนวน (ชิ้น)' }
+                        } 
+                    },
+                    layout: { padding: { top: 20, right: 20 } },
+                    plugins: {
+                        ...commonOpts.plugins,
+                        legend: { 
+                            display: true, 
+                            position: 'bottom', 
+                            labels: { boxWidth: 12, font: {size: 10} } 
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            itemSort: function(a, b) {
+                                return b.raw - a.raw; // เรียงอาการที่เกิดเยอะสุดขึ้นบนใน Tooltip
+                            },
+                            filter: function(tooltipItem) {
+                                return tooltipItem.raw > 0; // ซ่อนอาการที่ยอดเป็น 0
+                            },
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.parsed.y}${mode === 'percent' ? '%' : ' ชิ้น'}`;
+                                }
+                            }
+                        },
+                        datalabels: {
+                            display: function(ctx) { 
+                                const c = ctx.chart.canvas.closest('.widget-card'); 
+                                const isMax = c ? c.classList.contains('maximized-card') : false;
+                                return isMax && ctx.dataset.data[ctx.dataIndex] > 0; 
+                            },
+                            align: 'top',
+                            color: function(context) {
+                                return context.dataset.borderColor;
+                            },
+                            font: { weight: 'bold', size: 11 },
+                            formatter: (value) => value > 0 ? value + (mode === 'percent' ? '%' : '') : null
+                        }
+                    }
+                }
             });
         };
 
@@ -2491,7 +2630,7 @@
                      });
                  }
 
-                 // 🌟 วาดกราฟ Trend NG รายวัน
+                 // 🌟 วาดกราฟ Trend NG รายวันผ่านฟังก์ชันแทนเพื่อกันซ้ำซ้อน
                  window.renderNgTrendChart();
 
                  const ctxNG = document.getElementById('ngChart');
