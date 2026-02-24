@@ -840,18 +840,37 @@
             const card = btn.closest('.widget-card');
             const isMaximized = card.classList.contains('maximized-card');
             
+            // 🌟 สร้างหรือหา element สำหรับแสดงวันที่ช่วงที่เลือก
+            let dateLabel = card.querySelector('.max-date-label');
+            if (!dateLabel) {
+                dateLabel = document.createElement('div');
+                dateLabel.className = 'max-date-label hidden text-sm font-medium text-blue-600 mb-2 pb-2 border-b border-gray-100 text-center w-full';
+                const header = card.querySelector('.widget-header');
+                if (header) header.insertAdjacentElement('afterend', dateLabel);
+            }
+            
             if (isMaximized) {
                 // ยกเลิกขยายเต็มหน้าจอ
                 card.classList.remove('maximized-card');
                 document.body.style.overflow = ''; // คืนค่าการเลื่อนหน้าจอหลัก
                 btn.innerHTML = '⛶'; // เปลี่ยนไอคอนกลับเป็นรูปขยาย
                 btn.title = 'ขยายเต็มจอ';
+                dateLabel.classList.add('hidden'); // ซ่อนวันที่
             } else {
                 // ขยายเต็มหน้าจอ
                 card.classList.add('maximized-card');
                 document.body.style.overflow = 'hidden'; // ซ่อน Scrollbar ของหน้าจอหลักด้านหลัง
                 btn.innerHTML = '✖'; // เปลี่ยนไอคอนเป็นรูปปิด
                 btn.title = 'ย่อหน้าจอ';
+                
+                // 🌟 ดึงค่าวันที่มาแสดงผล
+                const sDate = document.getElementById('startDate').value;
+                const eDate = document.getElementById('endDate').value;
+                const shift = document.getElementById('filterShift').options[document.getElementById('filterShift').selectedIndex].text;
+                const shiftType = document.getElementById('filterShiftType').options[document.getElementById('filterShiftType').selectedIndex].text;
+                
+                dateLabel.innerHTML = `📅 ข้อมูลวันที่: <span class="text-gray-700 font-bold">${sDate}</span> ถึง <span class="text-gray-700 font-bold">${eDate}</span> <span class="mx-2 text-gray-300">|</span> กะ: <span class="text-gray-700 font-bold">${shift}</span> <span class="mx-2 text-gray-300">|</span> ช่วง: <span class="text-gray-700 font-bold">${shiftType}</span>`;
+                dateLabel.classList.remove('hidden'); // แสดงวันที่
             }
             
             // รอแอนิเมชัน CSS แล้วสั่งให้กราฟวาดสเกลและข้อมูลใหม่
