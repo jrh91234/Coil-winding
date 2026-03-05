@@ -789,6 +789,8 @@
                         const pSel = r.querySelector('.product-select-target');
                         if(mSel && mSel.value && machineMapping[mSel.value]) {
                             pSel.value = machineMapping[mSel.value];
+                            // กระตุ้น Event change ให้เช็คการตั้งค่าค่า FG อัตโนมัติ
+                            pSel.dispatchEvent(new Event('change'));
                         }
                     }
                 }
@@ -1020,6 +1022,8 @@
                 const pSel = r.querySelector('.product-select-target');
                 if(mSel && mSel.value && machineMapping[mSel.value]) {
                     pSel.value = machineMapping[mSel.value];
+                    // กระตุ้น Event change ให้เช็คการตั้งค่าค่า FG อัตโนมัติ
+                    pSel.dispatchEvent(new Event('change'));
                 }
             }
 
@@ -1072,12 +1076,31 @@
 
             const mSelect = div.querySelector('.machine-select-trigger');
             const pSelect = div.querySelector('.product-select-target');
+            const fgInput = div.querySelector('input[name="fgAmount"]');
+            
+            // 🌟 ฟังก์ชันเช็คชื่อโมเดลแล้วปรับยอด FG ให้ตรง
+            const checkProductForFg = () => {
+                if(pSelect.value === "51207080HC-JR (25/32A)") {
+                    fgInput.value = "800";
+                } else {
+                    fgInput.value = "1000";
+                }
+            };
+
+            // หากเลือกเครื่องแล้วดึงค่า Assign อัตโนมัติ ให้ทำการเช็คยอด FG ด้วย
             mSelect.addEventListener('change', function() {
                 const selectedM = this.value;
                 if(selectedM && machineMapping[selectedM]) {
                     pSelect.value = machineMapping[selectedM];
+                    checkProductForFg(); // กระตุ้นการปรับค่า FG
                 }
             });
+
+            // 🌟 ดักจับตอนที่ผู้ใช้เปลี่ยน Dropdown ช่อง Product ตรงๆ
+            pSelect.addEventListener('change', checkProductForFg);
+
+            // เซ็ตค่าเริ่มต้นให้ถูกตั้งแต่สร้างแถว
+            checkProductForFg();
         };
 
         window.removeBatchRow = function(id) { 
