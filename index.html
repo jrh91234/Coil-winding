@@ -150,9 +150,15 @@
                 
                 <div class="flex justify-between items-end mt-4 mb-2">
                     <h3 class="font-bold text-gray-700 text-sm">รายการผลิต</h3>
-                    <button type="button" onclick="window.openAssignModal()" class="text-xs bg-indigo-50 text-indigo-700 font-bold py-1.5 px-3 rounded border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1 shadow-sm">
-                        <span>⚙️</span> ตั้งค่าเครื่องจักร (Assign)
-                    </button>
+                    <div class="flex gap-2">
+                        <!-- ปุ่มแจ้งปัญหาที่เพิ่มเข้ามาใหม่ -->
+                        <button type="button" onclick="window.openMaintenanceModal()" class="text-xs bg-orange-50 text-orange-700 font-bold py-1.5 px-3 rounded border border-orange-200 hover:bg-orange-100 flex items-center gap-1 shadow-sm">
+                            <span>🛠️</span> แจ้งปัญหา/ซ่อมเครื่อง
+                        </button>
+                        <button type="button" onclick="window.openAssignModal()" class="text-xs bg-indigo-50 text-indigo-700 font-bold py-1.5 px-3 rounded border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1 shadow-sm">
+                            <span>⚙️</span> ตั้งค่าเครื่องจักร (Assign)
+                        </button>
+                    </div>
                 </div>
 
                 <div id="batchList" class="space-y-3"></div>
@@ -598,7 +604,6 @@
     </div>
 
     <!-- Modals (Assign, NG, Machine Detail, Breakdown, Manage List, Undo Toast) คงเดิมทั้งหมด -->
-    <!-- นำ Modal ชุดเดิมจากโค้ดเดิมของคุณมาวางทับส่วนนี้ได้เลย (ข้ามไปเพื่อประหยัดพื้นที่แสดงผล) -->
     
     <!-- (Include Modals from original exactly) -->
     <div id="modal-assign" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 print-hide">
@@ -607,6 +612,64 @@
             <p class="text-xs text-gray-500 mb-3 flex-none">เมื่อเลือกเครื่องจักรในฟอร์ม ระบบจะดึงรุ่นที่ตั้งค่าไว้นี้มาให้อัตโนมัติ</p>
             <div id="assign-list-container" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1 pr-2"></div>
             <div class="flex-none pt-3 border-t flex gap-2"><button onclick="window.saveAssignment()" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold hover:bg-indigo-700">💾 บันทึกการตั้งค่า</button></div>
+        </div>
+    </div>
+
+    <!-- 🌟 MODAL: แจ้งซ่อม/บันทึกปัญหาเครื่องจักร (New) 🌟 -->
+    <div id="modal-maintenance" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-xl shadow-2xl p-6 flex flex-col max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-orange-600 flex items-center gap-2"><span>🛠️</span> แจ้งซ่อม / ปัญหาเครื่องจักร</h3>
+                <button onclick="document.getElementById('modal-maintenance').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+            </div>
+            <form id="maintenanceForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">เลือกเครื่องจักร</label>
+                    <select id="maint-machine" required class="w-full p-2 border border-gray-300 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-orange-500">
+                        <!-- ตัวเลือกเครื่องจักรจะถูกดึงมาใส่ด้วย JS -->
+                        <option value="">-- กรุณาเลือก --</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">ประเภทของปัญหา</label>
+                    <select id="maint-issue-type" required class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-orange-500">
+                        <option value="เครื่องจักรเสีย (Machine Breakdown)">⚙️ เครื่องจักรเสีย (Machine Breakdown)</option>
+                        <option value="รอวัตถุดิบ (Material Shortage)">📦 รอวัตถุดิบ (Material Shortage)</option>
+                        <option value="ตั้งค่าเครื่อง (Setup/Changeover)">🔧 ตั้งค่าเครื่อง (Setup/Changeover)</option>
+                        <option value="ทำความสะอาด (Cleaning)">🧹 ทำความสะอาด (Cleaning)</option>
+                        <option value="อื่นๆ (Others)">❓ อื่นๆ (Others)</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">เริ่มหยุด (Start)</label>
+                        <input type="time" id="maint-start-time" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">ทำงานต่อ (End)</label>
+                        <input type="time" id="maint-end-time" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                        <p class="text-[10px] text-gray-400 mt-1">*เว้นว่างไว้ถ้ายังซ่อมไม่เสร็จ</p>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">รายละเอียด/การแก้ไขเบื้องต้น</label>
+                    <textarea id="maint-remark" rows="2" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" placeholder="อธิบายปัญหาที่พบ..."></textarea>
+                </div>
+                
+                <!-- ส่วนสำหรับถ่ายรูป/แนบรูป -->
+                <div class="bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">📸 ถ่ายรูปหลักฐาน (เลือกรูป/เปิดกล้อง)</label>
+                    <input type="file" id="maint-photo" accept="image/*" capture="environment" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer">
+                    <div id="maint-photo-preview" class="mt-3 hidden rounded-lg overflow-hidden border border-gray-200">
+                        <img id="maint-photo-img" src="" alt="Preview" class="w-full h-auto max-h-48 object-contain bg-black">
+                    </div>
+                </div>
+                
+                <div class="pt-2 flex gap-3">
+                    <button type="button" onclick="document.getElementById('modal-maintenance').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-300">ยกเลิก</button>
+                    <button type="submit" id="btn-save-maint" class="flex-1 bg-orange-600 text-white py-3 rounded-xl font-bold hover:bg-orange-700 shadow-md">💾 บันทึกปัญหา</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -633,22 +696,58 @@
             </div>
             <div class="p-4 overflow-y-auto flex-1 flex flex-col">
                 <div id="machine-detail-stats" class="mb-4 grid grid-cols-2 gap-4 text-center"></div>
-                <div class="flex justify-between items-center mb-2 bg-gray-100 p-2 rounded">
-                    <h4 class="font-bold text-gray-700 text-sm">📈 กราฟการผลิต</h4>
-                    <select id="machineChartToggle" onchange="window.switchMachineChart()" class="text-xs border border-gray-300 rounded p-1 text-gray-700 bg-white font-bold cursor-pointer">
-                        <option value="hourly">⏱️ ดูรายชั่วโมง (Hourly)</option>
-                        <option value="daily">📅 ดูเทรนด์รายวัน (Daily Trend)</option>
-                    </select>
+                
+                <!-- แท็บสลับดูข้อมูล กราฟการผลิต กับ ประวัติซ่อมบำรุง -->
+                <div class="flex border-b mb-4">
+                    <button onclick="window.switchMachineDetailTab('chart')" id="tab-md-chart" class="py-2 px-4 border-b-2 border-blue-600 text-blue-600 font-bold focus:outline-none">📊 กราฟการผลิต</button>
+                    <button onclick="window.switchMachineDetailTab('maint')" id="tab-md-maint" class="py-2 px-4 border-b-2 border-transparent text-gray-500 font-bold hover:text-gray-700 focus:outline-none">🛠️ ประวัติซ่อมบำรุง (Downtime)</button>
                 </div>
-                <div class="text-xs text-blue-600 mb-1 hidden text-right font-bold" id="daily-chart-hint">💡 คลิกที่แท่ง NG สีแดงเพื่อดูรายละเอียดอาการเสีย</div>
-                <div id="machine-hourly-wrapper" class="h-64 md:h-80 w-full relative"><canvas id="machineDetailChart"></canvas></div>
-                <div id="machine-daily-wrapper" class="h-64 md:h-80 w-full relative hidden"><canvas id="machineDailyTrendChart"></canvas></div>
-                <div id="machine-detail-remarks" class="mt-4 border-t pt-2 hidden">
-                    <h4 class="font-bold text-gray-700 text-left">📝 หมายเหตุของเสีย (NG Remarks)</h4>
-                    <div id="machine-remarks-list" class="text-left text-sm text-gray-600 mt-2 max-h-32 overflow-y-auto bg-gray-50 p-2 rounded"></div>
+
+                <!-- 1. ส่วนแสดงกราฟการผลิต (เดิม) -->
+                <div id="md-section-chart" class="flex flex-col flex-1">
+                    <div class="flex justify-between items-center mb-2 bg-gray-100 p-2 rounded">
+                        <h4 class="font-bold text-gray-700 text-sm">📈 แนวโน้มการผลิตและของเสีย</h4>
+                        <select id="machineChartToggle" onchange="window.switchMachineChart()" class="text-xs border border-gray-300 rounded p-1 text-gray-700 bg-white font-bold cursor-pointer">
+                            <option value="hourly">⏱️ ดูรายชั่วโมง (Hourly)</option>
+                            <option value="daily">📅 ดูเทรนด์รายวัน (Daily Trend)</option>
+                        </select>
+                    </div>
+                    <div class="text-xs text-blue-600 mb-1 hidden text-right font-bold" id="daily-chart-hint">💡 คลิกที่แท่ง NG สีแดงเพื่อดูรายละเอียดอาการเสีย</div>
+                    <div id="machine-hourly-wrapper" class="h-64 md:h-80 w-full relative"><canvas id="machineDetailChart"></canvas></div>
+                    <div id="machine-daily-wrapper" class="h-64 md:h-80 w-full relative hidden"><canvas id="machineDailyTrendChart"></canvas></div>
+                    <div id="machine-detail-remarks" class="mt-4 border-t pt-2 hidden">
+                        <h4 class="font-bold text-gray-700 text-left">📝 หมายเหตุของเสีย (NG Remarks)</h4>
+                        <div id="machine-remarks-list" class="text-left text-sm text-gray-600 mt-2 max-h-32 overflow-y-auto bg-gray-50 p-2 rounded"></div>
+                    </div>
                 </div>
+
+                <!-- 2. ส่วนแสดงประวัติแจ้งซ่อม (ใหม่) -->
+                <div id="md-section-maint" class="flex flex-col flex-1 hidden">
+                    <div class="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4 flex justify-between items-center">
+                        <div>
+                            <p class="text-xs font-bold text-orange-800 uppercase">รวมเวลาหยุดเครื่อง (Total Downtime)</p>
+                            <p id="md-total-downtime" class="text-xl font-bold text-orange-600">0 นาที</p>
+                        </div>
+                        <div class="text-3xl">⏱️</div>
+                    </div>
+                    <h4 class="font-bold text-gray-700 text-left mb-2">📋 รายการแจ้งปัญหา / ซ่อมบำรุง</h4>
+                    <div id="machine-maintenance-list" class="flex-1 overflow-y-auto space-y-2">
+                        <!-- รายการซ่อมจะถูกแทรกที่นี่จาก JS -->
+                        <div class="text-center text-gray-400 py-4 text-sm">ไม่พบประวัติการแจ้งซ่อมในช่วงเวลานี้</div>
+                    </div>
+                </div>
+                
             </div>
         </div>
+    </div>
+
+    <!-- Modal สำหรับดูรูปภาพหลักฐานขนาดใหญ่ -->
+    <div id="modal-image-viewer" class="fixed inset-0 bg-black bg-opacity-90 z-[60] hidden flex flex-col items-center justify-center p-4">
+        <div class="w-full flex justify-end mb-2">
+            <button onclick="document.getElementById('modal-image-viewer').classList.add('hidden')" class="text-white hover:text-gray-300 text-4xl font-bold">&times;</button>
+        </div>
+        <img id="viewer-img" src="" class="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl">
+        <p id="viewer-caption" class="text-white mt-4 text-center text-sm font-medium"></p>
     </div>
 
     <div id="modal-daily-ng-breakdown" class="fixed inset-0 bg-black bg-opacity-40 z-50 hidden flex items-center justify-center p-4 print-hide">
@@ -718,7 +817,7 @@
     <script src="js/app.js"></script>
     <script src="js/charts.js"></script>
 
-    <!-- Script สำหรับจัดการรหัสผ่าน (เพิ่มไว้ในไฟล์นี้เพื่อให้ทำงานได้ทันทีโดยไม่ต้องแก้ app.js) -->
+    <!-- Script สำหรับจัดการรหัสผ่านและสลับแท็บเครื่องจักร -->
     <script>
         window.openChangePasswordModal = function() {
             const modal = document.getElementById('modal-change-password');
@@ -734,6 +833,57 @@
             const modal = document.getElementById('modal-change-password');
             if(modal) modal.classList.add('hidden');
         };
+
+        // สคริปต์สลับแท็บในหน้ารายละเอียดเครื่องจักร (Machine Detail)
+        window.switchMachineDetailTab = function(tabName) {
+            const chartTab = document.getElementById('tab-md-chart');
+            const maintTab = document.getElementById('tab-md-maint');
+            const chartSection = document.getElementById('md-section-chart');
+            const maintSection = document.getElementById('md-section-maint');
+
+            if(tabName === 'chart') {
+                chartTab.className = "py-2 px-4 border-b-2 border-blue-600 text-blue-600 font-bold focus:outline-none";
+                maintTab.className = "py-2 px-4 border-b-2 border-transparent text-gray-500 font-bold hover:text-gray-700 focus:outline-none";
+                chartSection.classList.remove('hidden');
+                maintSection.classList.add('hidden');
+            } else {
+                maintTab.className = "py-2 px-4 border-b-2 border-orange-600 text-orange-600 font-bold focus:outline-none";
+                chartTab.className = "py-2 px-4 border-b-2 border-transparent text-gray-500 font-bold hover:text-gray-700 focus:outline-none";
+                maintSection.classList.remove('hidden');
+                chartSection.classList.add('hidden');
+            }
+        };
+
+        // ฟังก์ชันเบื้องต้นสำหรับเปิด Modal ซ่อมบำรุง
+        window.openMaintenanceModal = function() {
+            // โหลดรายชื่อเครื่องจักรเข้า Dropdown
+            const select = document.getElementById('maint-machine');
+            select.innerHTML = '<option value="">-- กรุณาเลือก --</option>';
+            for(let i=1; i<=16; i++) {
+                const m = `CWM-${String(i).padStart(2,'0')}`;
+                select.innerHTML += `<option value="${m}">${m}</option>`;
+            }
+            
+            // รีเซ็ตฟอร์ม
+            document.getElementById('maintenanceForm').reset();
+            document.getElementById('maint-photo-preview').classList.add('hidden');
+            document.getElementById('maint-photo-img').src = '';
+            
+            document.getElementById('modal-maintenance').classList.remove('hidden');
+        };
+
+        // พรีวิวรูปภาพเมื่อเลือกไฟล์หรือถ่ายรูปเสร็จ
+        document.getElementById('maint-photo')?.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('maint-photo-img').src = e.target.result;
+                    document.getElementById('maint-photo-preview').classList.remove('hidden');
+                }
+                reader.readAsDataURL(file);
+            }
+        });
 
         // ผูก Event ทันทีที่โหลดไฟล์เสร็จ
         setTimeout(() => {
