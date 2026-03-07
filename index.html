@@ -43,6 +43,13 @@
             <div class="mt-6 text-center text-xs text-gray-400">v3.54 Authentication System</div>
         </div>
     </div>
+
+    <!-- 🌟 สคริปต์ป้องกันการค้างหน้า Login หากเคยล็อคอินแล้ว 🌟 -->
+    <script>
+        if (localStorage.getItem('CWM_AUTH_USER')) {
+            document.getElementById('login-modal').classList.add('hidden');
+        }
+    </script>
     
     <!-- Navbar แบบ Hamberger Menu -->
     <nav class="bg-white shadow-md sticky top-0 z-30 print-hide">
