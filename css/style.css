@@ -32,7 +32,6 @@ td { @apply px-6 py-4 border-b text-sm text-gray-700 whitespace-nowrap; }
     background-color: #ffffff !important;
 }
 
-/* 🌟 CSS สำหรับการพิมพ์รายงานแบบมาตราฐานโรงงาน */
 @media print {
     @page { margin: 10mm; size: A4 portrait; }
     body { background-color: white !important; font-size: 12pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
