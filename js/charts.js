@@ -561,7 +561,7 @@ align: 'end', anchor: 'end', formatter: (v) => v > 0 ? v + ' ชิ้น' : nul
 options: { ...commonOpts, layout: { padding: { top: 20 } }, scales: { y: { beginAtZero: true, grace: '10%' }, y1: { beginAtZero: true, max: 105, position: 'right', grid: { display: false } } } }
 });
 }
-const ctxNgMac = document.getElementById('ngByMachineChart');
+     const ctxNgMac = document.getElementById('ngByMachineChart');
      if(ctxNgMac) {
          if(charts.ngMachine) charts.ngMachine.destroy();
          
@@ -1009,7 +1009,7 @@ if(val === 'hourly') {
 
 window.showMachineDetail = function(machineName) {
 if(!currentDashboardData) return;
-window.currentSelectedMachine = machineName; // 🌟 เก็บค่าเครื่องที่ถูกเลือกไว้ใช้ตอนคลิกกราฟ
+window.currentSelectedMachine = machineName; 
 const modal = document.getElementById('modal-machine-detail');
 const mData = currentDashboardData.machineData[machineName] || { fg: 0, ngTotal: 0, ngTotalKg: 0, ngTotalPcs: 0, hourlyFg: [], hourlyNgPcs: [], hourlyNg: [], hourlyNgKg: [], remarks: [], daily: {} };
 
