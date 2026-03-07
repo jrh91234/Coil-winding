@@ -79,6 +79,70 @@ window.logout = function() {
     window.location.reload();
 };
 
+// ==========================================
+// 🌟 ระบบเปลี่ยนรหัสผ่าน (Change Password)
+// ==========================================
+window.openChangePasswordModal = function() {
+    document.getElementById('modal-change-password').classList.remove('hidden');
+    document.getElementById('change-old-password').value = '';
+    document.getElementById('change-new-password').value = '';
+    document.getElementById('change-confirm-password').value = '';
+};
+
+window.closeChangePasswordModal = function() {
+    document.getElementById('modal-change-password').classList.add('hidden');
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const pwdForm = document.getElementById('changePasswordForm');
+    if (pwdForm) {
+        pwdForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const oldPw = document.getElementById('change-old-password').value.trim();
+            const newPw = document.getElementById('change-new-password').value.trim();
+            const confPw = document.getElementById('change-confirm-password').value.trim();
+
+            if(newPw !== confPw) {
+                alert('รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน!');
+                return;
+            }
+
+            const btn = document.getElementById('btn-submit-change-pwd');
+            btn.disabled = true;
+            btn.innerHTML = "⏳ กำลังดำเนินการ...";
+
+            try {
+                const payload = {
+                    action: 'CHANGE_PASSWORD',
+                    username: window.currentUser.username,
+                    role: window.currentUser.role,
+                    oldPassword: oldPw,
+                    newPassword: newPw
+                };
+                
+                const res = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    alert(data.message + "\nกรุณาล็อคอินใหม่อีกครั้งด้วยรหัสผ่านใหม่");
+                    window.closeChangePasswordModal();
+                    window.logout(); // บังคับเตะออกเพื่อให้ล็อคอินใหม่
+                } else {
+                    alert("ผิดพลาด: " + data.message);
+                }
+            } catch (err) {
+                alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = "บันทึกรหัสผ่าน";
+            }
+        };
+    }
+});
+
 function initAppAfterLogin() {
     // อัปเดต UI ชื่อและสิทธิ์
     document.getElementById('nav-user-name').innerText = window.currentUser.name || window.currentUser.username;
