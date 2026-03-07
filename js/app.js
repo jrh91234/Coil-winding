@@ -19,6 +19,317 @@ let currentManageType = '';
 
 window.isDualLayout = true;
 window.lastBatchId = null;
+window.currentUser = null; // 🌟 เก็บข้อมูล User ปัจจุบัน
+
+// ==========================================
+// 🌟 1. ระบบ Authentication & Authorization
+// ==========================================
+
+window.onload = () => {
+    // 1. ตรวจสอบการ Login
+    const savedUser = localStorage.getItem('CWM_AUTH_USER');
+    if (savedUser) {
+        window.currentUser = JSON.parse(savedUser);
+        initAppAfterLogin();
+    } else {
+        // ยังไม่ได้ Login แสดง Modal
+        document.getElementById('login-modal').classList.remove('hidden');
+    }
+};
+
+document.getElementById('loginForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btn-login');
+    const errDiv = document.getElementById('login-error');
+    const user = document.getElementById('login-username').value.trim();
+    const pass = document.getElementById('login-password').value.trim();
+    
+    btn.disabled = true;
+    btn.innerHTML = "⏳ กำลังเข้าสู่ระบบ...";
+    errDiv.classList.add('hidden');
+    
+    try {
+        const payload = { action: 'LOGIN', username: user, password: pass };
+        const res = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            window.currentUser = data.user;
+            localStorage.setItem('CWM_AUTH_USER', JSON.stringify(data.user));
+            document.getElementById('login-modal').classList.add('hidden');
+            initAppAfterLogin();
+        } else {
+            errDiv.innerText = data.message || "Username หรือ Password ไม่ถูกต้อง";
+            errDiv.classList.remove('hidden');
+        }
+    } catch (err) {
+        errDiv.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์";
+        errDiv.classList.remove('hidden');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = "เข้าสู่ระบบ";
+    }
+};
+
+window.logout = function() {
+    localStorage.removeItem('CWM_AUTH_USER');
+    window.location.reload();
+};
+
+function initAppAfterLogin() {
+    // อัปเดต UI ชื่อและสิทธิ์
+    document.getElementById('nav-user-name').innerText = window.currentUser.name || window.currentUser.username;
+    document.getElementById('nav-user-role').innerText = window.currentUser.role;
+    document.getElementById('nav-user-name-mobile').innerText = window.currentUser.name || window.currentUser.username;
+    document.getElementById('nav-user-role-mobile').innerText = window.currentUser.role;
+
+    // เตรียมฟังก์ชันหลักของแอป
+    const shiftDate = getShiftDateStr();
+    document.getElementById('productionDate').value = shiftDate;
+    document.getElementById('planDate').value = shiftDate;
+    document.getElementById('startDate').value = shiftDate;
+    document.getElementById('endDate').value = shiftDate;
+
+    if(localStorage.getItem('CWM_CUSTOM_NG')) ngSymptoms = JSON.parse(localStorage.getItem('CWM_CUSTOM_NG'));
+    ngSymptoms = normalizeSymptomList(ngSymptoms);
+    localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
+
+    if(localStorage.getItem('CWM_RECORDERS')) recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
+    if(localStorage.getItem('CWM_MACHINE_MAPPING')) machineMapping = JSON.parse(localStorage.getItem('CWM_MACHINE_MAPPING'));
+
+    window.detectCurrentShift();
+    window.addBatchRow();
+    window.fetchOptions();
+    window.initSortable();
+    window.renderRecorderOptions();
+    window.renderProductOptions();
+
+    applyPermissions(); // 🌟 บังคับสิทธิ์ตาม Role
+
+    // Chart.js event listeners (คงเดิม)
+    document.addEventListener('dblclick', function(e) {
+        if (e.target.tagName === 'CANVAS') {
+            const chartInstance = Chart.getChart(e.target);
+            if (chartInstance) {
+                if (typeof chartInstance.resetZoom === 'function') chartInstance.resetZoom();
+                if (chartInstance.options.scales) {
+                    Object.keys(chartInstance.options.scales).forEach(key => {
+                        delete chartInstance.options.scales[key].min;
+                        delete chartInstance.options.scales[key].max;
+                    });
+                    chartInstance.update();
+                }
+            }
+        }
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const maxCard = document.querySelector('.maximized-card');
+            if (maxCard) {
+                const btn = maxCard.querySelector('button[title="ย่อหน้าจอ"]');
+                if (btn) window.toggleCardMaximize(btn);
+            }
+        }
+    });
+}
+
+// 🌟 ระบบควบคุมสิทธิ์การเข้าถึงเมนู
+function applyPermissions() {
+    const role = window.currentUser.role;
+    
+    // 1. ซ่อนทุกปุ่มใน Navbar ก่อน
+    ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.classList.add('hidden');
+    });
+
+    // 2. แสดงเมนูและกำหนดหน้า Default ตามสิทธิ์
+    let defaultTab = '';
+
+    if (role === 'Production' || role === 'QC') {
+        ['tab-form', 'tab-dashboard', 'tab-rw'].forEach(id => document.getElementById(id).classList.remove('hidden'));
+        defaultTab = 'form';
+    } 
+    else if (role === 'Planning') {
+        ['tab-planning', 'tab-dashboard'].forEach(id => document.getElementById(id).classList.remove('hidden'));
+        defaultTab = 'planning';
+    } 
+    else if (role === 'Viewer') {
+        ['tab-dashboard'].forEach(id => document.getElementById(id).classList.remove('hidden'));
+        defaultTab = 'dashboard';
+    } 
+    else if (role === 'Admin') {
+        // แอดมินเห็นทุกเมนู
+        ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin'].forEach(id => document.getElementById(id).classList.remove('hidden'));
+        defaultTab = 'dashboard'; // Admin default เป็น dashboard
+    }
+
+    // ไปยังหน้า Default
+    window.switchTab(defaultTab);
+}
+
+// 🌟 ฟังก์ชันส่วนกลางสำหรับเก็บบันทึก (Log Action)
+function systemLog(logType, details) {
+    if (!window.currentUser) return;
+    const payload = {
+        action: 'LOG_ACTION',
+        username: window.currentUser.username,
+        role: window.currentUser.role,
+        logType: logType,
+        details: details
+    };
+    fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) }).catch(e=>console.log("Log error", e));
+}
+
+// ==========================================
+// 🌟 2. ระบบ Admin (จัดการผู้ใช้)
+// ==========================================
+window.openAdminPanel = function() {
+    if (!window.currentUser || window.currentUser.role !== 'Admin') {
+        alert("คุณไม่มีสิทธิ์เข้าถึงหน้านี้");
+        return;
+    }
+    
+    ['form', 'planning', 'dashboard'].forEach(t => document.getElementById('section-'+t).classList.add('hidden'));
+    document.getElementById('section-admin').classList.remove('hidden');
+    
+    loadAdminUsers();
+};
+
+async function loadAdminUsers() {
+    const tbody = document.getElementById('admin-user-table');
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-500">กำลังโหลดข้อมูลผู้ใช้งาน...</td></tr>';
+    
+    try {
+        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_USERS' }) });
+        const data = await res.json();
+        
+        if (data.success && data.users) {
+            let html = '';
+            data.users.forEach(u => {
+                let roleColor = 'gray';
+                if(u.role==='Admin') roleColor = 'purple';
+                else if(u.role==='Production') roleColor = 'blue';
+                else if(u.role==='QC') roleColor = 'orange';
+                else if(u.role==='Planning') roleColor = 'indigo';
+                else if(u.role==='Viewer') roleColor = 'teal';
+
+                html += `
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-800">${u.username}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-gray-600">${u.name || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-${roleColor}-100 text-${roleColor}-800">
+                            ${u.role}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                        <button onclick="window.showUserModal('EDIT', '${u.username}', '${u.name}', '${u.role}')" class="text-indigo-600 hover:text-indigo-900 mr-3">✏️ แก้ไข</button>
+                        ${u.username !== window.currentUser.username ? 
+                            `<button onclick="window.deleteUser('${u.username}')" class="text-red-600 hover:text-red-900">🗑️ ลบ</button>` 
+                            : '<span class="text-gray-400 text-xs">(คุณ)</span>'
+                        }
+                    </td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+        } else {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-500">ไม่พบข้อมูล หรือเกิดข้อผิดพลาด</td></tr>';
+        }
+    } catch(e) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-500">เกิดข้อผิดพลาดในการโหลดข้อมูล</td></tr>';
+    }
+}
+
+window.showUserModal = function(mode, username='', name='', role='Production') {
+    document.getElementById('user-manage-mode').value = mode;
+    document.getElementById('user-manage-target').value = username;
+    
+    document.getElementById('user-modal-title').innerText = mode === 'ADD' ? 'เพิ่มผู้ใช้งานใหม่' : 'แก้ไขผู้ใช้งาน: ' + username;
+    
+    document.getElementById('user-manage-username').value = username;
+    document.getElementById('user-manage-username').readOnly = (mode === 'EDIT');
+    document.getElementById('user-manage-username').classList.toggle('bg-gray-100', mode === 'EDIT');
+    
+    document.getElementById('user-manage-password').value = ''; // เคลียร์รหัสผ่านเสมอ
+    document.getElementById('user-manage-password').required = (mode === 'ADD');
+    
+    document.getElementById('user-manage-name').value = name;
+    document.getElementById('user-manage-role').value = role;
+    
+    document.getElementById('modal-user-manage').classList.remove('hidden');
+};
+
+document.getElementById('userManageForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const mode = document.getElementById('user-manage-mode').value;
+    const target = document.getElementById('user-manage-target').value;
+    const username = document.getElementById('user-manage-username').value.trim();
+    const password = document.getElementById('user-manage-password').value.trim();
+    const name = document.getElementById('user-manage-name').value.trim();
+    const role = document.getElementById('user-manage-role').value;
+    
+    const btn = document.getElementById('btn-save-user');
+    btn.disabled = true;
+    btn.innerHTML = "กำลังบันทึก...";
+    
+    const payload = {
+        action: mode === 'ADD' ? 'ADD_USER' : 'EDIT_USER',
+        adminUsername: window.currentUser.username,
+        targetUsername: target,
+        newUsername: username,
+        newPassword: password,
+        newName: name,
+        newRole: role
+    };
+    
+    try {
+        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+        const data = await res.json();
+        
+        if (data.success) {
+            alert(data.message);
+            document.getElementById('modal-user-manage').classList.add('hidden');
+            loadAdminUsers();
+        } else {
+            alert("ผิดพลาด: " + data.message);
+        }
+    } catch (e) {
+        alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = "บันทึกข้อมูล";
+    }
+};
+
+window.deleteUser = async function(username) {
+    if (!confirm(`ยืนยันการลบผู้ใช้: ${username} ใช่หรือไม่?\n(การกระทำนี้ไม่สามารถย้อนกลับได้)`)) return;
+    
+    try {
+        const res = await fetch(SCRIPT_URL, { 
+            method: 'POST', 
+            body: JSON.stringify({ action: 'DELETE_USER', targetUsername: username, adminUsername: window.currentUser.username }) 
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(data.message);
+            loadAdminUsers();
+        } else {
+            alert("ผิดพลาด: " + data.message);
+        }
+    } catch (e) {
+        alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    }
+};
+
+
+// ==========================================
+// 🌟 3. โค้ดเดิม (อัปเดตระบบ Security)
+// ==========================================
 
 function capitalizeFirst(str) {
     if (!str) return "";
@@ -53,66 +364,6 @@ function getShiftDateStr() {
     return `${y}-${m}-${d}`;
 }
 
-window.onload = () => {
-    const shiftDate = getShiftDateStr();
-    document.getElementById('productionDate').value = shiftDate;
-    document.getElementById('planDate').value = shiftDate;
-    document.getElementById('startDate').value = shiftDate;
-    document.getElementById('endDate').value = shiftDate;
-
-    if(localStorage.getItem('CWM_CUSTOM_NG')) {
-        ngSymptoms = JSON.parse(localStorage.getItem('CWM_CUSTOM_NG'));
-    }
-    ngSymptoms = normalizeSymptomList(ngSymptoms);
-    localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
-
-    if(localStorage.getItem('CWM_RECORDERS')) {
-        recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
-    }
-    
-    if(localStorage.getItem('CWM_MACHINE_MAPPING')) {
-        machineMapping = JSON.parse(localStorage.getItem('CWM_MACHINE_MAPPING'));
-    }
-
-    window.detectCurrentShift();
-    window.addBatchRow();
-    window.fetchOptions();
-    window.initSortable();
-    window.renderRecorderOptions();
-    window.renderProductOptions();
-
-    document.addEventListener('dblclick', function(e) {
-        if (e.target.tagName === 'CANVAS') {
-            const chartInstance = Chart.getChart(e.target);
-            if (chartInstance) {
-                if (typeof chartInstance.resetZoom === 'function') {
-                    chartInstance.resetZoom();
-                }
-                if (chartInstance.options.scales) {
-                    Object.keys(chartInstance.options.scales).forEach(key => {
-                        delete chartInstance.options.scales[key].min;
-                        delete chartInstance.options.scales[key].max;
-                    });
-                    chartInstance.update();
-                }
-            }
-        }
-    });
-
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            const maxCard = document.querySelector('.maximized-card');
-            if (maxCard) {
-                const btn = maxCard.querySelector('button[title="ย่อหน้าจอ"]');
-                if (btn) window.toggleCardMaximize(btn);
-            }
-        }
-    });
-
-    if(window.location.hash === '#dashboard') window.switchTab('dashboard');
-    else window.switchTab('form');
-};
-
 window.fetchOptions = async function() {
     try {
         const res = await fetch(`${SCRIPT_URL}?action=GET_OPTIONS&_t=${Date.now()}`);
@@ -142,7 +393,6 @@ window.fetchOptions = async function() {
                 const pSel = r.querySelector('.product-select-target');
                 if(mSel && mSel.value && machineMapping[mSel.value]) {
                     pSel.value = machineMapping[mSel.value];
-                    // กระตุ้น Event change ให้เช็คการตั้งค่าค่า FG อัตโนมัติ
                     pSel.dispatchEvent(new Event('change'));
                 }
             }
@@ -304,16 +554,28 @@ window.updateHourSlots = function(type) {
     if(match) select.value = match;
 };
 
+// 🌟 อัปเดตการ Switch Tab ป้องกันการเข้าผิดสิทธิ์
 window.switchTab = function(tab) {
-    ['form', 'planning', 'dashboard'].forEach(t => {
-        document.getElementById('section-'+t).classList.toggle('hidden', t !== tab);
+    if (!window.currentUser) return;
+    const role = window.currentUser.role;
+
+    // Security Rules
+    if ((role === 'Production' || role === 'QC') && (tab === 'planning' || tab === 'admin')) return;
+    if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin')) return;
+    if (role === 'Viewer' && tab !== 'dashboard') return;
+
+    ['form', 'planning', 'dashboard', 'admin'].forEach(t => {
+        const el = document.getElementById('section-'+t);
+        if(el) el.classList.toggle('hidden', t !== tab);
         const btn = document.getElementById('tab-'+t);
-        if(t === tab) { 
-            btn.classList.add('tab-active','text-blue-600'); 
-            btn.classList.remove('text-gray-500'); 
-        } else { 
-            btn.classList.remove('tab-active','text-blue-600'); 
-            btn.classList.add('text-gray-500'); 
+        if(btn) {
+            if(t === tab) { 
+                btn.classList.add('tab-active','text-blue-600'); 
+                btn.classList.remove('text-gray-500'); 
+            } else { 
+                btn.classList.remove('tab-active','text-blue-600'); 
+                btn.classList.add('text-gray-500'); 
+            }
         }
     });
     if(tab==='dashboard') window.loadDashboard();
@@ -375,7 +637,6 @@ window.saveAssignment = async function() {
         const pSel = r.querySelector('.product-select-target');
         if(mSel && mSel.value && machineMapping[mSel.value]) {
             pSel.value = machineMapping[mSel.value];
-            // กระตุ้น Event change ให้เช็คการตั้งค่าค่า FG อัตโนมัติ
             pSel.dispatchEvent(new Event('change'));
         }
     }
@@ -389,6 +650,8 @@ window.saveAssignment = async function() {
         };
         fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) })
         .catch(e => console.log("Error logging assignment:", e));
+
+        systemLog('ASSIGN_MACHINE', `บันทึกการตั้งค่าเครื่องจักร ${logEntries.length} รายการ`); // 🌟 บันทึก Log
     }
 };
 
@@ -431,7 +694,6 @@ window.addBatchRow = function() {
     const pSelect = div.querySelector('.product-select-target');
     const fgInput = div.querySelector('input[name="fgAmount"]');
     
-    // 🌟 ฟังก์ชันเช็คชื่อโมเดลแล้วปรับยอด FG ให้ตรง
     const checkProductForFg = () => {
         if(pSelect.value === "51207080HC-JR (25/32A)") {
             fgInput.value = "800";
@@ -440,19 +702,15 @@ window.addBatchRow = function() {
         }
     };
 
-    // หากเลือกเครื่องแล้วดึงค่า Assign อัตโนมัติ ให้ทำการเช็คยอด FG ด้วย
     mSelect.addEventListener('change', function() {
         const selectedM = this.value;
         if(selectedM && machineMapping[selectedM]) {
             pSelect.value = machineMapping[selectedM];
-            checkProductForFg(); // กระตุ้นการปรับค่า FG
+            checkProductForFg(); 
         }
     });
 
-    // 🌟 ดักจับตอนที่ผู้ใช้เปลี่ยน Dropdown ช่อง Product ตรงๆ
     pSelect.addEventListener('change', checkProductForFg);
-
-    // เซ็ตค่าเริ่มต้นให้ถูกตั้งแต่สร้างแถว
     checkProductForFg();
 };
 
@@ -686,6 +944,7 @@ window.saveListToCloud = async function() {
             body: JSON.stringify(payload) 
         }); 
         
+        systemLog('UPDATE_MASTER_LIST', `บันทึก Master List: ${actionName}`); // 🌟 บันทึก Log
         alert("☁️ อัปเดตข้อมูลขึ้น Cloud เรียบร้อยแล้ว!\n(ระบบจะจำรายการเหล่านี้ไปใช้กับเครื่องอื่นด้วย)");
     } catch (error) {
         alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อ Cloud: " + error.message);
@@ -731,6 +990,8 @@ window.undoLastSubmit = async function() {
         };
         await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
         
+        systemLog('UNDO_PRODUCTION', `ยกเลิกรายการผลิต Batch: ${window.lastBatchId}`); // 🌟 บันทึก Log
+
         btn.innerHTML = "✅ ยกเลิกสำเร็จ!";
         btn.classList.remove('bg-red-600', 'hover:bg-red-700');
         btn.classList.add('bg-green-600', 'hover:bg-green-700');
@@ -865,6 +1126,8 @@ document.getElementById('productionForm').onsubmit = async (e) => {
         const payload = { action: 'SAVE_BATCH_PRODUCTION', common, items };
         await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
         
+        systemLog('SAVE_PRODUCTION', `บันทึกรายการผลิต ${items.length} รายการ (Batch: ${newBatchId})`); // 🌟 บันทึก Log
+
         document.getElementById('batchList').innerHTML = ''; 
         batchNgData = {}; 
         window.addBatchRow(); 
@@ -902,6 +1165,9 @@ document.getElementById('planningForm').onsubmit = async (e) => {
     
     try {
         await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', body:JSON.stringify(payload)}); 
+        
+        systemLog('SAVE_PLAN', `บันทึกแผนการผลิต ${fd.get('planProduct')} จำนวน ${fd.get('planQty')} ชิ้น`); // 🌟 บันทึก Log
+
         alert("✅ บันทึกแผนสำเร็จ"); 
         e.target.reset();
         document.getElementById('planDate').value = getShiftDateStr();
@@ -1361,8 +1627,8 @@ window.loadDashboard = async function() {
         const ngKg = data.totalNgKg || 0;
         
         if (fg === 0 && ngPcs === 0 && target === 0) {
-            debugOut.innerText += `\n[Warning] ข้อมูลในวันที่ ${start} เป็น 0 ทั้งหมด กราฟจะแสดงเป็นพื้นที่ว่าง (โปรดเช็คว่าเลือกวันที่ถูกต้องหรือไม่)`;
-            alert(`⚠️ ไม่พบข้อมูลการผลิตหรือแผนงานในช่วงเวลาที่เลือก\n\nวันที่: ${start} ถึง ${end}\nกะ: ${shift}\nประเภท: ${shiftType}\n\n*ข้อแนะนำ: \nหากเพิ่งตัดเข้าวันใหม่ ให้ลองเปลี่ยนช่องวันที่กลับเป็นเมื่อวานครับ`);
+            debugOut.innerText += `\n[Warning] ข้อมูลในวันที่ ${start} เป็น 0 ทั้งหมด กราฟจะแสดงเป็นพื้นที่ว่าง`;
+            // alert(`⚠️ ไม่พบข้อมูลการผลิตหรือแผนงานในช่วงเวลาที่เลือก\n\nวันที่: ${start} ถึง ${end}`);
         } else {
             debugOut.innerText += `\n[Success] พบข้อมูล FG=${fg}, NG=${ngPcs}`;
         }
@@ -1403,7 +1669,6 @@ window.loadDashboard = async function() {
 
         currentDashboardData = data;
         
-        // ส่งต่อการวาดกราฟให้ charts.js
         if (typeof window.renderCharts === 'function') {
             window.renderCharts(data); 
             window.renderTable(data); 
