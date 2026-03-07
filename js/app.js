@@ -19,20 +19,18 @@ let currentManageType = '';
 
 window.isDualLayout = true;
 window.lastBatchId = null;
-window.currentUser = null; // 🌟 เก็บข้อมูล User ปัจจุบัน
+window.currentUser = null; 
 
 // ==========================================
 // 🌟 1. ระบบ Authentication & Authorization
 // ==========================================
 
 window.onload = () => {
-    // 1. ตรวจสอบการ Login
     const savedUser = localStorage.getItem('CWM_AUTH_USER');
     if (savedUser) {
         window.currentUser = JSON.parse(savedUser);
         initAppAfterLogin();
     } else {
-        // ยังไม่ได้ Login แสดง Modal
         document.getElementById('login-modal').classList.remove('hidden');
     }
 };
@@ -79,78 +77,12 @@ window.logout = function() {
     window.location.reload();
 };
 
-// ==========================================
-// 🌟 ระบบเปลี่ยนรหัสผ่าน (Change Password)
-// ==========================================
-window.openChangePasswordModal = function() {
-    document.getElementById('modal-change-password').classList.remove('hidden');
-    document.getElementById('change-old-password').value = '';
-    document.getElementById('change-new-password').value = '';
-    document.getElementById('change-confirm-password').value = '';
-};
-
-window.closeChangePasswordModal = function() {
-    document.getElementById('modal-change-password').classList.add('hidden');
-};
-
-document.addEventListener('DOMContentLoaded', () => {
-    const pwdForm = document.getElementById('changePasswordForm');
-    if (pwdForm) {
-        pwdForm.onsubmit = async (e) => {
-            e.preventDefault();
-            const oldPw = document.getElementById('change-old-password').value.trim();
-            const newPw = document.getElementById('change-new-password').value.trim();
-            const confPw = document.getElementById('change-confirm-password').value.trim();
-
-            if(newPw !== confPw) {
-                alert('รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน!');
-                return;
-            }
-
-            const btn = document.getElementById('btn-submit-change-pwd');
-            btn.disabled = true;
-            btn.innerHTML = "⏳ กำลังดำเนินการ...";
-
-            try {
-                const payload = {
-                    action: 'CHANGE_PASSWORD',
-                    username: window.currentUser.username,
-                    role: window.currentUser.role,
-                    oldPassword: oldPw,
-                    newPassword: newPw
-                };
-                
-                const res = await fetch(SCRIPT_URL, {
-                    method: 'POST',
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                
-                if (data.success) {
-                    alert(data.message + "\nกรุณาล็อคอินใหม่อีกครั้งด้วยรหัสผ่านใหม่");
-                    window.closeChangePasswordModal();
-                    window.logout(); // บังคับเตะออกเพื่อให้ล็อคอินใหม่
-                } else {
-                    alert("ผิดพลาด: " + data.message);
-                }
-            } catch (err) {
-                alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = "บันทึกรหัสผ่าน";
-            }
-        };
-    }
-});
-
 function initAppAfterLogin() {
-    // อัปเดต UI ชื่อและสิทธิ์
     document.getElementById('nav-user-name').innerText = window.currentUser.name || window.currentUser.username;
     document.getElementById('nav-user-role').innerText = window.currentUser.role;
     document.getElementById('nav-user-name-mobile').innerText = window.currentUser.name || window.currentUser.username;
     document.getElementById('nav-user-role-mobile').innerText = window.currentUser.role;
 
-    // เตรียมฟังก์ชันหลักของแอป
     const shiftDate = getShiftDateStr();
     document.getElementById('productionDate').value = shiftDate;
     document.getElementById('planDate').value = shiftDate;
@@ -171,9 +103,8 @@ function initAppAfterLogin() {
     window.renderRecorderOptions();
     window.renderProductOptions();
 
-    applyPermissions(); // 🌟 บังคับสิทธิ์ตาม Role
+    applyPermissions(); 
 
-    // Chart.js event listeners (คงเดิม)
     document.addEventListener('dblclick', function(e) {
         if (e.target.tagName === 'CANVAS') {
             const chartInstance = Chart.getChart(e.target);
@@ -201,17 +132,14 @@ function initAppAfterLogin() {
     });
 }
 
-// 🌟 ระบบควบคุมสิทธิ์การเข้าถึงเมนู
 function applyPermissions() {
     const role = window.currentUser.role;
     
-    // 1. ซ่อนทุกปุ่มใน Navbar ก่อน
     ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin'].forEach(id => {
         const el = document.getElementById(id);
         if(el) el.classList.add('hidden');
     });
 
-    // 2. แสดงเมนูและกำหนดหน้า Default ตามสิทธิ์
     let defaultTab = '';
 
     if (role === 'Production' || role === 'QC') {
@@ -227,16 +155,13 @@ function applyPermissions() {
         defaultTab = 'dashboard';
     } 
     else if (role === 'Admin') {
-        // แอดมินเห็นทุกเมนู
         ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin'].forEach(id => document.getElementById(id).classList.remove('hidden'));
-        defaultTab = 'dashboard'; // Admin default เป็น dashboard
+        defaultTab = 'dashboard'; 
     }
 
-    // ไปยังหน้า Default
     window.switchTab(defaultTab);
 }
 
-// 🌟 ฟังก์ชันส่วนกลางสำหรับเก็บบันทึก (Log Action)
 function systemLog(logType, details) {
     if (!window.currentUser) return;
     const payload = {
@@ -312,14 +237,13 @@ async function loadAdminUsers() {
 window.showUserModal = function(mode, username='', name='', role='Production') {
     document.getElementById('user-manage-mode').value = mode;
     document.getElementById('user-manage-target').value = username;
-    
     document.getElementById('user-modal-title').innerText = mode === 'ADD' ? 'เพิ่มผู้ใช้งานใหม่' : 'แก้ไขผู้ใช้งาน: ' + username;
     
     document.getElementById('user-manage-username').value = username;
     document.getElementById('user-manage-username').readOnly = (mode === 'EDIT');
     document.getElementById('user-manage-username').classList.toggle('bg-gray-100', mode === 'EDIT');
     
-    document.getElementById('user-manage-password').value = ''; // เคลียร์รหัสผ่านเสมอ
+    document.getElementById('user-manage-password').value = ''; 
     document.getElementById('user-manage-password').required = (mode === 'ADD');
     
     document.getElementById('user-manage-name').value = name;
@@ -390,9 +314,164 @@ window.deleteUser = async function(username) {
     }
 };
 
+// ==========================================
+// 🌟 3. ระบบแจ้งซ่อม (Maintenance Log)
+// ==========================================
+
+// ฟังก์ชันแปลงรูปภาพเป็น Base64
+function getBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const maintForm = document.getElementById('maintenanceForm');
+    if (maintForm) {
+        maintForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btn-save-maint');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = "⏳ กำลังอัปโหลดข้อมูล...";
+            btn.disabled = true;
+
+            try {
+                let base64Image = "";
+                const fileInput = document.getElementById('maint-photo');
+                if (fileInput.files.length > 0) {
+                    base64Image = await getBase64(fileInput.files[0]);
+                }
+
+                const payload = {
+                    action: 'SAVE_MAINTENANCE',
+                    username: window.currentUser ? (window.currentUser.name || window.currentUser.username) : "Unknown",
+                    role: window.currentUser ? window.currentUser.role : "User",
+                    date: document.getElementById('productionDate').value,
+                    machine: document.getElementById('maint-machine').value,
+                    issueType: document.getElementById('maint-issue-type').value,
+                    startTime: document.getElementById('maint-start-time').value,
+                    endTime: document.getElementById('maint-end-time').value,
+                    remark: document.getElementById('maint-remark').value,
+                    imageBase64: base64Image
+                };
+
+                const res = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+
+                if (result.status === 'success') {
+                    alert("✅ บันทึกการแจ้งซ่อม/ปัญหาสำเร็จ");
+                    document.getElementById('modal-maintenance').classList.add('hidden');
+                    maintForm.reset();
+                    document.getElementById('maint-photo-preview').classList.add('hidden');
+                } else {
+                    alert("❌ เกิดข้อผิดพลาด: " + result.message);
+                }
+            } catch(e) {
+                alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+                console.error(e);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        };
+    }
+
+    // ดักจับเวลาเปิด Modal ของ Machine Detail เพื่อโหลดข้อมูล Maintenance อัตโนมัติ
+    const titleEl = document.getElementById('machine-detail-title');
+    if (titleEl) {
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'characterData' || mutation.type === 'childList') {
+                    const titleText = titleEl.innerText || "";
+                    const match = titleText.match(/CWM-\d{2}/); 
+                    if (match) {
+                        window.populateMaintenanceTab(match[0]);
+                    }
+                }
+            });
+        });
+        observer.observe(titleEl, { childList: true, characterData: true, subtree: true });
+    }
+});
+
+// ฟังก์ชันนำข้อมูล Maintenance มาวาดลงใน Modal
+window.populateMaintenanceTab = function(machineName) {
+    const listContainer = document.getElementById('machine-maintenance-list');
+    const totalLabel = document.getElementById('md-total-downtime');
+    
+    if (!listContainer || !totalLabel) return;
+
+    listContainer.innerHTML = '';
+    totalLabel.innerText = '0 นาที';
+
+    if (!currentDashboardData || !currentDashboardData.machineData[machineName] || !currentDashboardData.machineData[machineName].maintenanceLogs) {
+        listContainer.innerHTML = '<div class="text-center text-gray-400 py-4 text-sm">🎉 ไม่พบประวัติการแจ้งซ่อม/ปัญหา ในช่วงเวลานี้</div>';
+        return;
+    }
+
+    const logs = currentDashboardData.machineData[machineName].maintenanceLogs;
+    if (logs.length === 0) {
+        listContainer.innerHTML = '<div class="text-center text-gray-400 py-4 text-sm">🎉 ไม่พบประวัติการแจ้งซ่อม/ปัญหา ในช่วงเวลานี้</div>';
+        return;
+    }
+
+    let totalMinutes = 0;
+    let html = '';
+
+    logs.forEach(log => {
+        let durationText = "รอดำเนินการ/ยังไม่เสร็จ";
+        let mins = 0;
+
+        if (log.startTime && log.endTime) {
+            const start = new Date(`2000-01-01T${log.startTime}`);
+            let end = new Date(`2000-01-01T${log.endTime}`);
+            if (end < start) end = new Date(`2000-01-02T${log.endTime}`); // กรณีข้ามคืน
+            
+            mins = Math.round((end - start) / 60000);
+            if(mins > 0) {
+                totalMinutes += mins;
+                durationText = `${mins} นาที`;
+            }
+        }
+
+        html += `
+        <div class="bg-white border border-gray-200 p-3 rounded-lg shadow-sm">
+            <div class="flex justify-between items-start mb-2">
+                <span class="text-sm font-bold text-orange-700">${log.issueType}</span>
+                <span class="text-[10px] font-medium bg-gray-100 text-gray-500 px-2 py-1 rounded border border-gray-200">${log.date}</span>
+            </div>
+            <div class="text-xs text-gray-600 mb-2 space-y-1">
+                <p>⏱️ <b>เวลาหยุด:</b> ${log.startTime} - ${log.endTime || '?'} (<span class="text-orange-600 font-bold">${durationText}</span>)</p>
+                <p>👤 <b>ผู้บันทึก:</b> ${log.recorder}</p>
+                <div class="mt-2 bg-gray-50 p-2 rounded border border-gray-100">📝 <b>รายละเอียด:</b> ${log.remark || '-'}</div>
+            </div>
+            ${log.imageUrl ? `<button onclick="window.viewImage('${log.imageUrl}')" class="w-full text-xs bg-blue-50 text-blue-600 font-bold border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 mt-1 shadow-sm flex justify-center items-center gap-1">📸 ดูรูปภาพหลักฐาน</button>` : ''}
+        </div>
+        `;
+    });
+
+    listContainer.innerHTML = html;
+    totalLabel.innerText = `${totalMinutes} นาที`;
+};
+
+// ฟังก์ชันเปิดดูรูปภาพขนาดใหญ่
+window.viewImage = function(url) {
+    const viewer = document.getElementById('modal-image-viewer');
+    const img = document.getElementById('viewer-img');
+    if (viewer && img) {
+        img.src = url;
+        viewer.classList.remove('hidden');
+    }
+};
 
 // ==========================================
-// 🌟 3. โค้ดเดิม (อัปเดตระบบ Security)
+// 🌟 4. โค้ดเดิมทั้งหมด (Production System)
 // ==========================================
 
 function capitalizeFirst(str) {
@@ -618,12 +697,10 @@ window.updateHourSlots = function(type) {
     if(match) select.value = match;
 };
 
-// 🌟 อัปเดตการ Switch Tab ป้องกันการเข้าผิดสิทธิ์
 window.switchTab = function(tab) {
     if (!window.currentUser) return;
     const role = window.currentUser.role;
 
-    // Security Rules
     if ((role === 'Production' || role === 'QC') && (tab === 'planning' || tab === 'admin')) return;
     if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin')) return;
     if (role === 'Viewer' && tab !== 'dashboard') return;
@@ -715,7 +792,7 @@ window.saveAssignment = async function() {
         fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) })
         .catch(e => console.log("Error logging assignment:", e));
 
-        systemLog('ASSIGN_MACHINE', `บันทึกการตั้งค่าเครื่องจักร ${logEntries.length} รายการ`); // 🌟 บันทึก Log
+        systemLog('ASSIGN_MACHINE', `บันทึกการตั้งค่าเครื่องจักร ${logEntries.length} รายการ`);
     }
 };
 
@@ -1008,7 +1085,7 @@ window.saveListToCloud = async function() {
             body: JSON.stringify(payload) 
         }); 
         
-        systemLog('UPDATE_MASTER_LIST', `บันทึก Master List: ${actionName}`); // 🌟 บันทึก Log
+        systemLog('UPDATE_MASTER_LIST', `บันทึก Master List: ${actionName}`);
         alert("☁️ อัปเดตข้อมูลขึ้น Cloud เรียบร้อยแล้ว!\n(ระบบจะจำรายการเหล่านี้ไปใช้กับเครื่องอื่นด้วย)");
     } catch (error) {
         alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อ Cloud: " + error.message);
@@ -1054,7 +1131,7 @@ window.undoLastSubmit = async function() {
         };
         await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
         
-        systemLog('UNDO_PRODUCTION', `ยกเลิกรายการผลิต Batch: ${window.lastBatchId}`); // 🌟 บันทึก Log
+        systemLog('UNDO_PRODUCTION', `ยกเลิกรายการผลิต Batch: ${window.lastBatchId}`);
 
         btn.innerHTML = "✅ ยกเลิกสำเร็จ!";
         btn.classList.remove('bg-red-600', 'hover:bg-red-700');
@@ -1190,7 +1267,7 @@ document.getElementById('productionForm').onsubmit = async (e) => {
         const payload = { action: 'SAVE_BATCH_PRODUCTION', common, items };
         await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
         
-        systemLog('SAVE_PRODUCTION', `บันทึกรายการผลิต ${items.length} รายการ (Batch: ${newBatchId})`); // 🌟 บันทึก Log
+        systemLog('SAVE_PRODUCTION', `บันทึกรายการผลิต ${items.length} รายการ (Batch: ${newBatchId})`);
 
         document.getElementById('batchList').innerHTML = ''; 
         batchNgData = {}; 
@@ -1230,7 +1307,7 @@ document.getElementById('planningForm').onsubmit = async (e) => {
     try {
         await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', body:JSON.stringify(payload)}); 
         
-        systemLog('SAVE_PLAN', `บันทึกแผนการผลิต ${fd.get('planProduct')} จำนวน ${fd.get('planQty')} ชิ้น`); // 🌟 บันทึก Log
+        systemLog('SAVE_PLAN', `บันทึกแผนการผลิต ${fd.get('planProduct')} จำนวน ${fd.get('planQty')} ชิ้น`);
 
         alert("✅ บันทึกแผนสำเร็จ"); 
         e.target.reset();
@@ -1691,8 +1768,7 @@ window.loadDashboard = async function() {
         const ngKg = data.totalNgKg || 0;
         
         if (fg === 0 && ngPcs === 0 && target === 0) {
-            debugOut.innerText += `\n[Warning] ข้อมูลในวันที่ ${start} เป็น 0 ทั้งหมด กราฟจะแสดงเป็นพื้นที่ว่าง`;
-            // alert(`⚠️ ไม่พบข้อมูลการผลิตหรือแผนงานในช่วงเวลาที่เลือก\n\nวันที่: ${start} ถึง ${end}`);
+            debugOut.innerText += `\n[Warning] ข้อมูลในวันที่ ${start} เป็น 0 ทั้งหมด`;
         } else {
             debugOut.innerText += `\n[Success] พบข้อมูล FG=${fg}, NG=${ngPcs}`;
         }
@@ -1733,6 +1809,7 @@ window.loadDashboard = async function() {
 
         currentDashboardData = data;
         
+        // ส่งต่อการวาดกราฟให้ charts.js
         if (typeof window.renderCharts === 'function') {
             window.renderCharts(data); 
             window.renderTable(data); 
