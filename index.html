@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.50 Ultimate Update (Auth)</title>
+    <title>CWM Production System - v3.50 Ultimate Update</title>
     
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -18,23 +18,6 @@
 </head>
 <body class="bg-gray-100 min-h-screen font-sans pb-10">
     
-    <!-- 🌟 LOGIN SCREEN 🌟 -->
-    <div id="login-screen" class="fixed inset-0 bg-gray-900 z-[100] flex items-center justify-center transition-opacity duration-300">
-        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm transform transition-all text-center">
-            <div class="text-5xl mb-4">🏭</div>
-            <h2 class="text-2xl font-black text-blue-900 mb-1">CWM System</h2>
-            <p class="text-gray-500 text-sm mb-6">กรุณาเข้าสู่ระบบเพื่อใช้งาน</p>
-            
-            <form id="loginForm" class="space-y-4">
-                <input type="text" id="loginUsername" placeholder="Username" required class="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition-colors">
-                <input type="password" id="loginPassword" placeholder="Password" required class="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition-colors">
-                <button type="submit" id="loginBtn" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 shadow-md transition-colors mt-2">
-                    เข้าสู่ระบบ
-                </button>
-            </form>
-        </div>
-    </div>
-
     <!-- Navbar แบบ Hamberger Menu -->
     <nav class="bg-white shadow-md sticky top-0 z-30 print-hide">
         <div class="max-w-6xl mx-auto px-4">
@@ -43,6 +26,7 @@
                     <span class="text-2xl">🏭</span>
                     <span class="font-bold text-lg text-blue-800 tracking-wide">CWM System</span>
                 </div>
+                <!-- ปุ่ม Hamburger -->
                 <button onclick="window.toggleMenu()" class="text-gray-600 hover:text-blue-600 focus:outline-none p-2 rounded-lg hover:bg-blue-50 transition-colors">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16"></path>
@@ -51,24 +35,12 @@
             </div>
         </div>
         
-        <!-- Dropdown Menu -->
+        <!-- Dropdown Menu (ซ่อนอยู่โดยค่าเริ่มต้น) -->
         <div id="dropdown-menu" class="hidden absolute left-0 right-0 bg-white shadow-xl border-t border-gray-100 flex flex-col z-20">
             <button onclick="window.switchTab('form'); window.toggleMenu()" id="tab-form" class="py-4 px-6 text-left text-blue-600 font-bold border-l-4 border-blue-600 bg-blue-50 hover:bg-blue-50 transition-colors text-lg">📝 บันทึกผลิต</button>
             <button onclick="window.switchTab('planning'); window.toggleMenu()" id="tab-planning" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg">📅 วางแผน (Plan)</button>
             <button onclick="window.switchTab('dashboard'); window.toggleMenu()" id="tab-dashboard" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg">📊 Dashboard</button>
-            <button onclick="window.toggleMenu(); window.location.href='https://jrh91234.github.io/CMW-rawmat/';" id="tab-rw" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg w-full">📦 รับเข้า (RW) ↗️</button>
-            
-            <!-- เมนูสำหรับ Admin และ Profile -->
-            <button onclick="window.openAdminPanel(); window.toggleMenu()" id="tab-admin" class="hidden py-4 px-6 text-left text-purple-600 font-bold border-l-4 border-transparent hover:bg-purple-50 transition-colors text-lg">⚙️ Admin Panel</button>
-            <div class="border-t border-gray-100 my-1"></div>
-            <div class="py-3 px-6 flex justify-between items-center bg-gray-50">
-                <div class="text-sm">
-                    <span class="text-gray-500">ผู้ใช้: </span>
-                    <span id="display-username" class="font-bold text-gray-800">Guest</span>
-                    <span id="display-role" class="ml-1 text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">Role</span>
-                </div>
-                <button onclick="window.logoutUser()" class="text-red-500 text-sm font-bold hover:text-red-700 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">ออกจากระบบ</button>
-            </div>
+            <button onclick="window.toggleMenu(); window.location.href='https://jrh91234.github.io/CMW-rawmat/';" id="tab-rw" class="py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg w-full text-left">📦 รับเข้า (RW) ↗️</button>
         </div>
     </nav>
     
@@ -164,6 +136,7 @@
     
     <!-- SECTION 3: DASHBOARD -->
     <main id="section-dashboard" class="max-w-6xl mx-auto p-4 space-y-6 hidden">
+         <!-- หัวกระดาษเวลาพิมพ์ (ซ่อนอยู่ตอนใช้งานปกติ) -->
          <div id="print-header">
              <h1 class="text-2xl font-bold text-gray-800">CWM Production Report</h1>
              <p class="text-gray-600" id="print-date-subtitle">ข้อมูลการผลิต</p>
@@ -198,6 +171,7 @@
                 </select>
                 <div class="flex gap-2 w-full md:w-auto">
                     <button onclick="window.loadDashboard()" class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded text-sm font-bold shadow-md hover:bg-indigo-700 active:bg-indigo-800 transition-colors">🔍 ค้นหา</button>
+                    <!-- ปุ่มสำหรับสลับ Layout -->
                     <button onclick="document.getElementById('debug-panel').classList.remove('hidden'); document.getElementById('debug-output').innerText='กำลังกดปุ่มสลับ Layout...'; window.toggleLayout()" id="layoutBtn" class="flex-1 bg-white text-indigo-600 border border-indigo-200 px-4 py-2 rounded text-sm font-bold shadow-sm hover:bg-indigo-50 transition-colors">🔀 Layout: คู่</button>
                 </div>
             </div>
@@ -309,7 +283,9 @@
                     </div>
                     <div class="flex-1 flex flex-col h-full overflow-hidden">
                         <div class="text-xs text-gray-500 mb-2">ติ๊กเลือกอาการ NG ที่ต้องการจำลองว่า "ถูกแก้ไข/ตัดทิ้ง" เพื่อดู % Yield ที่เปลี่ยนไป</div>
-                        <div id="simulator-checkboxes" class="flex-1 overflow-y-auto mb-3 border p-2 rounded-lg bg-gray-50 grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1 text-xs shadow-inner content-start"></div>
+                        <div id="simulator-checkboxes" class="flex-1 overflow-y-auto mb-3 border p-2 rounded-lg bg-gray-50 grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1 text-xs shadow-inner content-start">
+                            <!-- Checkboxes will be injected here -->
+                        </div>
                         <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-xl border border-blue-100 shadow-sm mt-auto">
                             <div class="flex justify-between items-center mb-1">
                                 <span class="font-bold text-gray-700 text-sm">New Yield Rate:</span>
@@ -326,7 +302,9 @@
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <div class="flex flex-col gap-1">
-                            <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">📊 Model / Raw Mat Analysis</h3>
+                            <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">
+                                📊 Model / Raw Mat Analysis
+                            </h3>
                             <div class="flex gap-1">
                                 <select id="modelViewBySelector" onchange="window.renderModelChart()" class="text-[10px] font-normal border border-blue-300 rounded p-1 text-blue-700 bg-blue-50 outline-none cursor-pointer hover:bg-blue-100 transition-colors font-bold print-hide">
                                     <option value="model">📌 View by Model</option>
@@ -364,7 +342,9 @@
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <div class="flex flex-col gap-1">
-                            <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">📊 Daily Output (FG & NG)</h3>
+                            <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">
+                                📊 Daily Output (FG & NG)
+                            </h3>
                             <div class="flex gap-1 mt-1">
                                 <select id="dailyOutputSelector" onchange="window.renderDailyOutputChart()" class="text-[10px] font-normal border border-gray-300 rounded p-1 text-gray-600 bg-white outline-none cursor-pointer hover:bg-gray-50 transition-colors print-hide">
                                     <option value="pcs">จำนวน (ชิ้น)</option>
@@ -396,7 +376,9 @@
                 <div class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <div class="flex flex-col gap-1">
-                            <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">📈 Trend อาการ NG (รายวัน)</h3>
+                            <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">
+                                📈 Trend อาการ NG (รายวัน)
+                            </h3>
                             <div class="flex gap-1 mt-1">
                                 <select id="ngTrendSelector" onchange="window.renderNgTrendChart()" class="text-[10px] font-normal border border-gray-300 rounded p-1 text-gray-600 bg-white outline-none cursor-pointer hover:bg-gray-50 transition-colors print-hide">
                                     <option value="pcs">จำนวนเสีย (ชิ้น)</option>
@@ -481,10 +463,13 @@
                 <button onclick="window.closeAutoReport()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-300 transition-colors">❌ ปิด</button>
             </div>
         </div>
-        <div class="p-6 md:p-10 max-w-[210mm] mx-auto w-full bg-white my-6 shadow-2xl rounded-sm" id="auto-report-content" style="min-height: 297mm;"></div>
+        <div class="p-6 md:p-10 max-w-[210mm] mx-auto w-full bg-white my-6 shadow-2xl rounded-sm" id="auto-report-content" style="min-height: 297mm;">
+            <!-- ข้อมูลรายงานจะถูกสร้างและใส่ในนี้ด้วย JavaScript -->
+        </div>
     </div>
 
     <!-- Modals -->
+    <!-- Assign Modal -->
     <div id="modal-assign" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 print-hide">
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[90vh]">
             <div class="flex justify-between items-center mb-4 flex-none">
@@ -492,13 +477,16 @@
                 <button onclick="window.closeAssignModal()" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
             </div>
             <p class="text-xs text-gray-500 mb-3 flex-none">เมื่อเลือกเครื่องจักรในฟอร์ม ระบบจะดึงรุ่นที่ตั้งค่าไว้นี้มาให้อัตโนมัติ</p>
+            
             <div id="assign-list-container" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1 pr-2"></div>
+            
             <div class="flex-none pt-3 border-t flex gap-2">
                 <button onclick="window.saveAssignment()" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold hover:bg-indigo-700">💾 บันทึกการตั้งค่า</button>
             </div>
         </div>
     </div>
 
+    <!-- NG Modal -->
     <div id="modal-ng" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 print-hide">
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[80vh]">
             <div class="flex justify-between items-center mb-4 flex-none">
@@ -507,7 +495,9 @@
                     ⚙️ จัดการรายการ
                 </button>
             </div>
+            
             <div id="modal-ng-list" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1"></div>
+            
             <div class="flex-none pt-2 border-t">
                  <button type="button" onclick="window.addCustomNgField()" class="w-full mb-2 text-blue-600 text-xs font-bold border border-blue-200 rounded py-1 hover:bg-blue-50">+ ระบุอาการอื่น (Add Other)</button>
                  <div class="flex gap-2">
@@ -518,6 +508,7 @@
         </div>
     </div>
     
+    <!-- Machine Detail Modal -->
     <div id="modal-machine-detail" class="fixed inset-0 bg-black bg-opacity-60 z-40 flex items-center justify-center hidden backdrop-blur-sm p-2 print-hide">
         <div class="bg-white w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
             <div class="bg-blue-600 p-4 border-b flex justify-between items-center text-white">
@@ -526,6 +517,7 @@
             </div>
             <div class="p-4 overflow-y-auto flex-1 flex flex-col">
                 <div id="machine-detail-stats" class="mb-4 grid grid-cols-2 gap-4 text-center"></div>
+                
                 <div class="flex justify-between items-center mb-2 bg-gray-100 p-2 rounded">
                     <h4 class="font-bold text-gray-700 text-sm">📈 กราฟการผลิต</h4>
                     <select id="machineChartToggle" onchange="window.switchMachineChart()" class="text-xs border border-gray-300 rounded p-1 text-gray-700 bg-white font-bold cursor-pointer">
@@ -533,9 +525,12 @@
                         <option value="daily">📅 ดูเทรนด์รายวัน (Daily Trend)</option>
                     </select>
                 </div>
+                
                 <div class="text-xs text-blue-600 mb-1 hidden text-right font-bold" id="daily-chart-hint">💡 คลิกที่แท่ง NG สีแดงเพื่อดูรายละเอียดอาการเสีย</div>
+
                 <div id="machine-hourly-wrapper" class="h-64 md:h-80 w-full relative"><canvas id="machineDetailChart"></canvas></div>
                 <div id="machine-daily-wrapper" class="h-64 md:h-80 w-full relative hidden"><canvas id="machineDailyTrendChart"></canvas></div>
+
                 <div id="machine-detail-remarks" class="mt-4 border-t pt-2 hidden">
                     <h4 class="font-bold text-gray-700 text-left">📝 หมายเหตุของเสีย (NG Remarks)</h4>
                     <div id="machine-remarks-list" class="text-left text-sm text-gray-600 mt-2 max-h-32 overflow-y-auto bg-gray-50 p-2 rounded"></div>
@@ -544,20 +539,25 @@
         </div>
     </div>
 
+    <!-- 🌟 Popup ย่อย สำหรับแสดง Daily NG Breakdown เมื่อคลิกจากกราฟ -->
     <div id="modal-daily-ng-breakdown" class="fixed inset-0 bg-black bg-opacity-40 z-50 hidden flex items-center justify-center p-4 print-hide">
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden flex flex-col animate-fade-in">
             <div class="bg-red-600 p-3 flex justify-between items-center text-white">
                 <h3 id="daily-ng-title" class="font-bold text-sm">🗑️ NG Breakdown</h3>
                 <button onclick="document.getElementById('modal-daily-ng-breakdown').classList.add('hidden')" class="text-white hover:text-gray-200 text-xl font-bold">&times;</button>
             </div>
-            <div class="p-4 bg-gray-50 max-h-[60vh] overflow-y-auto" id="daily-ng-content"></div>
+            <div class="p-4 bg-gray-50 max-h-[60vh] overflow-y-auto" id="daily-ng-content">
+                <!-- ข้อมูล Breakdown จะมาอยู่ที่นี่ -->
+            </div>
         </div>
     </div>
 
+    <!-- Modal for Manage Lists -->
     <div id="modal-manage-list" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 print-hide">
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[80vh]">
             <h3 id="manage-list-title" class="text-lg font-bold mb-4 flex-none">Manage List</h3>
             <div id="manage-list-content" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1 border border-gray-100 rounded bg-white"></div>
+            
             <div class="flex-none pt-3 border-t flex flex-col gap-2">
                  <div class="flex gap-2">
                      <input type="text" id="new-item-input" class="flex-1 p-2 border rounded text-sm" placeholder="พิมพ์ชื่อรายการใหม่...">
@@ -567,73 +567,6 @@
                      <button id="btn-save-cloud" onclick="window.saveListToCloud()" class="flex-1 bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700 shadow-sm">☁️ อัปเดตขึ้น Cloud</button>
                      <button onclick="window.closeManageListModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded font-bold hover:bg-gray-300">ปิด</button>
                  </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 🌟 Admin Modal Panel 🌟 -->
-    <div id="modal-admin" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center p-4 print-hide">
-        <div class="bg-white w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="bg-purple-600 p-4 flex justify-between items-center text-white flex-none">
-                <h3 class="font-bold text-lg">⚙️ ระบบจัดการผู้ใช้งาน (Admin Only)</h3>
-                <button onclick="document.getElementById('modal-admin').classList.add('hidden')" class="text-white hover:text-gray-200 text-2xl font-bold">&times;</button>
-            </div>
-            
-            <div class="p-4 flex flex-col md:flex-row gap-4 bg-gray-50 flex-1 overflow-y-auto">
-                <div class="w-full md:w-1/3 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                    <h4 id="admin-form-title" class="font-bold text-gray-800 mb-4 border-b pb-2">➕ เพิ่มผู้ใช้ใหม่</h4>
-                    <form id="adminUserForm" class="space-y-3">
-                        <input type="hidden" id="adminTargetUsername">
-                        <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">Username (ห้ามซ้ำ)</label>
-                            <input type="text" id="adminInputUsername" required class="w-full p-2 border rounded text-sm bg-gray-50 focus:bg-white focus:border-purple-500 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">Password</label>
-                            <input type="text" id="adminInputPassword" placeholder="(เว้นว่างไว้ถ้าไม่เปลี่ยน)" class="w-full p-2 border rounded text-sm bg-gray-50 focus:bg-white focus:border-purple-500 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">ชื่อ-สกุลพนักงาน</label>
-                            <input type="text" id="adminInputName" required class="w-full p-2 border rounded text-sm bg-gray-50 focus:bg-white focus:border-purple-500 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">ระดับสิทธิ์ (Role)</label>
-                            <select id="adminInputRole" required class="w-full p-2 border rounded text-sm bg-gray-50 focus:bg-white focus:border-purple-500 outline-none">
-                                <option value="Production">Production (บันทึกผลิต)</option>
-                                <option value="QC">QC (บันทึกผลิต)</option>
-                                <option value="Planning">Planning (วางแผน)</option>
-                                <option value="Viewer">Viewer (ดูได้อย่างเดียว)</option>
-                                <option value="Admin">Admin (ผู้ดูแลระบบ)</option>
-                            </select>
-                        </div>
-                        <div class="pt-2 flex gap-2">
-                            <button type="submit" id="adminSubmitBtn" class="flex-1 bg-purple-600 text-white font-bold py-2 rounded shadow hover:bg-purple-700 transition-colors text-sm">บันทึกข้อมูล</button>
-                            <button type="button" onclick="window.resetAdminForm()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded font-bold hover:bg-gray-300 text-sm">ล้าง</button>
-                        </div>
-                    </form>
-                </div>
-
-                <div class="w-full md:w-2/3 bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col">
-                    <div class="flex justify-between items-center mb-2 border-b pb-2">
-                        <h4 class="font-bold text-gray-800">📋 รายชื่อผู้ใช้งานในระบบ</h4>
-                        <button onclick="window.loadAdminUsers()" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded font-bold hover:bg-purple-200">🔄 รีเฟรช</button>
-                    </div>
-                    <div class="flex-1 overflow-y-auto">
-                        <table class="w-full text-sm text-left">
-                            <thead class="bg-gray-50 text-gray-600 text-xs">
-                                <tr>
-                                    <th class="p-2 border-b">Username</th>
-                                    <th class="p-2 border-b">Name</th>
-                                    <th class="p-2 border-b">Role</th>
-                                    <th class="p-2 border-b text-center">จัดการ</th>
-                                </tr>
-                            </thead>
-                            <tbody id="admin-user-list" class="divide-y divide-gray-100">
-                                <tr><td colspan="4" class="text-center text-gray-400 py-4">กำลังโหลดข้อมูล...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -652,7 +585,7 @@
         </button>
     </div>
 
-    <!-- โหลด JS แยกไฟล์ -->
+    <!-- Scripts -->
     <script src="js/app.js"></script>
     <script src="js/charts.js"></script>
 </body>
