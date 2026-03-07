@@ -710,5 +710,82 @@
     <!-- Scripts -->
     <script src="js/app.js"></script>
     <script src="js/charts.js"></script>
+
+    <!-- Script สำหรับจัดการรหัสผ่าน (เพิ่มไว้ในไฟล์นี้เพื่อให้ทำงานได้ทันทีโดยไม่ต้องแก้ app.js) -->
+    <script>
+        window.openChangePasswordModal = function() {
+            const modal = document.getElementById('modal-change-password');
+            if(modal) {
+                modal.classList.remove('hidden');
+                document.getElementById('change-old-password').value = '';
+                document.getElementById('change-new-password').value = '';
+                document.getElementById('change-confirm-password').value = '';
+            }
+        };
+
+        window.closeChangePasswordModal = function() {
+            const modal = document.getElementById('modal-change-password');
+            if(modal) modal.classList.add('hidden');
+        };
+
+        // ผูก Event ทันทีที่โหลดไฟล์เสร็จ
+        setTimeout(() => {
+            const pwdForm = document.getElementById('changePasswordForm');
+            if (pwdForm) {
+                pwdForm.onsubmit = async (e) => {
+                    e.preventDefault();
+                    if (!window.currentUser) {
+                        alert("กรุณาเข้าสู่ระบบก่อนทำรายการ");
+                        return;
+                    }
+
+                    const oldPw = document.getElementById('change-old-password').value.trim();
+                    const newPw = document.getElementById('change-new-password').value.trim();
+                    const confPw = document.getElementById('change-confirm-password').value.trim();
+
+                    if(newPw !== confPw) {
+                        alert('รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน!');
+                        return;
+                    }
+
+                    const btn = document.getElementById('btn-submit-change-pwd');
+                    const originalText = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = "⏳ กำลังดำเนินการ...";
+
+                    try {
+                        const payload = {
+                            action: 'CHANGE_PASSWORD',
+                            username: window.currentUser.username,
+                            role: window.currentUser.role,
+                            oldPassword: oldPw,
+                            newPassword: newPw
+                        };
+                        
+                        // ใช้ SCRIPT_URL จาก app.js
+                        const apiUrl = typeof SCRIPT_URL !== 'undefined' ? SCRIPT_URL : "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec";
+                        const res = await fetch(apiUrl, {
+                            method: 'POST',
+                            body: JSON.stringify(payload)
+                        });
+                        const data = await res.json();
+                        
+                        if (data.success) {
+                            alert(data.message + "\nกรุณาล็อคอินใหม่อีกครั้งด้วยรหัสผ่านใหม่");
+                            window.closeChangePasswordModal();
+                            if(typeof window.logout === 'function') window.logout(); 
+                        } else {
+                            alert("ผิดพลาด: " + data.message);
+                        }
+                    } catch (err) {
+                        alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                    }
+                };
+            }
+        }, 500);
+    </script>
 </body>
 </html>
