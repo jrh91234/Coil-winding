@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CWM Production System - v3.54 Auth Edition</title>
+    <title>CWM Production System - v3.55 Modular Edition</title>
     
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,7 +14,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=3.55">
 </head>
 <body class="bg-gray-100 min-h-screen font-sans pb-10">
 
@@ -40,7 +40,7 @@
                     เข้าสู่ระบบ
                 </button>
             </form>
-            <div class="mt-6 text-center text-xs text-gray-400">v3.54 Authentication System</div>
+            <div class="mt-6 text-center text-xs text-gray-400">v3.55 Authentication System</div>
         </div>
     </div>
 
@@ -88,7 +88,7 @@
             <button onclick="window.switchTab('dashboard'); window.toggleMenu()" id="tab-dashboard" class="hidden py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg">📊 Dashboard</button>
             <button onclick="window.toggleMenu(); window.location.href='https://jrh91234.github.io/CMW-rawmat/';" id="tab-rw" class="hidden py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg w-full text-left">📦 รับเข้า (RW) ↗️</button>
             
-            <!-- เมนู แจ้งซ่อม (ย้ายมาที่นี่ และจะให้เฉพาะ Prod, Admin เห็น) -->
+            <!-- เมนู แจ้งซ่อม -->
             <button onclick="window.openMaintenanceModal(); window.toggleMenu()" id="tab-maint" class="hidden py-4 px-6 text-left text-orange-600 font-bold border-l-4 border-transparent hover:bg-orange-50 transition-colors text-lg border-t border-gray-100">🛠️ แจ้งซ่อมเครื่องจักร</button>
             
             <!-- เมนู Admin -->
@@ -113,7 +113,7 @@
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-blue-500">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold text-gray-800">บันทึกยอดการผลิต (Batch)</h1>
-                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.54</span>
+                <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">v3.55</span>
             </div>
             <form id="productionForm" class="space-y-4">
                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -239,7 +239,8 @@
                     <option value="Night">Night</option>
                 </select>
                 <div class="flex gap-2 w-full md:w-auto">
-                    <button onclick="window.loadDashboard()" class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded text-sm font-bold shadow-md hover:bg-indigo-700 active:bg-indigo-800 transition-colors">🔍 ค้นหา</button>
+                    <!-- ใช้ safeLoadDashboard ป้องกันปัญหา Cache และไฟล์พัง -->
+                    <button onclick="safeLoadDashboard()" class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded text-sm font-bold shadow-md hover:bg-indigo-700 active:bg-indigo-800 transition-colors">🔍 ค้นหา</button>
                     <!-- ปุ่มสำหรับสลับ Layout -->
                     <button onclick="document.getElementById('debug-panel').classList.remove('hidden'); document.getElementById('debug-output').innerText='กำลังกดปุ่มสลับ Layout...'; window.toggleLayout()" id="layoutBtn" class="flex-1 bg-white text-indigo-600 border border-indigo-200 px-4 py-2 rounded text-sm font-bold shadow-sm hover:bg-indigo-50 transition-colors">🔀 Layout: คู่</button>
                 </div>
@@ -608,6 +609,7 @@
         <div class="bg-white shadow-md p-4 sticky top-0 z-10 flex justify-between items-center auto-report-hide border-b border-gray-200">
             <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">🤖 Factory Standard Report Preview</h2>
             <div class="flex gap-2">
+                <!-- Dropdown เปลี่ยนภาษาจะถูก Inject เข้ามาที่นี่โดย script.js -->
                 <button onclick="window.printAutoReport()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-indigo-700 transition-colors flex items-center gap-1">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                     พิมพ์ / บันทึก PDF
@@ -830,15 +832,35 @@
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="js/globals.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/form.js"></script>
-    <script src="js/report.js"></script>
-    <script src="js/charts.js"></script>
+    <!-- Scripts (แก้เป็นเวอร์ชันเพื่อกัน Cache) -->
+    <script src="js/globals.js?v=3.55"></script>
+    <script src="js/auth.js?v=3.55"></script>
+    <script src="js/form.js?v=3.55"></script>
+    <script src="js/report.js?v=3.55"></script>
+    <script src="js/charts.js?v=3.55"></script>
 
     <!-- Script ทั่วไปสำหรับ UI ย่อยๆ -->
     <script>
+        // Safe Caller Function ป้องกันปัญหาโหลดหน้าเว็บไม่สมบูรณ์
+        function safeLoadDashboard() {
+            const debugPanel = document.getElementById('debug-panel');
+            const debugOut = document.getElementById('debug-output');
+            try {
+                if (typeof window.loadDashboard === 'function') {
+                    window.loadDashboard().catch(err => {
+                        console.error(err);
+                        alert("เกิดข้อผิดพลาดในการดึงข้อมูล: " + err.message);
+                        if (debugPanel) debugPanel.classList.remove('hidden');
+                        if (debugOut) debugOut.innerText += "\n" + err.stack;
+                    });
+                } else {
+                    alert("⚠️ ไฟล์ระบบทำงานไม่สมบูรณ์ หรืออาจติด Cache เก่า\n\nกรุณากดปุ่ม Ctrl + F5 (หรือ Cmd + Shift + R สำหรับ Mac) บนคีย์บอร์ดเพื่อรีเฟรชหน้าเว็บแบบล้างแคชครับ");
+                }
+            } catch(e) {
+                alert("เกิดข้อผิดพลาดที่ปุ่ม: " + e.message);
+            }
+        }
+
         window.openChangePasswordModal = function() {
             const modal = document.getElementById('modal-change-password');
             if(modal) {
