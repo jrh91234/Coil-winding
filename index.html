@@ -88,8 +88,9 @@
             <button onclick="window.switchTab('dashboard'); window.toggleMenu()" id="tab-dashboard" class="hidden py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg">📊 Dashboard</button>
             <button onclick="window.toggleMenu(); window.location.href='https://jrh91234.github.io/CMW-rawmat/';" id="tab-rw" class="hidden py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg w-full text-left">📦 รับเข้า (RW) ↗️</button>
             
-            <!-- เมนู แจ้งซ่อม -->
+            <!-- เมนู แจ้งซ่อมและเคลม RTV -->
             <button onclick="window.openMaintenanceModal(); window.toggleMenu()" id="tab-maint" class="hidden py-4 px-6 text-left text-orange-600 font-bold border-l-4 border-transparent hover:bg-orange-50 transition-colors text-lg border-t border-gray-100">🛠️ แจ้งซ่อมเครื่องจักร</button>
+            <button onclick="window.switchTab('rtv'); window.toggleMenu()" id="tab-rtv" class="hidden py-4 px-6 text-left text-teal-600 font-bold border-l-4 border-transparent hover:bg-teal-50 transition-colors text-lg border-t border-gray-100">📦 บันทึกงานเคลม (RTV)</button>
             
             <!-- เมนู Admin -->
             <button onclick="window.openAdminPanel(); window.toggleMenu()" id="tab-admin" class="hidden py-4 px-6 text-left text-purple-600 font-bold border-l-4 border-transparent hover:bg-purple-50 transition-colors text-lg border-t border-gray-100">🛡️ จัดการระบบ (Admin)</button>
@@ -193,6 +194,57 @@
                 </div>
                 <button type="submit" id="planSubmitBtn" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition-colors">
                     บันทึกแผน
+                </button>
+            </form>
+        </div>
+    </main>
+
+    <!-- SECTION: RTV (Return To Vendor / Customer Claim) -->
+    <main id="section-rtv" class="max-w-3xl mx-auto p-4 space-y-4 hidden print-hide">
+        <div class="bg-white rounded-xl shadow-lg p-6 border-t-4 border-teal-500">
+            <h1 class="text-xl font-bold text-gray-800 mb-2">📦 บันทึกงานเคลม (RTV / Return to Vendor)</h1>
+            <p class="text-sm text-gray-500 mb-6">บันทึกข้อมูลสินค้า NG ที่ถูกตีกลับจากลูกค้าหรือแผนกอื่น</p>
+            
+            <form id="rtvForm" class="space-y-5">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-teal-800 mb-1">📅 วันที่รับคืน</label>
+                        <input type="date" id="rtvDate" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-teal-800 mb-1">👤 ผู้บันทึก (QC/Production)</label>
+                        <input type="text" id="rtvRecorder" readonly class="w-full p-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-teal-800 mb-1">ลูกค้า / แหล่งที่มา (Customer/Source)</label>
+                    <input type="text" id="rtvSource" required placeholder="เช่น ลูกค้า A, แผนกประกอบ..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500">
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-teal-800 mb-1">รุ่นสินค้า (Product)</label>
+                        <select id="rtvProduct" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500">
+                            <option value="S1B29288-JR (10A)">S1B29288-JR (10A)</option>
+                            <option value="S1B71819-JR (16A)">S1B71819-JR (16A)</option>
+                            <option value="S1B29292-JR (20A)">S1B29292-JR (20A)</option>
+                            <option value="51207080HC-JR (25/32A)">51207080HC-JR (25/32A)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-teal-800 mb-1">จำนวนที่เคลม (ชิ้น)</label>
+                        <input type="number" id="rtvQty" required min="1" placeholder="0" class="w-full p-3 border border-gray-300 rounded-lg text-center font-bold text-red-600 focus:ring-2 focus:ring-teal-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-teal-800 mb-1">อาการเสียที่พบ (Defect Details)</label>
+                    <textarea id="rtvRemark" required rows="3" placeholder="ระบุอาการเสีย หรือสาเหตุที่ลูกค้าตีกลับ..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"></textarea>
+                </div>
+
+                <button type="submit" id="btn-save-rtv" class="w-full bg-teal-600 text-white font-bold py-3.5 rounded-lg shadow-md hover:bg-teal-700 transition-all text-lg">
+                    💾 บันทึกข้อมูล RTV
                 </button>
             </form>
         </div>
@@ -683,6 +735,7 @@
                 
                 <div class="bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300">
                     <label class="block text-sm font-bold text-gray-700 mb-2">📸 ถ่ายรูปหลักฐาน (เลือกรูป/เปิดกล้อง)</label>
+                    <!-- นำ capture="environment" ออกเพื่อให้เลือกไฟล์ภาพในเครื่องได้ -->
                     <input type="file" id="maint-photo" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer">
                     <div id="maint-photo-preview" class="mt-3 hidden rounded-lg overflow-hidden border border-gray-200">
                         <img id="maint-photo-img" src="" alt="Preview" class="w-full h-auto max-h-48 object-contain bg-black">
@@ -904,6 +957,57 @@
                     document.getElementById('maint-photo-preview').classList.remove('hidden');
                 }
                 reader.readAsDataURL(file);
+            }
+        });
+
+        // Script สำหรับ RTV
+        document.addEventListener('DOMContentLoaded', () => {
+            const rtvDate = document.getElementById('rtvDate');
+            const rtvRec = document.getElementById('rtvRecorder');
+            if(rtvDate) rtvDate.value = getShiftDateStr();
+            
+            document.getElementById('tab-rtv')?.addEventListener('click', () => {
+                if(rtvRec && window.currentUser) rtvRec.value = window.currentUser.name || window.currentUser.username;
+            });
+
+            const rtvForm = document.getElementById('rtvForm');
+            if (rtvForm) {
+                rtvForm.onsubmit = async (e) => {
+                    e.preventDefault();
+                    const btn = document.getElementById('btn-save-rtv');
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = "⏳ กำลังบันทึก...";
+                    btn.disabled = true;
+
+                    const payload = {
+                        action: 'SAVE_RTV',
+                        date: document.getElementById('rtvDate').value,
+                        recorder: document.getElementById('rtvRecorder').value,
+                        source: document.getElementById('rtvSource').value,
+                        product: document.getElementById('rtvProduct').value,
+                        qty: document.getElementById('rtvQty').value,
+                        remark: document.getElementById('rtvRemark').value
+                    };
+
+                    try {
+                        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+                        const result = await res.json();
+                        
+                        if (result.status === 'success') {
+                            alert("✅ บันทึกงานเคลม (RTV) สำเร็จ");
+                            rtvForm.reset();
+                            rtvDate.value = getShiftDateStr();
+                            rtvRec.value = window.currentUser.name || window.currentUser.username;
+                        } else {
+                            alert("❌ เกิดข้อผิดพลาด: " + result.message);
+                        }
+                    } catch(err) {
+                        alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+                    } finally {
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    }
+                };
             }
         });
 
