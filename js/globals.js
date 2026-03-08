@@ -105,13 +105,11 @@ window.fetchOptions = async function() {
         const res = await fetch(`${SCRIPT_URL}?action=GET_OPTIONS&_t=${Date.now()}`);
         const data = await res.json();
         
-        // 🌟 แก้ไข: ให้นำรายชื่อพนักงานจาก Cloud มาเขียนทับ (Overwrite) ข้อมูลบนเครื่อง Local 🌟
         if (data.recorders && data.recorders.length > 0) {
-            recorderList = data.recorders; // ทับข้อมูลเดิม
-            localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); // อัปเดต Local Storage
+            recorderList = data.recorders; 
+            localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
         }
         
-        // สั่งให้กล่อง Dropdown วาดรายชื่อใหม่ตามข้อมูลอัปเดตล่าสุด
         if(typeof window.renderRecorderOptions === 'function') {
             window.renderRecorderOptions();
         }
@@ -314,17 +312,21 @@ window.updateHourSlots = function(type) {
     if(match) select.value = match;
 };
 
+// 🌟 อัปเดตสิทธิ์การเข้าถึงให้เมนู RTV 🌟
 window.switchTab = function(tab) {
     if (!window.currentUser) return;
     const role = window.currentUser.role;
 
+    // จำกัดสิทธิ์
     if ((role === 'Production' || role === 'QC') && (tab === 'planning' || tab === 'admin')) return;
-    if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin' || tab === 'maint')) return;
+    if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin' || tab === 'maint' || tab === 'rtv')) return;
     if (role === 'Viewer' && tab !== 'dashboard') return;
 
-    ['form', 'planning', 'dashboard', 'admin'].forEach(t => {
+    // สลับหน้าจอ Section
+    ['form', 'planning', 'dashboard', 'admin', 'rtv'].forEach(t => {
         const el = document.getElementById('section-'+t);
         if(el) el.classList.toggle('hidden', t !== tab);
+        
         const btn = document.getElementById('tab-'+t);
         if(btn) {
             if(t === tab) { 
@@ -336,5 +338,46 @@ window.switchTab = function(tab) {
             }
         }
     });
-    if(tab==='dashboard' && typeof window.loadDashboard === 'function') window.loadDashboard();
+    if(tab === 'dashboard' && typeof window.loadDashboard === 'function') window.loadDashboard();
 };
+
+function applyPermissions() {
+    const role = window.currentUser.role;
+    
+    // ซ่อนเมนูทั้งหมดก่อน
+    ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.classList.add('hidden');
+    });
+
+    let defaultTab = '';
+
+    if (role === 'Production') {
+        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-rtv'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        defaultTab = 'form';
+    } 
+    else if (role === 'QC') {
+        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        defaultTab = 'form';
+    }
+    else if (role === 'Planning') {
+        ['tab-planning', 'tab-dashboard'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        defaultTab = 'planning';
+    } 
+    else if (role === 'Viewer') {
+        ['tab-dashboard'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        defaultTab = 'dashboard';
+    } 
+    else if (role === 'Admin') {
+        ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        defaultTab = 'dashboard'; 
+        
+        const btnWidgetMgr = document.getElementById('btn-widget-manager');
+        if (btnWidgetMgr) {
+            btnWidgetMgr.classList.remove('hidden');
+            btnWidgetMgr.classList.add('flex');
+        }
+    }
+
+    window.switchTab(defaultTab);
+}
