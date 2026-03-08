@@ -108,19 +108,21 @@ function initAppAfterLogin() {
 function applyPermissions() {
     const role = window.currentUser.role;
     
-    ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint'].forEach(id => {
+    // ซ่อนเมนูทั้งหมดก่อน (รวมถึง rtv ด้วย)
+    ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv'].forEach(id => {
         const el = document.getElementById(id);
         if(el) el.classList.add('hidden');
     });
 
     let defaultTab = '';
 
+    // จัดการสิทธิ์การมองเห็นเมนู
     if (role === 'Production') {
-        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-rtv'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'form';
     } 
     else if (role === 'QC') {
-        ['tab-form', 'tab-dashboard', 'tab-rw'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'form';
     }
     else if (role === 'Planning') {
@@ -132,7 +134,7 @@ function applyPermissions() {
         defaultTab = 'dashboard';
     } 
     else if (role === 'Admin') {
-        ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'dashboard'; 
         
         const btnWidgetMgr = document.getElementById('btn-widget-manager');
@@ -145,14 +147,21 @@ function applyPermissions() {
     window.switchTab(defaultTab);
 }
 
-// --- Admin Panel Functions ---
+// ==========================================
+// 🌟 ระบบ Admin (จัดการผู้ใช้)
+// ==========================================
 window.openAdminPanel = function() {
     if (!window.currentUser || window.currentUser.role !== 'Admin') {
         alert("คุณไม่มีสิทธิ์เข้าถึงหน้านี้");
         return;
     }
-    ['form', 'planning', 'dashboard'].forEach(t => document.getElementById('section-'+t).classList.add('hidden'));
+    
+    ['form', 'planning', 'dashboard', 'rtv'].forEach(t => {
+        const el = document.getElementById('section-'+t);
+        if(el) el.classList.add('hidden');
+    });
     document.getElementById('section-admin').classList.remove('hidden');
+    
     loadAdminUsers();
 };
 
@@ -179,7 +188,9 @@ async function loadAdminUsers() {
                     <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-800">${u.username}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-gray-600">${u.name || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-${roleColor}-100 text-${roleColor}-800">${u.role}</span>
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-${roleColor}-100 text-${roleColor}-800">
+                            ${u.role}
+                        </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                         <button onclick="window.showUserModal('EDIT', '${u.username}', '${u.name}', '${u.role}')" class="text-indigo-600 hover:text-indigo-900 mr-3">✏️ แก้ไข</button>
