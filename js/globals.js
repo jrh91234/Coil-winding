@@ -123,6 +123,11 @@ window.fetchOptions = async function() {
            });
            ngSymptoms = normalizeSymptomList(ngSymptoms);
            localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
+           
+           // 🌟 อัปเดตข้อมูลอาการเสียลง Dropdown ของ RTV ใหม่เมื่อโหลดจาก Cloud เสร็จ 🌟
+           if (typeof window.renderRtvSymptomsOptions === 'function') {
+               window.renderRtvSymptomsOptions();
+           }
         }
         
         if (data.machineMapping) {
