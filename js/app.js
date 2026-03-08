@@ -423,24 +423,29 @@ window.openAutoReport = function() {
 
     const modal = document.getElementById('modal-auto-report');
     
-    // Add Language Selector to the modal header if not exists
-    let headerActions = document.getElementById('auto-report-actions');
-    if (!headerActions) {
-        const autoReportHeader = document.querySelector('.auto-report-hide .flex.gap-2');
-        if (autoReportHeader) {
-            autoReportHeader.id = 'auto-report-actions';
-            autoReportHeader.insertAdjacentHTML('afterbegin', `
-                <select id="report-lang-selector" onchange="window.renderAutoReportContent(this.value)" class="border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors shadow-sm outline-none cursor-pointer">
-                    <option value="TH">🇹🇭 TH (ภาษาไทย)</option>
-                    <option value="EN">🇬🇧 EN (English)</option>
-                    <option value="CH">🇨🇳 CH (中文)</option>
-                </select>
-            `);
+    // 🌟 แก้ไขการดึงปุ่ม 3 ภาษาให้แสดงผลแน่นอน 100% 🌟
+    let langSelector = document.getElementById('report-lang-selector');
+    if (!langSelector) {
+        // หา Header ของ Modal Auto Report (เอาตัวแรกสุดที่เป็นแถบเมนูด้านบน)
+        const modalHeader = modal.querySelector('div:first-child');
+        if (modalHeader) {
+            // หา div ที่เป็นกล่องเก็บปุ่มด้านขวา (ปุ่ม พิมพ์ และ ปิด)
+            const actionContainer = modalHeader.querySelector('div.flex');
+            if (actionContainer) {
+                actionContainer.insertAdjacentHTML('afterbegin', `
+                    <select id="report-lang-selector" onchange="window.renderAutoReportContent(this.value)" class="border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors shadow-sm outline-none cursor-pointer">
+                        <option value="TH">🇹🇭 TH (ภาษาไทย)</option>
+                        <option value="EN">🇬🇧 EN (English)</option>
+                        <option value="CH">🇨🇳 CH (中文)</option>
+                    </select>
+                `);
+                langSelector = document.getElementById('report-lang-selector');
+            }
         }
     }
 
-    // Default load TH
-    window.renderAutoReportContent('TH');
+    // โหลดภาษาตามที่ผู้ใช้เลือกไว้ หรือตั้งค่าเริ่มต้นเป็นภาษาไทย (TH)
+    window.renderAutoReportContent(langSelector ? langSelector.value : 'TH');
 
     modal.classList.remove('hidden');
     modal.classList.add('flex');
