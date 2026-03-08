@@ -105,9 +105,16 @@ window.fetchOptions = async function() {
         const res = await fetch(`${SCRIPT_URL}?action=GET_OPTIONS&_t=${Date.now()}`);
         const data = await res.json();
         
-        const allRecorders = new Set([...recorderList, ...(data.recorders || [])]);
-        recorderList = Array.from(allRecorders);
-        window.renderRecorderOptions();
+        // 🌟 แก้ไข: ให้นำรายชื่อพนักงานจาก Cloud มาเขียนทับ (Overwrite) ข้อมูลบนเครื่อง Local 🌟
+        if (data.recorders && data.recorders.length > 0) {
+            recorderList = data.recorders; // ทับข้อมูลเดิม
+            localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); // อัปเดต Local Storage
+        }
+        
+        // สั่งให้กล่อง Dropdown วาดรายชื่อใหม่ตามข้อมูลอัปเดตล่าสุด
+        if(typeof window.renderRecorderOptions === 'function') {
+            window.renderRecorderOptions();
+        }
         
         if (data.ngTypes && data.ngTypes.length > 0) {
            data.ngTypes.forEach(t => {
@@ -117,27 +124,33 @@ window.fetchOptions = async function() {
                }
            });
            ngSymptoms = normalizeSymptomList(ngSymptoms);
+           localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
         }
         
         if (data.machineMapping) {
             machineMapping = data.machineMapping;
             localStorage.setItem('CWM_MACHINE_MAPPING', JSON.stringify(machineMapping));
             
-            const rows = document.getElementById('batchList').children;
-            for(let r of rows) {
-                const mSel = r.querySelector('.machine-select-trigger');
-                const pSel = r.querySelector('.product-select-target');
-                if(mSel && mSel.value && machineMapping[mSel.value]) {
-                    pSel.value = machineMapping[mSel.value];
-                    pSel.dispatchEvent(new Event('change'));
+            const rows = document.getElementById('batchList');
+            if(rows) {
+                for(let r of rows.children) {
+                    const mSel = r.querySelector('.machine-select-trigger');
+                    const pSel = r.querySelector('.product-select-target');
+                    if(mSel && mSel.value && machineMapping[mSel.value]) {
+                        pSel.value = machineMapping[mSel.value];
+                        pSel.dispatchEvent(new Event('change'));
+                    }
                 }
             }
         }
 
         if (data.hiddenWidgets) {
             hiddenWidgets = data.hiddenWidgets;
-            window.applyWidgetVisibility();
+            if(typeof window.applyWidgetVisibility === 'function') {
+                window.applyWidgetVisibility();
+            }
         }
+
     } catch (e) { 
         console.log("Error fetching options", e); 
     }
@@ -158,15 +171,15 @@ window.initSortable = function() {
 
 window.toggleMenu = function() {
     const menu = document.getElementById('dropdown-menu');
-    menu.classList.toggle('hidden');
+    if(menu) menu.classList.toggle('hidden');
 };
 
 window.toggleLayout = function() {
     const debugOut = document.getElementById('debug-output');
     try {
-        debugOut.innerText += "\n[System] ฟังก์ชัน toggleLayout ทำงานแล้ว...";
+        if(debugOut) debugOut.innerText += "\n[System] ฟังก์ชัน toggleLayout ทำงานแล้ว...";
         window.isDualLayout = !window.isDualLayout;
-        debugOut.innerText += `\n[System] สถานะเลย์เอาต์ที่ต้องการ: ${window.isDualLayout ? 'คู่' : 'เดี่ยว'}`;
+        if(debugOut) debugOut.innerText += `\n[System] สถานะเลย์เอาต์ที่ต้องการ: ${window.isDualLayout ? 'คู่' : 'เดี่ยว'}`;
         
         const grid = document.getElementById('sortable-grid');
         const btn = document.getElementById('layoutBtn');
@@ -183,7 +196,7 @@ window.toggleLayout = function() {
             btn.innerText = '🔀 Layout: เดี่ยว';
         }
         
-        debugOut.innerText += "\n[System] เปลี่ยนคลาสสำเร็จ เริ่มรีไซส์กราฟ...";
+        if(debugOut) debugOut.innerText += "\n[System] เปลี่ยนคลาสสำเร็จ เริ่มรีไซส์กราฟ...";
 
         setTimeout(() => {
             let count = 0;
@@ -193,10 +206,10 @@ window.toggleLayout = function() {
                     count++;
                 }
             });
-            debugOut.innerText += `\n[System] รีไซส์กราฟเสร็จสิ้น ${count} อัน (สำเร็จ!)`;
+            if(debugOut) debugOut.innerText += `\n[System] รีไซส์กราฟเสร็จสิ้น ${count} อัน (สำเร็จ!)`;
         }, 150);
     } catch (err) {
-        debugOut.innerText += `\n[Fatal Error] โค้ดพัง: ${err.message}`;
+        if(debugOut) debugOut.innerText += `\n[Fatal Error] โค้ดพัง: ${err.message}`;
     }
 };
 
@@ -258,10 +271,13 @@ window.toggleCardMaximize = function(btn) {
         btn.innerHTML = '✖'; 
         btn.title = 'ย่อหน้าจอ';
         
-        const sDate = document.getElementById('startDate').value;
-        const eDate = document.getElementById('endDate').value;
-        const shift = document.getElementById('filterShift').options[document.getElementById('filterShift').selectedIndex].text;
-        const shiftType = document.getElementById('filterShiftType').options[document.getElementById('filterShiftType').selectedIndex].text;
+        const sDate = document.getElementById('startDate')?.value || '';
+        const eDate = document.getElementById('endDate')?.value || '';
+        const shiftElement = document.getElementById('filterShift');
+        const typeElement = document.getElementById('filterShiftType');
+        
+        const shift = shiftElement ? shiftElement.options[shiftElement.selectedIndex].text : '';
+        const shiftType = typeElement ? typeElement.options[typeElement.selectedIndex].text : '';
         
         dateLabel.innerHTML = `📅 ข้อมูลวันที่: <span class="text-gray-700 font-bold">${sDate}</span> ถึง <span class="text-gray-700 font-bold">${eDate}</span> <span class="mx-2 text-gray-300">|</span> กะ: <span class="text-gray-700 font-bold">${shift}</span> <span class="mx-2 text-gray-300">|</span> ช่วง: <span class="text-gray-700 font-bold">${shiftType}</span>`;
         dateLabel.classList.remove('hidden'); 
@@ -282,12 +298,14 @@ window.toggleCardMaximize = function(btn) {
 window.detectCurrentShift = function() {
     const hour = new Date().getHours();
     let type = (hour >= 8 && hour < 20) ? "Day" : "Night";
-    document.querySelector(`input[name="shift_type_toggle"][value="${type}"]`).checked = true;
+    const toggle = document.querySelector(`input[name="shift_type_toggle"][value="${type}"]`);
+    if(toggle) toggle.checked = true;
     window.updateHourSlots(type);
 };
 
 window.updateHourSlots = function(type) {
     const select = document.getElementById('hourSlot');
+    if(!select) return;
     const hours = (type === "Day") ? DAY_HOURS : NIGHT_HOURS;
     select.innerHTML = hours.map(h => `<option value="${h}">${h}</option>`).join('');
     
@@ -318,5 +336,5 @@ window.switchTab = function(tab) {
             }
         }
     });
-    if(tab==='dashboard') window.loadDashboard();
+    if(tab==='dashboard' && typeof window.loadDashboard === 'function') window.loadDashboard();
 };
