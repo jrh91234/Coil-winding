@@ -434,7 +434,6 @@ window.renderAutoReportContent = function(lang = 'TH') {
                             ${tLang.sec3_1_desc.replace('{topNgSymptomName}', topNgSymptomName).replace('{topNgSymptomRatio}', topNgSymptomRatio)}
                         </p>
                         <div class="mt-auto w-full bg-gray-50 rounded-lg p-4 border border-gray-100 h-[300px] relative">
-                            <!-- 🌟 พื้นที่สำหรับกราฟ Pareto Maximize 🌟 -->
                             <canvas id="auto-report-pareto-chart" style="width:100%; height:100%;"></canvas>
                         </div>
                     </div>
@@ -445,7 +444,6 @@ window.renderAutoReportContent = function(lang = 'TH') {
                             ${tLang.sec3_2_desc}
                         </p>
                         <div class="mt-auto w-full bg-gray-50 rounded-lg p-4 border border-gray-100 h-[300px] relative">
-                            <!-- 🌟 พื้นที่สำหรับกราฟ NG Trend %เทียบยอดผลิต Maximize 🌟 -->
                             <canvas id="auto-report-ng-trend-chart" style="width:100%; height:100%;"></canvas>
                         </div>
                     </div>
@@ -526,7 +524,6 @@ window.renderAutoReportContent = function(lang = 'TH') {
     content.className = 'w-full max-w-[210mm] mx-auto mt-6 px-4 md:px-0'; 
     content.innerHTML = html;
     
-    // 🌟 วาดกราฟของจริงลงไปในหน้าต่าง Report อัตโนมัติ (แก้ปัญหาไม่ยอมแสดงผล) 🌟
     setTimeout(() => {
         if (window.autoReportCharts) window.autoReportCharts.forEach(c => c.destroy());
         window.autoReportCharts = [];
@@ -673,4 +670,173 @@ window.exportCSV = function() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+};
+
+window.loadDashboard = async function() {
+    if(!SCRIPT_URL) return;
+    document.getElementById('dashboard-content').classList.add('hidden');
+    document.getElementById('dashboard-loader').classList.remove('hidden');
+    const debugPanel = document.getElementById('debug-panel');
+    const debugOut = document.getElementById('debug-output');
+    
+    const start = document.getElementById('startDate').value.trim(); 
+    const end = document.getElementById('endDate').value.trim();
+    const shift = document.getElementById('filterShift').value.trim(); 
+    const shiftType = document.getElementById('filterShiftType').value.trim();
+    
+    const isPartialView = (shift !== 'All' || shiftType !== 'All');
+    
+    const ngTrendSel = document.getElementById('ngTrendSelector');
+    if(ngTrendSel) ngTrendSel.value = 'percent';
+    
+    let rawText = "";
+    try {
+        debugOut.innerText = `[Dashboard] Loading data for ${start} to ${end}...`;
+        
+        const fetchUrl = `${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}&shiftType=${shiftType}&_t=${Date.now()}`;
+        const res = await fetch(fetchUrl);
+        
+        rawText = await res.text();
+        
+        let data;
+        try {
+            data = JSON.parse(rawText);
+        } catch(parseError) {
+            throw new Error("ระบบหลังบ้านส่งข้อมูลกลับมาไม่ถูกต้อง (ไม่ใช่ JSON)\nรายละเอียด:\n" + rawText.substring(0, 500));
+        }
+
+        if (data.error) {
+            throw new Error("ข้อผิดพลาดจากเซิร์ฟเวอร์: " + data.error);
+        }
+
+        const normalizedNgMapPcs = {};
+        const normalizedNgMapKg = {};
+        
+        (data.ngLabels || []).forEach((label, i) => {
+            const stdLabel = ngSymptoms.find(s => s.toLowerCase() === label.trim().toLowerCase()) || capitalizeFirst(label.trim());
+            const vPcs = data.ngValuesPcs ? data.ngValuesPcs[i] : (data.ngValues ? data.ngValues[i] : 0);
+            const vKg = data.ngValuesKg ? data.ngValuesKg[i] : 0;
+            
+            normalizedNgMapPcs[stdLabel] = (normalizedNgMapPcs[stdLabel] || 0) + vPcs;
+            normalizedNgMapKg[stdLabel] = (normalizedNgMapKg[stdLabel] || 0) + vKg;
+        });
+        
+        data.ngLabels = Object.keys(normalizedNgMapPcs);
+        data.ngValuesPcs = Object.values(normalizedNgMapPcs);
+        data.ngValuesKg = data.ngLabels.map(l => normalizedNgMapKg[l]);
+
+        if (data.machineData) {
+            for (let m in data.machineData) {
+                const mData = data.machineData[m];
+                const newBreakdownPcs = {};
+                const newBreakdownKg = {};
+                
+                const oldPcs = mData.ngBreakdownPcs || mData.ngBreakdown || {};
+                for (let k in oldPcs) {
+                    const stdLabel = capitalizeFirst(k);
+                    newBreakdownPcs[stdLabel] = (newBreakdownPcs[stdLabel] || 0) + oldPcs[k];
+                }
+                
+                const oldKg = mData.ngBreakdownKg || {};
+                for (let k in oldKg) {
+                    const stdLabel = capitalizeFirst(k);
+                    newBreakdownKg[stdLabel] = (newBreakdownKg[stdLabel] || 0) + oldKg[k];
+                }
+                
+                mData.ngBreakdownPcs = newBreakdownPcs;
+                mData.ngBreakdownKg = newBreakdownKg;
+            }
+        }
+        
+        if (data.productData) {
+            for (let p in data.productData) {
+                const pData = data.productData[p];
+                const newBreakdownPcs = {};
+                
+                const oldPcs = pData.ngBreakdownPcs || {};
+                for (let k in oldPcs) {
+                    const stdLabel = capitalizeFirst(k);
+                    newBreakdownPcs[stdLabel] = (newBreakdownPcs[stdLabel] || 0) + oldPcs[k];
+                }
+                
+                pData.ngBreakdownPcs = newBreakdownPcs;
+            }
+        }
+
+        if (data.dailyTrend) {
+            data.dailyTrend.forEach(d => {
+                if (d.ngBreakdown) {
+                    const newBd = {};
+                    for (let k in d.ngBreakdown) {
+                        const stdLabel = ngSymptoms.find(s => s.toLowerCase() === k.trim().toLowerCase()) || capitalizeFirst(k.trim());
+                        newBd[stdLabel] = (newBd[stdLabel] || 0) + d.ngBreakdown[k];
+                    }
+                    d.ngBreakdown = newBd;
+                }
+            });
+        }
+        
+        const fg = data.totalFg || 0;
+        const target = data.productionTarget || 0;
+        const ngPcs = data.totalNgPcs !== undefined ? data.totalNgPcs : (data.totalNg || 0);
+        const ngKg = data.totalNgKg || 0;
+        
+        if (fg === 0 && ngPcs === 0 && target === 0) {
+            debugOut.innerText += `\n[Warning] ข้อมูลในวันที่ ${start} เป็น 0 ทั้งหมด`;
+        } else {
+            debugOut.innerText += `\n[Success] พบข้อมูล FG=${fg}, NG=${ngPcs}`;
+        }
+
+        document.getElementById('stat-fg').innerText = fg.toLocaleString();
+        
+        let targetDisplay = target.toLocaleString();
+        if (isPartialView && target > 0) {
+            targetDisplay += ` <span class="text-sm text-gray-500 font-medium">/day</span>`;
+        }
+        document.getElementById('stat-target').innerHTML = targetDisplay;
+        
+        document.getElementById('stat-ng').innerText = `${ngPcs.toLocaleString()} ชิ้น`;
+        document.getElementById('stat-ng-sub').innerText = `(${ngKg.toFixed(2)} Kg)`;
+        
+        const ach = target > 0 ? ((fg / target) * 100).toFixed(1) : 0;
+        document.getElementById('stat-achievement').innerText = ach + "%";
+        document.getElementById('progress-achievement').style.width = Math.min(ach, 100) + "%";
+        
+        const total = fg + ngPcs;
+        const yieldVal = total > 0 ? ((fg / total) * 100).toFixed(2) : 0;
+        document.getElementById('stat-yield').innerText = yieldVal + "%";
+        
+        let workDays = data.datesFound ? Object.keys(data.datesFound).length : 0;
+        if (workDays === 0) {
+            const sDate = new Date(start);
+            const eDate = new Date(end);
+            workDays = Math.round((eDate - sDate) / (1000 * 60 * 60 * 24)) + 1;
+        }
+        if (workDays <= 0 || isNaN(workDays)) workDays = 1;
+
+        let activeSlots = 0; 
+        if(data.hourlyData) activeSlots = data.hourlyData.filter(v => v > 0).length;
+        if(activeSlots === 0) activeSlots = 1;
+
+        const uph = (fg / (workDays * activeSlots)).toFixed(0);
+        document.getElementById('stat-uph').innerText = uph;
+
+        currentDashboardData = data;
+        
+        if (typeof window.renderCharts === 'function') {
+            window.renderCharts(data); 
+            window.renderTable(data); 
+            window.renderFgByModel(data, isPartialView);
+            window.renderSimulator(data); 
+        }
+
+    } catch(e) { 
+        console.error("Dashboard Load Error: ", e); 
+        debugPanel.classList.remove('hidden');
+        debugOut.innerText += `\n[Error Message]\n${e.message}\n\n[Stack Trace]\n${e.stack || "No Stack Trace"}\n\n[Raw Response Text]\n${rawText.substring(0, 500)}`;
+        alert("เกิดข้อผิดพลาดในการดึงข้อมูล กรุณาตรวจสอบที่แผง Debug สีแดงด้านบน");
+    } finally { 
+        document.getElementById('dashboard-loader').classList.add('hidden'); 
+        document.getElementById('dashboard-content').classList.remove('hidden'); 
+    }
 };
