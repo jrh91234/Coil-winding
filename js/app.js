@@ -423,13 +423,11 @@ window.openAutoReport = function() {
 
     const modal = document.getElementById('modal-auto-report');
     
-    // 🌟 แก้ไขการดึงปุ่ม 3 ภาษาให้แสดงผลแน่นอน 100% 🌟
+    // Add Language Selector to the modal header if not exists
     let langSelector = document.getElementById('report-lang-selector');
     if (!langSelector) {
-        // หา Header ของ Modal Auto Report (เอาตัวแรกสุดที่เป็นแถบเมนูด้านบน)
         const modalHeader = modal.querySelector('div:first-child');
         if (modalHeader) {
-            // หา div ที่เป็นกล่องเก็บปุ่มด้านขวา (ปุ่ม พิมพ์ และ ปิด)
             const actionContainer = modalHeader.querySelector('div.flex');
             if (actionContainer) {
                 actionContainer.insertAdjacentHTML('afterbegin', `
@@ -444,7 +442,7 @@ window.openAutoReport = function() {
         }
     }
 
-    // โหลดภาษาตามที่ผู้ใช้เลือกไว้ หรือตั้งค่าเริ่มต้นเป็นภาษาไทย (TH)
+    // Default load TH
     window.renderAutoReportContent(langSelector ? langSelector.value : 'TH');
 
     modal.classList.remove('hidden');
@@ -704,6 +702,7 @@ window.renderAutoReportContent = function(lang = 'TH') {
         }
     };
     
+    let topNgHtml = '';
     const tLang = textData[lang] || textData['TH'];
 
     if(ngItems.length > 0) {
@@ -725,7 +724,43 @@ window.renderAutoReportContent = function(lang = 'TH') {
         return (canvas && canvas.toDataURL) ? canvas.toDataURL('image/png', 1.0) : '';
     };
 
-    // เตรียม Config สำหรับสร้างกราฟ NG Trend (Line Chart % เทียบยอดผลิต)
+    // 🌟 เตรียม Config สำหรับสร้างกราฟ Pareto แบบ Maximize 🌟
+    let autoReportParetoConfig = null;
+    if (ngItems.length > 0 && typeof Chart !== 'undefined') {
+        const pLabels = ngItems.map(item => item.label);
+        const pDataPcs = ngItems.map(item => item.pcs);
+        
+        let cumulativeAcc = 0;
+        const pDataCum = pDataPcs.map(val => {
+            cumulativeAcc += val;
+            return (cumulativeAcc / totalNG * 100).toFixed(2);
+        });
+
+        autoReportParetoConfig = {
+            labels: pLabels,
+            datasets: [
+                {
+                    type: 'bar',
+                    label: tLang.ng + ' (' + tLang.pcs + ')',
+                    data: pDataPcs,
+                    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                    yAxisID: 'y'
+                },
+                {
+                    type: 'line',
+                    label: 'Cumulative (%)',
+                    data: pDataCum,
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    backgroundColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                }
+            ]
+        };
+    }
+
+    // 🌟 เตรียม Config สำหรับสร้างกราฟ NG Trend แบบ Maximize (Line Chart % เทียบยอดผลิต) 🌟
     let autoReportNgTrendConfig = null;
     if (data.dailyTrend && data.dailyTrend.length > 0 && typeof Chart !== 'undefined') {
         const symptomTotals = {};
@@ -775,7 +810,6 @@ window.renderAutoReportContent = function(lang = 'TH') {
 
     const imgDailyOutput = getChartImg('dailyOutputChart');
     const imgTrendNG = getChartImg('qcTrendChart'); 
-    const imgPareto = getChartImg('paretoChart');
     const imgNgMac = getChartImg('ngByMachineChart');
     const imgYieldModel = getChartImg('yieldModelChart');
     const imgYieldMac = getChartImg('yieldMachineChart');
@@ -948,8 +982,9 @@ window.renderAutoReportContent = function(lang = 'TH') {
                         <p class="text-[12px] text-gray-600 mb-4 leading-relaxed indent-8 text-justify">
                             ${tLang.sec3_1_desc.replace('{topNgSymptomName}', topNgSymptomName).replace('{topNgSymptomRatio}', topNgSymptomRatio)}
                         </p>
-                        <div class="mt-auto w-full bg-gray-50 rounded-lg p-2 border border-gray-100">
-                            ${imgPareto ? `<img src="${imgPareto}" class="w-full h-[280px] object-contain mx-auto" />` : `<p class="text-center text-sm text-gray-400">${tLang.noGraph}</p>`}
+                        <div class="mt-auto w-full bg-gray-50 rounded-lg p-4 border border-gray-100 h-[300px] relative">
+                            <!-- 🌟 พื้นที่สำหรับกราฟ Pareto Maximize 🌟 -->
+                            <canvas id="auto-report-pareto-chart" style="width:100%; height:100%;"></canvas>
                         </div>
                     </div>
                     
@@ -959,7 +994,7 @@ window.renderAutoReportContent = function(lang = 'TH') {
                             ${tLang.sec3_2_desc}
                         </p>
                         <div class="mt-auto w-full bg-gray-50 rounded-lg p-4 border border-gray-100 h-[300px] relative">
-                            <!-- 🌟 พื้นที่สำหรับกราฟ %เทียบยอดผลิต 🌟 -->
+                            <!-- 🌟 พื้นที่สำหรับกราฟ NG Trend %เทียบยอดผลิต Maximize 🌟 -->
                             <canvas id="auto-report-ng-trend-chart" style="width:100%; height:100%;"></canvas>
                         </div>
                     </div>
@@ -1051,6 +1086,27 @@ window.renderAutoReportContent = function(lang = 'TH') {
         if (window.autoReportCharts) window.autoReportCharts.forEach(c => c.destroy());
         window.autoReportCharts = [];
 
+        // วาดกราฟ Pareto แบบ Maximize
+        if (autoReportParetoConfig) {
+            const ctxPareto = document.getElementById('auto-report-pareto-chart');
+            if (ctxPareto) {
+                window.autoReportCharts.push(new Chart(ctxPareto, {
+                    data: autoReportParetoConfig,
+                    options: {
+                        animation: false,
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: true, position: 'top' }, datalabels: { display: false } },
+                        scales: {
+                            y: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: tLang.ng + ' (' + tLang.pcs + ')' } },
+                            y1: { type: 'linear', position: 'right', beginAtZero: true, max: 100, grid: { drawOnChartArea: false }, title: { display: true, text: 'Cumulative (%)' } }
+                        }
+                    }
+                }));
+            }
+        }
+
+        // วาดกราฟ NG Trend แบบ Maximize
         if (autoReportNgTrendConfig) {
             const ctxNgTrend = document.getElementById('auto-report-ng-trend-chart');
             if (ctxNgTrend) {
@@ -1068,6 +1124,7 @@ window.renderAutoReportContent = function(lang = 'TH') {
             }
         }
 
+        // วาดกราฟรายเครื่องแบบ Maximize
         machineChartConfigs.forEach(cfg => {
             const ctx = document.getElementById(cfg.id);
             if (ctx) {
@@ -1114,6 +1171,86 @@ window.printAutoReport = function() {
     setTimeout(() => {
         document.body.classList.remove('printing-auto-report');
     }, 1000);
+};
+
+// ==========================================
+// 🌟 ส่วนปรับปรุง: ระบบดาวน์โหลด Excel
+// ==========================================
+window.exportCSV = function() {
+    if (!currentDashboardData) {
+        alert("⚠️ กรุณากดปุ่มค้นหาข้อมูล (ดึง Dashboard) ก่อนทำการส่งออก Excel");
+        return;
+    }
+    
+    const data = currentDashboardData;
+    
+    let csvContent = "\ufeff"; 
+    
+    // ส่วนที่ 1: ภาพรวม
+    csvContent += "--- Overall Summary ---\n";
+    csvContent += "Machine,Product Assigned,FG (Pcs),NG (Pcs),NG (Kg),% Yield\n";
+    
+    for(let i=1; i<=16; i++) {
+        const m = `CWM-${String(i).padStart(2,'0')}`; 
+        const d = (data.machineData && data.machineData[m]) ? data.machineData[m] : {fg:0, ngTotal:0, ngTotalKg:0, ngTotalPcs:0};
+        
+        const ngPcs = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
+        const ngKg = d.ngTotalKg || 0;
+        
+        const t = d.fg + ngPcs; 
+        const y = t > 0 ? ((d.fg/t)*100).toFixed(2) : "0.00";
+        
+        const productAssigned = machineMapping[m] || 'Unassigned';
+        
+        csvContent += `${m},${productAssigned},${d.fg},${ngPcs},${ngKg.toFixed(2)},${y}%\n`;
+    }
+
+    // ส่วนที่ 2: ข้อมูลแจกแจงรายวัน (Daily Breakdown)
+    csvContent += "\n--- Daily Breakdown ---\n";
+    csvContent += "Date,Machine,Product Assigned,FG (Pcs),NG (Pcs),% Yield\n";
+
+    // หาวันที่ทั้งหมดที่มีข้อมูล
+    const datesSet = new Set();
+    if (data.machineData) {
+        Object.values(data.machineData).forEach(mData => {
+            if (mData.daily) {
+                Object.keys(mData.daily).forEach(d => datesSet.add(d));
+            }
+        });
+    }
+    const sortedDates = Array.from(datesSet).sort();
+
+    sortedDates.forEach(date => {
+        for(let i=1; i<=16; i++) {
+            const m = `CWM-${String(i).padStart(2,'0')}`;
+            const productAssigned = machineMapping[m] || 'Unassigned';
+            const mData = data.machineData ? data.machineData[m] : null;
+            
+            if (mData && mData.daily && mData.daily[date]) {
+                const daily = mData.daily[date];
+                const fg = daily.fg || 0;
+                const ngPcs = daily.ngPcs || 0;
+                const total = fg + ngPcs;
+                const y = total > 0 ? ((fg/total)*100).toFixed(2) : "0.00";
+                
+                if (total > 0) { // แสดงเฉพาะวันที่มีข้อมูลการผลิต
+                    csvContent += `${date},${m},${productAssigned},${fg},${ngPcs},${y}%\n`;
+                }
+            }
+        }
+    });
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    
+    const sDate = document.getElementById('startDate').value;
+    
+    link.setAttribute("href", url);
+    link.setAttribute("download", `CWM_Report_${sDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 };
 
 // ==========================================
@@ -2004,6 +2141,9 @@ window.exportCSV = function() {
     const data = currentDashboardData;
     
     let csvContent = "\ufeff"; 
+    
+    // --- สรุปภาพรวม ---
+    csvContent += "--- Overall Summary ---\n";
     csvContent += "Machine,Product Assigned,FG (Pcs),NG (Pcs),NG (Kg),% Yield\n";
     
     for(let i=1; i<=16; i++) {
@@ -2020,6 +2160,40 @@ window.exportCSV = function() {
         
         csvContent += `${m},${productAssigned},${d.fg},${ngPcs},${ngKg.toFixed(2)},${y}%\n`;
     }
+
+    // --- แจกแจงรายวัน (Daily Breakdown) ---
+    csvContent += "\n--- Daily Breakdown ---\n";
+    csvContent += "Date,Machine,Product Assigned,FG (Pcs),NG (Pcs),% Yield\n";
+
+    const datesSet = new Set();
+    if (data.machineData) {
+        Object.values(data.machineData).forEach(mData => {
+            if (mData.daily) {
+                Object.keys(mData.daily).forEach(d => datesSet.add(d));
+            }
+        });
+    }
+    const sortedDates = Array.from(datesSet).sort();
+
+    sortedDates.forEach(date => {
+        for(let i=1; i<=16; i++) {
+            const m = `CWM-${String(i).padStart(2,'0')}`;
+            const productAssigned = machineMapping[m] || 'Unassigned';
+            const mData = data.machineData ? data.machineData[m] : null;
+            
+            if (mData && mData.daily && mData.daily[date]) {
+                const daily = mData.daily[date];
+                const fg = daily.fg || 0;
+                const ngPcs = daily.ngPcs || 0;
+                const total = fg + ngPcs;
+                const y = total > 0 ? ((fg/total)*100).toFixed(2) : "0.00";
+                
+                if (total > 0) { // แสดงเฉพาะวันที่มีข้อมูลการผลิต
+                    csvContent += `${date},${m},${productAssigned},${fg},${ngPcs},${y}%\n`;
+                }
+            }
+        }
+    });
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
