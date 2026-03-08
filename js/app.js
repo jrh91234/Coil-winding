@@ -5,7 +5,7 @@ let productList = ["S1B29288-JR (10A)", "S1B71819-JR (16A)", "S1B29292-JR (20A)"
 let recorderList = ["พนักงาน 1", "พนักงาน 2"];
 
 let machineMapping = {};
-let hiddenWidgets = []; // เก็บรายชื่อ ID ของกราฟที่ถูกซ่อน
+let hiddenWidgets = []; 
 
 const DAY_HOURS = ["08:00-09:00", "09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "OT 17:30-18:00", "OT 18:00-19:00", "OT 19:00-20:00"];
 const NIGHT_HOURS = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:00-06:00", "OT 06:00-07:00", "OT 07:00-08:00"];
@@ -164,7 +164,6 @@ function applyPermissions() {
 
     let defaultTab = '';
 
-    // สิทธิ์การเข้าถึงเมนู
     if (role === 'Production') {
         ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'form';
@@ -433,12 +432,6 @@ window.openAutoReport = function() {
     const target = data.productionTarget || 0;
     const achPct = target > 0 ? ((totalFG/target)*100).toFixed(1) : "0.0";
     const avgNgRate = (totalQty > 0 ? (totalNG/totalQty)*100 : 0).toFixed(2);
-    
-    let achHtml = '';
-    if (target === 0) achHtml = `<span class="text-gray-500">N/A</span>`;
-    else if (achPct >= 100) achHtml = `<span class="text-green-600 font-bold">${achPct}% (Achieved)</span>`;
-    else if (achPct >= 80) achHtml = `<span class="text-orange-500 font-bold">${achPct}% (Warning)</span>`;
-    else achHtml = `<span class="text-red-600 font-bold">${achPct}% (Below Target)</span>`;
 
     const labels = data.ngLabels || [];
     const vals = data.ngValuesPcs || data.ngValues || [];
@@ -510,10 +503,64 @@ window.openAutoReport = function() {
         return (canvas && canvas.toDataURL) ? canvas.toDataURL('image/png', 1.0) : '';
     };
 
+    // สร้างรูปกราฟ NG Trend แบบเปอร์เซ็นต์ (%เทียบยอดผลิต) สดๆ โดยไม่ต้องสนใจว่าหน้าเว็บเลือกอะไรอยู่
+    let imgNgTrendDynamic = getChartImg('ngSymptomTrendChart'); // Fallback
+    if (data.dailyTrend && data.dailyTrend.length > 0 && typeof Chart !== 'undefined') {
+        const symptomTotals = {};
+        data.dailyTrend.forEach(d => {
+            if(d.ngBreakdown) {
+                Object.keys(d.ngBreakdown).forEach(k => {
+                    symptomTotals[k] = (symptomTotals[k] || 0) + d.ngBreakdown[k];
+                });
+            }
+        });
+        const topSymptoms = Object.entries(symptomTotals).sort((a,b)=>b[1]-a[1]).slice(0,5).map(x=>x[0]);
+        
+        const ngTrendDatasets = topSymptoms.map((sym, i) => {
+            const colors = ['#ef4444', '#f97316', '#eab308', '#a855f7', '#ec4899'];
+            return {
+                label: sym + ' (%)',
+                data: data.dailyTrend.map(d => {
+                    const totalProd = d.fg + d.ng;
+                    const symPcs = (d.ngBreakdown && d.ngBreakdown[sym]) ? d.ngBreakdown[sym] : 0;
+                    return totalProd > 0 ? parseFloat(((symPcs / totalProd) * 100).toFixed(2)) : 0;
+                }),
+                borderColor: colors[i % colors.length],
+                backgroundColor: colors[i % colors.length],
+                borderWidth: 2,
+                tension: 0.3,
+                fill: false
+            };
+        });
+
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1000;
+            canvas.height = 350;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const tChart = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: data.dailyTrend.map(d => d.date),
+                    datasets: ngTrendDatasets
+                },
+                options: {
+                    animation: false,
+                    responsive: false,
+                    plugins: { legend: { display: true, position: 'top' }, datalabels: { display: false } },
+                    scales: { y: { type: 'linear', beginAtZero: true, title: { display: true, text: '% เทียบยอดผลิต (Yield %)' } } }
+                }
+            });
+            imgNgTrendDynamic = tChart.toDataURL('image/png', 1.0);
+            tChart.destroy();
+        } catch(e) { console.error(e); }
+    }
+
     const imgDailyOutput = getChartImg('dailyOutputChart');
     const imgTrendNG = getChartImg('qcTrendChart');
     const imgPareto = getChartImg('paretoChart');
-    const imgNgTrend = getChartImg('ngSymptomTrendChart');
     const imgNgMac = getChartImg('ngByMachineChart');
     const imgYieldModel = getChartImg('yieldModelChart');
     const imgYieldMac = getChartImg('yieldMachineChart');
@@ -526,7 +573,7 @@ window.openAutoReport = function() {
     const shiftType = document.getElementById('filterShiftType').options[document.getElementById('filterShiftType').selectedIndex].text;
     const printTime = new Date().toLocaleString('th-TH');
 
-    // วิเคราะห์เทรนแยกตามเครื่องจักร (Machine Analytics Loop)
+    // 🌟 วิเคราะห์เทรนแยกตามเครื่องจักร พร้อมสร้างรูปกราฟ Daily Trend ของแต่ละเครื่อง
     let machineAnalysisHtml = `<div class="page-break-before print-page">
         <div class="mb-8 page-break-inside-avoid">
         <h3 class="text-lg font-bold text-gray-800 border-l-4 border-purple-600 pl-2 mb-4 bg-gray-50 py-1">5. การวิเคราะห์แนวโน้มรายวันแยกตามเครื่องจักร (Machine-Level Daily Trend Analytics)</h3>
@@ -565,17 +612,70 @@ window.openAutoReport = function() {
             let stability = variance < 5 ? "มีความเสถียรสูง (Highly Stable)" : (variance < 15 ? "มีความผันผวนปานกลาง (Moderate Variance)" : "มีความผันผวนสูงมาก (Highly Unstable)");
             let stabilityColor = variance < 5 ? "text-green-600" : (variance < 15 ? "text-orange-500" : "text-red-600");
 
+            // สร้างรูปกราฟแท่งและเส้น (FG/NG) สำหรับเครื่องจักรนี้โดยเฉพาะ
+            let machineChartImg = '';
+            if (dates.length > 0 && typeof Chart !== 'undefined') {
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 800;
+                    canvas.height = 250;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    const mChart = new Chart(canvas, {
+                        data: {
+                            labels: dates,
+                            datasets: [
+                                {
+                                    type: 'bar',
+                                    label: 'FG (ชิ้น)',
+                                    data: dates.map(d => mDaily[d].fg || 0),
+                                    backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                                    yAxisID: 'y'
+                                },
+                                {
+                                    type: 'line',
+                                    label: 'NG (ชิ้น)',
+                                    data: dates.map(d => mDaily[d].ngPcs || 0),
+                                    borderColor: 'rgba(239, 68, 68, 1)',
+                                    backgroundColor: 'rgba(239, 68, 68, 1)',
+                                    borderWidth: 2,
+                                    tension: 0.3,
+                                    yAxisID: 'y1'
+                                }
+                            ]
+                        },
+                        options: {
+                            animation: false,
+                            responsive: false,
+                            plugins: {
+                                legend: { display: true },
+                                datalabels: { display: false }
+                            },
+                            scales: {
+                                y: { type: 'linear', position: 'left', beginAtZero: true },
+                                y1: { type: 'linear', position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } }
+                            }
+                        }
+                    });
+                    machineChartImg = mChart.toDataURL('image/png', 1.0);
+                    mChart.destroy();
+                } catch(e) { console.error(e); }
+            }
+
             machineAnalysisHtml += `
                 <div class="border border-gray-200 p-4 rounded-lg bg-white shadow-sm page-break-inside-avoid">
-                    <div class="flex justify-between items-center mb-2 border-b border-gray-100 pb-2">
+                    <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
                         <h4 class="font-black text-blue-800 text-sm flex items-center gap-2">🏭 เครื่องจักร: ${m}</h4>
                         <span class="text-xs font-bold ${avgMYield >= 95 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} px-2 py-1 rounded-full border border-gray-200 shadow-sm">Yield เฉลี่ย: ${avgMYield}%</span>
                     </div>
-                    <p class="text-[12px] text-gray-700 leading-relaxed text-justify indent-6">
+                    <p class="text-[12px] text-gray-700 leading-relaxed text-justify indent-6 mb-4">
                         จากข้อมูลตลอดช่วงเวลาประเมิน เครื่องจักรนี้รันผลผลิตได้ <b>${totalMFg.toLocaleString()} ชิ้น</b> และคัดออก <b>${totalMNg.toLocaleString()} ชิ้น</b> 
                         เมื่อวิเคราะห์จากความแปรปรวนรายวัน (Daily NG Rate Variance = ${variance}%) พบว่าสภาพการทำงานของเครื่อง <b class="${stabilityColor}">${stability}</b> 
                         ${totalMNg > 0 ? `โดยจุดวิกฤตที่พบอัตราของเสียพุ่งสูงผิดปกติคือวันที่ <b>${maxNgDate}</b> (อัตราสูญเสียแตะระดับ <b>${maxNgRate.toFixed(2)}%</b>) ฝ่ายซ่อมบำรุงและหัวหน้างานควรนำประวัติการตั้งค่า (Setup) หรือปัญหาเครื่องขัดข้อง (Downtime) ของเครื่องจักรนี้มาวิเคราะห์หา Root Cause โดยด่วนเพื่อจำกัดความสูญเปล่าในรอบถัดไป` : `ซึ่งสามารถรักษาความต่อเนื่องของคุณภาพได้อย่างดีเยี่ยมโดยไม่พบของเสียหลุดรอดในระบบ`}
                     </p>
+                    ${machineChartImg ? `<div class="bg-gray-50 p-2 rounded border border-gray-100"><img src="${machineChartImg}" class="w-full h-auto object-contain max-h-[250px] mx-auto" /></div>` : ''}
                 </div>
             `;
         }
@@ -607,18 +707,11 @@ window.openAutoReport = function() {
 
             <div class="mb-8">
                 <h3 class="text-lg font-bold text-gray-800 border-l-4 border-blue-600 pl-2 mb-4 bg-gray-50 py-1">1. ดัชนีชี้วัดผลการดำเนินงานหลัก (Key Performance Indicators)</h3>
-                <div class="grid grid-cols-5 gap-3 text-center">
-                    <div class="border border-gray-300 rounded p-4 bg-white shadow-sm">
-                        <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Target (Plan)</p>
-                        <p class="text-2xl font-black text-indigo-700 mt-1">${target.toLocaleString()}</p>
-                    </div>
+                <!-- แก้ไขนำ Target และ Achievement ออกตามที่ร้องขอ -->
+                <div class="grid grid-cols-3 gap-6 text-center">
                     <div class="border border-gray-300 rounded p-4 bg-white shadow-sm">
                         <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Good (FG)</p>
                         <p class="text-2xl font-black text-blue-600 mt-1">${totalFG.toLocaleString()}</p>
-                    </div>
-                    <div class="border border-gray-300 rounded p-4 bg-white shadow-sm">
-                        <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Achievement</p>
-                        <p class="text-xl mt-1">${achHtml}</p>
                     </div>
                     <div class="border border-red-200 rounded p-4 bg-red-50 shadow-sm">
                         <p class="text-[10px] text-red-600 font-bold uppercase tracking-wider">Total Defect (NG)</p>
@@ -633,7 +726,6 @@ window.openAutoReport = function() {
 
             <div class="mb-8 page-break-inside-avoid">
                 <h3 class="text-lg font-bold text-gray-800 border-l-4 border-indigo-500 pl-2 mb-4 bg-gray-50 py-1">2. การประเมินเสถียรภาพและแนวโน้มการผลิต (Production Stability Assessment)</h3>
-                <!-- เปลี่ยนเป็น 1 คอลัมน์ (Maximize Form) -->
                 <div class="grid grid-cols-1 gap-8">
                     <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm flex flex-col">
                         <p class="text-base font-bold text-gray-800 mb-2">📊 บทวิเคราะห์ขีดความสามารถการผลิต (Capacity Analysis)</p>
@@ -660,7 +752,6 @@ window.openAutoReport = function() {
             </div>
         </div>
 
-        <!-- ขึ้นหน้าใหม่ลักษณะเหมือนกระดาษแผ่นที่ 2 -->
         <div class="print-page bg-white shadow-lg ring-1 ring-gray-200 rounded p-8 mb-6 page-break-before">
             <div class="mb-8 page-break-inside-avoid">
                 <h3 class="text-lg font-bold text-gray-800 border-l-4 border-red-500 pl-2 mb-4 bg-gray-50 py-1">3. การวิเคราะห์สาเหตุความสูญเสียเชิงลึก (Defect Root Cause Diagnostics)</h3>
@@ -689,7 +780,8 @@ window.openAutoReport = function() {
                             หากกราฟของเสียอาการหลักมีแนวโน้มลดลง แสดงว่าการปรับปรุงกระบวนการหรือซ่อมบำรุงก่อนหน้า (Action Taken) สัมฤทธิ์ผล
                         </p>
                         <div class="mt-auto w-full bg-gray-50 rounded-lg p-2 border border-gray-100">
-                            ${imgNgTrend ? `<img src="${imgNgTrend}" class="w-full h-auto object-contain max-h-[400px] mx-auto" />` : '<p class="text-center text-sm text-gray-400">No Graph Available</p>'}
+                            <!-- 🌟 แสดงผลกราฟ %เทียบยอดผลิต 🌟 -->
+                            ${imgNgTrendDynamic ? `<img src="${imgNgTrendDynamic}" class="w-full h-auto object-contain max-h-[400px] mx-auto" />` : '<p class="text-center text-sm text-gray-400">No Graph Available</p>'}
                         </div>
                     </div>
                     
@@ -707,7 +799,6 @@ window.openAutoReport = function() {
             </div>
         </div>
 
-        <!-- ขึ้นหน้าใหม่ลักษณะเหมือนกระดาษแผ่นที่ 3 -->
         <div class="print-page bg-white shadow-lg ring-1 ring-gray-200 rounded p-8 mb-6 page-break-before">
             <div class="mb-8 page-break-inside-avoid">
                 <h3 class="text-lg font-bold text-gray-800 border-l-4 border-green-500 pl-2 mb-4 bg-gray-50 py-1">4. ประเมินสมรรถนะการผลิตและอัตราการส่งผ่าน (Productivity Validation)</h3>
@@ -749,7 +840,7 @@ window.openAutoReport = function() {
             </div>
         </div>
 
-        <!-- 🌟 แทรก Section 5: การวิเคราะห์รายเครื่องจักรตรงนี้ 🌟 -->
+        <!-- 🌟 แทรก Section 5: การวิเคราะห์รายเครื่องจักรพร้อมกราฟ 🌟 -->
         ${machineAnalysisHtml}
 
         <div class="print-page bg-white shadow-lg ring-1 ring-gray-200 rounded p-8 mt-6 page-break-inside-avoid">
@@ -777,7 +868,6 @@ window.openAutoReport = function() {
         </div>
     `;
 
-    // อัปเดตโครงสร้าง Modal เล็กน้อยเพื่อให้แบคกราวน์ดูเป็นสีเทาตัดกับสีกระดาษขาวชัดเจน
     document.getElementById('modal-auto-report').className = 'fixed inset-0 bg-gray-200 z-50 flex flex-col overflow-y-auto pb-10 transition-opacity duration-300';
     content.className = 'w-full max-w-[210mm] mx-auto mt-6 px-4 md:px-0'; 
     content.innerHTML = html;
@@ -1742,6 +1832,10 @@ window.loadDashboard = async function() {
     const shiftType = document.getElementById('filterShiftType').value.trim();
     
     const isPartialView = (shift !== 'All' || shiftType !== 'All');
+    
+    // ตั้งค่ากราฟ NG Trend ให้เป็นแบบเปอร์เซ็นต์เสมอเมื่อกดค้นหาข้อมูล (เพื่อเตรียมไว้ทำ Auto Report)
+    const ngTrendSel = document.getElementById('ngTrendSelector');
+    if(ngTrendSel) ngTrendSel.value = 'percent';
     
     let rawText = "";
     try {
