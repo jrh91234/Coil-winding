@@ -502,8 +502,8 @@ window.openAutoReport = function() {
         return (canvas && canvas.toDataURL) ? canvas.toDataURL('image/png', 1.0) : '';
     };
 
-    // 🌟 สร้างรูปกราฟ NG Trend แบบเปอร์เซ็นต์ (%เทียบยอดผลิต) สดๆ และเพิ่มเส้น Target 0.5% 🌟
-    let imgNgTrendDynamic = getChartImg('ngSymptomTrendChart'); // Fallback
+    // เตรียม Config สำหรับสร้างกราฟสดๆ ตอนสั่งเปิด Modal
+    let autoReportNgTrendConfig = null;
     if (data.dailyTrend && data.dailyTrend.length > 0 && typeof Chart !== 'undefined') {
         const symptomTotals = {};
         data.dailyTrend.forEach(d => {
@@ -532,7 +532,6 @@ window.openAutoReport = function() {
             };
         });
 
-        // แทรกเส้น Target Limit ที่ 0.5%
         ngTrendDatasets.push({
             label: 'Target Limit (0.5%)',
             data: data.dailyTrend.map(() => 0.5),
@@ -545,33 +544,14 @@ window.openAutoReport = function() {
             tension: 0
         });
 
-        try {
-            const canvas = document.createElement('canvas');
-            canvas.width = 1200; // Maximize Form
-            canvas.height = 400;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            const tChart = new Chart(canvas, {
-                type: 'line',
-                data: {
-                    labels: data.dailyTrend.map(d => d.date),
-                    datasets: ngTrendDatasets
-                },
-                options: {
-                    animation: false,
-                    responsive: false,
-                    plugins: { legend: { display: true, position: 'top' }, datalabels: { display: false } },
-                    scales: { y: { type: 'linear', beginAtZero: true, title: { display: true, text: '% เทียบยอดผลิต (Yield %)' } } }
-                }
-            });
-            imgNgTrendDynamic = tChart.toDataURL('image/png', 1.0);
-            tChart.destroy();
-        } catch(e) { console.error(e); }
+        autoReportNgTrendConfig = {
+            labels: data.dailyTrend.map(d => d.date),
+            datasets: ngTrendDatasets
+        };
     }
 
     const imgDailyOutput = getChartImg('dailyOutputChart');
-    const imgTrendNG = getChartImg('qcTrendChart');
+    const imgTrendNG = getChartImg('qcTrendChart'); // ตัวนี้คือภาพรวม อาจเก็บไว้
     const imgPareto = getChartImg('paretoChart');
     const imgNgMac = getChartImg('ngByMachineChart');
     const imgYieldModel = getChartImg('yieldModelChart');
@@ -585,11 +565,12 @@ window.openAutoReport = function() {
     const shiftType = document.getElementById('filterShiftType').options[document.getElementById('filterShiftType').selectedIndex].text;
     const printTime = new Date().toLocaleString('th-TH');
 
-    // 🌟 วิเคราะห์เทรนแยกตามเครื่องจักร พร้อมสร้างรูปกราฟ Daily Trend ของแต่ละเครื่อง 🌟
+    // 🌟 วิเคราะห์เทรนแยกตามเครื่องจักร พร้อมเตรียมพื้นที่สร้าง Canvas Daily Trend ของแต่ละเครื่อง 🌟
+    let machineChartConfigs = [];
     let machineAnalysisHtml = `<div class="page-break-before print-page">
         <div class="mb-8 page-break-inside-avoid">
         <h3 class="text-lg font-bold text-gray-800 border-l-4 border-purple-600 pl-2 mb-4 bg-gray-50 py-1">5. การวิเคราะห์แนวโน้มรายวันแยกตามเครื่องจักร (Machine-Level Daily Trend Analytics)</h3>
-        <div class="space-y-8">`; // ขยับช่องว่างให้ชัดเจนขึ้น
+        <div class="space-y-8">`;
     
     let hasMachineData = false;
     if(data.machineData) {
@@ -627,57 +608,21 @@ window.openAutoReport = function() {
             let targetEval = parseFloat(avgMNgRate) <= 0.5 ? "ผ่านเกณฑ์เป้าหมาย" : "ตกเกณฑ์มาตรฐาน (NG > 0.5%)";
             let targetColor = parseFloat(avgMNgRate) <= 0.5 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700";
 
-            // สร้างรูปกราฟแท่งและเส้น (FG/NG) สำหรับเครื่องจักรนี้ (Maximize Form)
-            let machineChartImg = '';
-            if (dates.length > 0 && typeof Chart !== 'undefined') {
-                try {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 1200;
-                    canvas.height = 350;
-                    const ctx = canvas.getContext('2d');
-                    ctx.fillStyle = 'white';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const chartId = `mchart_${m.replace(/\W/g, '')}`;
 
-                    const mChart = new Chart(canvas, {
-                        data: {
-                            labels: dates,
-                            datasets: [
-                                {
-                                    type: 'bar',
-                                    label: 'FG (ชิ้น)',
-                                    data: dates.map(d => mDaily[d].fg || 0),
-                                    backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                                    yAxisID: 'y'
-                                },
-                                {
-                                    type: 'line',
-                                    label: 'NG (ชิ้น)',
-                                    data: dates.map(d => mDaily[d].ngPcs || 0),
-                                    borderColor: 'rgba(239, 68, 68, 1)',
-                                    backgroundColor: 'rgba(239, 68, 68, 1)',
-                                    borderWidth: 2,
-                                    tension: 0.3,
-                                    yAxisID: 'y1'
-                                }
-                            ]
-                        },
-                        options: {
-                            animation: false,
-                            responsive: false,
-                            plugins: {
-                                legend: { display: true },
-                                datalabels: { display: false }
-                            },
-                            scales: {
-                                y: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: 'FG (ชิ้น)'} },
-                                y1: { type: 'linear', position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'NG (ชิ้น)'} }
-                            }
-                        }
-                    });
-                    machineChartImg = mChart.toDataURL('image/png', 1.0);
-                    mChart.destroy();
-                } catch(e) { console.error(e); }
-            }
+            // เตรียมข้อมูลส่งไปให้ Chart.js วาดสด
+            machineChartConfigs.push({
+                id: chartId,
+                labels: dates,
+                fgData: dates.map(d => mDaily[d].fg || 0),
+                ngData: dates.map(d => mDaily[d].ngPcs || 0),
+                rateData: dates.map(d => {
+                    const f = mDaily[d].fg || 0;
+                    const n = mDaily[d].ngPcs || 0;
+                    return (f+n) > 0 ? (n/(f+n)*100).toFixed(2) : 0;
+                }),
+                targetData: dates.map(() => 0.5) // เส้นเป้าหมาย
+            });
 
             machineAnalysisHtml += `
                 <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm page-break-inside-avoid">
@@ -692,7 +637,9 @@ window.openAutoReport = function() {
                         เมื่อนำมาเทียบกับ<b>เป้าหมายควบคุมของเสียองค์กรที่ 0.5%</b> พบว่าเครื่องจักรเครื่องนี้ <b>${targetEval}</b> โดยมีอัตราความแปรปรวนรายวันที่ ${variance}% (${stability})
                         ${totalMNg > 0 ? ` ทั้งนี้ พบจุดวิกฤตที่อัตราของเสียพุ่งสูงสุดในวันที่ <b>${maxNgDate}</b> (แตะระดับ <b>${maxNgRate.toFixed(2)}%</b>) หากเกิน 0.5% ควรตรวจสอบประวัติ Maintenance เผื่อมีการตั้งค่า (Setup) หรือปัญหาขัดข้องแฝงเร้นในวันดังกล่าว` : ``}
                     </p>
-                    ${machineChartImg ? `<div class="bg-gray-50 p-2 rounded-lg border border-gray-100 w-full"><img src="${machineChartImg}" class="w-full h-auto object-contain max-h-[350px] mx-auto" /></div>` : ''}
+                    <div class="bg-gray-50 p-4 rounded-lg border border-gray-100 w-full h-[300px] relative">
+                        <canvas id="${chartId}" style="width:100%; height:100%;"></canvas>
+                    </div>
                 </div>
             `;
         }
@@ -724,7 +671,7 @@ window.openAutoReport = function() {
 
             <div class="mb-8">
                 <h3 class="text-lg font-bold text-gray-800 border-l-4 border-blue-600 pl-2 mb-4 bg-gray-50 py-1">1. ดัชนีชี้วัดผลการดำเนินงานหลัก (Key Performance Indicators)</h3>
-                <!-- แก้ไขนำ Target และ Achievement ออกตามที่ร้องขอ ปรับเป็น 3 คอลัมน์สมดุล -->
+                <!-- นำ Target และ Achievement ออก และปรับเป็น 3 คอลัมน์ -->
                 <div class="grid grid-cols-3 gap-6 text-center">
                     <div class="border border-gray-300 rounded p-4 bg-white shadow-sm">
                         <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Good (FG)</p>
@@ -798,9 +745,9 @@ window.openAutoReport = function() {
                             การติดตามเปอร์เซ็นต์ของเสียแยกตามอาการแบบรายวัน ช่วยชี้ชัดว่าความผิดปกติเกิดจากตัวแปรภายนอกแบบชั่วคราว หรือฝังรากลึกในระบบ 
                             โดยกราฟด้านล่างมีเส้น <b>Target Limit 0.5% (เส้นประสีแดง)</b> หากกราฟอาการใดตัดผ่านเส้นนี้ขึ้นไป หมายถึงความล้มเหลวเฉพาะจุดที่ทำให้อัตราของเสียรวมหลุดเป้าหมายทันที
                         </p>
-                        <div class="mt-auto w-full bg-gray-50 rounded-lg p-2 border border-gray-100">
-                            <!-- 🌟 แสดงผลกราฟ %เทียบยอดผลิต 🌟 -->
-                            ${imgNgTrendDynamic ? `<img src="${imgNgTrendDynamic}" class="w-full h-auto object-contain max-h-[400px] mx-auto" />` : '<p class="text-center text-sm text-gray-400">No Graph Available</p>'}
+                        <div class="mt-auto w-full bg-gray-50 rounded-lg p-4 border border-gray-100 h-[400px] relative">
+                            <!-- 🌟 พื้นที่สำหรับกราฟ %เทียบยอดผลิต 🌟 -->
+                            <canvas id="auto-report-ng-trend-chart" style="width:100%; height:100%;"></canvas>
                         </div>
                     </div>
                     
@@ -896,7 +843,55 @@ window.openAutoReport = function() {
     
     setTimeout(() => {
         modal.classList.remove('opacity-0');
-    }, 10);
+        
+        // 🌟 วาดกราฟของจริงลงไปในหน้าต่าง Report อัตโนมัติ (แก้ปัญหาไม่ยอมแสดงผล) 🌟
+        if (window.autoReportCharts) window.autoReportCharts.forEach(c => c.destroy());
+        window.autoReportCharts = [];
+
+        if (autoReportNgTrendConfig) {
+            const ctxNgTrend = document.getElementById('auto-report-ng-trend-chart');
+            if (ctxNgTrend) {
+                window.autoReportCharts.push(new Chart(ctxNgTrend, {
+                    type: 'line',
+                    data: autoReportNgTrendConfig,
+                    options: {
+                        animation: false,
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: true, position: 'top' }, datalabels: { display: false } },
+                        scales: { y: { type: 'linear', beginAtZero: true, title: { display: true, text: '% เทียบยอดผลิต (Yield %)' } } }
+                    }
+                }));
+            }
+        }
+
+        machineChartConfigs.forEach(cfg => {
+            const ctx = document.getElementById(cfg.id);
+            if (ctx) {
+                window.autoReportCharts.push(new Chart(ctx, {
+                    data: {
+                        labels: cfg.labels,
+                        datasets: [
+                            { type: 'bar', label: 'FG (ชิ้น)', data: cfg.fgData, backgroundColor: 'rgba(59, 130, 246, 0.7)', yAxisID: 'y' },
+                            { type: 'bar', label: 'NG (ชิ้น)', data: cfg.ngData, backgroundColor: 'rgba(239, 68, 68, 0.8)', yAxisID: 'y' },
+                            { type: 'line', label: 'NG Rate (%)', data: cfg.rateData, borderColor: 'rgba(168, 85, 247, 1)', backgroundColor: 'rgba(168, 85, 247, 1)', borderWidth: 2, tension: 0.3, yAxisID: 'y1' },
+                            { type: 'line', label: 'Target Limit (0.5%)', data: cfg.targetData, borderColor: 'rgba(239, 68, 68, 1)', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false, tension: 0, yAxisID: 'y1' }
+                        ]
+                    },
+                    options: {
+                        animation: false,
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: true, position: 'top' }, datalabels: { display: false } },
+                        scales: {
+                            y: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: 'จำนวน (ชิ้น)' } },
+                            y1: { type: 'linear', position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: '% ของเสีย' } }
+                        }
+                    }
+                }));
+            }
+        });
+    }, 100); // ดีเลย์นิดนึงให้หน้าต่างโผล่มาก่อนวาดกราฟ เพื่อให้ขนาดไม่เพี้ยน
     
     document.body.style.overflow = '';
 };
