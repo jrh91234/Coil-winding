@@ -66,6 +66,11 @@ function initAppAfterLogin() {
     ngSymptoms = normalizeSymptomList(ngSymptoms);
     localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
 
+    // 🌟 ดึงข้อมูลอาการเสียลง Dropdown ของ RTV ทันทีที่เข้าสู่ระบบ 🌟
+    if (typeof window.renderRtvSymptomsOptions === 'function') {
+        window.renderRtvSymptomsOptions();
+    }
+
     if(localStorage.getItem('CWM_RECORDERS')) recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
     if(localStorage.getItem('CWM_MACHINE_MAPPING')) machineMapping = JSON.parse(localStorage.getItem('CWM_MACHINE_MAPPING'));
 
