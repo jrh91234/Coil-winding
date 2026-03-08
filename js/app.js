@@ -5,9 +5,31 @@ let productList = ["S1B29288-JR (10A)", "S1B71819-JR (16A)", "S1B29292-JR (20A)"
 let recorderList = ["พนักงาน 1", "พนักงาน 2"];
 
 let machineMapping = {};
+let hiddenWidgets = []; // เก็บรายชื่อ ID ของกราฟที่ถูกซ่อน
 
 const DAY_HOURS = ["08:00-09:00", "09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "OT 17:30-18:00", "OT 18:00-19:00", "OT 19:00-20:00"];
 const NIGHT_HOURS = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:00-06:00", "OT 06:00-07:00", "OT 07:00-08:00"];
+
+const WIDGET_LIST = [
+    { id: 'card-stat-target', label: 'TARGET (PLAN)' },
+    { id: 'card-stat-fg', label: 'TOTAL FG' },
+    { id: 'card-stat-ach', label: '% ACH' },
+    { id: 'card-stat-ng', label: 'TOTAL NG' },
+    { id: 'card-stat-yield', label: '% YIELD' },
+    { id: 'card-stat-uph', label: 'UPH' },
+    { id: 'card-fg-model', label: 'FG & ACH by Model' },
+    { id: 'card-pareto', label: 'NG Analysis (Pareto)' },
+    { id: 'card-simulator', label: 'Yield Simulator' },
+    { id: 'card-model-analysis', label: 'Model Analysis' },
+    { id: 'card-yield-machine', label: '% Yield by Machine' },
+    { id: 'card-daily-output', label: 'Daily Output' },
+    { id: 'card-qc-trend', label: 'Daily NG Rate Trend' },
+    { id: 'card-ng-trend', label: 'Trend อาการ NG' },
+    { id: 'card-ng-machine', label: 'NG by Machine' },
+    { id: 'card-hourly', label: 'Hourly Production' },
+    { id: 'card-ng-breakdown', label: 'NG Breakdown' },
+    { id: 'card-table', label: 'Detailed Machine Performance' }
+];
 
 let currentRowIdForNg = null;
 let batchNgData = {};
@@ -135,28 +157,40 @@ function initAppAfterLogin() {
 function applyPermissions() {
     const role = window.currentUser.role;
     
-    ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin'].forEach(id => {
+    ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint'].forEach(id => {
         const el = document.getElementById(id);
         if(el) el.classList.add('hidden');
     });
 
     let defaultTab = '';
 
-    if (role === 'Production' || role === 'QC') {
-        ['tab-form', 'tab-dashboard', 'tab-rw'].forEach(id => document.getElementById(id).classList.remove('hidden'));
+    // สิทธิ์การเข้าถึงเมนู
+    if (role === 'Production') {
+        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'form';
     } 
+    else if (role === 'QC') {
+        ['tab-form', 'tab-dashboard', 'tab-rw'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        defaultTab = 'form';
+    }
     else if (role === 'Planning') {
-        ['tab-planning', 'tab-dashboard'].forEach(id => document.getElementById(id).classList.remove('hidden'));
+        ['tab-planning', 'tab-dashboard'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'planning';
     } 
     else if (role === 'Viewer') {
-        ['tab-dashboard'].forEach(id => document.getElementById(id).classList.remove('hidden'));
+        ['tab-dashboard'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'dashboard';
     } 
     else if (role === 'Admin') {
-        ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin'].forEach(id => document.getElementById(id).classList.remove('hidden'));
+        ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'dashboard'; 
+        
+        // แอดมินเท่านั้นที่เห็นปุ่มตั้งค่าซ่อนกราฟ
+        const btnWidgetMgr = document.getElementById('btn-widget-manager');
+        if (btnWidgetMgr) {
+            btnWidgetMgr.classList.remove('hidden');
+            btnWidgetMgr.classList.add('flex');
+        }
     }
 
     window.switchTab(defaultTab);
@@ -175,7 +209,7 @@ function systemLog(logType, details) {
 }
 
 // ==========================================
-// 🌟 2. ระบบ Admin (จัดการผู้ใช้)
+// 🌟 2. ระบบ Admin (จัดการผู้ใช้ & ซ่อนกราฟ)
 // ==========================================
 window.openAdminPanel = function() {
     if (!window.currentUser || window.currentUser.role !== 'Admin') {
@@ -314,6 +348,74 @@ window.deleteUser = async function(username) {
     }
 };
 
+// --- Widget Manager (ระบบเปิด/ปิดการแสดงผลกราฟ) ---
+window.openWidgetManager = function() {
+    const container = document.getElementById('widget-manager-list');
+    container.innerHTML = '';
+    WIDGET_LIST.forEach(w => {
+        const isChecked = !hiddenWidgets.includes(w.id); 
+        container.innerHTML += `
+            <label class="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border hover:bg-blue-50 cursor-pointer transition-colors">
+                <input type="checkbox" value="${w.id}" class="widget-toggle-chk w-5 h-5 text-blue-600 rounded" ${isChecked ? 'checked' : ''}>
+                <span class="text-sm font-medium text-gray-700">${w.label}</span>
+            </label>
+        `;
+    });
+    document.getElementById('modal-widget-manager').classList.remove('hidden');
+};
+
+window.saveWidgetSettings = async function() {
+    const checkboxes = document.querySelectorAll('.widget-toggle-chk');
+    const newHidden = [];
+    checkboxes.forEach(chk => {
+        if (!chk.checked) newHidden.push(chk.value);
+    });
+
+    const btn = document.getElementById('btn-save-widgets');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = "⏳ กำลังอัปเดต...";
+    btn.disabled = true;
+
+    try {
+        await fetch(SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify({
+                action: 'SAVE_HIDDEN_WIDGETS',
+                data: newHidden
+            })
+        });
+        
+        hiddenWidgets = newHidden;
+        window.applyWidgetVisibility();
+        document.getElementById('modal-widget-manager').classList.add('hidden');
+        
+        // รีไซส์กราฟเพื่อจัด Layout ใหม่
+        setTimeout(() => { 
+            Object.values(charts).forEach(c => { if(c && typeof c.resize === 'function') c.resize(); }); 
+        }, 200);
+
+    } catch(e) {
+        alert("Error saving settings");
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+};
+
+window.applyWidgetVisibility = function() {
+    WIDGET_LIST.forEach(w => {
+        const el = document.getElementById(w.id);
+        if (el) {
+            if (hiddenWidgets.includes(w.id)) {
+                el.classList.add('hidden');
+            } else {
+                el.classList.remove('hidden');
+            }
+        }
+    });
+};
+
 // ==========================================
 // 🌟 3. ระบบแจ้งซ่อม (Maintenance Log)
 // ==========================================
@@ -327,6 +429,34 @@ function getBase64(file) {
         reader.onerror = error => reject(error);
     });
 }
+
+// ฟังก์ชันกรองเวลา ตัดวันที่ของ Google Sheet ออก
+function formatMaintTime(t) {
+    if (!t) return '?';
+    if (String(t).includes('T')) {
+        return t.split('T')[1].substring(0, 5); // เอาแค่ HH:mm
+    }
+    return t;
+}
+
+window.openMaintenanceModal = function() {
+    const select = document.getElementById('maint-machine');
+    select.innerHTML = '<option value="">-- กรุณาเลือก --</option>';
+    for(let i=1; i<=16; i++) {
+        const m = `CWM-${String(i).padStart(2,'0')}`;
+        select.innerHTML += `<option value="${m}">${m}</option>`;
+    }
+    
+    document.getElementById('maintenanceForm').reset();
+    document.getElementById('maint-photo-preview').classList.add('hidden');
+    document.getElementById('maint-photo-img').src = '';
+    
+    // ตั้งค่า Default
+    document.getElementById('maint-date').value = document.getElementById('productionDate').value;
+    document.getElementById('maint-reporter').value = window.currentUser ? (window.currentUser.name || window.currentUser.username) : "Unknown";
+    
+    document.getElementById('modal-maintenance').classList.remove('hidden');
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     const maintForm = document.getElementById('maintenanceForm');
@@ -349,7 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     action: 'SAVE_MAINTENANCE',
                     username: window.currentUser ? (window.currentUser.name || window.currentUser.username) : "Unknown",
                     role: window.currentUser ? window.currentUser.role : "User",
-                    date: document.getElementById('productionDate').value,
+                    date: document.getElementById('maint-date').value,
                     machine: document.getElementById('maint-machine').value,
                     issueType: document.getElementById('maint-issue-type').value,
                     startTime: document.getElementById('maint-start-time').value,
@@ -399,14 +529,13 @@ document.addEventListener('DOMContentLoaded', () => {
         observer.observe(titleEl, { childList: true, characterData: true, subtree: true });
     }
 
-    // 🌟 ส่วนใหม่: ดักจับเวลาเปิดกราฟ Daily NG Breakdown เพื่อต่อข้อมูลแจ้งซ่อมเข้าไปด้านล่าง
+    // ดักจับเวลาเปิดกราฟ Daily NG Breakdown เพื่อต่อข้อมูลแจ้งซ่อมเข้าไปด้านล่าง
     const dailyNgContentEl = document.getElementById('daily-ng-content');
     if (dailyNgContentEl) {
         const observer2 = new MutationObserver((mutations) => {
             let shouldInject = false;
             for (let mutation of mutations) {
                 for (let node of mutation.addedNodes) {
-                    // ตรวจสอบว่ามีข้อมูล Element ใหม่ที่ไม่ได้มาจากฟังก์ชันที่เราแอดเอง (เช็คจาก ID)
                     if (node.nodeType === 1 && node.id !== 'daily-maint-injected') {
                         shouldInject = true;
                         break;
@@ -414,18 +543,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             
-            // ถ้าระบบมีการแสดงผล Breakdown ปกติ ให้เอาประวัติการซ่อมไปต่อท้าย
             if (shouldInject && !document.getElementById('daily-maint-injected')) {
                 const titleText = document.getElementById('daily-ng-title')?.innerText || "";
-                // หาค่าวันที่ (YYYY-MM-DD)
                 const dateMatch = titleText.match(/\((\d{4}-\d{2}-\d{2})\)/);
-                // หาค่าเครื่องจักร (ถ้าเป็นการดูกราฟภาพรวม จะหาไม่เจอและเป็น null)
                 const machineMatch = titleText.match(/(CWM-\d{2})/);
                 
                 if (dateMatch) {
                     const date = dateMatch[1];
                     const machine = machineMatch ? machineMatch[1] : null;
-                    // หน่วงเวลานิดนึงเพื่อให้กราฟวาด List Breakdown เดิมเสร็จก่อน
                     setTimeout(() => {
                         window.appendMaintenanceToDailyBreakdown(date, machine);
                     }, 50); 
@@ -436,7 +561,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// ฟังก์ชันนำข้อมูล Maintenance มาวาดลงใน Modal ของ Machine Detail
 window.populateMaintenanceTab = function(machineName) {
     const listContainer = document.getElementById('machine-maintenance-list');
     const totalLabel = document.getElementById('md-total-downtime');
@@ -464,10 +588,13 @@ window.populateMaintenanceTab = function(machineName) {
         let durationText = "รอดำเนินการ/ยังไม่เสร็จ";
         let mins = 0;
 
-        if (log.startTime && log.endTime) {
-            const start = new Date(`2000-01-01T${log.startTime}`);
-            let end = new Date(`2000-01-01T${log.endTime}`);
-            if (end < start) end = new Date(`2000-01-02T${log.endTime}`); // กรณีข้ามคืน
+        const t1 = formatMaintTime(log.startTime);
+        const t2 = formatMaintTime(log.endTime);
+
+        if (t1 !== '?' && t2 !== '?') {
+            const start = new Date(`2000-01-01T${t1}`);
+            let end = new Date(`2000-01-01T${t2}`);
+            if (end < start) end = new Date(`2000-01-02T${t2}`); // กรณีข้ามคืน
             
             mins = Math.round((end - start) / 60000);
             if(mins > 0) {
@@ -483,7 +610,7 @@ window.populateMaintenanceTab = function(machineName) {
                 <span class="text-[10px] font-medium bg-gray-100 text-gray-500 px-2 py-1 rounded border border-gray-200">${log.date}</span>
             </div>
             <div class="text-xs text-gray-600 mb-2 space-y-1">
-                <p>⏱️ <b>เวลาหยุด:</b> ${log.startTime} - ${log.endTime || '?'} (<span class="text-orange-600 font-bold">${durationText}</span>)</p>
+                <p>⏱️ <b>เวลาหยุด:</b> ${t1} - ${t2} (<span class="text-orange-600 font-bold">${durationText}</span>)</p>
                 <p>👤 <b>ผู้บันทึก:</b> ${log.recorder}</p>
                 <div class="mt-2 bg-gray-50 p-2 rounded border border-gray-100">📝 <b>รายละเอียด:</b> ${log.remark || '-'}</div>
             </div>
@@ -496,23 +623,19 @@ window.populateMaintenanceTab = function(machineName) {
     totalLabel.innerText = `${totalMinutes} นาที`;
 };
 
-// 🌟 ส่วนใหม่: ฟังก์ชันนำข้อมูล Maintenance มาต่อท้ายในหน้าจอ Daily NG Breakdown (ดูกราฟเทรน)
 window.appendMaintenanceToDailyBreakdown = function(date, machine) {
     const container = document.getElementById('daily-ng-content');
     if (!container) return;
 
-    // ตรวจสอบว่าไม่ให้เพิ่มข้อมูลซ้ำซ้อน
     if (document.getElementById('daily-maint-injected')) return;
 
     let logsToDisplay = [];
 
-    // ถ้าเป็นการกดคลิกที่กราฟของเครื่องจักร (Machine Detail)
     if (machine) {
         if (currentDashboardData && currentDashboardData.machineData[machine] && currentDashboardData.machineData[machine].maintenanceLogs) {
             logsToDisplay = currentDashboardData.machineData[machine].maintenanceLogs.filter(log => log.date === date);
         }
     } 
-    // ถ้าเป็นการกดคลิกที่กราฟภาพรวม (Daily Trend หน้า Dashboard)
     else {
         if (currentDashboardData && currentDashboardData.machineData) {
             for (const mac in currentDashboardData.machineData) {
@@ -520,14 +643,13 @@ window.appendMaintenanceToDailyBreakdown = function(date, machine) {
                 if (mData.maintenanceLogs) {
                     const dayLogs = mData.maintenanceLogs.filter(log => log.date === date);
                     dayLogs.forEach(log => {
-                        logsToDisplay.push({...log, machine: mac}); // เก็บชื่อเครื่องไว้แสดงด้วย
+                        logsToDisplay.push({...log, machine: mac});
                     });
                 }
             }
         }
     }
 
-    // ถ้าระบบพบว่ามีข้อมูลแจ้งซ่อมบำรุงในวันนั้น ให้นำไปวาดต่อท้าย
     if (logsToDisplay.length > 0) {
         let html = `
         <div id="daily-maint-injected" class="mt-4 border-t-2 border-gray-200 pt-4">
@@ -537,10 +659,13 @@ window.appendMaintenanceToDailyBreakdown = function(date, machine) {
 
         logsToDisplay.forEach(log => {
             let durationText = "รอดำเนินการ";
-            if (log.startTime && log.endTime) {
-                const start = new Date(`2000-01-01T${log.startTime}`);
-                let end = new Date(`2000-01-01T${log.endTime}`);
-                if (end < start) end = new Date(`2000-01-02T${log.endTime}`);
+            const t1 = formatMaintTime(log.startTime);
+            const t2 = formatMaintTime(log.endTime);
+
+            if (t1 !== '?' && t2 !== '?') {
+                const start = new Date(`2000-01-01T${t1}`);
+                let end = new Date(`2000-01-01T${t2}`);
+                if (end < start) end = new Date(`2000-01-02T${t2}`);
                 const mins = Math.round((end - start) / 60000);
                 if (mins > 0) durationText = `${mins} นาที`;
             }
@@ -552,7 +677,7 @@ window.appendMaintenanceToDailyBreakdown = function(date, machine) {
                     <span class="text-[10px] text-orange-600 font-bold border border-orange-200 bg-orange-50 px-2 py-0.5 rounded">${durationText}</span>
                 </div>
                 <div class="text-[11px] text-gray-600 space-y-1">
-                    <p>⏱️ <b>เวลา:</b> ${log.startTime} - ${log.endTime || '?'}</p>
+                    <p>⏱️ <b>เวลา:</b> ${t1} - ${t2}</p>
                     ${log.remark ? `<p class="bg-gray-50 p-1.5 rounded border border-gray-100 mt-1">📝 <b>รายละเอียด:</b> ${log.remark}</p>` : ''}
                 </div>
                 ${log.imageUrl ? `<button onclick="window.viewImage('${log.imageUrl}')" class="w-full mt-2 text-xs bg-blue-50 text-blue-600 font-bold border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 shadow-sm flex justify-center items-center gap-1">📸 ดูรูปภาพหลักฐาน</button>` : ''}
@@ -565,7 +690,6 @@ window.appendMaintenanceToDailyBreakdown = function(date, machine) {
     }
 };
 
-// ฟังก์ชันเปิดดูรูปภาพขนาดใหญ่
 window.viewImage = function(url) {
     const viewer = document.getElementById('modal-image-viewer');
     const img = document.getElementById('viewer-img');
@@ -645,6 +769,13 @@ window.fetchOptions = async function() {
                 }
             }
         }
+
+        // ดึงการตั้งค่าซ่อนกราฟจาก Server (ถ้ามี)
+        if (data.hiddenWidgets) {
+            hiddenWidgets = data.hiddenWidgets;
+            window.applyWidgetVisibility();
+        }
+
     } catch (e) { 
         console.log("Error fetching options", e); 
     }
@@ -807,7 +938,7 @@ window.switchTab = function(tab) {
     const role = window.currentUser.role;
 
     if ((role === 'Production' || role === 'QC') && (tab === 'planning' || tab === 'admin')) return;
-    if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin')) return;
+    if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin' || tab === 'maint')) return;
     if (role === 'Viewer' && tab !== 'dashboard') return;
 
     ['form', 'planning', 'dashboard', 'admin'].forEach(t => {
