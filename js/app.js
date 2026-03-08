@@ -398,9 +398,45 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         observer.observe(titleEl, { childList: true, characterData: true, subtree: true });
     }
+
+    // 🌟 ส่วนใหม่: ดักจับเวลาเปิดกราฟ Daily NG Breakdown เพื่อต่อข้อมูลแจ้งซ่อมเข้าไปด้านล่าง
+    const dailyNgContentEl = document.getElementById('daily-ng-content');
+    if (dailyNgContentEl) {
+        const observer2 = new MutationObserver((mutations) => {
+            let shouldInject = false;
+            for (let mutation of mutations) {
+                for (let node of mutation.addedNodes) {
+                    // ตรวจสอบว่ามีข้อมูล Element ใหม่ที่ไม่ได้มาจากฟังก์ชันที่เราแอดเอง (เช็คจาก ID)
+                    if (node.nodeType === 1 && node.id !== 'daily-maint-injected') {
+                        shouldInject = true;
+                        break;
+                    }
+                }
+            }
+            
+            // ถ้าระบบมีการแสดงผล Breakdown ปกติ ให้เอาประวัติการซ่อมไปต่อท้าย
+            if (shouldInject && !document.getElementById('daily-maint-injected')) {
+                const titleText = document.getElementById('daily-ng-title')?.innerText || "";
+                // หาค่าวันที่ (YYYY-MM-DD)
+                const dateMatch = titleText.match(/\((\d{4}-\d{2}-\d{2})\)/);
+                // หาค่าเครื่องจักร (ถ้าเป็นการดูกราฟภาพรวม จะหาไม่เจอและเป็น null)
+                const machineMatch = titleText.match(/(CWM-\d{2})/);
+                
+                if (dateMatch) {
+                    const date = dateMatch[1];
+                    const machine = machineMatch ? machineMatch[1] : null;
+                    // หน่วงเวลานิดนึงเพื่อให้กราฟวาด List Breakdown เดิมเสร็จก่อน
+                    setTimeout(() => {
+                        window.appendMaintenanceToDailyBreakdown(date, machine);
+                    }, 50); 
+                }
+            }
+        });
+        observer2.observe(dailyNgContentEl, { childList: true });
+    }
 });
 
-// ฟังก์ชันนำข้อมูล Maintenance มาวาดลงใน Modal
+// ฟังก์ชันนำข้อมูล Maintenance มาวาดลงใน Modal ของ Machine Detail
 window.populateMaintenanceTab = function(machineName) {
     const listContainer = document.getElementById('machine-maintenance-list');
     const totalLabel = document.getElementById('md-total-downtime');
@@ -458,6 +494,75 @@ window.populateMaintenanceTab = function(machineName) {
 
     listContainer.innerHTML = html;
     totalLabel.innerText = `${totalMinutes} นาที`;
+};
+
+// 🌟 ส่วนใหม่: ฟังก์ชันนำข้อมูล Maintenance มาต่อท้ายในหน้าจอ Daily NG Breakdown (ดูกราฟเทรน)
+window.appendMaintenanceToDailyBreakdown = function(date, machine) {
+    const container = document.getElementById('daily-ng-content');
+    if (!container) return;
+
+    // ตรวจสอบว่าไม่ให้เพิ่มข้อมูลซ้ำซ้อน
+    if (document.getElementById('daily-maint-injected')) return;
+
+    let logsToDisplay = [];
+
+    // ถ้าเป็นการกดคลิกที่กราฟของเครื่องจักร (Machine Detail)
+    if (machine) {
+        if (currentDashboardData && currentDashboardData.machineData[machine] && currentDashboardData.machineData[machine].maintenanceLogs) {
+            logsToDisplay = currentDashboardData.machineData[machine].maintenanceLogs.filter(log => log.date === date);
+        }
+    } 
+    // ถ้าเป็นการกดคลิกที่กราฟภาพรวม (Daily Trend หน้า Dashboard)
+    else {
+        if (currentDashboardData && currentDashboardData.machineData) {
+            for (const mac in currentDashboardData.machineData) {
+                const mData = currentDashboardData.machineData[mac];
+                if (mData.maintenanceLogs) {
+                    const dayLogs = mData.maintenanceLogs.filter(log => log.date === date);
+                    dayLogs.forEach(log => {
+                        logsToDisplay.push({...log, machine: mac}); // เก็บชื่อเครื่องไว้แสดงด้วย
+                    });
+                }
+            }
+        }
+    }
+
+    // ถ้าระบบพบว่ามีข้อมูลแจ้งซ่อมบำรุงในวันนั้น ให้นำไปวาดต่อท้าย
+    if (logsToDisplay.length > 0) {
+        let html = `
+        <div id="daily-maint-injected" class="mt-4 border-t-2 border-gray-200 pt-4">
+            <h4 class="text-sm font-bold text-orange-600 mb-3 flex items-center gap-2"><span>🛠️</span> ประวัติแจ้งปัญหา / ซ่อมบำรุง (Downtime)</h4>
+            <div class="space-y-3">
+        `;
+
+        logsToDisplay.forEach(log => {
+            let durationText = "รอดำเนินการ";
+            if (log.startTime && log.endTime) {
+                const start = new Date(`2000-01-01T${log.startTime}`);
+                let end = new Date(`2000-01-01T${log.endTime}`);
+                if (end < start) end = new Date(`2000-01-02T${log.endTime}`);
+                const mins = Math.round((end - start) / 60000);
+                if (mins > 0) durationText = `${mins} นาที`;
+            }
+
+            html += `
+            <div class="bg-white border border-orange-200 p-3 rounded-lg shadow-sm">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs font-bold text-orange-700">${log.machine ? `<span class="bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded mr-1">${log.machine}</span> ` : ''}${log.issueType}</span>
+                    <span class="text-[10px] text-orange-600 font-bold border border-orange-200 bg-orange-50 px-2 py-0.5 rounded">${durationText}</span>
+                </div>
+                <div class="text-[11px] text-gray-600 space-y-1">
+                    <p>⏱️ <b>เวลา:</b> ${log.startTime} - ${log.endTime || '?'}</p>
+                    ${log.remark ? `<p class="bg-gray-50 p-1.5 rounded border border-gray-100 mt-1">📝 <b>รายละเอียด:</b> ${log.remark}</p>` : ''}
+                </div>
+                ${log.imageUrl ? `<button onclick="window.viewImage('${log.imageUrl}')" class="w-full mt-2 text-xs bg-blue-50 text-blue-600 font-bold border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 shadow-sm flex justify-center items-center gap-1">📸 ดูรูปภาพหลักฐาน</button>` : ''}
+            </div>
+            `;
+        });
+
+        html += `</div></div>`;
+        container.insertAdjacentHTML('beforeend', html);
+    }
 };
 
 // ฟังก์ชันเปิดดูรูปภาพขนาดใหญ่
