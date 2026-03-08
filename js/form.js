@@ -291,6 +291,7 @@ window.renderManageListContent = function(list) {
 window.addNewItemToList = function() {
      const rawVal = document.getElementById('new-item-input').value.trim();
      if(!rawVal) return;
+     
      if (currentManageType === 'recorder') { 
          if (!recorderList.some(r => r.toLowerCase() === rawVal.toLowerCase())) { 
              recorderList.push(rawVal); 
@@ -304,9 +305,39 @@ window.addNewItemToList = function() {
              ngSymptoms.push(stdVal); 
              localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
              window.renderManageListContent(ngSymptoms); 
+             
+             // 🌟 อัปเดต Dropdown RTV ทันทีที่มีการเพิ่มรายการอาการเสียใหม่ใน Modal 🌟
+             if (typeof window.renderRtvSymptomsOptions === 'function') {
+                 window.renderRtvSymptomsOptions();
+             }
          } 
      }
      document.getElementById('new-item-input').value = '';
+
+     if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
+         window.openNgModal(currentRowIdForNg);
+     }
+};
+
+window.deleteListItem = function(index) {
+     if (!confirm('ยืนยันการลบรายการนี้ (ออกจาก Local)?')) return;
+     
+     if (currentManageType === 'recorder') { 
+         recorderList.splice(index, 1); 
+         localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
+         window.renderRecorderOptions(); 
+         window.renderManageListContent(recorderList); 
+     } else if (currentManageType === 'symptom') { 
+         ngSymptoms.splice(index, 1); 
+         localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
+         window.renderManageListContent(ngSymptoms); 
+         
+         // 🌟 อัปเดต Dropdown RTV ทันทีที่มีการลบรายการอาการเสียออก 🌟
+         if (typeof window.renderRtvSymptomsOptions === 'function') {
+             window.renderRtvSymptomsOptions();
+         }
+     }
+
      if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
          window.openNgModal(currentRowIdForNg);
      }
