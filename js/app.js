@@ -446,14 +446,14 @@ window.openAutoReport = function() {
     
     let topNgHtml = '';
     if(ngItems.length > 0) {
-        topNgHtml = `<ul class="list-disc pl-5 mt-2 space-y-1">`;
+        topNgHtml = `<ul class="list-disc pl-5 mt-2 space-y-1 text-sm text-gray-700">`;
         ngItems.slice(0, 3).forEach((item, idx) => {
             let pct = totalNG > 0 ? ((item.pcs / totalNG) * 100).toFixed(1) : 0;
             topNgHtml += `<li>อันดับ ${idx+1}: <b>${item.label}</b> จำนวน ${item.pcs.toLocaleString()} ชิ้น (${pct}%)</li>`;
         });
         topNgHtml += `</ul>`;
     } else {
-        topNgHtml = `<p class="mt-2 text-green-600 font-bold">🎉 ยอดเยี่ยม ไม่พบของเสียในระบบ</p>`;
+        topNgHtml = `<p class="mt-2 text-green-600 font-bold text-sm">🎉 ยอดเยี่ยม ไม่พบของเสียในระบบ</p>`;
     }
 
     let topMacNg = { name: '-', ng: 0 };
@@ -565,17 +565,21 @@ window.openAutoReport = function() {
             </div>
 
             <div class="mb-8 page-break-inside-avoid">
-                <h3 class="text-lg font-bold text-gray-800 border-l-4 border-indigo-500 pl-2 mb-3 bg-gray-50 py-1">2. แนวโน้มผลผลิตและอัตราของเสีย (Production & Defect Trends)</h3>
+                <h3 class="text-lg font-bold text-gray-800 border-l-4 border-indigo-500 pl-2 mb-3 bg-gray-50 py-1">2. แนวโน้มผลผลิตและอัตราของเสียรายวัน (Production & Defect Trends)</h3>
                 <div class="grid grid-cols-2 gap-4">
-                    <div class="border border-gray-200 p-3 rounded bg-white shadow-sm">
+                    <div class="border border-gray-200 p-3 rounded bg-white shadow-sm flex flex-col">
                         <p class="text-sm font-bold text-gray-800 mb-1">📊 Daily Output (FG vs NG)</p>
-                        <p class="text-[10px] text-gray-600 mb-2 leading-relaxed"><b>คำอธิบาย:</b> กราฟแสดงปริมาณการผลิตงานดี (FG) เปรียบเทียบกับของเสีย (NG) ในแต่ละวัน ช่วยให้เห็นภาพรวมของกำลังการผลิตและการบรรลุเป้าหมายการทำงาน</p>
-                        ${imgDailyOutput ? `<img src="${imgDailyOutput}" class="w-full h-auto border rounded border-gray-100" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        <p class="text-[10px] text-gray-600 mb-3 leading-relaxed"><b>คำอธิบายกราฟ:</b> กราฟแท่งแสดงปริมาณการผลิตงานดี (สีน้ำเงิน) เปรียบเทียบกับปริมาณของเสีย (สีแดง) ในแต่ละวัน ช่วยให้ฝ่ายบริหารเห็นภาพรวมของกำลังการผลิตและการบรรลุเป้าหมายการทำงานในภาพรวมขององค์กร</p>
+                        <div class="mt-auto">
+                            ${imgDailyOutput ? `<img src="${imgDailyOutput}" class="w-full h-auto border rounded border-gray-100" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        </div>
                     </div>
-                    <div class="border border-gray-200 p-3 rounded bg-white shadow-sm">
+                    <div class="border border-gray-200 p-3 rounded bg-white shadow-sm flex flex-col">
                         <p class="text-sm font-bold text-gray-800 mb-1">📉 Daily NG Rate Trend (%)</p>
-                        <p class="text-[10px] text-gray-600 mb-2 leading-relaxed"><b>คำอธิบาย:</b> แสดงสัดส่วนเปอร์เซ็นต์ของเสียที่เกิดขึ้นแบบรายวัน (อัตราของเสียเฉลี่ยรอบนี้: <b>${(totalQty > 0 ? (totalNG/totalQty)*100 : 0).toFixed(2)}%</b>) ใช้เพื่อติดตามความเสถียรของกระบวนการผลิต</p>
-                        ${imgTrendNG ? `<img src="${imgTrendNG}" class="w-full h-auto border rounded border-gray-100" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        <p class="text-[10px] text-gray-600 mb-3 leading-relaxed"><b>คำอธิบายกราฟ:</b> กราฟเส้นแสดงสัดส่วนร้อยละของของเสียที่เกิดขึ้นแบบรายวัน (อัตราของเสียเฉลี่ยรอบนี้: <b class="text-red-600">${(totalQty > 0 ? (totalNG/totalQty)*100 : 0).toFixed(2)}%</b>) ใช้เพื่อติดตามความเสถียรของกระบวนการ หากกราฟพุ่งสูงเกินขอบเขตควรพิจารณาปรับปรุงกระบวนการทันที</p>
+                        <div class="mt-auto">
+                            ${imgTrendNG ? `<img src="${imgTrendNG}" class="w-full h-auto border rounded border-gray-100" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -585,27 +589,31 @@ window.openAutoReport = function() {
             <div class="mb-8 page-break-inside-avoid">
                 <h3 class="text-lg font-bold text-gray-800 border-l-4 border-red-500 pl-2 mb-3 bg-gray-50 py-1">3. การวิเคราะห์ปัญหาคุณภาพเชิงลึก (Quality Issue Analysis)</h3>
                 
-                <div class="bg-red-50 border border-red-200 p-4 rounded text-sm mb-4 text-gray-800 shadow-sm">
-                    <b>💡 ข้อค้นพบหลักด้านคุณภาพ (Top Defect Insights):</b>
+                <div class="bg-red-50 border border-red-200 p-4 rounded mb-4 shadow-sm">
+                    <p class="text-sm font-bold text-red-800 mb-2">💡 ข้อค้นพบหลักด้านคุณภาพ (Top Defect Insights):</p>
                     ${topNgHtml}
                 </div>
 
                 <div class="grid grid-cols-2 gap-4 mb-4">
-                    <div class="border border-gray-200 p-3 rounded bg-white shadow-sm">
+                    <div class="border border-gray-200 p-3 rounded bg-white shadow-sm flex flex-col">
                         <p class="text-sm font-bold text-gray-800 mb-1">📉 Pareto Analysis (สะสมความถี่ปัญหา)</p>
-                        <p class="text-[10px] text-gray-600 mb-2 leading-relaxed"><b>คำอธิบาย:</b> กราฟพาเรโตจัดเรียงอาการเสียจากมากไปน้อย (หลัก 80/20) ช่วยให้ฝ่ายผลิตและ QC เห็นภาพได้ชัดเจนว่าควรพุ่งเป้าไปที่การแก้ไขอาการเสียใดเป็นอันดับแรก</p>
-                        ${imgPareto ? `<img src="${imgPareto}" class="w-full h-auto border rounded border-gray-100" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        <p class="text-[10px] text-gray-600 mb-3 leading-relaxed"><b>คำอธิบายกราฟ:</b> กราฟพาเรโตจัดเรียงประเภทของเสียที่เกิดขึ้นบ่อยที่สุดไว้ด้านซ้าย (หลัก 80/20) ข้อมูลนี้ช่วยให้วิศวกรและแผนก QC ตัดสินใจได้แม่นยำว่าควรทุ่มเททรัพยากรแก้ไขอาการเสียประเภทใดเป็นอันดับแรกเพื่อให้ได้ผลลัพธ์คุ้มค่าที่สุด</p>
+                        <div class="mt-auto">
+                            ${imgPareto ? `<img src="${imgPareto}" class="w-full h-auto border rounded border-gray-100" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        </div>
                     </div>
-                    <div class="border border-gray-200 p-3 rounded bg-white shadow-sm">
-                        <p class="text-sm font-bold text-gray-800 mb-1">📈 Trend ปัญหา NG แยกตามอาการ</p>
-                        <p class="text-[10px] text-gray-600 mb-2 leading-relaxed"><b>คำอธิบาย:</b> กราฟแสดงแนวโน้มของอาการเสียแต่ละประเภทแบบรายวัน เพื่อตรวจสอบว่าปัญหาเกิดซ้ำๆ ในวันใด หรือเพื่อยืนยันผลการแก้ไข (Action taken) ว่าได้ผลหรือไม่</p>
-                        ${imgNgTrend ? `<img src="${imgNgTrend}" class="w-full h-auto border rounded border-gray-100" />` : '<p class="text-center text-xs">No Graph</p>'}
+                    <div class="border border-gray-200 p-3 rounded bg-white shadow-sm flex flex-col">
+                        <p class="text-sm font-bold text-gray-800 mb-1">📈 Trend ปัญหา NG แยกตามอาการ (รายวัน)</p>
+                        <p class="text-[10px] text-gray-600 mb-3 leading-relaxed"><b>คำอธิบายกราฟ:</b> กราฟแสดงการกระจายตัวของอาการเสียแต่ละประเภทแบบรายวัน เพื่อตรวจสอบว่าปัญหาเกิดขึ้นซ้ำเฉพาะบางวัน หรือเกิดขึ้นอย่างต่อเนื่อง และใช้ดูผลลัพธ์หลังจากการซ่อมบำรุงว่าปัญหาได้หมดไปหรือไม่</p>
+                        <div class="mt-auto">
+                            ${imgNgTrend ? `<img src="${imgNgTrend}" class="w-full h-auto border rounded border-gray-100" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        </div>
                     </div>
                 </div>
                 
                 <div class="border border-gray-200 p-3 rounded bg-white shadow-sm page-break-inside-avoid">
                     <p class="text-sm font-bold text-gray-800 mb-1">🏭 วิเคราะห์แหล่งกำเนิด NG แยกตามเครื่องจักร (Defect Source Mapping)</p>
-                    <p class="text-[10px] text-gray-600 mb-2 leading-relaxed"><b>คำอธิบาย:</b> กราฟนี้ช่วยเจาะจงและบ่งชี้ว่า "เครื่องจักรใด" เป็นตัวการหลักในการสร้าง "ของเสียประเภทใด" (เครื่องที่สร้างของเสียมากสุด: <b>${topMacNg.name}</b>)</p>
+                    <p class="text-[10px] text-gray-600 mb-3 leading-relaxed"><b>คำอธิบายกราฟ:</b> กราฟแท่งแสดงข้อมูลการแจกแจงอาการเสียที่พบในเครื่องจักรแต่ละเครื่องอย่างละเอียด ช่วยตอบคำถามว่า "เครื่องจักรใด" เป็นต้นเหตุที่แท้จริงของการเกิด "ของเสียประเภทต่างๆ" (เครื่องที่มีสัดส่วนของเสียมากที่สุดในช่วงนี้คือ: <b class="text-red-600">${topMacNg.name}</b>)</p>
                     ${imgNgMac ? `<img src="${imgNgMac}" class="w-full h-auto max-w-4xl mx-auto border rounded border-gray-100" />` : '<p class="text-center text-xs">No Graph</p>'}
                 </div>
             </div>
@@ -613,24 +621,28 @@ window.openAutoReport = function() {
 
         <div class="page-break-before print-page">
             <div class="mb-8 page-break-inside-avoid">
-                <h3 class="text-lg font-bold text-gray-800 border-l-4 border-green-500 pl-2 mb-3 bg-gray-50 py-1">4. ประสิทธิภาพแยกตามเครื่องจักรและเวลา (Performance Breakdown)</h3>
+                <h3 class="text-lg font-bold text-gray-800 border-l-4 border-green-500 pl-2 mb-3 bg-gray-50 py-1">4. ประสิทธิภาพแยกตามปัจจัยการผลิต (Performance Breakdown)</h3>
                 
                 <div class="grid grid-cols-2 gap-4 mb-4">
-                    <div class="border border-gray-200 p-3 rounded bg-white shadow-sm">
-                        <p class="text-sm font-bold text-gray-800 mb-1">📦 % Yield by Model (ผลตอบแทนตามรุ่น)</p>
-                        <p class="text-[10px] text-gray-600 mb-2 leading-relaxed"><b>คำอธิบาย:</b> เปรียบเทียบ Yield เพื่อให้ทราบว่าการตั้งค่าผลิตสินค้ารุ่นใดมีความยากง่าย (รุ่นที่ดีที่สุด: <b>${bestModel.name}</b> | รุ่นที่แย่ที่สุด: <b>${worstModel.name}</b>)</p>
-                        ${imgYieldModel ? `<img src="${imgYieldModel}" class="w-full h-auto border rounded border-gray-100" />` : '<p class="text-center text-xs">No Graph</p>'}
+                    <div class="border border-gray-200 p-3 rounded bg-white shadow-sm flex flex-col">
+                        <p class="text-sm font-bold text-gray-800 mb-1">📦 % Yield by Model (ผลตอบแทนตามรุ่นสินค้า)</p>
+                        <p class="text-[10px] text-gray-600 mb-3 leading-relaxed"><b>คำอธิบายกราฟ:</b> แสดงอัตราผลตอบแทนจากการผลิตแยกตามโมเดลสินค้า ช่วยประเมินว่าสินค้ารุ่นใดมีความยาก/ง่ายในการผลิต หรือต้องการกระบวนการควบคุมคุณภาพที่เข้มงวดมากขึ้น (รุ่นที่ดีที่สุด: <b class="text-green-600">${bestModel.name}</b> | รุ่นที่สูญเสียมากที่สุด: <b class="text-red-600">${worstModel.name}</b>)</p>
+                        <div class="mt-auto">
+                            ${imgYieldModel ? `<img src="${imgYieldModel}" class="w-full h-auto border rounded border-gray-100" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        </div>
                     </div>
-                    <div class="border border-gray-200 p-3 rounded bg-white shadow-sm">
-                        <p class="text-sm font-bold text-gray-800 mb-1">⚙️ % Yield by Machine (ผลตอบแทนตามเครื่อง)</p>
-                        <p class="text-[10px] text-gray-600 mb-2 leading-relaxed"><b>คำอธิบาย:</b> เปรียบเทียบประสิทธิภาพการเดินเครื่องจักรแบบรายตัว เพื่อค้นหาความผิดปกติของเครื่องจักร (ดีสุด: <b>${highestYieldMac.name}</b> | แย่สุด: <b>${lowestYieldMac.name}</b>)</p>
-                        ${imgYieldMac ? `<img src="${imgYieldMac}" class="w-full h-auto border rounded border-gray-100" />` : '<p class="text-center text-xs">No Graph</p>'}
+                    <div class="border border-gray-200 p-3 rounded bg-white shadow-sm flex flex-col">
+                        <p class="text-sm font-bold text-gray-800 mb-1">⚙️ % Yield by Machine (ผลตอบแทนตามเครื่องจักร)</p>
+                        <p class="text-[10px] text-gray-600 mb-3 leading-relaxed"><b>คำอธิบายกราฟ:</b> เปรียบเทียบประสิทธิภาพการเดินเครื่องจักรแบบรายตัว เครื่องจักรที่กราฟมีระดับต่ำกว่ามาตรฐานอย่างมีนัยสำคัญ ควรได้รับการตรวจสอบหรือตั้งค่าแจ้งเตือนการบำรุงรักษา (เครื่องที่มีประสิทธิภาพดีสุด: <b class="text-green-600">${highestYieldMac.name}</b> | ประสิทธิภาพต่ำสุด: <b class="text-red-600">${lowestYieldMac.name}</b>)</p>
+                        <div class="mt-auto">
+                            ${imgYieldMac ? `<img src="${imgYieldMac}" class="w-full h-auto border rounded border-gray-100" />` : '<p class="text-center text-xs">No Graph</p>'}
+                        </div>
                     </div>
                 </div>
                 
                 <div class="border border-gray-200 p-3 rounded bg-white shadow-sm page-break-inside-avoid">
                     <p class="text-sm font-bold text-gray-800 mb-1">⏱️ Hourly Production Profile (อัตราการผลิตรายชั่วโมง)</p>
-                    <p class="text-[10px] text-gray-600 mb-2 leading-relaxed"><b>คำอธิบาย:</b> กราฟแสดงความต่อเนื่องในการผลิตของสายงานตลอดทั้งกะ ช่วยให้ฝ่ายจัดการเห็นคอขวดหรือช่วงเวลาที่ความเร็วการผลิตตกลง (ช่วง Peak ของกะ: <b>${peakHour.label}</b>)</p>
+                    <p class="text-[10px] text-gray-600 mb-3 leading-relaxed"><b>คำอธิบายกราฟ:</b> กราฟแสดงความต่อเนื่องในการผลิตของสายงานตลอดทั้งกะ ช่วยให้ผู้นำงานเห็นถึง "คอขวด" หรือช่วงเวลาที่มีปัญหาขัดข้อง ทำให้ความเร็วการผลิตตกลง และประเมินความสม่ำเสมอในการทำงานของพนักงานแต่ละช่วงเวลาได้ (ชั่วโมงที่มียอดการผลิตสูงที่สุดคือ: <b class="text-blue-600">${peakHour.label}</b> จำนวน ${peakHour.fg} ชิ้น)</p>
                     ${imgHourly ? `<img src="${imgHourly}" class="w-full h-auto max-w-4xl mx-auto border rounded border-gray-100" />` : '<p class="text-center text-xs">No Graph</p>'}
                 </div>
             </div>
@@ -654,7 +666,7 @@ window.openAutoReport = function() {
             </div>
             
             <div class="text-center text-xs text-gray-400 mt-10 pt-4 border-t">
-                Generated by CWM Auto Report System - ${printTime}
+                Generated by CWM Auto Report System (Analytical Report Edition) - ${printTime}
             </div>
         </div>
     `;
@@ -2039,4 +2051,23 @@ window.openAutoReport = function() {
     }, 10);
     
     document.body.style.overflow = '';
+};
+
+window.closeAutoReport = function() {
+    const modal = document.getElementById('modal-auto-report');
+    modal.classList.add('opacity-0');
+    setTimeout(() => {
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }, 300);
+};
+
+window.printAutoReport = function() {
+    document.body.classList.add('printing-auto-report');
+    window.print();
+    
+    setTimeout(() => {
+        document.body.classList.remove('printing-auto-report');
+    }, 1000);
 };
