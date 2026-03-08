@@ -217,11 +217,6 @@
                     </div>
                 </div>
 
-                <div>
-                    <label class="block text-sm font-bold text-teal-800 mb-1">ลูกค้า / แหล่งที่มา (Customer/Source)</label>
-                    <input type="text" id="rtvSource" required placeholder="เช่น ลูกค้า A, แผนกประกอบ..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500">
-                </div>
-
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-bold text-teal-800 mb-1">รุ่นสินค้า (Product)</label>
@@ -240,7 +235,9 @@
 
                 <div>
                     <label class="block text-sm font-bold text-teal-800 mb-1">อาการเสียที่พบ (Defect Details)</label>
-                    <textarea id="rtvRemark" required rows="3" placeholder="ระบุอาการเสีย หรือสาเหตุที่ลูกค้าตีกลับ..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"></textarea>
+                    <select id="rtvRemark" required class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-teal-500">
+                        <option value="">-- เลือกอาการเสีย --</option>
+                    </select>
                 </div>
 
                 <button type="submit" id="btn-save-rtv" class="w-full bg-teal-600 text-white font-bold py-3.5 rounded-lg shadow-md hover:bg-teal-700 transition-all text-lg">
@@ -970,6 +967,21 @@
                 if(rtvRec && window.currentUser) rtvRec.value = window.currentUser.name || window.currentUser.username;
             });
 
+            // 🌟 ฟังก์ชันสำหรับอัปเดตตัวเลือกอาการเสียในฟอร์ม RTV 🌟
+            window.renderRtvSymptomsOptions = function() {
+                const select = document.getElementById('rtvRemark');
+                if(!select) return;
+                const currentVal = select.value;
+                select.innerHTML = '<option value="">-- เลือกอาการเสีย --</option>';
+                ngSymptoms.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s;
+                    opt.text = s;
+                    select.appendChild(opt);
+                });
+                if(currentVal && ngSymptoms.includes(currentVal)) select.value = currentVal;
+            };
+
             const rtvForm = document.getElementById('rtvForm');
             if (rtvForm) {
                 rtvForm.onsubmit = async (e) => {
@@ -983,7 +995,7 @@
                         action: 'SAVE_RTV',
                         date: document.getElementById('rtvDate').value,
                         recorder: document.getElementById('rtvRecorder').value,
-                        source: document.getElementById('rtvSource').value,
+                        source: '-', // ส่งค่าว่างไปให้ Backend แทน Customer/Source ที่เอาออกไปแล้ว
                         product: document.getElementById('rtvProduct').value,
                         qty: document.getElementById('rtvQty').value,
                         remark: document.getElementById('rtvRemark').value
