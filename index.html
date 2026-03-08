@@ -67,7 +67,6 @@
                             <span id="nav-user-name" class="text-sm font-bold text-gray-800 leading-tight">-</span>
                             <span id="nav-user-role" class="text-[10px] text-blue-600 font-bold uppercase bg-blue-50 px-2 rounded-full inline-block mt-0.5">-</span>
                         </div>
-                        <!-- เพิ่มรูปลูกกุญแจตรงนี้ -->
                         <button onclick="window.openChangePasswordModal()" class="text-xl hover:scale-110 transition-transform cursor-pointer bg-gray-50 hover:bg-blue-50 p-2 rounded-full border border-gray-200" title="เปลี่ยนรหัสผ่านของฉัน">🔑</button>
                     </div>
                     
@@ -83,11 +82,14 @@
         
         <!-- Dropdown Menu -->
         <div id="dropdown-menu" class="hidden absolute left-0 right-0 bg-white shadow-xl border-t border-gray-100 flex flex-col z-20">
-            <!-- เมนูหลัก (ซ่อน/แสดงตามสิทธิ์จาก JS) -->
+            <!-- เมนูหลัก -->
             <button onclick="window.switchTab('form'); window.toggleMenu()" id="tab-form" class="hidden py-4 px-6 text-left text-blue-600 font-bold border-l-4 border-blue-600 bg-blue-50 hover:bg-blue-50 transition-colors text-lg">📝 บันทึกผลิต</button>
             <button onclick="window.switchTab('planning'); window.toggleMenu()" id="tab-planning" class="hidden py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg">📅 วางแผน (Plan)</button>
             <button onclick="window.switchTab('dashboard'); window.toggleMenu()" id="tab-dashboard" class="hidden py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg">📊 Dashboard</button>
             <button onclick="window.toggleMenu(); window.location.href='https://jrh91234.github.io/CMW-rawmat/';" id="tab-rw" class="hidden py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg w-full text-left">📦 รับเข้า (RW) ↗️</button>
+            
+            <!-- เมนู แจ้งซ่อม (ย้ายมาที่นี่ และจะให้เฉพาะ Prod, Admin เห็น) -->
+            <button onclick="window.openMaintenanceModal(); window.toggleMenu()" id="tab-maint" class="hidden py-4 px-6 text-left text-orange-600 font-bold border-l-4 border-transparent hover:bg-orange-50 transition-colors text-lg border-t border-gray-100">🛠️ แจ้งซ่อมเครื่องจักร</button>
             
             <!-- เมนู Admin -->
             <button onclick="window.openAdminPanel(); window.toggleMenu()" id="tab-admin" class="hidden py-4 px-6 text-left text-purple-600 font-bold border-l-4 border-transparent hover:bg-purple-50 transition-colors text-lg border-t border-gray-100">🛡️ จัดการระบบ (Admin)</button>
@@ -99,7 +101,6 @@
                     <div class="font-bold text-gray-800" id="nav-user-name-mobile">-</div>
                     <div class="text-xs text-blue-600 font-bold" id="nav-user-role-mobile">-</div>
                 </div>
-                <!-- ปุ่มกุญแจในมือถือ -->
                 <button onclick="window.openChangePasswordModal(); window.toggleMenu()" class="text-2xl bg-white p-2 rounded-lg shadow-sm border border-gray-200 hover:bg-blue-50 transition-colors">🔑</button>
             </div>
             
@@ -150,15 +151,9 @@
                 
                 <div class="flex justify-between items-end mt-4 mb-2">
                     <h3 class="font-bold text-gray-700 text-sm">รายการผลิต</h3>
-                    <div class="flex gap-2">
-                        <!-- ปุ่มแจ้งปัญหาที่เพิ่มเข้ามาใหม่ -->
-                        <button type="button" onclick="window.openMaintenanceModal()" class="text-xs bg-orange-50 text-orange-700 font-bold py-1.5 px-3 rounded border border-orange-200 hover:bg-orange-100 flex items-center gap-1 shadow-sm">
-                            <span>🛠️</span> แจ้งปัญหา/ซ่อมเครื่อง
-                        </button>
-                        <button type="button" onclick="window.openAssignModal()" class="text-xs bg-indigo-50 text-indigo-700 font-bold py-1.5 px-3 rounded border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1 shadow-sm">
-                            <span>⚙️</span> ตั้งค่าเครื่องจักร (Assign)
-                        </button>
-                    </div>
+                    <button type="button" onclick="window.openAssignModal()" class="text-xs bg-indigo-50 text-indigo-700 font-bold py-1.5 px-3 rounded border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1 shadow-sm">
+                        <span>⚙️</span> ตั้งค่าเครื่องจักร (Assign)
+                    </button>
                 </div>
 
                 <div id="batchList" class="space-y-3"></div>
@@ -205,7 +200,7 @@
     
     <!-- SECTION 3: DASHBOARD -->
     <main id="section-dashboard" class="max-w-6xl mx-auto p-4 space-y-6 hidden">
-         <!-- หัวกระดาษเวลาพิมพ์ (ซ่อนอยู่ตอนใช้งานปกติ) -->
+         <!-- หัวกระดาษเวลาพิมพ์ -->
          <div id="print-header">
              <h1 class="text-2xl font-bold text-gray-800">CWM Production Report</h1>
              <p class="text-gray-600" id="print-date-subtitle">ข้อมูลการผลิต</p>
@@ -213,9 +208,14 @@
 
          <div class="bg-white p-4 rounded-xl shadow-md border-t-4 border-indigo-500 print-hide">
             <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-3">
-                <h2 class="text-gray-700 font-bold text-sm mb-2 lg:mb-0 print-hide">📅 ตัวเลือกการกรอง <span class="text-xs font-normal text-gray-500">(ดึงข้อมูลตั้งแต่ 08:00น. ถึง 08:00น. ของอีกวัน)</span><span class="text-xs font-normal text-blue-500 ml-2 border-l pl-2 border-gray-300">💡 หมุนลูกกลิ้งเมาส์/บีบนิ้วเพื่อซูมกราฟ & ดับเบิลคลิกบนกราฟเพื่อรีเซ็ต</span></h2>
+                <h2 class="text-gray-700 font-bold text-sm mb-2 lg:mb-0 print-hide">📅 ตัวเลือกการกรอง <span class="text-xs font-normal text-gray-500">(ดึงข้อมูลตั้งแต่ 08:00น. ถึง 08:00น. ของอีกวัน)</span><span class="text-xs font-normal text-blue-500 ml-2 border-l pl-2 border-gray-300">💡 หมุนลูกกลิ้งเมาส์/บีบนิ้วเพื่อซูมกราฟ</span></h2>
                 
                 <div class="flex flex-wrap gap-2 w-full lg:w-auto print-hide">
+                    <!-- 🌟 เพิ่มปุ่มให้ Admin กดตั้งค่าการซ่อนกราฟ 🌟 -->
+                    <button id="btn-widget-manager" onclick="window.openWidgetManager()" class="hidden flex-1 lg:flex-none bg-gray-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-gray-700 transition-colors shadow-sm items-center justify-center gap-1">
+                        👁️ ซ่อน/แสดงกราฟ
+                    </button>
+
                     <button onclick="window.openAutoReport()" class="flex-1 lg:flex-none bg-indigo-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm flex items-center justify-center gap-1">
                         🤖 Auto Report (AI Summary)
                     </button>
@@ -259,10 +259,10 @@
             <pre id="debug-output" class="text-[10px] md:text-xs text-red-900 overflow-auto max-h-64 whitespace-pre-wrap font-mono bg-white p-2 rounded border border-red-100"></pre>
         </div>
         
-        <!-- โครงสร้างกราฟและ Dashboard ทั้งหมดยังคงเหมือนเดิม 100% -->
+        <!-- 🌟 เพิ่ม ID เข้าไปใน Widget ทุกตัวเพื่อให้คุมเปิด/ปิดได้ 🌟 -->
         <div id="dashboard-content" class="space-y-6 pb-20">
              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="widget-card p-4 border-l-4 border-indigo-500">
+                <div id="card-stat-target" class="widget-card p-4 border-l-4 border-indigo-500">
                     <div class="flex justify-between items-start">
                         <div>
                             <p class="text-xs text-gray-400 font-bold uppercase">TARGET (PLAN)</p>
@@ -271,7 +271,7 @@
                         <div class="bg-indigo-50 p-2 rounded-full">🎯</div>
                     </div>
                 </div>
-                <div class="widget-card p-4 border-l-4 border-blue-500">
+                <div id="card-stat-fg" class="widget-card p-4 border-l-4 border-blue-500">
                     <div class="flex justify-between items-start">
                         <div>
                             <p class="text-xs text-gray-400 font-bold uppercase">TOTAL FG</p>
@@ -281,12 +281,12 @@
                         <div class="bg-blue-50 p-2 rounded-full">📦</div>
                     </div>
                 </div>
-                <div class="widget-card p-4 border-l-4 border-orange-500">
+                <div id="card-stat-ach" class="widget-card p-4 border-l-4 border-orange-500">
                     <p class="text-xs text-gray-400 font-bold uppercase">% ACH</p>
                     <p id="stat-achievement" class="text-2xl font-bold text-orange-600 mt-1">0%</p>
                     <div class="w-full bg-gray-200 rounded-full h-2.5 mt-2"><div id="progress-achievement" class="bg-orange-600 h-2.5 rounded-full" style="width: 0%"></div></div>
                 </div>
-                <div class="widget-card p-4 border-l-4 border-red-500">
+                <div id="card-stat-ng" class="widget-card p-4 border-l-4 border-red-500">
                     <div class="flex justify-between items-start">
                         <div>
                             <p class="text-xs text-gray-400 font-bold uppercase">TOTAL NG</p>
@@ -296,7 +296,7 @@
                         <div class="bg-red-50 p-2 rounded-full">🗑️</div>
                     </div>
                 </div>
-                <div class="widget-card p-4 border-l-4 border-green-500">
+                <div id="card-stat-yield" class="widget-card p-4 border-l-4 border-green-500">
                     <div class="flex justify-between items-start">
                         <div>
                             <p class="text-xs text-gray-400 font-bold uppercase">% YIELD</p>
@@ -306,7 +306,7 @@
                         <div class="bg-green-50 p-2 rounded-full">📈</div>
                     </div>
                 </div>
-                <div class="widget-card p-4 border-l-4 border-teal-500">
+                <div id="card-stat-uph" class="widget-card p-4 border-l-4 border-teal-500">
                     <div class="flex justify-between items-start">
                         <div>
                             <p class="text-xs text-gray-400 font-bold uppercase">UPH (Avg Speed)</p>
@@ -318,8 +318,8 @@
             </div>
             
             <div id="sortable-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- กราฟและตารางเหมือนเดิมทุกประการ ไม่ถูกลดทอน -->
-                <div class="widget-card p-4 h-[350px]">
+                <!-- กราฟและตาราง -->
+                <div id="card-fg-model" class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">📦 FG & ACH by Model</h3>
                         <div class="flex gap-2">
@@ -331,7 +331,7 @@
                     <div class="flex-1 overflow-y-auto" id="fgModelList"></div>
                 </div>
                 
-                <div class="widget-card p-4 h-[350px]">
+                <div id="card-pareto" class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">📉 NG Analysis (Pareto)</h3>
                         <div class="flex gap-2">
@@ -343,7 +343,7 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="paretoChart"></canvas></div>
                 </div>
 
-                <div class="widget-card p-4 h-[350px] print-hide">
+                <div id="card-simulator" class="widget-card p-4 h-[350px] print-hide">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">🔮 Yield Simulator</h3>
                         <div class="flex gap-2">
@@ -368,7 +368,7 @@
                     </div>
                 </div>
                 
-                <div class="widget-card p-4 h-[350px]">
+                <div id="card-model-analysis" class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <div class="flex flex-col gap-1">
                             <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">📊 Model Analysis</h3>
@@ -394,7 +394,7 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="yieldModelChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card p-4 h-[350px]">
+                <div id="card-yield-machine" class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">% Yield by Machine</h3>
                         <div class="flex gap-2">
@@ -406,7 +406,7 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="yieldMachineChart"></canvas></div>
                 </div>
 
-                <div class="widget-card p-4 h-[350px]">
+                <div id="card-daily-output" class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <div class="flex flex-col gap-1">
                             <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">📊 Daily Output</h3>
@@ -426,7 +426,7 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="dailyOutputChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card p-4 h-[350px]">
+                <div id="card-qc-trend" class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">📉 Daily NG Rate Trend</h3>
                         <div class="flex gap-2">
@@ -438,7 +438,7 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
                 </div>
 
-                <div class="widget-card p-4 h-[350px]">
+                <div id="card-ng-trend" class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <div class="flex flex-col gap-1">
                             <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">📈 Trend อาการ NG</h3>
@@ -458,7 +458,7 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngSymptomTrendChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card p-4 h-[350px]">
+                <div id="card-ng-machine" class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">🏭 NG by Machine</h3>
                         <div class="flex gap-2">
@@ -470,7 +470,7 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngByMachineChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card p-4 h-[350px]">
+                <div id="card-hourly" class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">Hourly Production</h3>
                         <div class="flex gap-2">
@@ -483,7 +483,7 @@
                     <div class="flex-1 relative w-full min-h-[150px]"><canvas id="hourlyChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card p-4 h-[350px]">
+                <div id="card-ng-breakdown" class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">NG Breakdown</h3>
                         <div class="flex gap-2">
@@ -495,7 +495,7 @@
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngChart"></canvas></div>
                 </div>
                 
-                <div class="widget-card md:col-span-2 p-4 print-hide">
+                <div id="card-table" class="widget-card md:col-span-2 p-4 print-hide">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <h3 class="font-bold text-gray-700 text-sm">Detailed Machine Performance</h3>
                         <div class="flex gap-2">
@@ -538,13 +538,28 @@
                         </tr>
                     </thead>
                     <tbody id="admin-user-table" class="bg-white divide-y divide-gray-200">
-                        <!-- โหลดข้อมูลผู้ใช้มาใส่ตรงนี้ผ่าน JS -->
                         <tr><td colspan="4" class="text-center py-4 text-gray-500">กำลังโหลดข้อมูล...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
     </main>
+
+    <!-- 🌟 MODAL: Manage Widgets (Admin Only) 🌟 -->
+    <div id="modal-widget-manager" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-xl shadow-2xl p-6 flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-xl font-bold text-gray-800">👁️ เลือกกราฟที่จะแสดงผล</h3>
+                <button onclick="document.getElementById('modal-widget-manager').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">ติ๊กเลือกข้อมูลและกราฟที่ต้องการให้ผู้ใช้งานทุกคนมองเห็นในหน้า Dashboard</p>
+            <div id="widget-manager-list" class="flex-1 overflow-y-auto space-y-2 mb-4 p-1"></div>
+            <div class="pt-3 border-t flex gap-3">
+                <button type="button" onclick="document.getElementById('modal-widget-manager').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-lg font-bold hover:bg-gray-300">ยกเลิก</button>
+                <button type="button" id="btn-save-widgets" onclick="window.saveWidgetSettings()" class="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-bold hover:bg-blue-700 shadow-md">💾 บันทึกการตั้งค่า</button>
+            </div>
+        </div>
+    </div>
 
     <!-- 🌟 MODAL: จัดการ User (Add/Edit) 🌟 -->
     <div id="modal-user-manage" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center p-4">
@@ -588,8 +603,8 @@
         </div>
     </div>
 
-    <!-- โครงสร้าง Auto Report Modal เหมือนเดิม -->
     <div id="modal-auto-report" class="fixed inset-0 bg-gray-100 z-50 hidden flex-col overflow-y-auto">
+        <!-- ... (คงเดิม) ... -->
         <div class="bg-white shadow-md p-4 sticky top-0 z-10 flex justify-between items-center auto-report-hide border-b border-gray-200">
             <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">🤖 Factory Standard Report Preview</h2>
             <div class="flex gap-2">
@@ -603,9 +618,7 @@
         <div class="p-6 md:p-10 max-w-[210mm] mx-auto w-full bg-white my-6 shadow-2xl rounded-sm" id="auto-report-content" style="min-height: 297mm;"></div>
     </div>
 
-    <!-- Modals (Assign, NG, Machine Detail, Breakdown, Manage List, Undo Toast) คงเดิมทั้งหมด -->
-    
-    <!-- (Include Modals from original exactly) -->
+    <!-- Modals -->
     <div id="modal-assign" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 print-hide">
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-4 flex flex-col max-h-[90vh]">
             <div class="flex justify-between items-center mb-4 flex-none"><h3 class="text-lg font-bold text-gray-800">⚙️ กำหนดรุ่นให้เครื่องจักร</h3><button onclick="window.closeAssignModal()" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button></div>
@@ -615,7 +628,7 @@
         </div>
     </div>
 
-    <!-- 🌟 MODAL: แจ้งซ่อม/บันทึกปัญหาเครื่องจักร (New) 🌟 -->
+    <!-- 🌟 MODAL: แจ้งซ่อม/บันทึกปัญหาเครื่องจักร 🌟 -->
     <div id="modal-maintenance" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white w-full max-w-md rounded-xl shadow-2xl p-6 flex flex-col max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
@@ -623,10 +636,20 @@
                 <button onclick="document.getElementById('modal-maintenance').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
             </div>
             <form id="maintenanceForm" class="space-y-4">
+                <div class="grid grid-cols-2 gap-3 mb-2">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">วันที่แจ้ง</label>
+                        <input type="date" id="maint-date" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">ผู้แจ้งปัญหา</label>
+                        <input type="text" id="maint-reporter" readonly class="w-full p-2 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 text-sm cursor-not-allowed font-medium">
+                    </div>
+                </div>
+
                 <div>
                     <label class="block text-sm font-bold text-gray-700 mb-1">เลือกเครื่องจักร</label>
                     <select id="maint-machine" required class="w-full p-2 border border-gray-300 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-orange-500">
-                        <!-- ตัวเลือกเครื่องจักรจะถูกดึงมาใส่ด้วย JS -->
                         <option value="">-- กรุณาเลือก --</option>
                     </select>
                 </div>
@@ -656,7 +679,6 @@
                     <textarea id="maint-remark" rows="2" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" placeholder="อธิบายปัญหาที่พบ..."></textarea>
                 </div>
                 
-                <!-- ส่วนสำหรับถ่ายรูป/แนบรูป -->
                 <div class="bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300">
                     <label class="block text-sm font-bold text-gray-700 mb-2">📸 ถ่ายรูปหลักฐาน (เลือกรูป/เปิดกล้อง)</label>
                     <input type="file" id="maint-photo" accept="image/*" capture="environment" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer">
@@ -697,13 +719,11 @@
             <div class="p-4 overflow-y-auto flex-1 flex flex-col">
                 <div id="machine-detail-stats" class="mb-4 grid grid-cols-2 gap-4 text-center"></div>
                 
-                <!-- แท็บสลับดูข้อมูล กราฟการผลิต กับ ประวัติซ่อมบำรุง -->
                 <div class="flex border-b mb-4">
                     <button onclick="window.switchMachineDetailTab('chart')" id="tab-md-chart" class="py-2 px-4 border-b-2 border-blue-600 text-blue-600 font-bold focus:outline-none">📊 กราฟการผลิต</button>
                     <button onclick="window.switchMachineDetailTab('maint')" id="tab-md-maint" class="py-2 px-4 border-b-2 border-transparent text-gray-500 font-bold hover:text-gray-700 focus:outline-none">🛠️ ประวัติซ่อมบำรุง (Downtime)</button>
                 </div>
 
-                <!-- 1. ส่วนแสดงกราฟการผลิต (เดิม) -->
                 <div id="md-section-chart" class="flex flex-col flex-1">
                     <div class="flex justify-between items-center mb-2 bg-gray-100 p-2 rounded">
                         <h4 class="font-bold text-gray-700 text-sm">📈 แนวโน้มการผลิตและของเสีย</h4>
@@ -721,7 +741,6 @@
                     </div>
                 </div>
 
-                <!-- 2. ส่วนแสดงประวัติแจ้งซ่อม (ใหม่) -->
                 <div id="md-section-maint" class="flex flex-col flex-1 hidden">
                     <div class="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4 flex justify-between items-center">
                         <div>
@@ -732,11 +751,9 @@
                     </div>
                     <h4 class="font-bold text-gray-700 text-left mb-2">📋 รายการแจ้งปัญหา / ซ่อมบำรุง</h4>
                     <div id="machine-maintenance-list" class="flex-1 overflow-y-auto space-y-2">
-                        <!-- รายการซ่อมจะถูกแทรกที่นี่จาก JS -->
                         <div class="text-center text-gray-400 py-4 text-sm">ไม่พบประวัติการแจ้งซ่อมในช่วงเวลานี้</div>
                     </div>
                 </div>
-                
             </div>
         </div>
     </div>
@@ -784,7 +801,7 @@
         <button onclick="window.closeUndoToast()" class="text-gray-400 hover:text-white p-1 pointer-events-auto"><span class="text-xl leading-none">&times;</span></button>
     </div>
 
-    <!-- 🌟 MODAL: เปลี่ยนรหัสผ่าน (Change Password) 🌟 -->
+    <!-- 🌟 MODAL: เปลี่ยนรหัสผ่าน 🌟 -->
     <div id="modal-change-password" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white w-full max-w-md rounded-xl shadow-2xl p-6 flex flex-col">
             <div class="flex justify-between items-center mb-5">
@@ -817,7 +834,7 @@
     <script src="js/app.js"></script>
     <script src="js/charts.js"></script>
 
-    <!-- Script สำหรับจัดการรหัสผ่านและสลับแท็บเครื่องจักร -->
+    <!-- Script ทั่วไปสำหรับ UI ย่อยๆ -->
     <script>
         window.openChangePasswordModal = function() {
             const modal = document.getElementById('modal-change-password');
@@ -834,7 +851,6 @@
             if(modal) modal.classList.add('hidden');
         };
 
-        // สคริปต์สลับแท็บในหน้ารายละเอียดเครื่องจักร (Machine Detail)
         window.switchMachineDetailTab = function(tabName) {
             const chartTab = document.getElementById('tab-md-chart');
             const maintTab = document.getElementById('tab-md-maint');
@@ -854,25 +870,6 @@
             }
         };
 
-        // ฟังก์ชันเบื้องต้นสำหรับเปิด Modal ซ่อมบำรุง
-        window.openMaintenanceModal = function() {
-            // โหลดรายชื่อเครื่องจักรเข้า Dropdown
-            const select = document.getElementById('maint-machine');
-            select.innerHTML = '<option value="">-- กรุณาเลือก --</option>';
-            for(let i=1; i<=16; i++) {
-                const m = `CWM-${String(i).padStart(2,'0')}`;
-                select.innerHTML += `<option value="${m}">${m}</option>`;
-            }
-            
-            // รีเซ็ตฟอร์ม
-            document.getElementById('maintenanceForm').reset();
-            document.getElementById('maint-photo-preview').classList.add('hidden');
-            document.getElementById('maint-photo-img').src = '';
-            
-            document.getElementById('modal-maintenance').classList.remove('hidden');
-        };
-
-        // พรีวิวรูปภาพเมื่อเลือกไฟล์หรือถ่ายรูปเสร็จ
         document.getElementById('maint-photo')?.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
@@ -885,16 +882,12 @@
             }
         });
 
-        // ผูก Event ทันทีที่โหลดไฟล์เสร็จ
         setTimeout(() => {
             const pwdForm = document.getElementById('changePasswordForm');
             if (pwdForm) {
                 pwdForm.onsubmit = async (e) => {
                     e.preventDefault();
-                    if (!window.currentUser) {
-                        alert("กรุณาเข้าสู่ระบบก่อนทำรายการ");
-                        return;
-                    }
+                    if (!window.currentUser) return;
 
                     const oldPw = document.getElementById('change-old-password').value.trim();
                     const newPw = document.getElementById('change-new-password').value.trim();
@@ -918,13 +911,7 @@
                             oldPassword: oldPw,
                             newPassword: newPw
                         };
-                        
-                        // ใช้ SCRIPT_URL จาก app.js
-                        const apiUrl = typeof SCRIPT_URL !== 'undefined' ? SCRIPT_URL : "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec";
-                        const res = await fetch(apiUrl, {
-                            method: 'POST',
-                            body: JSON.stringify(payload)
-                        });
+                        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
                         const data = await res.json();
                         
                         if (data.success) {
