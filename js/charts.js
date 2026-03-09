@@ -1036,13 +1036,28 @@ window.showMachineDetail = function(machineName) {
     let totalDowntimeMins = 0;
     let maintHtml = '';
 
-    // ฟังก์ชันย่อยสำหรับแก้ปัญหาเวลา 1899-12-30T... ที่ Google Sheets สร้างมา
+    // ฟังก์ชันย่อยสำหรับแก้ปัญหาเวลา 1899-12-30T... และบังคับแสดงเป็น 24 ชั่วโมง (HH:mm)
     const extractTime = (timeVal) => {
         if (!timeVal) return '';
         let str = String(timeVal);
-        if (str.includes('T')) return str.split('T')[1].substring(0, 5); // เช่น 1899-12-30T01:30:00.000Z -> 01:30
+        
+        // กรณีเป็น ISO Date String (มีตัว T)
+        if (str.includes('T')) {
+            try {
+                const d = new Date(str);
+                if (!isNaN(d.getTime())) {
+                    // ใช้ getHours / getMinutes ของเบราว์เซอร์ จะได้เวลา 24 ชม. ของ Timezone ปัจจุบันอัตโนมัติ
+                    let h = d.getHours().toString().padStart(2, '0');
+                    let m = d.getMinutes().toString().padStart(2, '0');
+                    return `${h}:${m}`;
+                }
+            } catch(e) { console.warn("Time parse error", e); }
+        }
+        
+        // ถ้าเป็น String เวลาปกติ ให้ดึงแค่ HH:mm ด้วย Regex
         const match = str.match(/(\d{2}:\d{2})/);
         if (match) return match[1];
+        
         return str.substring(0, 5);
     };
 
@@ -1051,11 +1066,11 @@ window.showMachineDetail = function(machineName) {
             let durationStr = 'ยังไม่ระบุเวลาเสร็จสิ้น';
             let mins = 0;
             
-            // ดึงค่าเวลาออกมาใหม่
+            // ดึงค่าเวลาออกมาใหม่ในรูปแบบ 24 ชั่วโมง
             let sTime = extractTime(log.startTime) || '-';
             let eTime = extractTime(log.endTime) || '-';
             
-            // คำนวณเวลา Downtime ใหม่ ป้องกัน Bug 1899-
+            // คำนวณเวลา Downtime ใหม่ 
             if (sTime !== '-' && eTime !== '-') {
                 try {
                     let s = sTime.split(':');
@@ -1064,7 +1079,7 @@ window.showMachineDetail = function(machineName) {
                     let eMins = parseInt(e[0]) * 60 + parseInt(e[1]);
                     mins = eMins - sMins;
                     
-                    if (mins < 0) mins += 1440; // กรณีข้ามวัน (เช่น เริ่ม 23:00 เสร็จ 01:00)
+                    if (mins < 0) mins += 1440; // กรณีข้ามวัน
                     totalDowntimeMins += mins;
 
                     let h = Math.floor(mins / 60);
@@ -1073,17 +1088,10 @@ window.showMachineDetail = function(machineName) {
                 } catch(err) { console.log("Time calc error:", err); }
             }
 
-            // จัดการแปลง URL รูปภาพจากหน้า Viewer ให้กลายเป็นภาพตรงๆ ให้โชว์ได้
-            let displayImageUrl = log.imageUrl;
-            if (displayImageUrl && displayImageUrl.includes('drive.google.com/file/d/')) {
-                 const match = displayImageUrl.match(/\/d\/(.+?)\//);
-                 if (match && match[1]) {
-                     displayImageUrl = `https://drive.google.com/uc?id=${match[1]}`;
-                 }
-            }
-
-            let imgBtn = displayImageUrl ? 
-                `<button onclick="window.viewMaintImage('${displayImageUrl}', '${log.issueType}')" class="mt-2 text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded border border-orange-200 hover:bg-orange-100 font-bold w-full text-center">📸 ดูรูปภาพแนบ</button>` : '';
+            // เนื่องจากนโยบายใหม่ของ Google Drive จะบล็อกการฝังรูปลงในเว็บตรงๆ (CORS/X-Frame-Options)
+            // จึงต้องเปลี่ยนเป็นปุ่มคลิกเพื่อเปิดรูปภาพในแท็บใหม่แทน เพื่อให้ดูภาพได้แน่นอน 100%
+            let imgBtn = log.imageUrl ? 
+                `<button onclick="window.open('${log.imageUrl}', '_blank')" class="mt-2 text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded border border-orange-200 hover:bg-orange-100 font-bold w-full text-center">📸 เปิดดูรูปภาพแนบ (แท็บใหม่)</button>` : '';
 
             maintHtml += `
                 <div class="bg-white border border-gray-200 p-3 rounded-lg shadow-sm">
@@ -1269,15 +1277,7 @@ window.showDailyNgBreakdown = function(machine, date) {
     document.getElementById('modal-daily-ng-breakdown').classList.remove('hidden');
 };
 
-// เพิ่มฟังก์ชันสำหรับกดดูรูปภาพขนาดใหญ่
+// เผื่อไว้ใช้ในส่วนอื่น: ปรับให้ฟังก์ชันนี้เปิดแท็บใหม่เช่นกัน
 window.viewMaintImage = function(url, caption) {
-    const modal = document.getElementById('modal-image-viewer');
-    const img = document.getElementById('viewer-img');
-    const cap = document.getElementById('viewer-caption');
-
-    if (modal && img) {
-        img.src = url;
-        if (cap) cap.innerText = caption || 'ภาพแนบการแจ้งซ่อม';
-        modal.classList.remove('hidden');
-    }
+    window.open(url, '_blank');
 };
