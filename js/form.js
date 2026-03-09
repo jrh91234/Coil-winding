@@ -291,7 +291,6 @@ window.renderManageListContent = function(list) {
 window.addNewItemToList = function() {
      const rawVal = document.getElementById('new-item-input').value.trim();
      if(!rawVal) return;
-     
      if (currentManageType === 'recorder') { 
          if (!recorderList.some(r => r.toLowerCase() === rawVal.toLowerCase())) { 
              recorderList.push(rawVal); 
@@ -305,39 +304,9 @@ window.addNewItemToList = function() {
              ngSymptoms.push(stdVal); 
              localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
              window.renderManageListContent(ngSymptoms); 
-             
-             // 🌟 อัปเดต Dropdown RTV ทันทีที่มีการเพิ่มรายการอาการเสียใหม่ใน Modal 🌟
-             if (typeof window.renderRtvSymptomsOptions === 'function') {
-                 window.renderRtvSymptomsOptions();
-             }
          } 
      }
      document.getElementById('new-item-input').value = '';
-
-     if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
-         window.openNgModal(currentRowIdForNg);
-     }
-};
-
-window.deleteListItem = function(index) {
-     if (!confirm('ยืนยันการลบรายการนี้ (ออกจาก Local)?')) return;
-     
-     if (currentManageType === 'recorder') { 
-         recorderList.splice(index, 1); 
-         localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
-         window.renderRecorderOptions(); 
-         window.renderManageListContent(recorderList); 
-     } else if (currentManageType === 'symptom') { 
-         ngSymptoms.splice(index, 1); 
-         localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
-         window.renderManageListContent(ngSymptoms); 
-         
-         // 🌟 อัปเดต Dropdown RTV ทันทีที่มีการลบรายการอาการเสียออก 🌟
-         if (typeof window.renderRtvSymptomsOptions === 'function') {
-             window.renderRtvSymptomsOptions();
-         }
-     }
-
      if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
          window.openNgModal(currentRowIdForNg);
      }
@@ -582,3 +551,93 @@ document.getElementById('planningForm').onsubmit = async (e) => {
         btn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
 };
+
+// ==========================================
+// 🌟 ระบบแจ้งซ่อม (Maintenance)
+// ==========================================
+window.openMaintenanceModal = function() {
+    const modal = document.getElementById('modal-maintenance');
+    const dDate = document.getElementById('maint-date');
+    const dRec = document.getElementById('maint-reporter');
+    const dMac = document.getElementById('maint-machine');
+    const dStart = document.getElementById('maint-start-time');
+    
+    if (dDate) dDate.value = getShiftDateStr();
+    if (dRec && window.currentUser) dRec.value = window.currentUser.name || window.currentUser.username;
+    
+    if (dMac) {
+        let macOpts = '<option value="">-- เลือกเครื่องจักร --</option>';
+        for(let i=1; i<=16; i++) {
+            macOpts += `<option value="CWM-${String(i).padStart(2,'0')}">CWM-${String(i).padStart(2,'0')}</option>`;
+        }
+        dMac.innerHTML = macOpts;
+    }
+    
+    if (dStart) {
+        const now = new Date();
+        dStart.value = now.toTimeString().substring(0,5);
+    }
+
+    if (modal) modal.classList.remove('hidden');
+};
+
+document.getElementById('maintenanceForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-save-maint');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = "⏳ กำลังอัปโหลดข้อมูล...";
+    btn.disabled = true;
+
+    const fileInput = document.getElementById('maint-photo');
+    let base64String = "";
+
+    if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        try {
+            base64String = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        } catch (err) {
+            console.error("Error reading file:", err);
+            alert("❌ ไม่สามารถอ่านไฟล์ภาพได้ กรุณาลองใหม่อีกครั้ง");
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            return;
+        }
+    }
+
+    const payload = {
+        action: 'SAVE_MAINTENANCE',
+        username: window.currentUser ? window.currentUser.username : "Unknown",
+        role: window.currentUser ? window.currentUser.role : "Unknown",
+        date: document.getElementById('maint-date').value,
+        machine: document.getElementById('maint-machine').value,
+        issueType: document.getElementById('maint-issue-type').value,
+        startTime: document.getElementById('maint-start-time').value,
+        endTime: document.getElementById('maint-end-time').value,
+        remark: document.getElementById('maint-remark').value,
+        imageBase64: base64String
+    };
+
+    try {
+        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+        const result = await res.json();
+        
+        if (result.status === 'success') {
+            alert("✅ " + result.message);
+            document.getElementById('maintenanceForm').reset();
+            document.getElementById('maint-photo-preview').classList.add('hidden');
+            document.getElementById('modal-maintenance').classList.add('hidden');
+        } else {
+            alert("❌ เกิดข้อผิดพลาด: " + result.message);
+        }
+    } catch(err) {
+        alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+});
