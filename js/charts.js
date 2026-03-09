@@ -553,633 +553,712 @@ window.renderCharts = function(data) {
                      datasets: [
                          { label: '% สะสม', data: cumulative, type: 'line', borderColor: '#8b5cf6', yAxisID: 'y1', datalabels: { display: false } },
                          { label: 'NG (ชิ้น)', data: ngItems.map(i=>i.pcs), backgroundColor: '#ef4444', yAxisID: 'y', datalabels: {
-display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
-align: 'end', anchor: 'end', formatter: (v) => v > 0 ? v + ' ชิ้น' : null
-} }
-]
-},
-options: { ...commonOpts, layout: { padding: { top: 20 } }, scales: { y: { beginAtZero: true, grace: '10%' }, y1: { beginAtZero: true, max: 105, position: 'right', grid: { display: false } } } }
-});
-}
-     const ctxNgMac = document.getElementById('ngByMachineChart');
-     if(ctxNgMac) {
-         if(charts.ngMachine) charts.ngMachine.destroy();
+                            display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
+                            align: 'end', anchor: 'end', formatter: (v) => v > 0 ? v + ' ชิ้น' : null
+                         } }
+                     ]
+                 },
+                 options: { ...commonOpts, layout: { padding: { top: 20 } }, scales: { y: { beginAtZero: true, grace: '10%' }, y1: { beginAtZero: true, max: 105, position: 'right', grid: { display: false } } } }
+             });
+         }
          
-         const sortedNgLabels = ngItems.filter(i => i.pcs > 0).map(i => i.label);
-         
-         const macColors = [
-             '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', 
-             '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'
-         ];
-         let macDatasets = [];
-         let colorIdx = 0;
-         
-         const allMacs = Object.keys(data.machineData || {}).sort();
-         
-         allMacs.forEach(m => {
-             const mData = data.machineData[m];
-             let hasNg = false;
-             const ngDataForMac = sortedNgLabels.map(ngLabel => {
-                 const val = mData.ngBreakdownPcs ? (mData.ngBreakdownPcs[ngLabel] || 0) : 0;
-                 if(val > 0) hasNg = true;
-                 return val;
+         const ctxNgMac = document.getElementById('ngByMachineChart');
+         if(ctxNgMac) {
+             if(charts.ngMachine) charts.ngMachine.destroy();
+             
+             const sortedNgLabels = ngItems.filter(i => i.pcs > 0).map(i => i.label);
+             
+             const macColors = [
+                 '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', 
+                 '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'
+             ];
+             let macDatasets = [];
+             let colorIdx = 0;
+             
+             const allMacs = Object.keys(data.machineData || {}).sort();
+             
+             allMacs.forEach(m => {
+                 const mData = data.machineData[m];
+                 let hasNg = false;
+                 const ngDataForMac = sortedNgLabels.map(ngLabel => {
+                     const val = mData.ngBreakdownPcs ? (mData.ngBreakdownPcs[ngLabel] || 0) : 0;
+                     if(val > 0) hasNg = true;
+                     return val;
+                 });
+                 
+                 if (hasNg) {
+                     macDatasets.push({
+                         label: m,
+                         data: ngDataForMac,
+                         backgroundColor: macColors[colorIdx % macColors.length],
+                         stack: 'Stack 0'
+                     });
+                     colorIdx++;
+                 }
              });
              
-             if (hasNg) {
-                 macDatasets.push({
-                     label: m,
-                     data: ngDataForMac,
-                     backgroundColor: macColors[colorIdx % macColors.length],
-                     stack: 'Stack 0'
-                 });
-                 colorIdx++;
-             }
-         });
-         
-         charts.ngMachine = new Chart(ctxNgMac, {
-             type: 'bar',
-             data: {
-                 labels: sortedNgLabels,
-                 datasets: macDatasets
-             },
-             options: {
-                 ...commonOpts,
-                 scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
-                 plugins: {
-                     ...commonOpts.plugins,
-                     legend: { 
-                         display: window.innerWidth > 768,
-                         position: 'right',
-                         labels: { boxWidth: 12, font: { size: 10 } }
-                     },
-                     tooltip: {
-                         mode: 'index',
-                         intersect: false,
-                         itemSort: function(a, b) {
-                             return b.raw - a.raw; 
+             charts.ngMachine = new Chart(ctxNgMac, {
+                 type: 'bar',
+                 data: {
+                     labels: sortedNgLabels,
+                     datasets: macDatasets
+                 },
+                 options: {
+                     ...commonOpts,
+                     scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+                     plugins: {
+                         ...commonOpts.plugins,
+                         legend: { 
+                             display: window.innerWidth > 768,
+                             position: 'right',
+                             labels: { boxWidth: 12, font: { size: 10 } }
                          },
-                         filter: function(tooltipItem) {
-                             return tooltipItem.raw > 0;
+                         tooltip: {
+                             mode: 'index',
+                             intersect: false,
+                             itemSort: function(a, b) {
+                                 return b.raw - a.raw; 
+                             },
+                             filter: function(tooltipItem) {
+                                 return tooltipItem.raw > 0;
+                             },
+                             callbacks: {
+                                 title: function(context) {
+                                     return `อาการ: ${context[0].label}`;
+                                 }
+                             }
                          },
-                         callbacks: {
-                             title: function(context) {
-                                 return `อาการ: ${context[0].label}`;
+                         datalabels: {
+                             display: function(ctx) { 
+                                 const c = ctx.chart.canvas.closest('.widget-card'); 
+                                 const isMax = c ? c.classList.contains('maximized-card') : false; 
+                                 return ctx.dataset.data[ctx.dataIndex] > 0 && isMax; 
+                             },
+                             color: '#ffffff',
+                             font: { weight: 'bold', size: 11 },
+                             formatter: (value, ctx) => {
+                                 return `${ctx.dataset.label}: ${value}`;
                              }
                          }
-                     },
-                     datalabels: {
-                         display: function(ctx) { 
-                             const c = ctx.chart.canvas.closest('.widget-card'); 
-                             const isMax = c ? c.classList.contains('maximized-card') : false; 
-                             return ctx.dataset.data[ctx.dataIndex] > 0 && isMax; 
-                         },
-                         color: '#ffffff',
-                         font: { weight: 'bold', size: 11 },
-                         formatter: (value, ctx) => {
-                             return `${ctx.dataset.label}: ${value}`;
-                         }
                      }
                  }
-             }
-         });
-     }
-
-     window.renderDailyOutputChart();
-
-     const hNgPcs = data.hourlyNgPcsData || data.hourlyNgData || []; 
-     const ctxH = document.getElementById('hourlyChart');
-     if(ctxH) {
-         if(charts.hourly) charts.hourly.destroy();
-         
-         const cleanHourlyLabels = (data.hourlyLabels || []).map(label => {
-             const parts = label.split('-');
-             if (parts.length > 1) {
-                 const match = parts[1].match(/(\d{2}):/);
-                 return match ? match[1] + ":00" : label;
-             }
-             const fallbackMatch = label.match(/(\d{2}):/);
-             return fallbackMatch ? fallbackMatch[1] + ":00" : label;
-         });
-
-         let hourlyDatasets = [];
-         
-         if (data.hourlyByModel && Object.keys(data.hourlyByModel).length > 0) {
-             const fgColors = ['#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8', '#1e3a8a']; 
-             const ngColors = ['#fca5a5', '#f87171', '#ef4444', '#dc2626', '#b91c1c', '#7f1d1d'];
-             
-             let cIdx = 0;
-             for (const [model, d] of Object.entries(data.hourlyByModel)) {
-                 hourlyDatasets.push({
-                     label: `FG - ${model}`,
-                     data: d.fg,
-                     backgroundColor: fgColors[cIdx % fgColors.length],
-                     stack: 'Stack 0',
-                     borderWidth: 1,
-                     borderColor: 'rgba(255,255,255,0.2)'
-                 });
-                 cIdx++;
-             }
-             
-             cIdx = 0;
-             for (const [model, d] of Object.entries(data.hourlyByModel)) {
-                 hourlyDatasets.push({
-                     label: `NG - ${model}`,
-                     data: d.ng,
-                     backgroundColor: ngColors[cIdx % ngColors.length],
-                     stack: 'Stack 0',
-                     borderWidth: 1,
-                     borderColor: 'rgba(255,255,255,0.2)'
-                 });
-                 cIdx++;
-             }
-         } else {
-             hourlyDatasets = [
-                 {label:'FG (รวม)', data:data.hourlyData || [], backgroundColor:'#3b82f6', stack: 'Stack 0'}, 
-                 {label:'NG (เสียเป็นชิ้น)', data:hNgPcs, backgroundColor:'#ef4444', stack: 'Stack 0'}
-             ];
+             });
          }
 
-         charts.hourly = new Chart(ctxH, { 
-             type: 'bar', 
-             data: { 
-                 labels: cleanHourlyLabels, 
-                 datasets: hourlyDatasets
-             }, 
-             options: {
-                 ...commonOpts, 
-                 scales:{x:{stacked:true}, y:{stacked:true}},
-                 plugins: {
-                     ...commonOpts.plugins,
-                     legend: { display: false }, 
-                     tooltip: {
-                         mode: 'index',
-                         intersect: false,
-                         filter: function(tooltipItem) {
-                             return tooltipItem.raw > 0;
-                         }
-                     },
-                     datalabels: {
-                         display: function(ctx) { 
-                             const c = ctx.chart.canvas.closest('.widget-card'); 
-                             const isMax = c ? c.classList.contains('maximized-card') : true; 
-                             return isMax && ctx.dataset.data[ctx.dataIndex] > 0; 
-                         },
-                         color: '#ffffff',
-                         font: { weight: 'bold', size: 10 },
-                         formatter: (value) => value > 0 ? value : null
-                     }
-                 }
-             },
-             plugins: [
-                 ...(activePlugins || []),
-                 {
-                     id: 'customHtmlLegend',
-                     afterUpdate: function(chart) {
-                         const container = document.getElementById('hourly-legend-ul');
-                         if (!container) return;
-                         container.innerHTML = ''; 
-                         
-                         const items = Chart.defaults.plugins.legend.labels.generateLabels(chart);
-                         
-                         const half = Math.ceil(items.length / 2);
-                         let interleaved = [];
-                         for(let i = 0; i < half; i++) {
-                             interleaved.push(items[i]);                 
-                             if(items[i+half]) interleaved.push(items[i+half]); 
-                         }
-                         
-                         interleaved.forEach(item => {
-                             const li = document.createElement('li');
-                             li.className = `flex items-center cursor-pointer text-[10px] md:text-xs ${item.hidden ? 'line-through text-gray-300' : 'text-gray-700'} hover:text-blue-600 transition-colors`;
-                             
-                             li.onclick = () => {
-                                 const isHidden = chart.isDatasetVisible(item.datasetIndex);
-                                 chart.setDatasetVisibility(item.datasetIndex, !isHidden);
-                                 chart.update();
-                             };
-                             
-                             const box = document.createElement('span');
-                             box.className = 'w-3 h-3 md:w-4 md:h-4 inline-block mr-1.5 flex-none rounded-sm shadow-sm';
-                             box.style.backgroundColor = item.fillStyle;
-                             box.style.border = item.lineWidth > 0 ? `${item.lineWidth}px solid ${item.strokeStyle}` : '1px solid rgba(0,0,0,0.1)';
-                             
-                             const text = document.createElement('span');
-                             text.className = 'truncate leading-none';
-                             text.title = item.text; 
-                             text.innerText = item.text;
-                             
-                             li.appendChild(box);
-                             li.appendChild(text);
-                             container.appendChild(li);
-                         });
-                     }
-                 }
-             ]
-         });
-     }
+         window.renderDailyOutputChart();
 
-     const ctxYieldM = document.getElementById('yieldMachineChart');
-     if(ctxYieldM) {
-        if(charts.yieldMachine) charts.yieldMachine.destroy();
-        const macs = []; for(let i=1;i<=16;i++) macs.push(`CWM-${String(i).padStart(2,'0')}`);
-        charts.yieldMachine = new Chart(ctxYieldM, { 
-            type: 'bar', 
-            data: { 
-                labels: macs, 
-                datasets: [{ 
-                    label: '% Yield', 
-                    data: macs.map(m=>{
-                        const d = (data.machineData && data.machineData[m]) ? data.machineData[m] : null; 
-                        if(!d) return 0; 
-                        const ngCount = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
-                        const t = d.fg + ngCount; 
-                        return t > 0 ? ((d.fg/t)*100).toFixed(1) : 0;
-                    }), 
-                    backgroundColor: '#6366f1' 
-                }] 
-            }, 
-            options: {
-                ...commonOpts, 
-                scales:{y:{max:100}},
-                layout: { padding: { top: 40 } }, 
-                plugins: {
-                    ...commonOpts.plugins,
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return `Yield: ${context.parsed.y}%`;
-                            },
-                            afterLabel: function(context) {
-                                const machineName = context.label;
-                                const mData = (data.machineData && data.machineData[machineName]) ? data.machineData[machineName] : null;
-                                if(!mData) return [];
-                                
-                                const fg = mData.fg || 0;
-                                const ngTotal = mData.ngTotalPcs !== undefined ? mData.ngTotalPcs : (mData.ngTotal || 0);
-                                
-                                let lines = [
-                                    `----------------------`,
-                                    `✅ FG: ${fg.toLocaleString()} ชิ้น`,
-                                    `❌ NG รวม: ${ngTotal.toLocaleString()} ชิ้น`
-                                ];
-                                
-                                if(mData.ngBreakdownPcs && Object.keys(mData.ngBreakdownPcs).length > 0) {
-                                    const sortedNg = Object.entries(mData.ngBreakdownPcs)
-                                        .filter(([k, v]) => v > 0)
-                                        .sort((a, b) => b[1] - a[1]);
+         const hNgPcs = data.hourlyNgPcsData || data.hourlyNgData || []; 
+         const ctxH = document.getElementById('hourlyChart');
+         if(ctxH) {
+             if(charts.hourly) charts.hourly.destroy();
+             
+             const cleanHourlyLabels = (data.hourlyLabels || []).map(label => {
+                 const parts = label.split('-');
+                 if (parts.length > 1) {
+                     const match = parts[1].match(/(\d{2}):/);
+                     return match ? match[1] + ":00" : label;
+                 }
+                 const fallbackMatch = label.match(/(\d{2}):/);
+                 return fallbackMatch ? fallbackMatch[1] + ":00" : label;
+             });
+
+             let hourlyDatasets = [];
+             
+             if (data.hourlyByModel && Object.keys(data.hourlyByModel).length > 0) {
+                 const fgColors = ['#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8', '#1e3a8a']; 
+                 const ngColors = ['#fca5a5', '#f87171', '#ef4444', '#dc2626', '#b91c1c', '#7f1d1d'];
+                 
+                 let cIdx = 0;
+                 for (const [model, d] of Object.entries(data.hourlyByModel)) {
+                     hourlyDatasets.push({
+                         label: `FG - ${model}`,
+                         data: d.fg,
+                         backgroundColor: fgColors[cIdx % fgColors.length],
+                         stack: 'Stack 0',
+                         borderWidth: 1,
+                         borderColor: 'rgba(255,255,255,0.2)'
+                     });
+                     cIdx++;
+                 }
+                 
+                 cIdx = 0;
+                 for (const [model, d] of Object.entries(data.hourlyByModel)) {
+                     hourlyDatasets.push({
+                         label: `NG - ${model}`,
+                         data: d.ng,
+                         backgroundColor: ngColors[cIdx % ngColors.length],
+                         stack: 'Stack 0',
+                         borderWidth: 1,
+                         borderColor: 'rgba(255,255,255,0.2)'
+                     });
+                     cIdx++;
+                 }
+             } else {
+                 hourlyDatasets = [
+                     {label:'FG (รวม)', data:data.hourlyData || [], backgroundColor:'#3b82f6', stack: 'Stack 0'}, 
+                     {label:'NG (เสียเป็นชิ้น)', data:hNgPcs, backgroundColor:'#ef4444', stack: 'Stack 0'}
+                 ];
+             }
+
+             charts.hourly = new Chart(ctxH, { 
+                 type: 'bar', 
+                 data: { 
+                     labels: cleanHourlyLabels, 
+                     datasets: hourlyDatasets
+                 }, 
+                 options: {
+                     ...commonOpts, 
+                     scales:{x:{stacked:true}, y:{stacked:true}},
+                     plugins: {
+                         ...commonOpts.plugins,
+                         legend: { display: false }, 
+                         tooltip: {
+                             mode: 'index',
+                             intersect: false,
+                             filter: function(tooltipItem) {
+                                 return tooltipItem.raw > 0;
+                             }
+                         },
+                         datalabels: {
+                             display: function(ctx) { 
+                                 const c = ctx.chart.canvas.closest('.widget-card'); 
+                                 const isMax = c ? c.classList.contains('maximized-card') : true; 
+                                 return isMax && ctx.dataset.data[ctx.dataIndex] > 0; 
+                             },
+                             color: '#ffffff',
+                             font: { weight: 'bold', size: 10 },
+                             formatter: (value) => value > 0 ? value : null
+                         }
+                     }
+                 },
+                 plugins: [
+                     ...(activePlugins || []),
+                     {
+                         id: 'customHtmlLegend',
+                         afterUpdate: function(chart) {
+                             const container = document.getElementById('hourly-legend-ul');
+                             if (!container) return;
+                             container.innerHTML = ''; 
+                             
+                             const items = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                             
+                             const half = Math.ceil(items.length / 2);
+                             let interleaved = [];
+                             for(let i = 0; i < half; i++) {
+                                 interleaved.push(items[i]);                 
+                                 if(items[i+half]) interleaved.push(items[i+half]); 
+                             }
+                             
+                             interleaved.forEach(item => {
+                                 const li = document.createElement('li');
+                                 li.className = `flex items-center cursor-pointer text-[10px] md:text-xs ${item.hidden ? 'line-through text-gray-300' : 'text-gray-700'} hover:text-blue-600 transition-colors`;
+                                 
+                                 li.onclick = () => {
+                                     const isHidden = chart.isDatasetVisible(item.datasetIndex);
+                                     chart.setDatasetVisibility(item.datasetIndex, !isHidden);
+                                     chart.update();
+                                 };
+                                 
+                                 const box = document.createElement('span');
+                                 box.className = 'w-3 h-3 md:w-4 md:h-4 inline-block mr-1.5 flex-none rounded-sm shadow-sm';
+                                 box.style.backgroundColor = item.fillStyle;
+                                 box.style.border = item.lineWidth > 0 ? `${item.lineWidth}px solid ${item.strokeStyle}` : '1px solid rgba(0,0,0,0.1)';
+                                 
+                                 const text = document.createElement('span');
+                                 text.className = 'truncate leading-none';
+                                 text.title = item.text; 
+                                 text.innerText = item.text;
+                                 
+                                 li.appendChild(box);
+                                 li.appendChild(text);
+                                 container.appendChild(li);
+                             });
+                         }
+                     }
+                 ]
+             });
+         }
+
+         const ctxYieldM = document.getElementById('yieldMachineChart');
+         if(ctxYieldM) {
+            if(charts.yieldMachine) charts.yieldMachine.destroy();
+            const macs = []; for(let i=1;i<=16;i++) macs.push(`CWM-${String(i).padStart(2,'0')}`);
+            charts.yieldMachine = new Chart(ctxYieldM, { 
+                type: 'bar', 
+                data: { 
+                    labels: macs, 
+                    datasets: [{ 
+                        label: '% Yield', 
+                        data: macs.map(m=>{
+                            const d = (data.machineData && data.machineData[m]) ? data.machineData[m] : null; 
+                            if(!d) return 0; 
+                            const ngCount = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
+                            const t = d.fg + ngCount; 
+                            return t > 0 ? ((d.fg/t)*100).toFixed(1) : 0;
+                        }), 
+                        backgroundColor: '#6366f1' 
+                    }] 
+                }, 
+                options: {
+                    ...commonOpts, 
+                    scales:{y:{max:100}},
+                    layout: { padding: { top: 40 } }, 
+                    plugins: {
+                        ...commonOpts.plugins,
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `Yield: ${context.parsed.y}%`;
+                                },
+                                afterLabel: function(context) {
+                                    const machineName = context.label;
+                                    const mData = (data.machineData && data.machineData[machineName]) ? data.machineData[machineName] : null;
+                                    if(!mData) return [];
                                     
-                                    if(sortedNg.length > 0) {
-                                        lines.push(`-- รายละเอียด NG --`);
-                                        sortedNg.forEach(([k, v]) => {
-                                            lines.push(`   • ${k}: ${v.toLocaleString()} ชิ้น`);
-                                        });
+                                    const fg = mData.fg || 0;
+                                    const ngTotal = mData.ngTotalPcs !== undefined ? mData.ngTotalPcs : (mData.ngTotal || 0);
+                                    
+                                    let lines = [
+                                        `----------------------`,
+                                        `✅ FG: ${fg.toLocaleString()} ชิ้น`,
+                                        `❌ NG รวม: ${ngTotal.toLocaleString()} ชิ้น`
+                                    ];
+                                    
+                                    if(mData.ngBreakdownPcs && Object.keys(mData.ngBreakdownPcs).length > 0) {
+                                        const sortedNg = Object.entries(mData.ngBreakdownPcs)
+                                            .filter(([k, v]) => v > 0)
+                                            .sort((a, b) => b[1] - a[1]);
+                                        
+                                        if(sortedNg.length > 0) {
+                                            lines.push(`-- รายละเอียด NG --`);
+                                            sortedNg.forEach(([k, v]) => {
+                                                lines.push(`   • ${k}: ${v.toLocaleString()} ชิ้น`);
+                                            });
+                                        }
                                     }
+                                    return lines;
                                 }
-                                return lines;
+                            }
+                        },
+                        datalabels: {
+                            display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
+                            color: '#4338ca', 
+                            anchor: 'end',    
+                            align: 'top',     
+                            font: { weight: 'bold' },
+                            formatter: (value) => value > 0 ? value + '%' : null
+                        }
+                    }
+                } 
+            });
+         }
+
+         const ctxQC = document.getElementById('qcTrendChart');
+         if(ctxQC) {
+            if(charts.qcTrend) charts.qcTrend.destroy();
+             const trendData = data.dailyTrend || [];
+             charts.qcTrend = new Chart(ctxQC, { 
+                 type: 'line', 
+                 data: { 
+                     labels: trendData.map(d=>d.date), 
+                     datasets: [{label:'% NG Rate', data:trendData.map(d=>d.ngRate), borderColor:'#f97316'}] 
+                 }, 
+                 options: { 
+                     ...commonOpts, 
+                     scales: { x: { offset: true } },
+                     layout: { padding: { top: 20 } },
+                     plugins: {
+                         ...commonOpts.plugins,
+                         datalabels: {
+                             display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
+                             color: '#c2410c',
+                             align: 'top',
+                             anchor: 'end',
+                             font: { weight: 'bold' },
+                             formatter: (value) => value > 0 ? value + '%' : null
+                         }
+                     }
+                 } 
+             });
+         }
+
+         window.renderNgTrendChart();
+
+         const ctxNG = document.getElementById('ngChart');
+         if(ctxNG) {
+            if(charts.ng) charts.ng.destroy();
+            
+            const sortedLabels = ngItems.filter(item => item.pcs > 0).map(item => item.label);
+            const sortedData = ngItems.filter(item => item.pcs > 0).map(item => item.pcs);
+            const totalNGPcs = sortedData.reduce((a, b) => a + b, 0);
+            
+            charts.ng = new Chart(ctxNG, { 
+                type: 'doughnut',
+                plugins: activePlugins,
+                data: { 
+                    labels: sortedLabels, 
+                    datasets: [{ 
+                        data: sortedData, 
+                        backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#8b5cf6', '#ec4899', '#14b8a6'],
+                        borderWidth: 0
+                    }] 
+                }, 
+                options: {
+                    ...commonOpts,
+                    scales: { 
+                        x: { display: false }, 
+                        y: { display: false } 
+                    },
+                    plugins: {
+                        ...commonOpts.plugins,
+                        datalabels: {
+                            display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
+                            color: '#ffffff',
+                            font: { weight: 'bold', size: 12 },
+                            formatter: (value) => {
+                                if (totalNGPcs === 0 || value === 0) return null;
+                                return ((value / totalNGPcs) * 100).toFixed(1) + '%';
                             }
                         }
-                    },
-                    datalabels: {
-                        display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
-                        color: '#4338ca', 
-                        anchor: 'end',    
-                        align: 'top',     
-                        font: { weight: 'bold' },
-                        formatter: (value) => value > 0 ? value + '%' : null
                     }
-                }
-            } 
-        });
-     }
+                } 
+            });
+         }
+         
+         window.renderModelChart();
 
-     const ctxQC = document.getElementById('qcTrendChart');
-     if(ctxQC) {
-        if(charts.qcTrend) charts.qcTrend.destroy();
-         const trendData = data.dailyTrend || [];
-         charts.qcTrend = new Chart(ctxQC, { 
-             type: 'line', 
-             data: { 
-                 labels: trendData.map(d=>d.date), 
-                 datasets: [{label:'% NG Rate', data:trendData.map(d=>d.ngRate), borderColor:'#f97316'}] 
-             }, 
-             options: { 
-                 ...commonOpts, 
-                 scales: { x: { offset: true } },
-                 layout: { padding: { top: 20 } },
-                 plugins: {
-                     ...commonOpts.plugins,
-                     datalabels: {
-                         display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
-                         color: '#c2410c',
-                         align: 'top',
-                         anchor: 'end',
-                         font: { weight: 'bold' },
-                         formatter: (value) => value > 0 ? value + '%' : null
-                     }
-                 }
-             } 
-         });
-     }
-
-     window.renderNgTrendChart();
-
-     const ctxNG = document.getElementById('ngChart');
-     if(ctxNG) {
-        if(charts.ng) charts.ng.destroy();
-        
-        const sortedLabels = ngItems.filter(item => item.pcs > 0).map(item => item.label);
-        const sortedData = ngItems.filter(item => item.pcs > 0).map(item => item.pcs);
-        const totalNGPcs = sortedData.reduce((a, b) => a + b, 0);
-        
-        charts.ng = new Chart(ctxNG, { 
-            type: 'doughnut',
-            plugins: activePlugins,
-            data: { 
-                labels: sortedLabels, 
-                datasets: [{ 
-                    data: sortedData, 
-                    backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#8b5cf6', '#ec4899', '#14b8a6'],
-                    borderWidth: 0
-                }] 
-            }, 
-            options: {
-                ...commonOpts,
-                scales: { 
-                    x: { display: false }, 
-                    y: { display: false } 
-                },
-                plugins: {
-                    ...commonOpts.plugins,
-                    datalabels: {
-                        display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
-                        color: '#ffffff',
-                        font: { weight: 'bold', size: 12 },
-                        formatter: (value) => {
-                            if (totalNGPcs === 0 || value === 0) return null;
-                            return ((value / totalNGPcs) * 100).toFixed(1) + '%';
-                        }
-                    }
-                }
-            } 
-        });
-     }
-     
-     window.renderModelChart();
-
-} catch (err) {
-     const debugOut = document.getElementById('debug-output');
-     if (debugOut) {
-         document.getElementById('debug-panel').classList.remove('hidden');
-         debugOut.innerText += `\n[Chart Rendering Error] ${err.message}`;
-     }
-     console.error(err);
-}
+    } catch (err) {
+         const debugOut = document.getElementById('debug-output');
+         if (debugOut) {
+             document.getElementById('debug-panel').classList.remove('hidden');
+             debugOut.innerText += `\n[Chart Rendering Error] ${err.message}`;
+         }
+         console.error(err);
+    }
 };
 
 window.renderTable = function(data) {
-let dynamicColumns = normalizeSymptomList(ngSymptoms);
-if (data.machineData) {
-    for (let m in data.machineData) {
-        const d = data.machineData[m];
-        if (d.ngBreakdownPcs) {
-            Object.keys(d.ngBreakdownPcs).forEach(k => {
-                const stdK = capitalizeFirst(k);
-                if (!dynamicColumns.some(s => s.toLowerCase() === stdK.toLowerCase())) {
-                    dynamicColumns.push(stdK);
-                }
-            });
+    let dynamicColumns = normalizeSymptomList(ngSymptoms);
+    if (data.machineData) {
+        for (let m in data.machineData) {
+            const d = data.machineData[m];
+            if (d.ngBreakdownPcs) {
+                Object.keys(d.ngBreakdownPcs).forEach(k => {
+                    const stdK = capitalizeFirst(k);
+                    if (!dynamicColumns.some(s => s.toLowerCase() === stdK.toLowerCase())) {
+                        dynamicColumns.push(stdK);
+                    }
+                });
+            }
         }
     }
-}
 
-dynamicColumns = [...new Set(dynamicColumns.map(s => capitalizeFirst(s)))];
+    dynamicColumns = [...new Set(dynamicColumns.map(s => capitalizeFirst(s)))];
 
-const h = document.getElementById('table-header'); 
-const b = document.getElementById('table-body');
-h.innerHTML = '<th>Machine</th><th>FG</th><th>NG (ชิ้น/Kg)</th><th>% Yield</th>' + dynamicColumns.map(s=>`<th>${s}</th>`).join('');
-b.innerHTML = '';
+    const h = document.getElementById('table-header'); 
+    const b = document.getElementById('table-body');
+    h.innerHTML = '<th>Machine</th><th>FG</th><th>NG (ชิ้น/Kg)</th><th>% Yield</th>' + dynamicColumns.map(s=>`<th>${s}</th>`).join('');
+    b.innerHTML = '';
 
-for(let i=1; i<=16; i++) {
-    const m = `CWM-${String(i).padStart(2,'0')}`; 
-    const d = (data.machineData && data.machineData[m]) ? data.machineData[m] : {fg:0, ngTotal:0, ngTotalKg:0, ngTotalPcs:0, ngBreakdownKg:{}, ngBreakdownPcs:{}};
-    
-    const ngPcs = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
-    const ngKg = d.ngTotalKg || 0;
-    
-    const t = d.fg + ngPcs; 
-    const y = t > 0 ? ((d.fg/t)*100).toFixed(1) : "0.0";
-    
-    const productAssigned = machineMapping[m] || 'ไม่ได้ระบุรุ่น';
-    
-    let html = `<td class="p-4 border-b font-bold cursor-pointer text-blue-600 hover:underline" onclick="window.showMachineDetail('${m}')">
-            <div class="flex flex-col">
-                <span>👉 ${m}</span>
-                <span class="text-[10px] text-gray-500 font-normal mt-0.5">📦 ${productAssigned}</span>
-            </div>
-        </td>
-        <td class="p-4 border-b">${d.fg}</td>
-        <td class="p-4 border-b text-red-600 font-bold">${ngPcs} <br><span class="text-[10px] text-gray-500 font-normal">(${ngKg.toFixed(2)} Kg)</span></td>
-        <td class="p-4 border-b">${y}%</td>`;
+    for(let i=1; i<=16; i++) {
+        const m = `CWM-${String(i).padStart(2,'0')}`; 
+        const d = (data.machineData && data.machineData[m]) ? data.machineData[m] : {fg:0, ngTotal:0, ngTotalKg:0, ngTotalPcs:0, ngBreakdownKg:{}, ngBreakdownPcs:{}};
         
-    dynamicColumns.forEach(s => { 
-        const keyPcs = Object.keys(d.ngBreakdownPcs || {}).find(k => k.toLowerCase() === s.toLowerCase());
-        const keyKg = Object.keys(d.ngBreakdownKg || {}).find(k => k.toLowerCase() === s.toLowerCase());
+        const ngPcs = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
+        const ngKg = d.ngTotalKg || 0;
         
-        const cPcs = keyPcs ? d.ngBreakdownPcs[keyPcs] : 0; 
-        const cKg = keyKg ? d.ngBreakdownKg[keyKg] : 0; 
-        html += `<td class="${cPcs>0?'bg-red-50 text-red-700 font-bold':''}">${cPcs>0 ? cPcs + '<br><span class="text-[10px] text-gray-500 font-normal">(' + cKg.toFixed(2) + ' Kg)</span>' : '-'}</td>`; 
-    });
-    b.innerHTML += `<tr>${html}</tr>`;
-}
+        const t = d.fg + ngPcs; 
+        const y = t > 0 ? ((d.fg/t)*100).toFixed(1) : "0.0";
+        
+        const productAssigned = machineMapping[m] || 'ไม่ได้ระบุรุ่น';
+        
+        let html = `<td class="p-4 border-b font-bold cursor-pointer text-blue-600 hover:underline" onclick="window.showMachineDetail('${m}')">
+                <div class="flex flex-col">
+                    <span>👉 ${m}</span>
+                    <span class="text-[10px] text-gray-500 font-normal mt-0.5">📦 ${productAssigned}</span>
+                </div>
+            </td>
+            <td class="p-4 border-b">${d.fg}</td>
+            <td class="p-4 border-b text-red-600 font-bold">${ngPcs} <br><span class="text-[10px] text-gray-500 font-normal">(${ngKg.toFixed(2)} Kg)</span></td>
+            <td class="p-4 border-b">${y}%</td>`;
+            
+        dynamicColumns.forEach(s => { 
+            const keyPcs = Object.keys(d.ngBreakdownPcs || {}).find(k => k.toLowerCase() === s.toLowerCase());
+            const keyKg = Object.keys(d.ngBreakdownKg || {}).find(k => k.toLowerCase() === s.toLowerCase());
+            
+            const cPcs = keyPcs ? d.ngBreakdownPcs[keyPcs] : 0; 
+            const cKg = keyKg ? d.ngBreakdownKg[keyKg] : 0; 
+            html += `<td class="${cPcs>0?'bg-red-50 text-red-700 font-bold':''}">${cPcs>0 ? cPcs + '<br><span class="text-[10px] text-gray-500 font-normal">(' + cKg.toFixed(2) + ' Kg)</span>' : '-'}</td>`; 
+        });
+        b.innerHTML += `<tr>${html}</tr>`;
+    }
 };
 
 window.switchMachineChart = function() {
-const val = document.getElementById('machineChartToggle').value;
-const hint = document.getElementById('daily-chart-hint');
-if(val === 'hourly') {
-    document.getElementById('machine-hourly-wrapper').classList.remove('hidden');
-    document.getElementById('machine-daily-wrapper').classList.add('hidden');
-    if(hint) hint.classList.add('hidden');
-} else {
-    document.getElementById('machine-hourly-wrapper').classList.add('hidden');
-    document.getElementById('machine-daily-wrapper').classList.remove('hidden');
-    if(hint) hint.classList.remove('hidden');
-}
+    const val = document.getElementById('machineChartToggle').value;
+    const hint = document.getElementById('daily-chart-hint');
+    if(val === 'hourly') {
+        document.getElementById('machine-hourly-wrapper').classList.remove('hidden');
+        document.getElementById('machine-daily-wrapper').classList.add('hidden');
+        if(hint) hint.classList.add('hidden');
+    } else {
+        document.getElementById('machine-hourly-wrapper').classList.add('hidden');
+        document.getElementById('machine-daily-wrapper').classList.remove('hidden');
+        if(hint) hint.classList.remove('hidden');
+    }
 };
 
 window.showMachineDetail = function(machineName) {
-if(!currentDashboardData) return;
-window.currentSelectedMachine = machineName; 
-const modal = document.getElementById('modal-machine-detail');
-const mData = currentDashboardData.machineData[machineName] || { fg: 0, ngTotal: 0, ngTotalKg: 0, ngTotalPcs: 0, hourlyFg: [], hourlyNgPcs: [], hourlyNg: [], hourlyNgKg: [], remarks: [], daily: {} };
+    if(!currentDashboardData) return;
+    window.currentSelectedMachine = machineName; 
+    const modal = document.getElementById('modal-machine-detail');
+    const mData = currentDashboardData.machineData[machineName] || { fg: 0, ngTotal: 0, ngTotalKg: 0, ngTotalPcs: 0, hourlyFg: [], hourlyNgPcs: [], hourlyNg: [], hourlyNgKg: [], remarks: [], daily: {}, maintenanceLogs: [] };
 
-const ngPcs = mData.ngTotalPcs !== undefined ? mData.ngTotalPcs : (mData.ngTotal || 0);
-const ngKg = mData.ngTotalKg || 0;
+    const ngPcs = mData.ngTotalPcs !== undefined ? mData.ngTotalPcs : (mData.ngTotal || 0);
+    const ngKg = mData.ngTotalKg || 0;
 
-document.getElementById('machine-detail-title').innerText = `📊 รายละเอียดเครื่อง ${machineName}`;
-document.getElementById('machine-detail-stats').innerHTML = `<div class="bg-blue-50 p-2 rounded">FG รวม: <b class="text-blue-700 text-xl">${mData.fg}</b></div><div class="bg-red-50 p-2 rounded">NG รวม: <b class="text-red-700 text-xl">${ngPcs} ชิ้น</b><br><span class="text-xs text-gray-500">(${ngKg.toFixed(2)} Kg)</span></div>`;
+    document.getElementById('machine-detail-title').innerText = `📊 รายละเอียดเครื่อง ${machineName}`;
+    document.getElementById('machine-detail-stats').innerHTML = `<div class="bg-blue-50 p-2 rounded">FG รวม: <b class="text-blue-700 text-xl">${mData.fg}</b></div><div class="bg-red-50 p-2 rounded">NG รวม: <b class="text-red-700 text-xl">${ngPcs} ชิ้น</b><br><span class="text-xs text-gray-500">(${ngKg.toFixed(2)} Kg)</span></div>`;
 
-const rList = document.getElementById('machine-remarks-list'); 
-const rSec = document.getElementById('machine-detail-remarks');
-if(mData.remarks && mData.remarks.length > 0) { 
-    rSec.classList.remove('hidden'); 
-    rList.innerHTML = `<ul class="list-disc pl-5 space-y-1">${mData.remarks.map(r => `<li>${r}</li>`).join('')}</ul>`; 
-} else { 
-    rSec.classList.add('hidden'); 
-}
+    const rList = document.getElementById('machine-remarks-list'); 
+    const rSec = document.getElementById('machine-detail-remarks');
+    if(mData.remarks && mData.remarks.length > 0) { 
+        rSec.classList.remove('hidden'); 
+        rList.innerHTML = `<ul class="list-disc pl-5 space-y-1">${mData.remarks.map(r => `<li>${r}</li>`).join('')}</ul>`; 
+    } else { 
+        rSec.classList.add('hidden'); 
+    }
 
-document.getElementById('machineChartToggle').value = 'hourly';
-window.switchMachineChart();
+    // --- ส่วนที่ดึงข้อมูลแจ้งซ่อม (Maintenance) มาแสดงผล ---
+    const maintListContainer = document.getElementById('machine-maintenance-list');
+    const downtimeText = document.getElementById('md-total-downtime');
+    
+    let totalDowntimeMins = 0;
+    let maintHtml = '';
 
-modal.classList.remove('hidden');
-
-if(machineDetailChart) machineDetailChart.destroy();
-if(machineDailyChartInst) machineDailyChartInst.destroy();
-
-const hNgPcs = mData.hourlyNgPcs || mData.hourlyNg || [];
-
-const cleanHourlyLabels = (currentDashboardData.hourlyLabels || []).map(label => {
-     const parts = label.split('-');
-     if (parts.length > 1) {
-         const match = parts[1].match(/(\d{2}):/);
-         return match ? match[1] + ":00" : label;
-     }
-     const fallbackMatch = label.match(/(\d{2}):/);
-     return fallbackMatch ? fallbackMatch[1] + ":00" : label;
-});
-
-machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), { 
-    type: 'bar', 
-    data: { 
-        labels: cleanHourlyLabels, 
-        datasets: [
-            { label: 'FG (งานดี)', data: mData.hourlyFg || [], backgroundColor: '#3b82f6', borderRadius: 2 }, 
-            { label: 'NG (เสียเป็นชิ้น)', data: hNgPcs, backgroundColor: '#ef4444', borderRadius: 2 }
-        ] 
-    }, 
-    options: { 
-        responsive: true, 
-        maintainAspectRatio: false, 
-        plugins: { 
-            legend: { display: true },
-            zoom: {
-                pan: { enabled: true, mode: 'xy' },
-                zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
-            },
-            datalabels: {
-                display: true,
-                color: '#ffffff',
-                font: { weight: 'bold', size: 11 },
-                formatter: (value) => value > 0 ? value : null
-            }
-        }, 
-        scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } 
-    } 
-});
-
-const dailyData = mData.daily || {};
-const dailyKeys = Object.keys(dailyData).sort();
-
-const dailyYields = dailyKeys.map(k => {
-    const t = dailyData[k].fg + dailyData[k].ngPcs;
-    return t > 0 ? parseFloat(((dailyData[k].fg / t) * 100).toFixed(1)) : 0;
-});
-
-machineDailyChartInst = new Chart(document.getElementById('machineDailyTrendChart').getContext('2d'), {
-    type: 'bar',
-    data: {
-        labels: dailyKeys,
-        datasets: [
-            {
-                type: 'line',
-                label: '% Yield รายวัน',
-                data: dailyYields,
-                borderColor: '#10b981',
-                backgroundColor: '#10b981',
-                yAxisID: 'y1',
-                tension: 0.3,
-                borderWidth: 2
-            },
-            { label: 'FG (งานดี)', data: dailyKeys.map(k => dailyData[k].fg), backgroundColor: '#3b82f6', yAxisID: 'y', stack: 'Stack 0' },
-            { label: 'NG (เสียเป็นชิ้น)', data: dailyKeys.map(k => dailyData[k].ngPcs), backgroundColor: '#ef4444', yAxisID: 'y', stack: 'Stack 0' }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        onClick: (e, elements, chart) => {
-            if (!elements || elements.length === 0) return;
-            const element = elements[0];
-            const datasetIndex = element.datasetIndex;
-            const index = element.index;
+    if (mData.maintenanceLogs && mData.maintenanceLogs.length > 0) {
+        mData.maintenanceLogs.forEach(log => {
+            let durationStr = 'ยังไม่ระบุเวลาเสร็จสิ้น';
+            let mins = 0;
             
-            if (chart.data.datasets[datasetIndex].label === 'NG (เสียเป็นชิ้น)') {
-                const dateStr = chart.data.labels[index];
-                window.showDailyNgBreakdown(window.currentSelectedMachine, dateStr);
+            // คำนวณเวลา Downtime
+            if (log.startTime && log.endTime) {
+                try {
+                    let s = log.startTime.toString().split(':');
+                    let e = log.endTime.toString().split(':');
+                    let sMins = parseInt(s[0]) * 60 + parseInt(s[1]);
+                    let eMins = parseInt(e[0]) * 60 + parseInt(e[1]);
+                    mins = eMins - sMins;
+                    
+                    if (mins < 0) mins += 1440; // กรณีข้ามวัน (เช่น เริ่ม 23:00 เสร็จ 01:00)
+                    totalDowntimeMins += mins;
+
+                    let h = Math.floor(mins / 60);
+                    let m = mins % 60;
+                    durationStr = h > 0 ? `${h} ชม. ${m} นาที` : `${m} นาที`;
+                } catch(err) { console.log("Time calc error:", err); }
             }
-        },
-        scales: {
-            x: { stacked: true },
-            y: { stacked: true, beginAtZero: true, position: 'left' },
-            y1: { beginAtZero: true, max: 100, position: 'right', grid: { display: false } }
-        },
-        plugins: {
-            zoom: {
-                pan: { enabled: true, mode: 'xy' },
-                zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
-            },
-            datalabels: {
-                display: function(context) {
-                    return context.dataset.type === 'line' && context.dataset.data[context.dataIndex] > 0;
+
+            // จัดการปุ่มดูรูปภาพ
+            let imgBtn = log.imageUrl ? 
+                `<button onclick="window.viewMaintImage('${log.imageUrl}', '${log.issueType}')" class="mt-2 text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded border border-orange-200 hover:bg-orange-100 font-bold w-full text-center">📸 ดูรูปภาพแนบ</button>` : '';
+
+            let sTime = log.startTime ? log.startTime.toString().substring(0,5) : '-';
+            let eTime = log.endTime ? log.endTime.toString().substring(0,5) : '-';
+
+            maintHtml += `
+                <div class="bg-white border border-gray-200 p-3 rounded-lg shadow-sm">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="font-bold text-sm text-orange-700">${log.issueType}</span>
+                        <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">${log.date}</span>
+                    </div>
+                    <div class="text-xs text-gray-600 mb-2 flex justify-between bg-orange-50 p-2 rounded">
+                        <span>⏱️ ${sTime} - ${eTime} (<b class="text-gray-800">${durationStr}</b>)</span>
+                        <span>👤 ${log.recorder || '-'}</span>
+                    </div>
+                    <p class="text-sm text-gray-700 p-2 rounded border border-gray-100 bg-gray-50">${log.remark || 'ไม่มีรายละเอียดเพิ่มเติม'}</p>
+                    ${imgBtn}
+                </div>
+            `;
+        });
+
+        // สรุปเวลา Downtime รวม
+        let totalH = Math.floor(totalDowntimeMins / 60);
+        let totalM = totalDowntimeMins % 60;
+        downtimeText.innerText = totalH > 0 ? `${totalH} ชม. ${totalM} นาที` : `${totalM} นาที`;
+        maintListContainer.innerHTML = maintHtml;
+
+    } else {
+        downtimeText.innerText = "0 นาที";
+        maintListContainer.innerHTML = '<div class="text-center text-gray-400 py-4 text-sm bg-gray-50 rounded border border-dashed border-gray-200">ไม่พบประวัติการแจ้งซ่อม หรือปัญหาเครื่องจักรในช่วงเวลานี้</div>';
+    }
+    // --------------------------------------------------------
+
+    document.getElementById('machineChartToggle').value = 'hourly';
+    window.switchMachineChart();
+
+    modal.classList.remove('hidden');
+
+    if(machineDetailChart) machineDetailChart.destroy();
+    if(machineDailyChartInst) machineDailyChartInst.destroy();
+
+    const hNgPcs = mData.hourlyNgPcs || mData.hourlyNg || [];
+
+    const cleanHourlyLabels = (currentDashboardData.hourlyLabels || []).map(label => {
+         const parts = label.split('-');
+         if (parts.length > 1) {
+             const match = parts[1].match(/(\d{2}):/);
+             return match ? match[1] + ":00" : label;
+         }
+         const fallbackMatch = label.match(/(\d{2}):/);
+         return fallbackMatch ? fallbackMatch[1] + ":00" : label;
+    });
+
+    machineDetailChart = new Chart(document.getElementById('machineDetailChart').getContext('2d'), { 
+        type: 'bar', 
+        data: { 
+            labels: cleanHourlyLabels, 
+            datasets: [
+                { label: 'FG (งานดี)', data: mData.hourlyFg || [], backgroundColor: '#3b82f6', borderRadius: 2 }, 
+                { label: 'NG (เสียเป็นชิ้น)', data: hNgPcs, backgroundColor: '#ef4444', borderRadius: 2 }
+            ] 
+        }, 
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { 
+                legend: { display: true },
+                zoom: {
+                    pan: { enabled: true, mode: 'xy' },
+                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
                 },
-                align: 'top',
-                color: '#065f46',
-                font: { weight: 'bold', size: 10 },
-                formatter: (v) => v + '%'
+                datalabels: {
+                    display: true,
+                    color: '#ffffff',
+                    font: { weight: 'bold', size: 11 },
+                    formatter: (value) => value > 0 ? value : null
+                }
+            }, 
+            scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } 
+        } 
+    });
+
+    const dailyData = mData.daily || {};
+    const dailyKeys = Object.keys(dailyData).sort();
+
+    const dailyYields = dailyKeys.map(k => {
+        const t = dailyData[k].fg + dailyData[k].ngPcs;
+        return t > 0 ? parseFloat(((dailyData[k].fg / t) * 100).toFixed(1)) : 0;
+    });
+
+    machineDailyChartInst = new Chart(document.getElementById('machineDailyTrendChart').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: dailyKeys,
+            datasets: [
+                {
+                    type: 'line',
+                    label: '% Yield รายวัน',
+                    data: dailyYields,
+                    borderColor: '#10b981',
+                    backgroundColor: '#10b981',
+                    yAxisID: 'y1',
+                    tension: 0.3,
+                    borderWidth: 2
+                },
+                { label: 'FG (งานดี)', data: dailyKeys.map(k => dailyData[k].fg), backgroundColor: '#3b82f6', yAxisID: 'y', stack: 'Stack 0' },
+                { label: 'NG (เสียเป็นชิ้น)', data: dailyKeys.map(k => dailyData[k].ngPcs), backgroundColor: '#ef4444', yAxisID: 'y', stack: 'Stack 0' }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            onClick: (e, elements, chart) => {
+                if (!elements || elements.length === 0) return;
+                const element = elements[0];
+                const datasetIndex = element.datasetIndex;
+                const index = element.index;
+                
+                if (chart.data.datasets[datasetIndex].label === 'NG (เสียเป็นชิ้น)') {
+                    const dateStr = chart.data.labels[index];
+                    window.showDailyNgBreakdown(window.currentSelectedMachine, dateStr);
+                }
+            },
+            scales: {
+                x: { stacked: true },
+                y: { stacked: true, beginAtZero: true, position: 'left' },
+                y1: { beginAtZero: true, max: 100, position: 'right', grid: { display: false } }
+            },
+            plugins: {
+                zoom: {
+                    pan: { enabled: true, mode: 'xy' },
+                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
+                },
+                datalabels: {
+                    display: function(context) {
+                        return context.dataset.type === 'line' && context.dataset.data[context.dataIndex] > 0;
+                    },
+                    align: 'top',
+                    color: '#065f46',
+                    font: { weight: 'bold', size: 10 },
+                    formatter: (v) => v + '%'
+                }
             }
         }
-    }
-});
+    });
 };
 
 window.showDailyNgBreakdown = function(machine, date) {
-if (!currentDashboardData || !currentDashboardData.machineData[machine]) return;
-const dailyData = currentDashboardData.machineData[machine].daily[date];
+    if (!currentDashboardData || !currentDashboardData.machineData[machine]) return;
+    const dailyData = currentDashboardData.machineData[machine].daily[date];
 
-if (!dailyData || !dailyData.ngBreakdown) {
-    alert("ไม่พบข้อมูล Breakdown สำหรับวันนี้ (อาจเป็นข้อมูลเก่าก่อนการอัปเดตระบบ)");
-    return;
-}
+    if (!dailyData || !dailyData.ngBreakdown) {
+        alert("ไม่พบข้อมูล Breakdown สำหรับวันนี้ (อาจเป็นข้อมูลเก่าก่อนการอัปเดตระบบ)");
+        return;
+    }
 
-const breakdown = dailyData.ngBreakdown;
-const container = document.getElementById('daily-ng-content');
-document.getElementById('daily-ng-title').innerText = `🗑️ NG Breakdown: ${machine} (${date})`;
+    const breakdown = dailyData.ngBreakdown;
+    const container = document.getElementById('daily-ng-content');
+    document.getElementById('daily-ng-title').innerText = `🗑️ NG Breakdown: ${machine} (${date})`;
 
-let html = '<ul class="divide-y divide-gray-200">';
-let total = 0;
+    let html = '<ul class="divide-y divide-gray-200">';
+    let total = 0;
 
-const sortedItems = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
+    const sortedItems = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
 
-if (sortedItems.length === 0) {
-    html += '<li class="py-3 text-center text-gray-500">🎉 ไม่มีของเสียในวันนี้</li>';
-} else {
-    sortedItems.forEach(([type, pcs]) => {
-        total += pcs;
+    if (sortedItems.length === 0) {
+        html += '<li class="py-3 text-center text-gray-500">🎉 ไม่มีของเสียในวันนี้</li>';
+    } else {
+        sortedItems.forEach(([type, pcs]) => {
+            total += pcs;
+            html += `
+            <li class="py-3 flex justify-between items-center">
+                <span class="text-sm font-medium text-gray-700">${type}</span>
+                <span class="text-sm font-bold text-red-600">${pcs.toLocaleString()} ชิ้น</span>
+            </li>`;
+        });
         html += `
-        <li class="py-3 flex justify-between items-center">
-            <span class="text-sm font-medium text-gray-700">${type}</span>
-            <span class="text-sm font-bold text-red-600">${pcs.toLocaleString()} ชิ้น</span>
+        <li class="py-3 flex justify-between items-center bg-red-50 mt-2 px-3 rounded-lg font-bold border border-red-100">
+            <span class="text-red-800">รวมของเสียทั้งหมด</span>
+            <span class="text-red-800 text-lg">${total.toLocaleString()} ชิ้น</span>
         </li>`;
-    });
-    html += `
-    <li class="py-3 flex justify-between items-center bg-red-50 mt-2 px-3 rounded-lg font-bold border border-red-100">
-        <span class="text-red-800">รวมของเสียทั้งหมด</span>
-        <span class="text-red-800 text-lg">${total.toLocaleString()} ชิ้น</span>
-    </li>`;
-}
+    }
 
-html += '</ul>';
-container.innerHTML = html;
+    html += '</ul>';
+    container.innerHTML = html;
 
-document.getElementById('modal-daily-ng-breakdown').classList.remove('hidden');
+    document.getElementById('modal-daily-ng-breakdown').classList.remove('hidden');
+};
+
+// เพิ่มฟังก์ชันสำหรับกดดูรูปภาพขนาดใหญ่
+window.viewMaintImage = function(url, caption) {
+    const modal = document.getElementById('modal-image-viewer');
+    const img = document.getElementById('viewer-img');
+    const cap = document.getElementById('viewer-caption');
+
+    if (modal && img) {
+        img.src = url;
+        if (cap) cap.innerText = caption || 'ภาพแนบการแจ้งซ่อม';
+        modal.classList.remove('hidden');
+    }
 };
