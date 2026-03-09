@@ -1036,16 +1036,30 @@ window.showMachineDetail = function(machineName) {
     let totalDowntimeMins = 0;
     let maintHtml = '';
 
+    // ฟังก์ชันย่อยสำหรับแก้ปัญหาเวลา 1899-12-30T... ที่ Google Sheets สร้างมา
+    const extractTime = (timeVal) => {
+        if (!timeVal) return '';
+        let str = String(timeVal);
+        if (str.includes('T')) return str.split('T')[1].substring(0, 5); // เช่น 1899-12-30T01:30:00.000Z -> 01:30
+        const match = str.match(/(\d{2}:\d{2})/);
+        if (match) return match[1];
+        return str.substring(0, 5);
+    };
+
     if (mData.maintenanceLogs && mData.maintenanceLogs.length > 0) {
         mData.maintenanceLogs.forEach(log => {
             let durationStr = 'ยังไม่ระบุเวลาเสร็จสิ้น';
             let mins = 0;
             
-            // คำนวณเวลา Downtime
-            if (log.startTime && log.endTime) {
+            // ดึงค่าเวลาออกมาใหม่
+            let sTime = extractTime(log.startTime) || '-';
+            let eTime = extractTime(log.endTime) || '-';
+            
+            // คำนวณเวลา Downtime ใหม่ ป้องกัน Bug 1899-
+            if (sTime !== '-' && eTime !== '-') {
                 try {
-                    let s = log.startTime.toString().split(':');
-                    let e = log.endTime.toString().split(':');
+                    let s = sTime.split(':');
+                    let e = eTime.split(':');
                     let sMins = parseInt(s[0]) * 60 + parseInt(s[1]);
                     let eMins = parseInt(e[0]) * 60 + parseInt(e[1]);
                     mins = eMins - sMins;
@@ -1059,12 +1073,17 @@ window.showMachineDetail = function(machineName) {
                 } catch(err) { console.log("Time calc error:", err); }
             }
 
-            // จัดการปุ่มดูรูปภาพ
-            let imgBtn = log.imageUrl ? 
-                `<button onclick="window.viewMaintImage('${log.imageUrl}', '${log.issueType}')" class="mt-2 text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded border border-orange-200 hover:bg-orange-100 font-bold w-full text-center">📸 ดูรูปภาพแนบ</button>` : '';
+            // จัดการแปลง URL รูปภาพจากหน้า Viewer ให้กลายเป็นภาพตรงๆ ให้โชว์ได้
+            let displayImageUrl = log.imageUrl;
+            if (displayImageUrl && displayImageUrl.includes('drive.google.com/file/d/')) {
+                 const match = displayImageUrl.match(/\/d\/(.+?)\//);
+                 if (match && match[1]) {
+                     displayImageUrl = `https://drive.google.com/uc?id=${match[1]}`;
+                 }
+            }
 
-            let sTime = log.startTime ? log.startTime.toString().substring(0,5) : '-';
-            let eTime = log.endTime ? log.endTime.toString().substring(0,5) : '-';
+            let imgBtn = displayImageUrl ? 
+                `<button onclick="window.viewMaintImage('${displayImageUrl}', '${log.issueType}')" class="mt-2 text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded border border-orange-200 hover:bg-orange-100 font-bold w-full text-center">📸 ดูรูปภาพแนบ</button>` : '';
 
             maintHtml += `
                 <div class="bg-white border border-gray-200 p-3 rounded-lg shadow-sm">
