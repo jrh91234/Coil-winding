@@ -1036,17 +1036,14 @@ window.showMachineDetail = function(machineName) {
     let totalDowntimeMins = 0;
     let maintHtml = '';
 
-    // ฟังก์ชันย่อยสำหรับแก้ปัญหาเวลา 1899-12-30T... และบังคับแสดงเป็น 24 ชั่วโมง (HH:mm)
     const extractTime = (timeVal) => {
         if (!timeVal) return '';
         let str = String(timeVal);
         
-        // กรณีเป็น ISO Date String (มีตัว T)
         if (str.includes('T')) {
             try {
                 const d = new Date(str);
                 if (!isNaN(d.getTime())) {
-                    // ใช้ getHours / getMinutes ของเบราว์เซอร์ จะได้เวลา 24 ชม. ของ Timezone ปัจจุบันอัตโนมัติ
                     let h = d.getHours().toString().padStart(2, '0');
                     let m = d.getMinutes().toString().padStart(2, '0');
                     return `${h}:${m}`;
@@ -1054,7 +1051,6 @@ window.showMachineDetail = function(machineName) {
             } catch(e) { console.warn("Time parse error", e); }
         }
         
-        // ถ้าเป็น String เวลาปกติ ให้ดึงแค่ HH:mm ด้วย Regex
         const match = str.match(/(\d{2}:\d{2})/);
         if (match) return match[1];
         
@@ -1066,11 +1062,9 @@ window.showMachineDetail = function(machineName) {
             let durationStr = 'ยังไม่ระบุเวลาเสร็จสิ้น';
             let mins = 0;
             
-            // ดึงค่าเวลาออกมาใหม่ในรูปแบบ 24 ชั่วโมง
             let sTime = extractTime(log.startTime) || '-';
             let eTime = extractTime(log.endTime) || '-';
             
-            // คำนวณเวลา Downtime ใหม่ 
             if (sTime !== '-' && eTime !== '-') {
                 try {
                     let s = sTime.split(':');
@@ -1079,7 +1073,7 @@ window.showMachineDetail = function(machineName) {
                     let eMins = parseInt(e[0]) * 60 + parseInt(e[1]);
                     mins = eMins - sMins;
                     
-                    if (mins < 0) mins += 1440; // กรณีข้ามวัน
+                    if (mins < 0) mins += 1440;
                     totalDowntimeMins += mins;
 
                     let h = Math.floor(mins / 60);
@@ -1088,10 +1082,46 @@ window.showMachineDetail = function(machineName) {
                 } catch(err) { console.log("Time calc error:", err); }
             }
 
-            // เนื่องจากนโยบายใหม่ของ Google Drive จะบล็อกการฝังรูปลงในเว็บตรงๆ (CORS/X-Frame-Options)
-            // จึงต้องเปลี่ยนเป็นปุ่มคลิกเพื่อเปิดรูปภาพในแท็บใหม่แทน เพื่อให้ดูภาพได้แน่นอน 100%
-            let imgBtn = log.imageUrl ? 
-                `<button onclick="window.open('${log.imageUrl}', '_blank')" class="mt-2 text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded border border-orange-200 hover:bg-orange-100 font-bold w-full text-center">📸 เปิดดูรูปภาพแนบ (แท็บใหม่)</button>` : '';
+            // --- ส่วนสร้าง Thumbnail โดยสกัด File ID ---
+            let imgBtn = '';
+            if (log.imageUrl) {
+                let fileId = '';
+                // ดึง ID ออกจากลิงก์รูปแบบต่างๆ ของ Google Drive
+                const matchD = log.imageUrl.match(/\/d\/(.+?)\//);
+                const matchId = log.imageUrl.match(/id=([^&]+)/);
+                if (matchD && matchD[1]) {
+                    fileId = matchD[1];
+                } else if (matchId && matchId[1]) {
+                    fileId = matchId[1];
+                }
+
+                if (fileId) {
+                    // ใช้ endpoint ลับ 2 แบบสำหรับดึง Thumbnail จาก Drive โดยไม่ติด CORS
+                    const thumbUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
+                    const fallbackThumb = `https://lh3.googleusercontent.com/d/${fileId}`;
+                    
+                    imgBtn = `
+                        <div class="mt-3 border border-gray-200 rounded overflow-hidden cursor-pointer relative group" onclick="window.viewMaintImage('${fallbackThumb}', '${log.issueType}')" title="คลิกเพื่อดูรูปใหญ่">
+                            <div class="h-32 w-full bg-gray-100 flex items-center justify-center">
+                                <!-- พยายามโหลด Thumbnail แบบแรก ถ้าไม่ได้ให้สลับไปใช้ lh3.googleusercontent.com -->
+                                <img src="${thumbUrl}" onerror="this.onerror=null; this.src='${fallbackThumb}'; this.onerror=function(){ this.style.display='none'; this.nextElementSibling.style.display='flex'; };" class="w-full h-full object-cover" alt="Maintenance Image" loading="lazy">
+                                <!-- ถ้าโหลดรูปไม่ได้จริงๆ จะแสดงปุ่มนี้แทน -->
+                                <div class="hidden flex-col items-center justify-center text-gray-500 text-xs w-full h-full">
+                                    <span class="text-2xl mb-1">📸</span>
+                                    <span>คลิกเพื่อดูรูปภาพ</span>
+                                </div>
+                            </div>
+                            <!-- Effect ตอนเอาเมาส์ไปชี้เหนือรูป -->
+                            <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center pointer-events-none">
+                                <span class="bg-black bg-opacity-70 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">🔍 ขยายรูปภาพ</span>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // กรณีหา ID ไม่เจอ (เช่นลิงก์แปลกๆ) ให้แสดงเป็นปุ่มธรรมดา
+                    imgBtn = `<button onclick="window.open('${log.imageUrl}', '_blank')" class="mt-2 text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded border border-orange-200 hover:bg-orange-100 font-bold w-full text-center">📸 เปิดดูรูปภาพแนบ (แท็บใหม่)</button>`;
+                }
+            }
 
             maintHtml += `
                 <div class="bg-white border border-gray-200 p-3 rounded-lg shadow-sm">
@@ -1109,7 +1139,6 @@ window.showMachineDetail = function(machineName) {
             `;
         });
 
-        // สรุปเวลา Downtime รวม
         let totalH = Math.floor(totalDowntimeMins / 60);
         let totalM = totalDowntimeMins % 60;
         downtimeText.innerText = totalH > 0 ? `${totalH} ชม. ${totalM} นาที` : `${totalM} นาที`;
@@ -1119,7 +1148,6 @@ window.showMachineDetail = function(machineName) {
         downtimeText.innerText = "0 นาที";
         maintListContainer.innerHTML = '<div class="text-center text-gray-400 py-4 text-sm bg-gray-50 rounded border border-dashed border-gray-200">ไม่พบประวัติการแจ้งซ่อม หรือปัญหาเครื่องจักรในช่วงเวลานี้</div>';
     }
-    // --------------------------------------------------------
 
     document.getElementById('machineChartToggle').value = 'hourly';
     window.switchMachineChart();
@@ -1277,7 +1305,17 @@ window.showDailyNgBreakdown = function(machine, date) {
     document.getElementById('modal-daily-ng-breakdown').classList.remove('hidden');
 };
 
-// เผื่อไว้ใช้ในส่วนอื่น: ปรับให้ฟังก์ชันนี้เปิดแท็บใหม่เช่นกัน
+// เปลี่ยนให้ใช้ Modal สำหรับเปิดรูปแทน ถ้าหน้าเว็บมีโค้ดรองรับ (หรือจะเด้งแท็บใหม่ถ้าไม่มี Modal)
 window.viewMaintImage = function(url, caption) {
-    window.open(url, '_blank');
+    const modal = document.getElementById('modal-image-viewer');
+    const img = document.getElementById('viewer-img');
+    const cap = document.getElementById('viewer-caption');
+
+    if (modal && img) {
+        img.src = url;
+        if (cap) cap.innerText = caption || 'ภาพแนบการแจ้งซ่อม';
+        modal.classList.remove('hidden');
+    } else {
+        window.open(url, '_blank');
+    }
 };
