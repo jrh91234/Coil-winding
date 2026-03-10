@@ -1219,6 +1219,29 @@ window.showMachineDetail = function(machineName) {
             maintainAspectRatio: false, 
             plugins: { 
                 legend: { display: true },
+                tooltip: {
+                    callbacks: {
+                        afterLabel: function(context) {
+                            // เช็คว่าเป็นแท่งกราฟของ 'NG' และมีข้อมูล Breakdown รายชั่วโมงส่งมาหรือไม่
+                            if (context.dataset.label === 'NG (เสียเป็นชิ้น)') {
+                                const idx = context.dataIndex;
+                                const breakdown = mData.hourlyNgBreakdown ? mData.hourlyNgBreakdown[idx] : null;
+                                
+                                if (breakdown && Object.keys(breakdown).length > 0) {
+                                    let lines = ['----------------------'];
+                                    Object.entries(breakdown)
+                                        .filter(([k, v]) => v > 0)
+                                        .sort((a, b) => b[1] - a[1]) // เรียงจากมากไปน้อย
+                                        .forEach(([k, v]) => {
+                                            lines.push(`  • ${k}: ${v.toLocaleString()} ชิ้น`);
+                                        });
+                                    if (lines.length > 1) return lines;
+                                }
+                            }
+                            return [];
+                        }
+                    }
+                },
                 zoom: {
                     pan: { enabled: true, mode: 'xy' },
                     zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
