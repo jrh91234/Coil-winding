@@ -529,7 +529,13 @@ window.renderNgTrendChart = function() {
                             }
                             html += '</ul>';
                             container.innerHTML = html;
-                            document.getElementById('modal-daily-ng-breakdown').classList.remove('hidden');
+                            
+                            const modalWindow = document.getElementById('modal-daily-ng-breakdown');
+                            if(modalWindow) {
+                                modalWindow.classList.remove('hidden');
+                                // 🌟 บังคับใส่ !important เพื่อให้ทะลุโหมด Maximize
+                                modalWindow.style.setProperty('z-index', '999999', 'important'); 
+                            }
                         }
                     }, 250); // รอ 250 มิลลิวินาที
                 }
@@ -1265,7 +1271,11 @@ window.showMachineDetail = function(machineName) {
     document.getElementById('machineChartToggle').value = 'hourly';
     window.switchMachineChart();
 
-    modal.classList.remove('hidden');
+    // เปิดหน้าต่าง Modal แล้วดัน z-index ให้สูงสุดแบบบังคับเพื่อทะลุโหมด Maximize
+    if(modal) {
+        modal.classList.remove('hidden');
+        modal.style.setProperty('z-index', '999999', 'important');
+    }
 
     if(machineDetailChart) machineDetailChart.destroy();
     if(machineDailyChartInst) machineDailyChartInst.destroy();
@@ -1299,7 +1309,6 @@ window.showMachineDetail = function(machineName) {
                 tooltip: {
                     callbacks: {
                         afterLabel: function(context) {
-                            // เช็คว่าเป็นแท่งกราฟของ 'NG' และมีข้อมูล Breakdown รายชั่วโมงส่งมาหรือไม่
                             if (context.dataset.label === 'NG (เสียเป็นชิ้น)') {
                                 const idx = context.dataIndex;
                                 const breakdown = mData.hourlyNgBreakdown ? mData.hourlyNgBreakdown[idx] : null;
@@ -1308,7 +1317,7 @@ window.showMachineDetail = function(machineName) {
                                     let lines = ['----------------------'];
                                     Object.entries(breakdown)
                                         .filter(([k, v]) => v > 0)
-                                        .sort((a, b) => b[1] - a[1]) // เรียงจากมากไปน้อย
+                                        .sort((a, b) => b[1] - a[1])
                                         .forEach(([k, v]) => {
                                             lines.push(`  • ${k}: ${v.toLocaleString()} ชิ้น`);
                                         });
@@ -1438,7 +1447,12 @@ window.showDailyNgBreakdown = function(machine, date) {
     html += '</ul>';
     container.innerHTML = html;
 
-    document.getElementById('modal-daily-ng-breakdown').classList.remove('hidden');
+    const modalWindow = document.getElementById('modal-daily-ng-breakdown');
+    if(modalWindow) {
+        modalWindow.classList.remove('hidden');
+        // ดัน z-index ให้สูงสุดแบบบังคับเพื่อทะลุโหมด Maximize
+        modalWindow.style.setProperty('z-index', '999999', 'important');
+    }
 };
 
 window.viewMaintImage = function(url, caption) {
@@ -1450,6 +1464,8 @@ window.viewMaintImage = function(url, caption) {
         img.src = url;
         if (cap) cap.innerText = caption || 'ภาพแนบการแจ้งซ่อม';
         modal.classList.remove('hidden');
+        // ดัน z-index ให้สูงสุดแบบบังคับเพื่อทะลุโหมด Maximize
+        modal.style.setProperty('z-index', '999999', 'important');
     } else {
         window.open(url, '_blank');
     }
