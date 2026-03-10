@@ -1038,8 +1038,9 @@ window.showMachineDetail = function(machineName) {
 
     const extractTime = (timeVal) => {
         if (!timeVal) return '';
-        let str = String(timeVal);
+        let str = String(timeVal).trim();
         
+        // กรณี ISO Date String (มาจาก Google Sheets ตรงๆ)
         if (str.includes('T')) {
             try {
                 const d = new Date(str);
@@ -1051,8 +1052,25 @@ window.showMachineDetail = function(machineName) {
             } catch(e) { console.warn("Time parse error", e); }
         }
         
-        const match = str.match(/(\d{2}:\d{2})/);
-        if (match) return match[1];
+        // กรณีพบข้อความที่มีคำว่า AM หรือ PM (เช่น "2:30 PM", "02:30 AM") ให้แปลงกลับเป็น 24 ชม. ทันที
+        const ampmMatch = str.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+        if (ampmMatch) {
+            let h = parseInt(ampmMatch[1], 10);
+            let m = ampmMatch[2];
+            let ampm = ampmMatch[3].toUpperCase();
+            
+            if (ampm === 'PM' && h < 12) h += 12;
+            if (ampm === 'AM' && h === 12) h = 0;
+            
+            return `${h.toString().padStart(2, '0')}:${m}`;
+        }
+        
+        // กรณีข้อความทั่วไป 14:30
+        const match = str.match(/(\d{1,2}:\d{2})/);
+        if (match) {
+            let parts = match[1].split(':');
+            return `${parts[0].padStart(2, '0')}:${parts[1]}`;
+        }
         
         return str.substring(0, 5);
     };
@@ -1066,19 +1084,16 @@ window.showMachineDetail = function(machineName) {
     
     if (dashStartDate && dashEndDate) {
         processedLogs = processedLogs.filter(log => {
-            if (!log.date) return true; // ถ้าเรคคอร์ดไหนไม่ได้ใส่วันที่ไว้ ปล่อยผ่าน
-            // เทียบ String ของวันที่ (รูปแบบ YYYY-MM-DD สามารถเทียบแบบ string ได้เลย)
+            if (!log.date) return true; 
             return log.date >= dashStartDate && log.date <= dashEndDate;
         });
     }
 
     // 2. เรียงลำดับรายการ (รายการใหม่ล่าสุดอยู่บนสุด)
     processedLogs.sort((a, b) => {
-        // เทียบวันที่ก่อน
         const dateCompare = (b.date || '').localeCompare(a.date || '');
         if (dateCompare !== 0) return dateCompare; 
         
-        // ถ้าเป็นวันเดียวกัน ให้เทียบเวลาเริ่ม
         const timeA = extractTime(a.startTime) || '00:00';
         const timeB = extractTime(b.startTime) || '00:00';
         return timeB.localeCompare(timeA);
@@ -1113,7 +1128,6 @@ window.showMachineDetail = function(machineName) {
             let imgBtn = '';
             if (log.imageUrl) {
                 let fileId = '';
-                // ดึง ID ออกจากลิงก์รูปแบบต่างๆ ของ Google Drive
                 const matchD = log.imageUrl.match(/\/d\/(.+?)\//);
                 const matchId = log.imageUrl.match(/id=([^&]+)/);
                 if (matchD && matchD[1]) {
@@ -1123,29 +1137,24 @@ window.showMachineDetail = function(machineName) {
                 }
 
                 if (fileId) {
-                    // ใช้ endpoint ลับ 2 แบบสำหรับดึง Thumbnail จาก Drive โดยไม่ติด CORS
                     const thumbUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
                     const fallbackThumb = `https://lh3.googleusercontent.com/d/${fileId}`;
                     
                     imgBtn = `
                         <div class="mt-3 border border-gray-200 rounded overflow-hidden cursor-pointer relative group" onclick="window.viewMaintImage('${fallbackThumb}', '${log.issueType}')" title="คลิกเพื่อดูรูปใหญ่">
                             <div class="h-32 w-full bg-gray-100 flex items-center justify-center">
-                                <!-- พยายามโหลด Thumbnail แบบแรก ถ้าไม่ได้ให้สลับไปใช้ lh3.googleusercontent.com -->
                                 <img src="${thumbUrl}" onerror="this.onerror=null; this.src='${fallbackThumb}'; this.onerror=function(){ this.style.display='none'; this.nextElementSibling.style.display='flex'; };" class="w-full h-full object-cover" alt="Maintenance Image" loading="lazy">
-                                <!-- ถ้าโหลดรูปไม่ได้จริงๆ จะแสดงปุ่มนี้แทน -->
                                 <div class="hidden flex-col items-center justify-center text-gray-500 text-xs w-full h-full">
                                     <span class="text-2xl mb-1">📸</span>
                                     <span>คลิกเพื่อดูรูปภาพ</span>
                                 </div>
                             </div>
-                            <!-- Effect ตอนเอาเมาส์ไปชี้เหนือรูป -->
                             <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center pointer-events-none">
                                 <span class="bg-black bg-opacity-70 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">🔍 ขยายรูปภาพ</span>
                             </div>
                         </div>
                     `;
                 } else {
-                    // กรณีหา ID ไม่เจอ (เช่นลิงก์แปลกๆ) ให้แสดงเป็นปุ่มธรรมดา
                     imgBtn = `<button onclick="window.open('${log.imageUrl}', '_blank')" class="mt-2 text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded border border-orange-200 hover:bg-orange-100 font-bold w-full text-center">📸 เปิดดูรูปภาพแนบ (แท็บใหม่)</button>`;
                 }
             }
@@ -1332,7 +1341,6 @@ window.showDailyNgBreakdown = function(machine, date) {
     document.getElementById('modal-daily-ng-breakdown').classList.remove('hidden');
 };
 
-// เปลี่ยนให้ใช้ Modal สำหรับเปิดรูปแทน ถ้าหน้าเว็บมีโค้ดรองรับ (หรือจะเด้งแท็บใหม่ถ้าไม่มี Modal)
 window.viewMaintImage = function(url, caption) {
     const modal = document.getElementById('modal-image-viewer');
     const img = document.getElementById('viewer-img');
