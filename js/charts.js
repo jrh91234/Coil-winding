@@ -1037,11 +1037,25 @@ window.showMachineDetail = function(machineName) {
     let maintHtml = '';
 
     const extractTime = (timeVal) => {
-        if (!timeVal) return '';
+        if (!timeVal) return '-';
         let str = String(timeVal).trim();
         
-        // กรณี ISO Date String (มาจาก Google Sheets ตรงๆ)
-        if (str.includes('T')) {
+        // 1. ดักจับรูปแบบที่มี AM / PM โดยเฉพาะ (ไม่ว่าจะมีวินาทีต่อท้ายหรือไม่ เช่น "2:30 PM", "02:30:00 PM")
+        const ampmRegex = /(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)/i;
+        const ampmMatch = str.match(ampmRegex);
+        if (ampmMatch) {
+            let h = parseInt(ampmMatch[1], 10);
+            let m = ampmMatch[2];
+            let ampm = ampmMatch[3].toUpperCase();
+
+            if (ampm === 'PM' && h < 12) h += 12;
+            if (ampm === 'AM' && h === 12) h = 0;
+
+            return `${h.toString().padStart(2, '0')}:${m}`;
+        }
+
+        // 2. ดักจับ ISO Date String ที่ Google Sheets ชอบสร้าง (เช่น "1899-12-30T07:30:00.000Z")
+        if (str.includes('T') || str.length > 10) {
             try {
                 const d = new Date(str);
                 if (!isNaN(d.getTime())) {
@@ -1051,25 +1065,11 @@ window.showMachineDetail = function(machineName) {
                 }
             } catch(e) { console.warn("Time parse error", e); }
         }
-        
-        // กรณีพบข้อความที่มีคำว่า AM หรือ PM (เช่น "2:30 PM", "02:30 AM") ให้แปลงกลับเป็น 24 ชม. ทันที
-        const ampmMatch = str.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-        if (ampmMatch) {
-            let h = parseInt(ampmMatch[1], 10);
-            let m = ampmMatch[2];
-            let ampm = ampmMatch[3].toUpperCase();
-            
-            if (ampm === 'PM' && h < 12) h += 12;
-            if (ampm === 'AM' && h === 12) h = 0;
-            
-            return `${h.toString().padStart(2, '0')}:${m}`;
-        }
-        
-        // กรณีข้อความทั่วไป 14:30
-        const match = str.match(/(\d{1,2}:\d{2})/);
-        if (match) {
-            let parts = match[1].split(':');
-            return `${parts[0].padStart(2, '0')}:${parts[1]}`;
+
+        // 3. ดักจับข้อความที่เป็นเวลาทั่วไป HH:MM หรือ HH:MM:SS
+        const timeMatch = str.match(/(\d{1,2}):(\d{2})/);
+        if (timeMatch) {
+            return `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
         }
         
         return str.substring(0, 5);
