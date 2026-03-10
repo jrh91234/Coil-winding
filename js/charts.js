@@ -1057,8 +1057,35 @@ window.showMachineDetail = function(machineName) {
         return str.substring(0, 5);
     };
 
-    if (mData.maintenanceLogs && mData.maintenanceLogs.length > 0) {
-        mData.maintenanceLogs.forEach(log => {
+    // --- ส่วนจัดการ กรองวันที่ (Filter) และ เรียงลำดับ (Sort) ---
+    let processedLogs = [...(mData.maintenanceLogs || [])];
+
+    // 1. กรองข้อมูลให้อยู่ในช่วงวันที่เลือกบน Dashboard
+    const dashStartDate = document.getElementById('start-date')?.value;
+    const dashEndDate = document.getElementById('end-date')?.value;
+    
+    if (dashStartDate && dashEndDate) {
+        processedLogs = processedLogs.filter(log => {
+            if (!log.date) return true; // ถ้าเรคคอร์ดไหนไม่ได้ใส่วันที่ไว้ ปล่อยผ่าน
+            // เทียบ String ของวันที่ (รูปแบบ YYYY-MM-DD สามารถเทียบแบบ string ได้เลย)
+            return log.date >= dashStartDate && log.date <= dashEndDate;
+        });
+    }
+
+    // 2. เรียงลำดับรายการ (รายการใหม่ล่าสุดอยู่บนสุด)
+    processedLogs.sort((a, b) => {
+        // เทียบวันที่ก่อน
+        const dateCompare = (b.date || '').localeCompare(a.date || '');
+        if (dateCompare !== 0) return dateCompare; 
+        
+        // ถ้าเป็นวันเดียวกัน ให้เทียบเวลาเริ่ม
+        const timeA = extractTime(a.startTime) || '00:00';
+        const timeB = extractTime(b.startTime) || '00:00';
+        return timeB.localeCompare(timeA);
+    });
+
+    if (processedLogs.length > 0) {
+        processedLogs.forEach(log => {
             let durationStr = 'ยังไม่ระบุเวลาเสร็จสิ้น';
             let mins = 0;
             
