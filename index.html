@@ -13,6 +13,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     
+    <!-- เพิ่มไลบรารีเวลา Flatpickr สำหรับบังคับเวลา 24 ชั่วโมง -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/style.css?v=3.55">
 </head>
@@ -1071,6 +1075,26 @@
                 };
             }
         }, 500);
+
+        // โค้ดบังคับให้ช่องเวลาเป็น 24 ชั่วโมง
+        document.addEventListener("DOMContentLoaded", function() {
+            if(document.getElementById("maint-start-time")) {
+                flatpickr("#maint-start-time", {
+                    enableTime: true,
+                    noCalendar: true,
+                    dateFormat: "H:i",
+                    time_24hr: true
+                });
+            }
+            if(document.getElementById("maint-end-time")) {
+                flatpickr("#maint-end-time", {
+                    enableTime: true,
+                    noCalendar: true,
+                    dateFormat: "H:i",
+                    time_24hr: true
+                });
+            }
+        });
     </script>
 </body>
 </html>
