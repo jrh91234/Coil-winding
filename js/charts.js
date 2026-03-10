@@ -429,17 +429,6 @@ window.renderNgTrendChart = function() {
     const commonOpts = { 
          responsive: true, 
          maintainAspectRatio: false,
-         onClick: (e, elements, chart) => {
-             if (elements && elements.length > 0 && chart.options.scales) {
-                 const axisId = chart.options.indexAxis === 'y' ? 'y' : 'x';
-                 const index = elements[0].index;
-                 if(chart.options.scales[axisId]) {
-                     chart.options.scales[axisId].min = index;
-                     chart.options.scales[axisId].max = index;
-                     chart.update();
-                 }
-             }
-         },
          plugins: {
              zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } }
          }
@@ -447,6 +436,9 @@ window.renderNgTrendChart = function() {
 
     const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
     const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
+
+    // 🌟 ตัวแปรสำหรับตั้งเวลาเพื่อแยกการคลิก 1 ครั้ง / 2 ครั้ง 🌟
+    let ngTrendClickTimer = null;
 
     charts.ngSymptomTrend = new Chart(ctxNgTrend, {
         type: 'line',
@@ -457,6 +449,91 @@ window.renderNgTrendChart = function() {
         },
         options: {
             ...commonOpts,
+            // ============================================
+            // 🌟 ระบบแยกคลิก 1 ครั้ง / 2 ครั้ง สำหรับกราฟนี้ 
+            // ============================================
+            onClick: function(e, elements, chart) {
+                if (!elements || elements.length === 0) return;
+                const element = elements[0];
+                const datasetIndex = element.datasetIndex;
+                const index = element.index;
+                
+                const dateStr = chart.data.labels[index];
+                const symptom = chart.data.datasets[datasetIndex].label;
+                const val = chart.data.datasets[datasetIndex].data[index];
+
+                if (val === 0) return; // ไม่แสดงถ้าค่าเป็น 0
+
+                if (ngTrendClickTimer) {
+                    // 🌟 ดับเบิ้ลคลิก (2 clicks) -> ซูมเข้าเหมือนระบบเดิม
+                    clearTimeout(ngTrendClickTimer);
+                    ngTrendClickTimer = null;
+                    
+                    const axisId = chart.options.indexAxis === 'y' ? 'y' : 'x';
+                    if(chart.options.scales[axisId]) {
+                        chart.options.scales[axisId].min = index;
+                        chart.options.scales[axisId].max = index;
+                        chart.update();
+                    }
+                } else {
+                    // 🌟 คลิกครั้งแรก (ตั้งเวลาเผื่อ 250ms เพื่อดูว่าจะมีการคลิกซ้ำเป็นดับเบิ้ลคลิกไหม)
+                    ngTrendClickTimer = setTimeout(() => {
+                        ngTrendClickTimer = null;
+                        
+                        // 🌟 คลิก 1 ครั้ง -> คำนวณและแสดงว่ามาจากเครื่องจักรไหนบ้าง
+                        if (!currentDashboardData || !currentDashboardData.machineData) return;
+                        
+                        let machineBreakdown = [];
+                        let totalPcs = 0;
+                        
+                        // วนลูปหาข้อมูลของเสียอาการนี้ ในวันที่เลือก จากทุกเครื่องจักร
+                        for (const [mac, mData] of Object.entries(currentDashboardData.machineData)) {
+                            if (mData.daily && mData.daily[dateStr] && mData.daily[dateStr].ngBreakdown) {
+                                const mPcs = mData.daily[dateStr].ngBreakdown[symptom];
+                                if (mPcs > 0) {
+                                    machineBreakdown.push({ machine: mac, pcs: mPcs });
+                                    totalPcs += mPcs;
+                                }
+                            }
+                        }
+                        
+                        machineBreakdown.sort((a, b) => b.pcs - a.pcs); // เรียงจากมากไปน้อย
+                        
+                        // นำข้อมูลไปแสดงผลใน Modal (ใช้ Modal เดิมที่มีอยู่แล้วเพื่อความสวยงาม)
+                        const container = document.getElementById('daily-ng-content');
+                        const title = document.getElementById('daily-ng-title');
+                        
+                        if (title && container) {
+                            title.innerHTML = `⚙️ แหล่งที่มา: <span class="text-yellow-300">${symptom}</span> <span class="text-xs font-normal text-white ml-1">(${dateStr})</span>`;
+                            
+                            let html = '<ul class="divide-y divide-gray-200">';
+                            if (machineBreakdown.length === 0) {
+                                html += '<li class="py-3 text-center text-gray-500">ไม่พบข้อมูลเครื่องจักร</li>';
+                            } else {
+                                machineBreakdown.forEach(item => {
+                                    const pct = totalPcs > 0 ? ((item.pcs / totalPcs) * 100).toFixed(1) : 0;
+                                    html += `
+                                    <li class="py-3 flex justify-between items-center">
+                                        <div class="flex flex-col">
+                                            <span class="text-sm font-bold text-gray-800">${item.machine}</span>
+                                            <span class="text-xs text-gray-500">สัดส่วน: ${pct}%</span>
+                                        </div>
+                                        <span class="text-sm font-bold text-red-600">${item.pcs.toLocaleString()} ชิ้น</span>
+                                    </li>`;
+                                });
+                                html += `
+                                <li class="py-3 flex justify-between items-center bg-red-50 mt-2 px-3 rounded-lg font-bold border border-red-100">
+                                    <span class="text-red-800">รวมทั้งหมด</span>
+                                    <span class="text-red-800 text-lg">${totalPcs.toLocaleString()} ชิ้น</span>
+                                </li>`;
+                            }
+                            html += '</ul>';
+                            container.innerHTML = html;
+                            document.getElementById('modal-daily-ng-breakdown').classList.remove('hidden');
+                        }
+                    }, 250); // รอ 250 มิลลิวินาที
+                }
+            },
             scales: { 
                 x: { offset: true }, 
                 y: { 
