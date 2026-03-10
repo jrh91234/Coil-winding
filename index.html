@@ -690,7 +690,19 @@
                 <h3 class="text-xl font-bold text-orange-600 flex items-center gap-2"><span>🛠️</span> แจ้งซ่อม / ปัญหาเครื่องจักร</h3>
                 <button onclick="document.getElementById('modal-maintenance').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
             </div>
+            
+            <!-- ส่วนแสดงงานค้าง -->
+            <div id="pending-maint-container" class="hidden mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                 <div class="flex justify-between items-center mb-2">
+                     <h4 class="text-sm font-bold text-yellow-800">⚠️ งานซ่อมค้าง (ยังไม่ลงเวลาเสร็จ)</h4>
+                     <button type="button" onclick="window.clearPendingSelection()" class="hidden text-[10px] text-gray-500 hover:text-gray-800 bg-white border px-2 py-1 rounded shadow-sm" id="btn-clear-pending">ยกเลิกดึงข้อมูล</button>
+                 </div>
+                 <div id="pending-maint-list" class="space-y-2 max-h-32 overflow-y-auto text-xs"></div>
+            </div>
+
             <form id="maintenanceForm" class="space-y-4">
+                <input type="hidden" id="maint-job-id" value="">
+                
                 <div class="grid grid-cols-2 gap-3 mb-2">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">วันที่แจ้ง</label>
@@ -718,6 +730,13 @@
                         <option value="อื่นๆ (Others)">❓ อื่นๆ (Others)</option>
                     </select>
                 </div>
+                
+                <!-- วันที่ซ่อมเสร็จ กรณีปิดจ๊อบข้ามวัน -->
+                <div id="maint-end-date-wrapper" class="hidden">
+                     <label class="block text-sm font-bold text-green-700 mb-1">📅 วันที่ซ่อมเสร็จ (ปิดจ๊อบ)</label>
+                     <input type="date" id="maint-end-date" class="w-full p-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-green-50">
+                </div>
+
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">เริ่มหยุด (Start)</label>
@@ -726,7 +745,7 @@
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">ทำงานต่อ (End)</label>
                         <input type="time" id="maint-end-time" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
-                        <p class="text-[10px] text-gray-400 mt-1">*เว้นว่างไว้ถ้ายังซ่อมไม่เสร็จ</p>
+                        <p class="text-[10px] text-gray-400 mt-1" id="maint-end-hint">*เว้นว่างไว้ถ้ายังซ่อมไม่เสร็จ</p>
                     </div>
                 </div>
                 <div>
@@ -734,7 +753,7 @@
                     <textarea id="maint-remark" rows="2" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" placeholder="อธิบายปัญหาที่พบ..."></textarea>
                 </div>
                 
-                <div class="bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300">
+                <div class="bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300" id="maint-photo-section">
                     <label class="block text-sm font-bold text-gray-700 mb-2">📸 ถ่ายรูปหลักฐาน (เลือกรูป/เปิดกล้อง)</label>
                     <!-- นำ capture="environment" ออกเพื่อให้เลือกไฟล์ภาพในเครื่องได้ -->
                     <input type="file" id="maint-photo" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer">
@@ -745,7 +764,7 @@
                 
                 <div class="pt-2 flex gap-3">
                     <button type="button" onclick="document.getElementById('modal-maintenance').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-300">ยกเลิก</button>
-                    <button type="submit" id="btn-save-maint" class="flex-1 bg-orange-600 text-white py-3 rounded-xl font-bold hover:bg-orange-700 shadow-md">💾 บันทึกปัญหา</button>
+                    <button type="submit" id="btn-save-maint" class="flex-1 bg-orange-600 text-white py-3 rounded-xl font-bold hover:bg-orange-700 shadow-md">💾 บันทึกเปิดแจ้งซ่อม</button>
                 </div>
             </form>
         </div>
@@ -1093,6 +1112,224 @@
                     dateFormat: "H:i",
                     time_24hr: true
                 });
+            }
+        });
+
+        // ==========================================
+        // 🌟 เพิ่มสคริปต์สำหรับจัดการซ่อมค้าง (Pending Maintenance)
+        // ==========================================
+        window.openMaintenanceModal = function() {
+            const modal = document.getElementById('modal-maintenance');
+            const dDate = document.getElementById('maint-date');
+            const dRec = document.getElementById('maint-reporter');
+            const dMac = document.getElementById('maint-machine');
+            const dStart = document.getElementById('maint-start-time');
+            
+            // รีเซ็ตฟอร์มให้กลับเป็นโหมด "เปิดแจ้งซ่อมใหม่"
+            window.clearPendingSelection();
+            
+            if (dDate) dDate.value = getShiftDateStr();
+            if (dRec && window.currentUser) dRec.value = window.currentUser.name || window.currentUser.username;
+            
+            if (dMac) {
+                let macOpts = '<option value="">-- เลือกเครื่องจักร --</option>';
+                for(let i=1; i<=16; i++) {
+                    macOpts += `<option value="CWM-${String(i).padStart(2,'0')}">CWM-${String(i).padStart(2,'0')}</option>`;
+                }
+                dMac.innerHTML = macOpts;
+            }
+            
+            if (dStart) {
+                const now = new Date();
+                dStart.value = now.toTimeString().substring(0,5);
+            }
+
+            // ดึงข้อมูลงานค้างจากเซิร์ฟเวอร์
+            window.fetchPendingJobs();
+
+            if (modal) modal.classList.remove('hidden');
+        };
+
+        window.fetchPendingJobs = async function() {
+            const container = document.getElementById('pending-maint-container');
+            const list = document.getElementById('pending-maint-list');
+            
+            if (!container || !list) return;
+            
+            list.innerHTML = '<p class="text-gray-500 text-center py-2">กำลังตรวจสอบงานค้าง...</p>';
+            container.classList.remove('hidden');
+
+            try {
+                // เรียกใช้ GET_PENDING_MAINTENANCE ที่ฝั่ง Backend
+                const res = await fetch(SCRIPT_URL + '?action=GET_PENDING_MAINTENANCE');
+                const data = await res.json();
+                
+                if (data.status === 'success' && data.data.length > 0) {
+                    let html = '';
+                    data.data.forEach(job => {
+                        html += `
+                        <div class="bg-white p-2 rounded border border-yellow-200 flex justify-between items-center cursor-pointer hover:bg-yellow-100 transition-colors" onclick='window.loadPendingJob(${JSON.stringify(job)})'>
+                            <div class="flex-1">
+                                <span class="font-bold text-orange-700">${job.jobId}</span> | <b class="text-gray-800">${job.machine}</b><br>
+                                <span class="text-gray-600">วันที่แจ้ง: ${job.date} เวลา ${job.startTime} น.<br>อาการ: ${job.issueType}</span>
+                            </div>
+                            <button type="button" class="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-2 rounded text-[10px] font-bold shadow-sm whitespace-nowrap ml-2">ดึงมาปิดจ๊อบ</button>
+                        </div>`;
+                    });
+                    list.innerHTML = html;
+                } else {
+                    container.classList.add('hidden'); 
+                }
+            } catch(e) {
+                list.innerHTML = '<p class="text-red-500 text-center py-2">ไม่สามารถโหลดข้อมูลงานค้างได้</p>';
+            }
+        };
+
+        window.loadPendingJob = function(job) {
+            // เซ็ตค่าลงในฟอร์ม
+            document.getElementById('maint-job-id').value = job.jobId;
+            document.getElementById('maint-date').value = job.date;
+            
+            const macSelect = document.getElementById('maint-machine');
+            if(macSelect.querySelector(`option[value="${job.machine}"]`)) {
+                macSelect.value = job.machine;
+            }
+            
+            const issueSelect = document.getElementById('maint-issue-type');
+            if(issueSelect.querySelector(`option[value="${job.issueType}"]`)) {
+                 issueSelect.value = job.issueType;
+            } else {
+                 issueSelect.innerHTML += `<option value="${job.issueType}">${job.issueType}</option>`;
+                 issueSelect.value = job.issueType;
+            }
+            
+            // ใช้ Flatpickr เซ็ตค่าเวลา
+            document.getElementById('maint-start-time')._flatpickr.setDate(job.startTime);
+            document.getElementById('maint-remark').value = job.remark || '';
+
+            // ล็อคช่องที่ไม่ให้แก้ (เพราะเป็นข้อมูลที่เคยเปิดไว้แล้ว)
+            document.getElementById('maint-date').style.pointerEvents = 'none';
+            document.getElementById('maint-date').classList.add('bg-gray-100', 'text-gray-500');
+            
+            document.getElementById('maint-machine').style.pointerEvents = 'none';
+            document.getElementById('maint-machine').classList.add('bg-gray-100', 'text-gray-500');
+            
+            document.getElementById('maint-issue-type').style.pointerEvents = 'none';
+            document.getElementById('maint-issue-type').classList.add('bg-gray-100', 'text-gray-500');
+            
+            // ซ่อนช่องอัปโหลดรูป (เพราะอัปไปตั้งแต่ตอนเปิดจ๊อบแล้ว)
+            document.getElementById('maint-photo-section').classList.add('hidden');
+            
+            // แสดงช่องวันที่ซ่อมเสร็จ
+            document.getElementById('maint-end-date-wrapper').classList.remove('hidden');
+            document.getElementById('maint-end-date').value = getShiftDateStr(); // ค่าเริ่มต้นคือวันนี้
+
+            // เปลี่ยนหน้าตาปุ่มและข้อความ
+            document.getElementById('btn-save-maint').innerHTML = '✅ บันทึกเวลาและปิดจ๊อบ';
+            document.getElementById('btn-save-maint').classList.replace('bg-orange-600', 'bg-green-600');
+            document.getElementById('btn-save-maint').classList.replace('hover:bg-orange-700', 'hover:bg-green-700');
+            document.getElementById('maint-end-hint').innerText = '*กรุณาระบุเวลาที่ซ่อมเสร็จ';
+            document.getElementById('btn-clear-pending').classList.remove('hidden');
+        };
+
+        window.clearPendingSelection = function() {
+            document.getElementById('maint-job-id').value = '';
+            document.getElementById('maintenanceForm').reset();
+            
+            // ปลดล็อคฟิลด์
+            const fields = ['maint-date', 'maint-machine', 'maint-issue-type'];
+            fields.forEach(f => {
+                document.getElementById(f).style.pointerEvents = '';
+                document.getElementById(f).classList.remove('bg-gray-100', 'text-gray-500');
+            });
+            
+            document.getElementById('maint-photo-section').classList.remove('hidden');
+            document.getElementById('maint-end-date-wrapper').classList.add('hidden');
+            document.getElementById('btn-clear-pending').classList.add('hidden');
+            
+            document.getElementById('btn-save-maint').innerHTML = '💾 บันทึกเปิดแจ้งซ่อม';
+            document.getElementById('btn-save-maint').classList.replace('bg-green-600', 'bg-orange-600');
+            document.getElementById('btn-save-maint').classList.replace('hover:bg-green-700', 'hover:bg-orange-700');
+            document.getElementById('maint-end-hint').innerText = '*เว้นว่างไว้ถ้ายังซ่อมไม่เสร็จ';
+            
+            document.getElementById('maint-date').value = getShiftDateStr();
+            const now = new Date();
+            if(document.getElementById('maint-start-time')._flatpickr) {
+                document.getElementById('maint-start-time')._flatpickr.setDate(now.toTimeString().substring(0,5));
+            }
+        };
+
+        // 🌟 แก้ไขฟังก์ชันการ Submit ของฟอร์มแจ้งซ่อม 🌟
+        document.getElementById('maintenanceForm')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-save-maint');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = "⏳ กำลังบันทึกข้อมูล...";
+            btn.disabled = true;
+
+            const fileInput = document.getElementById('maint-photo');
+            let base64String = "";
+            const jobId = document.getElementById('maint-job-id').value;
+
+            // ตรวจสอบ: ถ้าเป็นการปิดจ๊อบข้ามวัน บังคับให้ใส่เวลาเสร็จ
+            if (jobId && !document.getElementById('maint-end-time').value) {
+                alert("❌ กรุณาระบุ 'ทำงานต่อ (End)' เพื่อปิดจ๊อบ");
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                return;
+            }
+
+            // แปลงรูปภาพ (เฉพาะตอนเปิดจ๊อบใหม่)
+            if (!jobId && fileInput && fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                try {
+                    base64String = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                } catch (err) {
+                    console.error("Error reading file:", err);
+                    alert("❌ ไม่สามารถอ่านไฟล์ภาพได้ กรุณาลองใหม่อีกครั้ง");
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    return;
+                }
+            }
+
+            const payload = {
+                action: 'SAVE_MAINTENANCE',
+                jobId: jobId, // ถ้ามีแปลว่าอัปเดต ถ้าว่างแปลว่าสร้างใหม่
+                username: window.currentUser ? window.currentUser.username : "Unknown",
+                role: window.currentUser ? window.currentUser.role : "Unknown",
+                date: document.getElementById('maint-date').value,
+                machine: document.getElementById('maint-machine').value,
+                issueType: document.getElementById('maint-issue-type').value,
+                startTime: document.getElementById('maint-start-time').value,
+                endDate: document.getElementById('maint-end-date').value || "", // ส่งวันที่ซ่อมเสร็จไปด้วย
+                endTime: document.getElementById('maint-end-time').value || "",
+                remark: document.getElementById('maint-remark').value,
+                imageBase64: base64String
+            };
+
+            try {
+                const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+                const result = await res.json();
+                
+                if (result.status === 'success') {
+                    alert("✅ " + result.message);
+                    window.clearPendingSelection();
+                    document.getElementById('maint-photo-preview').classList.add('hidden');
+                    document.getElementById('modal-maintenance').classList.add('hidden');
+                } else {
+                    alert("❌ เกิดข้อผิดพลาด: " + result.message);
+                }
+            } catch(err) {
+                alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         });
     </script>
