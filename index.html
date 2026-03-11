@@ -947,14 +947,6 @@
         <div class="flex-1 overflow-hidden relative bg-gray-800" id="tv-content-area">
             <!-- สไลด์จะมาโผล่ตรงนี้ -->
         </div>
-        
-        <!-- แถบตัววิ่งด้านล่าง -->
-        <div class="bg-blue-900 text-white font-medium p-2 text-sm flex-none whitespace-nowrap overflow-hidden flex items-center">
-            <span class="bg-blue-600 px-2 py-0.5 rounded text-xs font-bold mr-2 flex-none uppercase">LATEST NEWS</span>
-            <div class="animate-marquee inline-block" id="tv-ticker">
-                กำลังโหลดข้อมูลล่าสุด...
-            </div>
-        </div>
     </div>
 
     <!-- Scripts (แก้เป็นเวอร์ชันเพื่อกัน Cache) -->
@@ -1609,7 +1601,6 @@
 
             const modal = document.getElementById('modal-tv-mode');
             const contentArea = document.getElementById('tv-content-area');
-            const ticker = document.getElementById('tv-ticker');
             
             modal.classList.remove('hidden');
             modal.classList.add('flex');
@@ -1642,27 +1633,8 @@
                 return fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w400` : null;
             };
 
-            // 1. เตรียมข้อมูลตัววิ่ง (Ticker)
             const maintLogs = currentDashboardData.maintenanceLogs || [];
             const rtvLogs = currentDashboardData.rtvLogs || [];
-            let tickerNews = [];
-            
-            if (maintLogs.length === 0 && rtvLogs.length === 0) {
-                tickerNews.push("🎉 วันนี้ไม่มีรายงานปัญหาเครื่องจักรและงานเคลม RTV เยี่ยมมาก!");
-            } else {
-                maintLogs.forEach(log => {
-                    let sTime = formatTimeStr(log.startTime);
-                    let eTime = formatTimeStr(log.endTime);
-                    let status = eTime ? "✅ ซ่อมเสร็จแล้ว" : "⚠️ รอดำเนินการ";
-                    tickerNews.push(`[${sTime}] ${log.machine} : ${log.issueType} - ${status}`);
-                });
-                rtvLogs.forEach(log => {
-                    tickerNews.push(`📦 รับคืน RTV: ${log.product} จำนวน ${log.qty} ชิ้น (${log.remark})`);
-                });
-            }
-            ticker.innerHTML = tickerNews.join(' &nbsp;&nbsp;&nbsp; 🔴 &nbsp;&nbsp;&nbsp; ');
-
-            // 2. เตรียมสไลด์เนื้อหา (เน้นแจ้งซ่อมและ RTV เท่านั้น)
             tvSlides = [];
             
             // กรองข้อมูลแจ้งซ่อมเป็น 2 กลุ่ม
@@ -1813,16 +1785,5 @@
         };
 
     </script>
-    <style>
-        /* CSS สำหรับตัววิ่ง TV Mode */
-        @keyframes marquee {
-            0% { transform: translateX(100vw); }
-            100% { transform: translateX(-100%); }
-        }
-        .animate-marquee {
-            animation: marquee 20s linear infinite;
-            white-space: nowrap;
-        }
-    </style>
 </body>
 </html>
