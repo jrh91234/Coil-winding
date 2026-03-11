@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     
-    <!-- เพิ่มไลบรารีเวลา Flatpickr สำหรับบังคับเวลา 24 ชั่วโมง -->
+    <!-- เพิ่มไลบรารีเวลา Flatpickr -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
@@ -658,11 +658,9 @@
     </div>
 
     <div id="modal-auto-report" class="fixed inset-0 bg-gray-100 z-50 hidden flex-col overflow-y-auto">
-        <!-- Header ของ Modal Report -->
         <div class="bg-white shadow-md p-4 sticky top-0 z-10 flex justify-between items-center auto-report-hide border-b border-gray-200">
             <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">🤖 Factory Standard Report Preview</h2>
             <div class="flex gap-2">
-                <!-- Dropdown เปลี่ยนภาษาจะถูก Inject เข้ามาที่นี่โดย script.js -->
                 <button onclick="window.printAutoReport()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-indigo-700 transition-colors flex items-center gap-1">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                     พิมพ์ / บันทึก PDF
@@ -724,6 +722,8 @@
                     <label class="block text-sm font-bold text-gray-700 mb-1">ประเภทของปัญหา</label>
                     <select id="maint-issue-type" required class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-orange-500">
                         <option value="เครื่องจักรเสีย (Machine Breakdown)">⚙️ เครื่องจักรเสีย (Machine Breakdown)</option>
+                        <option value="PM (Preventive Maintenance)">📅 PM (Preventive Maintenance)</option>
+                        <option value="AM (Autonomous Maintenance)">👤 AM (Autonomous Maintenance)</option>
                         <option value="รอวัตถุดิบ (Material Shortage)">📦 รอวัตถุดิบ (Material Shortage)</option>
                         <option value="ตั้งค่าเครื่อง (Setup/Changeover)">🔧 ตั้งค่าเครื่อง (Setup/Changeover)</option>
                         <option value="ทำความสะอาด (Cleaning)">🧹 ทำความสะอาด (Cleaning)</option>
@@ -755,7 +755,6 @@
                 
                 <div class="bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300" id="maint-photo-section">
                     <label class="block text-sm font-bold text-gray-700 mb-2">📸 ถ่ายรูปหลักฐาน (เลือกรูป/เปิดกล้อง)</label>
-                    <!-- นำ capture="environment" ออกเพื่อให้เลือกไฟล์ภาพในเครื่องได้ -->
                     <input type="file" id="maint-photo" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer">
                     <div id="maint-photo-preview" class="mt-3 hidden rounded-lg overflow-hidden border border-gray-200">
                         <img id="maint-photo-img" src="" alt="Preview" class="w-full h-auto max-h-48 object-contain bg-black">
@@ -990,7 +989,6 @@
                 if(rtvRec && window.currentUser) rtvRec.value = window.currentUser.name || window.currentUser.username;
             });
 
-            // 🌟 ฟังก์ชันสำหรับอัปเดตตัวเลือกอาการเสียในฟอร์ม RTV 🌟
             window.renderRtvSymptomsOptions = function() {
                 const select = document.getElementById('rtvRemark');
                 if(!select) return;
@@ -1018,7 +1016,7 @@
                         action: 'SAVE_RTV',
                         date: document.getElementById('rtvDate').value,
                         recorder: document.getElementById('rtvRecorder').value,
-                        source: '-', // ส่งค่าว่างไปให้ Backend แทน Customer/Source ที่เอาออกไปแล้ว
+                        source: '-', 
                         product: document.getElementById('rtvProduct').value,
                         qty: document.getElementById('rtvQty').value,
                         remark: document.getElementById('rtvRemark').value
@@ -1095,14 +1093,14 @@
             }
         }, 500);
 
-        // โค้ดบังคับให้ช่องเวลาเป็น 24 ชั่วโมง
+        // 🌟 โค้ดตั้งค่าช่องเวลาให้ออกมาเป็น 24 ชม.
         document.addEventListener("DOMContentLoaded", function() {
             if(document.getElementById("maint-start-time")) {
                 flatpickr("#maint-start-time", {
                     enableTime: true,
                     noCalendar: true,
-                    dateFormat: "H:i",
-                    time_24hr: true
+                    dateFormat: "H:i",    // รูปแบบที่ส่งไปเซิร์ฟเวอร์ (24 ชม.)
+                    time_24hr: true       // บังคับแสดงผลเป็น 24 ชม.
                 });
             }
             if(document.getElementById("maint-end-time")) {
@@ -1141,7 +1139,12 @@
             
             if (dStart) {
                 const now = new Date();
-                dStart.value = now.toTimeString().substring(0,5);
+                const nowStr = now.toTimeString().substring(0,5);
+                if(dStart._flatpickr) {
+                    dStart._flatpickr.setDate(nowStr);
+                } else {
+                    dStart.value = nowStr;
+                }
             }
 
             // ดึงข้อมูลงานค้างจากเซิร์ฟเวอร์
@@ -1203,8 +1206,12 @@
                  issueSelect.value = job.issueType;
             }
             
-            // ใช้ Flatpickr เซ็ตค่าเวลา
-            document.getElementById('maint-start-time')._flatpickr.setDate(job.startTime);
+            // ใช้ Flatpickr เซ็ตค่าเวลา (ถ้ามี)
+            if(document.getElementById('maint-start-time')._flatpickr) {
+                document.getElementById('maint-start-time')._flatpickr.setDate(job.startTime);
+            } else {
+                document.getElementById('maint-start-time').value = job.startTime;
+            }
             document.getElementById('maint-remark').value = job.remark || '';
 
             // ล็อคช่องที่ไม่ให้แก้ (เพราะเป็นข้อมูลที่เคยเปิดไว้แล้ว)
@@ -1259,12 +1266,12 @@
             }
         };
 
-        // 🌟 แก้ไขฟังก์ชันการ Submit ของฟอร์มแจ้งซ่อม 🌟
+        // 🌟 แก้ไขฟังก์ชันการ Submit ของฟอร์มแจ้งซ่อม พร้อมระบบบีบอัดรูปภาพ 🌟
         document.getElementById('maintenanceForm')?.addEventListener('submit', async function(e) {
             e.preventDefault();
             const btn = document.getElementById('btn-save-maint');
             const originalText = btn.innerHTML;
-            btn.innerHTML = "⏳ กำลังบันทึกข้อมูล...";
+            btn.innerHTML = "⏳ กำลังดำเนินการ...";
             btn.disabled = true;
 
             const fileInput = document.getElementById('maint-photo');
@@ -1279,19 +1286,60 @@
                 return;
             }
 
-            // แปลงรูปภาพ (เฉพาะตอนเปิดจ๊อบใหม่)
+            // 🌟 ฟังก์ชันสำหรับบีบอัดรูปภาพ (Compress Image) ให้ขนาดประมาณ ไม่เกิน maxSizeKB 🌟
+            async function compressImage(file, maxSizeKB) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onload = function(event) {
+                        const img = new Image();
+                        img.src = event.target.result;
+                        img.onload = function() {
+                            const canvas = document.createElement('canvas');
+                            let width = img.width;
+                            let height = img.height;
+
+                            // ย่อขนาดภาพไม่ให้เกิน 1200px ก่อน
+                            const MAX_DIMENSION = 1200;
+                            if (width > height && width > MAX_DIMENSION) {
+                                height *= MAX_DIMENSION / width;
+                                width = MAX_DIMENSION;
+                            } else if (height > MAX_DIMENSION) {
+                                width *= MAX_DIMENSION / height;
+                                height = MAX_DIMENSION;
+                            }
+
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+
+                            let quality = 0.8;
+                            let dataUrl = canvas.toDataURL('image/jpeg', quality);
+                            
+                            // วนลูปบีบอัด Quality ลงเรื่อยๆ จนกว่าขนาดไฟล์จะเล็กกว่า 256KB หรือคุณภาพเหลือ 10%
+                            while (Math.round((dataUrl.length * 3 / 4) / 1024) > maxSizeKB && quality > 0.1) {
+                                quality -= 0.1;
+                                dataUrl = canvas.toDataURL('image/jpeg', quality);
+                            }
+                            resolve(dataUrl);
+                        };
+                        img.onerror = reject;
+                    };
+                    reader.onerror = reject;
+                });
+            }
+
+            // แปลงรูปภาพและบีบอัด (เฉพาะตอนเปิดจ๊อบใหม่)
             if (!jobId && fileInput && fileInput.files.length > 0) {
                 const file = fileInput.files[0];
                 try {
-                    base64String = await new Promise((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () => resolve(reader.result);
-                        reader.onerror = reject;
-                        reader.readAsDataURL(file);
-                    });
+                    btn.innerHTML = "⏳ กำลังบีบอัดรูปภาพ...";
+                    base64String = await compressImage(file, 256); // ส่งไปบีบอัดให้ไม่เกิน 256KB
+                    btn.innerHTML = "⏳ กำลังบันทึกข้อมูล...";
                 } catch (err) {
-                    console.error("Error reading file:", err);
-                    alert("❌ ไม่สามารถอ่านไฟล์ภาพได้ กรุณาลองใหม่อีกครั้ง");
+                    console.error("Error compressing file:", err);
+                    alert("❌ ไม่สามารถประมวลผลไฟล์ภาพได้ กรุณาลองใหม่อีกครั้ง");
                     btn.innerHTML = originalText;
                     btn.disabled = false;
                     return;
@@ -1307,7 +1355,7 @@
                 machine: document.getElementById('maint-machine').value,
                 issueType: document.getElementById('maint-issue-type').value,
                 startTime: document.getElementById('maint-start-time').value,
-                endDate: document.getElementById('maint-end-date').value || "", // ส่งวันที่ซ่อมเสร็จไปด้วย
+                endDate: document.getElementById('maint-end-date') ? document.getElementById('maint-end-date').value : "", 
                 endTime: document.getElementById('maint-end-time').value || "",
                 remark: document.getElementById('maint-remark').value,
                 imageBase64: base64String
