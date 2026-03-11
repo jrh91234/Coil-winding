@@ -1579,7 +1579,7 @@
         };
 
         // ==========================================
-        // 🌟 ฟังก์ชันสำหรับเปิด TV Mode (นำเสนอข้อมูล) 🌟
+        // 🌟 ฟังก์ชันสำหรับเปิด TV Mode (นำเสนอข้อมูลแบบเจาะจงซ่อมบำรุงและ RTV) 🌟
         // ==========================================
         let tvModeInterval = null;
         let tvClockInterval = null;
@@ -1632,55 +1632,37 @@
                     tickerNews.push(`📦 รับคืน RTV: ${log.product} จำนวน ${log.qty} ชิ้น (${log.remark})`);
                 });
             }
-            // เชื่อมข้อความด้วยลูกน้ำหรือสัญลักษณ์เพื่อความสวยงาม
             ticker.innerHTML = tickerNews.join(' &nbsp;&nbsp;&nbsp; 🔴 &nbsp;&nbsp;&nbsp; ');
 
-            // 2. เตรียมสไลด์เนื้อหา
+            // 2. เตรียมสไลด์เนื้อหา (เน้นแจ้งซ่อมและ RTV เท่านั้น)
             tvSlides = [];
             
-            // สไลด์ 1: สรุปภาพรวมผลิต
-            const target = currentDashboardData.productionTarget || 0;
-            const fg = currentDashboardData.totalFg || 0;
-            const ng = currentDashboardData.totalNgPcs || 0;
-            const ach = target > 0 ? ((fg/target)*100).toFixed(1) : 0;
-            const yieldRate = (fg+ng) > 0 ? ((fg/(fg+ng))*100).toFixed(1) : 0;
-            
-            tvSlides.push(`
-                <div class="h-full w-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-gray-800 to-gray-900 animate-fade-in text-white">
-                    <h1 class="text-5xl font-black mb-10 text-blue-400">📊 ภาพรวมการผลิตวันนี้</h1>
-                    <div class="grid grid-cols-2 gap-8 w-full max-w-4xl">
-                        <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 text-center shadow-xl">
-                            <div class="text-gray-400 text-xl font-bold uppercase mb-2">TOTAL FG</div>
-                            <div class="text-7xl font-black text-blue-500">${fg.toLocaleString()}</div>
-                            <div class="text-gray-500 mt-2 text-lg">จากเป้าหมาย ${target.toLocaleString()}</div>
-                        </div>
-                        <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 text-center shadow-xl">
-                            <div class="text-gray-400 text-xl font-bold uppercase mb-2">% ACHIEVEMENT</div>
-                            <div class="text-7xl font-black ${ach >= 100 ? 'text-green-500' : 'text-orange-500'}">${ach}%</div>
-                        </div>
-                        <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 text-center shadow-xl">
-                            <div class="text-gray-400 text-xl font-bold uppercase mb-2">TOTAL NG</div>
-                            <div class="text-7xl font-black text-red-500">${ng.toLocaleString()}</div>
-                        </div>
-                        <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 text-center shadow-xl">
-                            <div class="text-gray-400 text-xl font-bold uppercase mb-2">% YIELD</div>
-                            <div class="text-7xl font-black text-green-400">${yieldRate}%</div>
-                        </div>
-                    </div>
-                </div>
-            `);
-
-            // สไลด์ 2: งานซ่อมบำรุงที่ค้างอยู่ (ถ้ามี)
+            // กรองข้อมูลแจ้งซ่อมเป็น 2 กลุ่ม
             const pendingMaint = maintLogs.filter(m => !m.endTime);
+            const completedMaint = maintLogs.filter(m => m.endTime);
+
+            // ถ้าไม่มีข้อมูลอะไรเลยในวันนี้
+            if (pendingMaint.length === 0 && completedMaint.length === 0 && rtvLogs.length === 0) {
+                tvSlides.push(`
+                    <div class="h-full w-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-gray-800 to-green-900 animate-fade-in text-white">
+                        <div class="text-9xl mb-6">🎉</div>
+                        <h1 class="text-5xl font-black mb-4 text-green-400">วันนี้ระบบราบรื่น</h1>
+                        <p class="text-2xl text-gray-300">ไม่มีรายงานปัญหาเครื่องจักรและงานเคลม RTV</p>
+                    </div>
+                `);
+            }
+
+            // สไลด์ 1: งานซ่อมบำรุงที่ค้างอยู่ (Active Issues)
             if (pendingMaint.length > 0) {
-                let mHtml = '<div class="grid grid-cols-2 gap-6 w-full max-w-6xl">';
+                let mHtml = '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-6xl">';
                 pendingMaint.slice(0, 6).forEach(log => {
                     mHtml += `
-                    <div class="bg-gray-800 p-6 rounded-xl border-l-8 border-red-500 shadow-lg flex items-center gap-4">
-                        <div class="text-5xl">⚠️</div>
-                        <div>
-                            <div class="text-2xl font-bold text-white mb-1">${log.machine} <span class="text-red-400 text-lg ml-2">${log.issueType}</span></div>
-                            <div class="text-gray-400 text-lg">เวลาแจ้ง: ${log.startTime} น. | ${log.remark}</div>
+                    <div class="bg-gray-800 p-6 rounded-xl border-l-8 border-red-500 shadow-lg flex items-center gap-6">
+                        <div class="text-6xl animate-pulse">⚠️</div>
+                        <div class="flex-1">
+                            <div class="text-3xl font-black text-white mb-2">${log.machine} <span class="bg-red-500 text-white text-sm px-3 py-1 rounded-full ml-2 align-middle">${log.issueType}</span></div>
+                            <div class="text-gray-400 text-xl font-medium">เวลาแจ้ง: <span class="text-red-400">${log.startTime} น.</span></div>
+                            <div class="text-gray-300 text-lg mt-2 bg-gray-700 p-2 rounded">📝 ${log.remark || 'ไม่มีรายละเอียดเพิ่มเติม'}</div>
                         </div>
                     </div>`;
                 });
@@ -1688,23 +1670,47 @@
 
                 tvSlides.push(`
                     <div class="h-full w-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-gray-900 to-red-900 animate-fade-in text-white">
-                        <h1 class="text-5xl font-black mb-10 text-red-400 flex items-center gap-4">🚨 เครื่องจักรที่กำลังมีปัญหา (Downtime)</h1>
+                        <h1 class="text-5xl font-black mb-10 text-red-400 flex items-center gap-4">🚨 เครื่องจักรที่กำลังมีปัญหา (รอซ่อม/กำลังซ่อม)</h1>
                         ${mHtml}
                     </div>
                 `);
             }
 
-            // สไลด์ 3: งานเคลม RTV (ถ้ามี)
+            // สไลด์ 2: งานซ่อมที่เสร็จแล้ววันนี้
+            if (completedMaint.length > 0) {
+                let mHtml = '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-6xl">';
+                completedMaint.slice(0, 6).forEach(log => {
+                    mHtml += `
+                    <div class="bg-gray-800 p-6 rounded-xl border-l-8 border-green-500 shadow-lg flex items-center gap-6">
+                        <div class="text-6xl">✅</div>
+                        <div class="flex-1">
+                            <div class="text-3xl font-black text-white mb-2">${log.machine} <span class="bg-green-600 text-white text-sm px-3 py-1 rounded-full ml-2 align-middle">${log.issueType}</span></div>
+                            <div class="text-gray-400 text-xl font-medium">⏱️ ${log.startTime} - ${log.endTime} น.</div>
+                            <div class="text-gray-300 text-lg mt-2 bg-gray-700 p-2 rounded">📝 ${log.remark || 'แก้ไขเรียบร้อย'}</div>
+                        </div>
+                    </div>`;
+                });
+                mHtml += '</div>';
+
+                tvSlides.push(`
+                    <div class="h-full w-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-gray-900 to-green-900 animate-fade-in text-white">
+                        <h1 class="text-5xl font-black mb-10 text-green-400 flex items-center gap-4">✅ งานซ่อมที่เสร็จสิ้นแล้วในวันนี้</h1>
+                        ${mHtml}
+                    </div>
+                `);
+            }
+
+            // สไลด์ 3: งานเคลม RTV 
             if (rtvLogs.length > 0) {
-                let rHtml = '<div class="grid grid-cols-2 gap-6 w-full max-w-6xl">';
+                let rHtml = '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-6xl">';
                 rtvLogs.slice(0, 6).forEach(log => {
                     rHtml += `
-                    <div class="bg-gray-800 p-6 rounded-xl border border-teal-700 shadow-lg flex items-center gap-4">
-                        <div class="text-5xl">📦</div>
-                        <div>
-                            <div class="text-2xl font-bold text-teal-400 mb-1">${log.product}</div>
-                            <div class="text-white text-xl">จำนวน <span class="text-red-400 font-black text-2xl">${log.qty}</span> ชิ้น</div>
-                            <div class="text-gray-400 text-sm mt-1">สาเหตุ: ${log.remark}</div>
+                    <div class="bg-gray-800 p-6 rounded-xl border-l-8 border-teal-500 shadow-lg flex items-center gap-6">
+                        <div class="text-6xl">📦</div>
+                        <div class="flex-1">
+                            <div class="text-3xl font-black text-teal-400 mb-2">${log.product}</div>
+                            <div class="text-white text-2xl mb-2">จำนวน <span class="text-red-400 font-black text-4xl mx-2">${log.qty}</span> ชิ้น</div>
+                            <div class="text-gray-300 text-lg bg-gray-700 p-2 rounded">สาเหตุ: ${log.remark}</div>
                         </div>
                     </div>`;
                 });
@@ -1712,7 +1718,7 @@
 
                 tvSlides.push(`
                     <div class="h-full w-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-gray-900 to-teal-900 animate-fade-in text-white">
-                        <h1 class="text-5xl font-black mb-10 text-teal-400 flex items-center gap-4">📦 ข้อมูลงานเคลม RTV วันนี้</h1>
+                        <h1 class="text-5xl font-black mb-10 text-teal-400 flex items-center gap-4">📦 ข้อมูลลูกค้ารีเทิร์น / เคลม RTV วันนี้</h1>
                         ${rHtml}
                     </div>
                 `);
