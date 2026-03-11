@@ -733,6 +733,9 @@
                 
                 <!-- วันที่ซ่อมเสร็จ กรณีปิดจ๊อบข้ามวัน -->
                 <div id="maint-end-date-wrapper" class="hidden">
+                     <div class="bg-blue-50 border border-blue-200 p-2 rounded-lg mb-3 flex items-center justify-between" id="maint-close-info">
+                         <span class="text-xs text-blue-700">👤 ผู้ปิดงานซ่อม: <b id="maint-closer-name">-</b></span>
+                     </div>
                      <label class="block text-sm font-bold text-green-700 mb-1">📅 วันที่ซ่อมเสร็จ (ปิดจ๊อบ)</label>
                      <input type="date" id="maint-end-date" class="w-full p-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-green-50">
                 </div>
@@ -754,7 +757,7 @@
                 </div>
                 
                 <div class="bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300" id="maint-photo-section">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">📸 ถ่ายรูปหลักฐาน (เลือกรูป/เปิดกล้อง)</label>
+                    <label id="maint-photo-label" class="block text-sm font-bold text-gray-700 mb-2">📸 ถ่ายรูปหลักฐานตอนเปิดแจ้งซ่อม</label>
                     <input type="file" id="maint-photo" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer">
                     <div id="maint-photo-preview" class="mt-3 hidden rounded-lg overflow-hidden border border-gray-200">
                         <img id="maint-photo-img" src="" alt="Preview" class="w-full h-auto max-h-48 object-contain bg-black">
@@ -1099,8 +1102,8 @@
                 flatpickr("#maint-start-time", {
                     enableTime: true,
                     noCalendar: true,
-                    dateFormat: "H:i",    // รูปแบบที่ส่งไปเซิร์ฟเวอร์ (24 ชม.)
-                    time_24hr: true       // บังคับแสดงผลเป็น 24 ชม.
+                    dateFormat: "H:i",
+                    time_24hr: true
                 });
             }
             if(document.getElementById("maint-end-time")) {
@@ -1224,10 +1227,16 @@
             document.getElementById('maint-issue-type').style.pointerEvents = 'none';
             document.getElementById('maint-issue-type').classList.add('bg-gray-100', 'text-gray-500');
             
-            // ซ่อนช่องอัปโหลดรูป (เพราะอัปไปตั้งแต่ตอนเปิดจ๊อบแล้ว)
-            document.getElementById('maint-photo-section').classList.add('hidden');
+            // 🌟 ให้ตั้งชื่อคนปิดจ๊อบปัจจุบัน 🌟
+            document.getElementById('maint-closer-name').innerText = window.currentUser ? window.currentUser.name || window.currentUser.username : "Unknown";
             
-            // แสดงช่องวันที่ซ่อมเสร็จ
+            // 🌟 เตรียมช่องถ่ายรูปรอบที่ 2 🌟
+            document.getElementById('maint-photo-label').innerText = '📸 ถ่ายรูปหลักฐานหลังซ่อมเสร็จ (ปิดจ๊อบ)';
+            document.getElementById('maint-photo').value = '';
+            document.getElementById('maint-photo-img').src = '';
+            document.getElementById('maint-photo-preview').classList.add('hidden');
+            
+            // แสดงช่องวันที่ซ่อมเสร็จและผู้ปิดจ๊อบ
             document.getElementById('maint-end-date-wrapper').classList.remove('hidden');
             document.getElementById('maint-end-date').value = getShiftDateStr(); // ค่าเริ่มต้นคือวันนี้
 
@@ -1250,7 +1259,10 @@
                 document.getElementById(f).classList.remove('bg-gray-100', 'text-gray-500');
             });
             
-            document.getElementById('maint-photo-section').classList.remove('hidden');
+            // 🌟 คืนค่าช่องรูปภาพให้เป็นตอนเปิดแจ้งซ่อม 🌟
+            document.getElementById('maint-photo-label').innerText = '📸 ถ่ายรูปหลักฐานตอนเปิดแจ้งซ่อม';
+            document.getElementById('maint-photo-preview').classList.add('hidden');
+
             document.getElementById('maint-end-date-wrapper').classList.add('hidden');
             document.getElementById('btn-clear-pending').classList.add('hidden');
             
@@ -1343,8 +1355,8 @@
                 });
             }
 
-            // แปลงรูปภาพและบีบอัด (เฉพาะตอนเปิดจ๊อบใหม่)
-            if (!jobId && fileInput && fileInput.files.length > 0) {
+            // แปลงรูปภาพและบีบอัด (ทำได้ทั้งตอนเปิดจ๊อบใหม่และตอนปิดจ๊อบค้าง)
+            if (fileInput && fileInput.files.length > 0) {
                 const file = fileInput.files[0];
                 try {
                     btn.innerHTML = "⏳ กำลังบีบอัดรูปภาพ...";
@@ -1372,7 +1384,7 @@
                 endDate: document.getElementById('maint-end-date') ? document.getElementById('maint-end-date').value : "", 
                 endTime: document.getElementById('maint-end-time').value || "",
                 remark: document.getElementById('maint-remark').value,
-                imageBase64: base64String
+                imageBase64: base64String // ส่งภาพไปให้ Backend (เป็นของใหม่เสมอ ไม่ว่าจะเปิดหรือปิดจ๊อบ)
             };
 
             try {
