@@ -72,7 +72,7 @@ window.renderAutoReportContent = function() {
     const data = currentDashboardData;
     const content = document.getElementById('auto-report-content');
 
-    // 🌟 Helper Function สำหรับคำนวณ Kg และ Time String 🌟
+    // 🌟 Helper Function สำหรับคำนวณ Kg, Time String และ Multilingual Text 🌟
     const getKgFromPcs = (prod, pcs) => {
         if (!pcs || pcs <= 0) return 0;
         let w = 0.003;
@@ -96,9 +96,17 @@ window.renderAutoReportContent = function() {
         return m ? m[1].padStart(5, '0') : str.substring(0, 5);
     };
 
+    const multiLang = (th, en, jp) => `
+        <div class="space-y-1.5 mb-4 border-l-2 border-gray-200 pl-3">
+            <p class="text-[12px] text-gray-800 leading-relaxed text-justify"><span class="font-bold text-blue-600 mr-1">[TH]</span>${th}</p>
+            <p class="text-[11px] text-gray-600 leading-relaxed text-justify"><span class="font-bold text-red-600 mr-1">[EN]</span>${en}</p>
+            <p class="text-[11px] text-gray-500 leading-relaxed text-justify"><span class="font-bold text-gray-700 mr-1">[JP]</span>${jp}</p>
+        </div>
+    `;
+
     const sDate = document.getElementById('startDate').value;
     const eDate = document.getElementById('endDate').value;
-    const isSingleDay = (sDate === eDate); // เช็คว่าดึงข้อมูลวันเดียวหรือไม่
+    const isSingleDay = (sDate === eDate); 
     const dateStr = isSingleDay ? sDate : `${sDate} ถึง ${eDate}`;
     const shiftName = document.getElementById('filterShift').options[document.getElementById('filterShift').selectedIndex].text;
     const shiftType = document.getElementById('filterShiftType').options[document.getElementById('filterShiftType').selectedIndex].text;
@@ -161,11 +169,19 @@ window.renderAutoReportContent = function() {
     let sec2_1_title, sec2_1_desc, sec2_1_img;
     if (isSingleDay) {
         sec2_1_title = "📊 บทวิเคราะห์อัตราการผลิตรายชั่วโมง (Hourly Throughput)";
-        sec2_1_desc = `การประเมินความสม่ำเสมอของการเดินสายพานใน 1 วัน/กะ พบว่ามีจุดสูบฉีดผลผลิตสูงสุด (Peak Performance Hour) ที่ช่วงเวลา <b>${peakHour.label}</b> โดยทำศักยภาพได้ถึง <b>${peakHour.fg.toLocaleString()}</b> ชิ้น การกระจายตัวของแท่งกราฟ (FG) ช่วยให้เห็นความหนาแน่นของการทำงาน หากมีความแตกต่างสูงระหว่างชั่วโมง อาจเกิดจากความสูญเปล่าแฝง (Hidden Waste) หรือมีการหยุดพักและซ่อมบำรุงในบางช่วงเวลา`;
+        sec2_1_desc = multiLang(
+            `การประเมินความสม่ำเสมอของการเดินสายพานใน 1 วัน/กะ พบว่ามีจุดสูบฉีดผลผลิตสูงสุด (Peak Performance Hour) ที่ช่วงเวลา <b>${peakHour.label}</b> โดยทำศักยภาพได้ถึง <b>${peakHour.fg.toLocaleString()}</b> ชิ้น หากมีความแตกต่างสูงระหว่างชั่วโมง อาจเกิดจากความสูญเปล่าแฝง (Hidden Waste) หรือการหยุดซ่อมบำรุง`,
+            `Evaluating the assembly line consistency in 1 day/shift reveals the peak performance hour at <b>${peakHour.label}</b>, reaching <b>${peakHour.fg.toLocaleString()}</b> pcs. High variance between hours may indicate hidden waste or maintenance downtime.`,
+            `1日/シフトの生産ラインの安定性を評価した結果、ピークパフォーマンス時間は <b>${peakHour.label}</b> であり、<b>${peakHour.fg.toLocaleString()}</b> 個に達しました。時間ごとの差異が大きい場合は、隠れた無駄や設備の停止を示している可能性があります。`
+        );
         sec2_1_img = getChartImg('hourlyChart');
     } else {
         sec2_1_title = "📊 บทวิเคราะห์การกระจายตัวของผลผลิตรายวัน (Daily Throughput)";
-        sec2_1_desc = `จากการวิเคราะห์ความสัมพันธ์ระหว่างปริมาณงานดี (FG) และความสูญเสีย (NG) สะท้อนให้เห็นถึงขีดความสามารถการเดินเครื่องของฝ่ายผลิตตลอดช่วงเวลาที่เลือก หากกราฟแท่ง (FG) มีความสม่ำเสมอในแต่ละวัน บ่งชี้ถึงความพร้อมทางด้านทรัพยากรและประสิทธิภาพการดำเนินงานที่คงที่`;
+        sec2_1_desc = multiLang(
+            `จากการวิเคราะห์ความสัมพันธ์ระหว่างปริมาณงานดี (FG) และความสูญเสีย (NG) สะท้อนให้เห็นถึงขีดความสามารถการเดินเครื่องของฝ่ายผลิตตลอดช่วงเวลาที่เลือก หากกราฟแท่งมีความสม่ำเสมอ บ่งชี้ถึงประสิทธิภาพการดำเนินงานที่คงที่`,
+            `The analysis of Finished Goods (FG) and No Good (NG) reflects the machine's capacity over the selected period. A consistent bar graph indicates stable operational efficiency and resource readiness.`,
+            `良品（FG）と不良品（NG）の割合の分析により、選択した期間の生産能力が反映されます。棒グラフが一定である場合は、安定した稼働効率とリソースの準備が整っていることを示しています。`
+        );
         sec2_1_img = getChartImg('dailyOutputChart');
     }
 
@@ -187,8 +203,13 @@ window.renderAutoReportContent = function() {
         topNgHtml = `<p class="mt-2 text-green-600 font-bold text-sm">🎉 สมบูรณ์แบบ ไม่พบของเสียหลุดรอดในกระบวนการผลิต</p>`;
     }
 
+    let paretoDesc = multiLang(
+        `อ้างอิงจากหลักการพาเรโต (80/20) ปัญหาคอขวดด้านคุณภาพที่หล่อเลี้ยงความสูญเสียมากที่สุดคือ <b>${topNgSymptomName}</b> ซึ่งกินสัดส่วนสูงถึง <b>${topNgSymptomRatio}%</b> การพุ่งเป้าแก้ไขปัญหานี้เป็นอันดับแรกจะช่วยกอบกู้ Yield กลับมาได้เร็วที่สุด`,
+        `Based on the Pareto principle (80/20), the primary quality bottleneck causing the most loss is <b>${topNgSymptomName}</b>, accounting for <b>${topNgSymptomRatio}%</b>. Targeting this issue first will maximize Yield recovery.`,
+        `パレートの法則（80/20）に基づき、最大の損失をもたらす品質のボトルネックは <b>${topNgSymptomName}</b> であり、<b>${topNgSymptomRatio}%</b> を占めています。この問題の解決を優先することで、歩留まりの回復を最大化できます。`
+    );
+
     // สร้างรูปกราฟ Pareto
-    let imgParetoDynamic = '';
     let autoReportParetoConfig = null;
     if (ngItems.length > 0 && typeof Chart !== 'undefined') {
         const pLabels = ngItems.map(item => item.label);
@@ -210,7 +231,7 @@ window.renderAutoReportContent = function() {
     if (!isSingleDay && data.dailyTrend && data.dailyTrend.length > 0) {
         let breachedDays = 0;
         let peakNgDay = { date: '-', rate: 0 };
-        let trendDesc = "ทรงตัว";
+        let trendDescTH = "ทรงตัว", trendDescEN = "Stable", trendDescJP = "安定";
         
         data.dailyTrend.forEach(d => {
             let total = d.fg + d.ng;
@@ -221,15 +242,19 @@ window.renderAutoReportContent = function() {
         
         let firstHalf = data.dailyTrend.slice(0, Math.ceil(data.dailyTrend.length/2)).reduce((a,b)=>a+(b.fg+b.ng>0?(b.ng/(b.fg+b.ng)*100):0),0);
         let secondHalf = data.dailyTrend.slice(Math.ceil(data.dailyTrend.length/2)).reduce((a,b)=>a+(b.fg+b.ng>0?(b.ng/(b.fg+b.ng)*100):0),0);
-        if(secondHalf > firstHalf * 1.2) trendDesc = "มีแนวโน้มเพิ่มสูงขึ้นในช่วงท้าย";
-        else if (firstHalf > secondHalf * 1.2) trendDesc = "มีแนวโน้มลดลง (ดีขึ้น) ในช่วงท้าย";
+        if(secondHalf > firstHalf * 1.2) { trendDescTH = "มีแนวโน้มเพิ่มสูงขึ้น"; trendDescEN = "Upward trend"; trendDescJP = "増加傾向"; }
+        else if (firstHalf > secondHalf * 1.2) { trendDescTH = "มีแนวโน้มลดลง (ดีขึ้น)"; trendDescEN = "Downward trend (Improving)"; trendDescJP = "減少傾向（改善）"; }
 
-        let s32_desc = `จากการวิเคราะห์แนวโน้มของเสียตลอดช่วงเวลาที่เลือก พบว่าภาพรวม <b>${trendDesc}</b> โดยมีวันที่สัดส่วนของเสียทะลุเพดานควบคุม (Target Limit 0.5%) จำนวน <b>${breachedDays} วัน</b> จุดวิกฤตสูงสุด (Peak Breach) เกิดขึ้นในวันที่ <b>${peakNgDay.date}</b> ซึ่งมีอัตราความสูญเสียพุ่งไปถึง <b>${peakNgDay.rate.toFixed(2)}%</b> ข้อมูลนี้สะท้อนให้เห็นถึงเสถียรภาพและคุณภาพในบางช่วงเวลาที่อาจต้องการการดูแลเฉพาะกิจ`;
+        let s32_desc = multiLang(
+            `จากการวิเคราะห์ภาพรวมพบว่าอัตราของเสีย <b>${trendDescTH}</b> โดยมีวันที่สัดส่วนทะลุเพดานควบคุม (Target > 0.5%) จำนวน <b>${breachedDays} วัน</b> จุดวิกฤตสูงสุดเกิดขึ้นในวันที่ <b>${peakNgDay.date}</b> ที่อัตรา <b>${peakNgDay.rate.toFixed(2)}%</b>`,
+            `Analysis indicates an overall <b>${trendDescEN}</b> in defect rates. There were <b>${breachedDays} days</b> breaching the 0.5% limit. The peak crisis occurred on <b>${peakNgDay.date}</b> at <b>${peakNgDay.rate.toFixed(2)}%</b>.`,
+            `分析の結果、不良率全体としては <b>${trendDescJP}</b> にあります。0.5%の制限を超えた日は <b>${breachedDays} 日</b> ありました。ピーク時の危機は <b>${peakNgDay.date}</b> に <b>${peakNgDay.rate.toFixed(2)}%</b> で発生しました。`
+        );
 
         sec3_2_html = `
         <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm flex flex-col page-break-inside-avoid mb-6">
-            <p class="text-base font-bold text-gray-800 mb-2">📈 แนวโน้มการเกิดซ้ำของปัญหาและสถิติการหลุดเป้าหมาย (Defect Chronology & Breach Stats)</p>
-            <p class="text-[12px] text-gray-600 mb-4 leading-relaxed indent-8 text-justify">${s32_desc}</p>
+            <p class="text-base font-bold text-gray-800 mb-2">📈 แนวโน้มการเกิดซ้ำของปัญหาและสถิติการหลุดเป้าหมาย (Defect Chronology)</p>
+            ${s32_desc}
             <div class="mt-auto w-full bg-gray-50 rounded-lg p-4 border border-gray-100 h-[300px] relative">
                 <canvas id="auto-report-ng-trend-chart" style="width:100%; height:100%;"></canvas>
             </div>
@@ -256,7 +281,7 @@ window.renderAutoReportContent = function() {
         autoReportNgTrendConfig = { labels: data.dailyTrend.map(d => d.date), datasets: ngTrendDatasets };
     }
 
-    // ส่วนที่ 3.3 - Top 3 Defect Source (Machine)
+    // ส่วนที่ 3.3 - Top 3 Defect Source (Machine) พร้อมกราฟแสดงเครื่องที่เสียเยอะ
     let macNgList = [];
     if(data.machineData) {
         for(let m in data.machineData) {
@@ -266,11 +291,32 @@ window.renderAutoReportContent = function() {
         }
     }
     macNgList.sort((a,b)=>b.ng-a.ng);
-    let top3Macs = macNgList.slice(0,3);
-    let top3Str = top3Macs.map((m, i) => `อันดับ ${i+1} <b>${m.name}</b> (${m.ng.toLocaleString()} ชิ้น / ${m.kg.toFixed(2)} Kg)`).join(', ');
-    if(top3Macs.length === 0) top3Str = "ไม่มีข้อมูลเครื่องจักรที่เกิดของเสียเลยในกะ/วันนี้";
     
-    let sec3_3_desc = `ผลลัพธ์จากการ Mapping ข้อมูลเชื่อมโยงพฤติกรรมความเสียหายของชิ้นงานเข้ากับหมายเลขเครื่องจักร ยืนยันได้ว่าเครื่องจักรที่เป็นแหล่งกำเนิดของเสียสะสมสูงสุด 3 อันดับแรก ได้แก่ ${top3Str} ข้อเสนอแนะเชิงวิศวกรรมคือ ควรยกระดับแผนการบำรุงรักษาเชิงป้องกัน (PM) หรือตรวจสอบพารามิเตอร์การตั้งค่า (Setup) ในกลุ่มเครื่องจักรดังกล่าวอย่างเร่งด่วน`;
+    let top3Macs = macNgList.slice(0,3);
+    let top3StrTH = top3Macs.map((m, i) => `อันดับ ${i+1} <b>${m.name}</b> (${m.ng.toLocaleString()} ชิ้น)`).join(', ');
+    let top3StrEN = top3Macs.map((m, i) => `Rank ${i+1}: <b>${m.name}</b> (${m.ng.toLocaleString()} pcs)`).join(', ');
+    if(top3Macs.length === 0) { top3StrTH = "ไม่มีข้อมูลของเสีย"; top3StrEN = "No defects found"; }
+    
+    let sec3_3_desc = multiLang(
+        `ผลลัพธ์จากการ Mapping พบว่าเครื่องจักรที่เป็นแหล่งกำเนิดของเสียสูงสุด 3 อันดับแรก ได้แก่ ${top3StrTH} ควรยกระดับแผนการซ่อมบำรุงเชิงป้องกัน (PM) อย่างเร่งด่วน`,
+        `Defect mapping reveals the top 3 machines generating the most defects are: ${top3StrEN}. Elevating Preventive Maintenance (PM) plans for these machines is highly recommended.`,
+        `欠陥マッピングの結果、不良発生トップ3の機械は次のとおりです：${top3StrEN}。 これらの機械の予防保全（PM）計画を直ちに強化することを強く推奨します。`
+    );
+
+    // สร้าง Config กราฟสำหรับหัวข้อ 3.3 Defect Source Mapping
+    let autoReportMachineNgConfig = null;
+    if (macNgList.length > 0) {
+        autoReportMachineNgConfig = {
+            labels: macNgList.map(m => m.name),
+            datasets: [{
+                label: 'NG (ชิ้น)',
+                data: macNgList.map(m => m.ng),
+                backgroundColor: 'rgba(249, 115, 22, 0.8)', // Orange color
+                borderColor: 'rgba(249, 115, 22, 1)',
+                borderWidth: 1
+            }]
+        };
+    }
 
     // 🌟 ส่วนที่ 5: การวิเคราะห์แนวโน้มรายวันแยกตามเครื่องจักร (1-16) 🌟
     let machineChartConfigs = [];
@@ -295,14 +341,53 @@ window.renderAutoReportContent = function() {
             if (rate > maxNgRate) { maxNgRate = rate; maxNgDate = d; }
         });
 
+        // 🌟 ดึงข้อมูลแจ้งซ่อมของเครื่องนี้ 🌟
+        let logs = [];
+        if(data.maintenanceLogs) logs = data.maintenanceLogs.filter(log => log.machine === m);
+        let maintTableHtml = '';
+        
+        if (logs.length > 0) {
+            maintTableHtml = `
+            <div class="mt-4">
+                <h5 class="text-xs font-bold text-orange-700 mb-1">🛠️ ประวัติปัญหาเครื่องจักรและการแจ้งซ่อม (Maintenance Logs)</h5>
+                <div class="border border-gray-200 rounded overflow-hidden">
+                    <table class="w-full text-[10px] text-left bg-white">
+                        <thead class="bg-orange-50 text-orange-800 border-b border-orange-100">
+                            <tr>
+                                <th class="px-2 py-1.5 w-20">วันที่</th>
+                                <th class="px-2 py-1.5 w-24">เวลาเริ่ม-เสร็จ</th>
+                                <th class="px-2 py-1.5 w-28">ประเภทปัญหา</th>
+                                <th class="px-2 py-1.5">รายละเอียด/การแก้ไขเบื้องต้น</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            ${logs.map(log => {
+                                let s = formatTimeStr(log.startTime);
+                                let e = log.endTime ? formatTimeStr(log.endTime) : '<span class="text-red-500 font-bold">รอดำเนินการ</span>';
+                                return `<tr>
+                                    <td class="px-2 py-1.5 text-gray-700">${log.date}</td>
+                                    <td class="px-2 py-1.5 font-medium">${s} - ${e}</td>
+                                    <td class="px-2 py-1.5 text-blue-700">${log.issueType}</td>
+                                    <td class="px-2 py-1.5 text-gray-600">${log.remark||'-'}</td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
+        }
+
         if (totalMFg > 0 || totalMNg > 0) {
             // กรณีมีผลผลิต -> โชว์กราฟ (ถ้ารายวันจะดึง Hourly, ถ้าหลายวันดึง Daily)
             const avgMYield = totalMFg + totalMNg > 0 ? ((totalMFg / (totalMFg + totalMNg)) * 100).toFixed(2) : 0;
             const avgMNgRate = (100 - avgMYield).toFixed(2);
             const variance = trend.length > 1 ? (Math.max(...trend) - Math.min(...trend)).toFixed(2) : 0;
             
-            let stability = variance < 5 ? "มีความเสถียรสูง (Highly Stable)" : (variance < 15 ? "มีความผันผวนปานกลาง (Moderate Variance)" : "มีความผันผวนสูงมาก (Highly Unstable)");
-            let targetEval = parseFloat(avgMNgRate) <= 0.5 ? "ผ่านเกณฑ์เป้าหมาย" : "ตกเกณฑ์มาตรฐาน (NG > 0.5%)";
+            let stabilityTH = variance < 5 ? "ความเสถียรสูง" : (variance < 15 ? "ผันผวนปานกลาง" : "ผันผวนสูงมาก");
+            let stabilityEN = variance < 5 ? "Highly Stable" : (variance < 15 ? "Moderate Variance" : "Highly Unstable");
+            
+            let targetEvalTH = parseFloat(avgMNgRate) <= 0.5 ? "ผ่านเกณฑ์" : "ตกเกณฑ์มาตรฐาน (NG > 0.5%)";
+            let targetEvalEN = parseFloat(avgMNgRate) <= 0.5 ? "Target Passed" : "Target Failed (NG > 0.5%)";
             let targetColor = parseFloat(avgMNgRate) <= 0.5 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700";
 
             let chartId = `mchart_${m.replace(/\W/g, '')}`;
@@ -332,45 +417,30 @@ window.renderAutoReportContent = function() {
                 id: chartId, labels: chartLabels, fgData: fgData, ngData: ngData, rateData: rateData, targetData: targetData 
             });
 
-            let descHtml = totalMNg > 0 
-                ? `จากการวิเคราะห์ข้อมูลเครื่องจักรสามารถเดินผลผลิต FG ได้รวม <b>${totalMFg.toLocaleString()} ชิ้น</b> และพบของเสีย <b>${totalMNg.toLocaleString()} ชิ้น</b> เมื่อประเมินด้วย<b>เป้าหมายควบคุมของเสียองค์กรที่ 0.5%</b> พบว่าเครื่องจักรเครื่องนี้ <b>${targetEval}</b> โดยมีอัตราความแปรปรวนที่ ${variance}% (${stability}) ทั้งนี้ พบจุดวิกฤตที่อัตราของเสียพุ่งสูงสุดแตะระดับ <b>${maxNgRate.toFixed(2)}%</b>`
-                : `จากการวิเคราะห์ข้อมูลเครื่องจักรสามารถเดินผลผลิต FG ได้รวม <b>${totalMFg.toLocaleString()} ชิ้น</b> และพบของเสีย <b>${totalMNg.toLocaleString()} ชิ้น</b> เมื่อประเมินด้วย<b>เป้าหมายควบคุมของเสียองค์กรที่ 0.5%</b> พบว่าเครื่องจักรเครื่องนี้ <b>${targetEval}</b> โดยมีอัตราความแปรปรวนที่ ${variance}% (${stability}) ซึ่งสามารถรักษาความต่อเนื่องของคุณภาพได้อย่างดีเยี่ยมโดยไม่พบของเสียในระบบ`;
+            let descHtml = multiLang(
+                `เดินผลผลิต FG รวม <b>${totalMFg.toLocaleString()} ชิ้น</b> พบของเสีย <b>${totalMNg.toLocaleString()} ชิ้น</b> (${targetEvalTH}) มีความแปรปรวน ${variance}% (${stabilityTH}) จุดวิกฤตของเสียสูงสุดที่ <b>${maxNgRate.toFixed(2)}%</b>`,
+                `Produced FG <b>${totalMFg.toLocaleString()} pcs</b>, defects <b>${totalMNg.toLocaleString()} pcs</b> (${targetEvalEN}). Variance is ${variance}% (${stabilityEN}). Peak NG crisis hit <b>${maxNgRate.toFixed(2)}%</b>.`,
+                `総生産量(FG) <b>${totalMFg.toLocaleString()} 個</b>、不良品 <b>${totalMNg.toLocaleString()} 個</b>。 変動率は ${variance}% (${stabilityEN}) です。ピーク時の不良率は <b>${maxNgRate.toFixed(2)}%</b> でした。`
+            );
 
             machineAnalysisHtml += `
                 <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm page-break-inside-avoid">
                     <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
                         <h4 class="font-black text-blue-800 text-base flex items-center gap-2">🏭 เครื่องจักร: ${m}</h4>
                         <span class="text-xs font-bold ${targetColor} px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
-                            ${targetEval} | ของเสียเฉลี่ย ${avgMNgRate}%
+                            ${targetEvalTH} | เฉลี่ย ${avgMNgRate}%
                         </span>
                     </div>
-                    <p class="text-[12px] text-gray-700 leading-relaxed text-justify indent-8 mb-4">${descHtml}</p>
+                    ${descHtml}
                     <div class="bg-gray-50 p-4 rounded-lg border border-gray-100 w-full h-[250px] relative">
                         <canvas id="${chartId}" style="width:100%; height:100%;"></canvas>
                     </div>
+                    ${maintTableHtml}
                 </div>
             `;
         } else {
             // กรณีไม่มียอดผลิต (เช็คประวัติแจ้งซ่อม)
-            let logs = [];
-            if(data.maintenanceLogs) logs = data.maintenanceLogs.filter(log => log.machine === m);
-
             if (logs.length > 0) {
-                let timelineHtml = `<ul class="relative border-l border-gray-300 ml-3 space-y-4 mt-2">`;
-                logs.forEach(log => {
-                    let sTime = formatTimeStr(log.startTime);
-                    let eTime = log.endTime ? formatTimeStr(log.endTime) : "รอดำเนินการ";
-                    let badgeColor = log.issueType.includes('Breakdown') ? 'bg-red-100 text-red-800 border-red-200' : 'bg-orange-100 text-orange-800 border-orange-200';
-                    timelineHtml += `
-                    <li class="mb-4 ml-4">
-                        <div class="absolute w-3 h-3 bg-gray-300 rounded-full mt-1.5 -left-1.5 border border-white"></div>
-                        <time class="mb-1 text-xs font-normal leading-none text-gray-500">วันที่ ${log.date} | ${sTime} - ${eTime} น.</time>
-                        <h5 class="text-sm font-bold text-gray-800"><span class="px-2 py-0.5 border text-[10px] rounded-full mr-2 ${badgeColor}">${log.issueType}</span></h5>
-                        <p class="text-xs text-gray-500 mt-1">📝 ${log.remark || 'ไม่มีรายละเอียดเพิ่มเติม'}</p>
-                    </li>`;
-                });
-                timelineHtml += `</ul>`;
-
                 machineAnalysisHtml += `
                 <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm page-break-inside-avoid">
                     <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
@@ -379,10 +449,7 @@ window.renderAutoReportContent = function() {
                             ไม่มีผลผลิต (ติดปัญหาแจ้งซ่อม)
                         </span>
                     </div>
-                    <div class="bg-gray-50 p-4 rounded-lg border border-gray-100 w-full">
-                        <h5 class="font-bold text-gray-700 text-sm mb-3">📋 ลำดับเหตุการณ์แจ้งซ่อม (Maintenance Timeline)</h5>
-                        ${timelineHtml}
-                    </div>
+                    ${maintTableHtml}
                 </div>`;
             } else {
                 machineAnalysisHtml += `
@@ -442,7 +509,7 @@ window.renderAutoReportContent = function() {
                 <div class="grid grid-cols-1 gap-6">
                     <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm flex flex-col page-break-inside-avoid">
                         <p class="text-base font-bold text-gray-800 mb-2">${sec2_1_title}</p>
-                        <p class="text-[12px] text-gray-600 mb-4 leading-relaxed indent-8 text-justify">${sec2_1_desc}</p>
+                        ${sec2_1_desc}
                         <div class="mt-auto w-full bg-gray-50 rounded-lg p-2 border border-gray-100">
                             ${sec2_1_img ? `<img src="${sec2_1_img}" class="w-full h-[280px] object-contain mx-auto" />` : `<p class="text-center text-sm text-gray-400">ไม่มีข้อมูลกราฟแสดงผล</p>`}
                         </div>
@@ -463,9 +530,7 @@ window.renderAutoReportContent = function() {
                 <div class="grid grid-cols-1 gap-6 mb-6">
                     <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm flex flex-col page-break-inside-avoid">
                         <p class="text-base font-bold text-gray-800 mb-2">📉 การจัดลำดับความสำคัญของปัญหา (Pareto Logic)</p>
-                        <p class="text-[12px] text-gray-600 mb-4 leading-relaxed indent-8 text-justify">
-                            อ้างอิงจากหลักการพาเรโต (80/20 Rule) ปัญหาคอขวดด้านคุณภาพที่หล่อเลี้ยงความสูญเสียมากที่สุดคือ <b>${topNgSymptomName}</b> ซึ่งกินสัดส่วนสูงถึง <b>${topNgSymptomRatio}%</b> เพื่อผลักดันให้อัตราของเสียรวมลดลงสู่เป้าหมาย การกำหนดมาตรการ Corrective Action (CAR) พุ่งเป้าไปที่อาการนี้เป็นอันดับแรกจะส่งผลลัพธ์การกอบกู้ Yield กลับมาได้รวดเร็วที่สุด
-                        </p>
+                        ${paretoDesc}
                         <div class="mt-auto w-full bg-gray-50 rounded-lg p-4 border border-gray-100 h-[300px] relative">
                             <canvas id="auto-report-pareto-chart" style="width:100%; height:100%;"></canvas>
                         </div>
@@ -475,7 +540,10 @@ window.renderAutoReportContent = function() {
                     
                     <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm page-break-inside-avoid">
                         <p class="text-base font-bold text-gray-800 mb-2">🏭 การชี้เป้าแหล่งกำเนิดปัญหาขัดข้อง (Defect Source Mapping)</p>
-                        <p class="text-[12px] text-gray-600 mb-4 leading-relaxed indent-8 text-justify">${sec3_3_desc}</p>
+                        ${sec3_3_desc}
+                        <div class="mt-auto w-full bg-gray-50 rounded-lg p-4 border border-gray-100 h-[250px] relative">
+                            <canvas id="auto-report-machine-ng-chart" style="width:100%; height:100%;"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -542,6 +610,20 @@ window.renderAutoReportContent = function() {
                         animation: false, responsive: true, maintainAspectRatio: false,
                         plugins: { legend: { display: true, position: 'top' }, datalabels: { display: false } },
                         scales: { y: { type: 'linear', beginAtZero: true, title: { display: true, text: '% (Yield %)' } } }
+                    }
+                }));
+            }
+        }
+
+        if (autoReportMachineNgConfig) {
+            const ctxMachineNg = document.getElementById('auto-report-machine-ng-chart');
+            if (ctxMachineNg) {
+                window.autoReportCharts.push(new Chart(ctxMachineNg, {
+                    type: 'bar', data: autoReportMachineNgConfig,
+                    options: {
+                        animation: false, responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' } } },
+                        scales: { y: { beginAtZero: true, title: { display: true, text: 'NG (ชิ้น)' } } }
                     }
                 }));
             }
