@@ -1266,9 +1266,21 @@
             }
         };
 
-        // 🌟 แก้ไขฟังก์ชันการ Submit ของฟอร์มแจ้งซ่อม พร้อมระบบบีบอัดรูปภาพ 🌟
+        // 🌟 ตัวแปรป้องกันการกดเบิ้ล (Frontend Lock) 🌟
+        let isSubmittingMaintenance = false;
+
+        // 🌟 แก้ไขฟังก์ชันการ Submit ของฟอร์มแจ้งซ่อม พร้อมระบบบีบอัดรูปภาพและกันเบิ้ล 🌟
         document.getElementById('maintenanceForm')?.addEventListener('submit', async function(e) {
             e.preventDefault();
+
+            // ถ้ากำลังบันทึกอยู่ ให้หยุดการทำงานทันที (ไม่ทำซ้ำ)
+            if (isSubmittingMaintenance) {
+                console.log("บล็อกการส่งข้อมูลซ้ำ");
+                return;
+            }
+            
+            isSubmittingMaintenance = true; // ล็อคประตู
+
             const btn = document.getElementById('btn-save-maint');
             const originalText = btn.innerHTML;
             btn.innerHTML = "⏳ กำลังดำเนินการ...";
@@ -1283,6 +1295,7 @@
                 alert("❌ กรุณาระบุ 'ทำงานต่อ (End)' เพื่อปิดจ๊อบ");
                 btn.innerHTML = originalText;
                 btn.disabled = false;
+                isSubmittingMaintenance = false; // ปลดล็อค
                 return;
             }
 
@@ -1342,6 +1355,7 @@
                     alert("❌ ไม่สามารถประมวลผลไฟล์ภาพได้ กรุณาลองใหม่อีกครั้ง");
                     btn.innerHTML = originalText;
                     btn.disabled = false;
+                    isSubmittingMaintenance = false; // ปลดล็อค
                     return;
                 }
             }
@@ -1378,6 +1392,7 @@
             } finally {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
+                isSubmittingMaintenance = false; // ปลดล็อคประตูเมื่อเสร็จสิ้นทุกอย่าง
             }
         });
     </script>
