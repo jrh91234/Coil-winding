@@ -1579,7 +1579,7 @@
         };
 
         // ==========================================
-        // 🌟 ฟังก์ชันสำหรับเปิด TV Mode (นำเสนอข้อมูลแบบเจาะจงซ่อมบำรุงและ RTV) 🌟
+        // 🌟 ฟังก์ชันสำหรับเปิด TV Mode (นำเสนอข้อมูลแบบเจาะจงซ่อมบำรุงและ RTV พร้อมรูปภาพ) 🌟
         // ==========================================
         let tvModeInterval = null;
         let tvClockInterval = null;
@@ -1615,6 +1615,17 @@
                 const now = new Date();
                 document.getElementById('tv-clock').innerText = now.toLocaleTimeString('th-TH');
             }, 1000);
+
+            // ฟังก์ชันตัวช่วยดึง Thumbnail จาก Google Drive URL
+            const getThumbUrl = (url) => {
+                if (!url) return null;
+                let fileId = '';
+                const matchD = url.match(/\/d\/(.+?)\//);
+                const matchId = url.match(/id=([^&]+)/);
+                if (matchD && matchD[1]) fileId = matchD[1];
+                else if (matchId && matchId[1]) fileId = matchId[1];
+                return fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w400` : null;
+            };
 
             // 1. เตรียมข้อมูลตัววิ่ง (Ticker)
             const maintLogs = currentDashboardData.maintenanceLogs || [];
@@ -1652,17 +1663,26 @@
                 `);
             }
 
-            // สไลด์ 1: งานซ่อมบำรุงที่ค้างอยู่ (Active Issues)
+            // สไลด์ 1: งานซ่อมบำรุงที่ค้างอยู่ (Active Issues) พร้อมรูปภาพใบแรก
             if (pendingMaint.length > 0) {
                 let mHtml = '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-6xl">';
-                pendingMaint.slice(0, 6).forEach(log => {
+                pendingMaint.slice(0, 4).forEach(log => {
+                    let imgHtml = '<div class="text-6xl animate-pulse flex-none w-24 text-center">⚠️</div>';
+                    if (log.imageUrl) {
+                        let firstImg = log.imageUrl.split('|')[0];
+                        let thumb = getThumbUrl(firstImg);
+                        if (thumb) {
+                            imgHtml = `<img src="${thumb}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" class="w-24 h-24 md:w-32 md:h-32 object-cover rounded-xl shadow-md border-2 border-red-500/50 flex-none bg-gray-900"><div class="text-6xl animate-pulse hidden flex-none w-24 text-center">⚠️</div>`;
+                        }
+                    }
+
                     mHtml += `
                     <div class="bg-gray-800 p-6 rounded-xl border-l-8 border-red-500 shadow-lg flex items-center gap-6">
-                        <div class="text-6xl animate-pulse">⚠️</div>
-                        <div class="flex-1">
-                            <div class="text-3xl font-black text-white mb-2">${log.machine} <span class="bg-red-500 text-white text-sm px-3 py-1 rounded-full ml-2 align-middle">${log.issueType}</span></div>
-                            <div class="text-gray-400 text-xl font-medium">เวลาแจ้ง: <span class="text-red-400">${log.startTime} น.</span></div>
-                            <div class="text-gray-300 text-lg mt-2 bg-gray-700 p-2 rounded">📝 ${log.remark || 'ไม่มีรายละเอียดเพิ่มเติม'}</div>
+                        ${imgHtml}
+                        <div class="flex-1 overflow-hidden">
+                            <div class="text-2xl md:text-3xl font-black text-white mb-2 truncate">${log.machine} <span class="bg-red-500 text-white text-sm px-3 py-1 rounded-full ml-2 align-middle">${log.issueType}</span></div>
+                            <div class="text-gray-400 text-lg md:text-xl font-medium">เวลาแจ้ง: <span class="text-red-400">${log.startTime} น.</span></div>
+                            <div class="text-gray-300 text-base md:text-lg mt-2 bg-gray-700 p-2 rounded truncate">📝 ${log.remark || 'ไม่มีรายละเอียดเพิ่มเติม'}</div>
                         </div>
                     </div>`;
                 });
@@ -1676,17 +1696,27 @@
                 `);
             }
 
-            // สไลด์ 2: งานซ่อมที่เสร็จแล้ววันนี้
+            // สไลด์ 2: งานซ่อมที่เสร็จแล้ววันนี้ พร้อมรูปภาพใบที่สอง
             if (completedMaint.length > 0) {
                 let mHtml = '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-6xl">';
-                completedMaint.slice(0, 6).forEach(log => {
+                completedMaint.slice(0, 4).forEach(log => {
+                    let imgHtml = '<div class="text-6xl flex-none w-24 text-center">✅</div>';
+                    if (log.imageUrl) {
+                        let urls = log.imageUrl.split('|');
+                        let targetImg = urls.length > 1 ? urls[1] : urls[0]; // ใช้รูปตอนปิดจ๊อบ ถ้ามี
+                        let thumb = getThumbUrl(targetImg);
+                        if (thumb) {
+                            imgHtml = `<img src="${thumb}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" class="w-24 h-24 md:w-32 md:h-32 object-cover rounded-xl shadow-md border-2 border-green-500/50 flex-none bg-gray-900"><div class="text-6xl hidden flex-none w-24 text-center">✅</div>`;
+                        }
+                    }
+
                     mHtml += `
                     <div class="bg-gray-800 p-6 rounded-xl border-l-8 border-green-500 shadow-lg flex items-center gap-6">
-                        <div class="text-6xl">✅</div>
-                        <div class="flex-1">
-                            <div class="text-3xl font-black text-white mb-2">${log.machine} <span class="bg-green-600 text-white text-sm px-3 py-1 rounded-full ml-2 align-middle">${log.issueType}</span></div>
-                            <div class="text-gray-400 text-xl font-medium">⏱️ ${log.startTime} - ${log.endTime} น.</div>
-                            <div class="text-gray-300 text-lg mt-2 bg-gray-700 p-2 rounded">📝 ${log.remark || 'แก้ไขเรียบร้อย'}</div>
+                        ${imgHtml}
+                        <div class="flex-1 overflow-hidden">
+                            <div class="text-2xl md:text-3xl font-black text-white mb-2 truncate">${log.machine} <span class="bg-green-600 text-white text-sm px-3 py-1 rounded-full ml-2 align-middle">${log.issueType}</span></div>
+                            <div class="text-gray-400 text-lg md:text-xl font-medium">⏱️ ${log.startTime} - ${log.endTime} น.</div>
+                            <div class="text-gray-300 text-base md:text-lg mt-2 bg-gray-700 p-2 rounded truncate">📝 ${log.remark || 'แก้ไขเรียบร้อย'}</div>
                         </div>
                     </div>`;
                 });
