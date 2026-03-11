@@ -268,6 +268,16 @@
                     <button id="btn-widget-manager" onclick="window.openWidgetManager()" class="hidden flex-1 lg:flex-none bg-gray-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-gray-700 transition-colors shadow-sm items-center justify-center gap-1">
                         👁️ ซ่อน/แสดงกราฟ
                     </button>
+                    
+                    <!-- 🌟 เพิ่มปุ่ม TV Mode ตรงนี้ 🌟 -->
+                    <button onclick="window.startTVMode()" class="flex-1 lg:flex-none bg-purple-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-purple-700 transition-colors shadow-sm flex items-center justify-center gap-1">
+                        📺 TV Mode
+                    </button>
+
+                    <!-- เพิ่มปุ่มสรุปงานซ่อมตรงนี้ -->
+                    <button onclick="window.openDailySummaryModal()" class="flex-1 lg:flex-none bg-amber-500 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-amber-600 transition-colors shadow-sm flex items-center justify-center gap-1">
+                        📋 สรุปงานซ่อม/RTV
+                    </button>
 
                     <button onclick="window.openAutoReport()" class="flex-1 lg:flex-none bg-indigo-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm flex items-center justify-center gap-1">
                         🤖 Auto Report (AI Summary)
@@ -907,6 +917,46 @@
         </div>
     </div>
 
+    <!-- 🌟 MODAL: สรุปงานซ่อมและ RTV รายวัน (Idea 3) 🌟 -->
+    <div id="modal-daily-summary" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center p-4 print-hide">
+        <div class="bg-white w-full max-w-4xl rounded-xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-fade-in">
+            <div class="bg-amber-500 p-4 flex justify-between items-center text-white flex-none">
+                <h3 class="font-bold text-lg flex items-center gap-2">📋 สรุปปัญหาแจ้งซ่อม และ RTV ประจำวัน</h3>
+                <button onclick="document.getElementById('modal-daily-summary').classList.add('hidden')" class="text-white hover:text-amber-100 text-2xl font-bold leading-none">&times;</button>
+            </div>
+            <div class="p-4 md:p-6 overflow-y-auto flex-1 bg-gray-50" id="daily-summary-content">
+                <!-- เนื้อหาจะถูกแทรกด้วย JavaScript -->
+            </div>
+            <div class="p-4 border-t bg-white flex-none flex justify-end">
+                <button onclick="document.getElementById('modal-daily-summary').classList.add('hidden')" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-bold hover:bg-gray-300 transition-colors">ปิดหน้าต่าง</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 🌟 MODAL: TV Mode (โหมดนำเสนอแบบเต็มจอ) 🌟 -->
+    <div id="modal-tv-mode" class="fixed inset-0 bg-black z-[200] hidden flex-col">
+        <div class="flex justify-between items-center p-4 bg-gray-900 text-white flex-none">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl animate-pulse">🔴</span>
+                <h2 class="text-xl font-bold tracking-widest">CWM TV STATION</h2>
+                <span class="text-xs bg-gray-700 px-2 py-1 rounded-full text-gray-300" id="tv-clock">00:00:00</span>
+            </div>
+            <button onclick="window.stopTVMode()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded font-bold transition-colors">❌ ออกจาก TV Mode</button>
+        </div>
+        
+        <div class="flex-1 overflow-hidden relative bg-gray-800" id="tv-content-area">
+            <!-- สไลด์จะมาโผล่ตรงนี้ -->
+        </div>
+        
+        <!-- แถบตัววิ่งด้านล่าง -->
+        <div class="bg-blue-900 text-white font-medium p-2 text-sm flex-none whitespace-nowrap overflow-hidden flex items-center">
+            <span class="bg-blue-600 px-2 py-0.5 rounded text-xs font-bold mr-2 flex-none uppercase">LATEST NEWS</span>
+            <div class="animate-marquee inline-block" id="tv-ticker">
+                กำลังโหลดข้อมูลล่าสุด...
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts (แก้เป็นเวอร์ชันเพื่อกัน Cache) -->
     <script src="js/globals.js?v=3.55"></script>
     <script src="js/auth.js?v=3.55"></script>
@@ -1528,6 +1578,195 @@
             modal.style.setProperty('z-index', '999999', 'important');
         };
 
+        // ==========================================
+        // 🌟 ฟังก์ชันสำหรับเปิด TV Mode (นำเสนอข้อมูล) 🌟
+        // ==========================================
+        let tvModeInterval = null;
+        let tvClockInterval = null;
+        let tvSlides = [];
+        let currentSlideIdx = 0;
+
+        window.startTVMode = function() {
+            if (!currentDashboardData) {
+                alert("กรุณากด 'ค้นหา' เพื่อโหลดข้อมูล Dashboard ก่อนใช้งาน TV Mode ครับ");
+                return;
+            }
+
+            const modal = document.getElementById('modal-tv-mode');
+            const contentArea = document.getElementById('tv-content-area');
+            const ticker = document.getElementById('tv-ticker');
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            // เข้าสู่โหมด Fullscreen (ถ้า Browser รองรับ)
+            try {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                } else if (document.documentElement.webkitRequestFullscreen) { /* Safari */
+                    document.documentElement.webkitRequestFullscreen();
+                } else if (document.documentElement.msRequestFullscreen) { /* IE11 */
+                    document.documentElement.msRequestFullscreen();
+                }
+            } catch(e) {}
+
+            // อัปเดตนาฬิกา
+            tvClockInterval = setInterval(() => {
+                const now = new Date();
+                document.getElementById('tv-clock').innerText = now.toLocaleTimeString('th-TH');
+            }, 1000);
+
+            // 1. เตรียมข้อมูลตัววิ่ง (Ticker)
+            const maintLogs = currentDashboardData.maintenanceLogs || [];
+            const rtvLogs = currentDashboardData.rtvLogs || [];
+            let tickerNews = [];
+            
+            if (maintLogs.length === 0 && rtvLogs.length === 0) {
+                tickerNews.push("🎉 วันนี้ไม่มีรายงานปัญหาเครื่องจักรและงานเคลม RTV เยี่ยมมาก!");
+            } else {
+                maintLogs.forEach(log => {
+                    let status = log.endTime ? "✅ ซ่อมเสร็จแล้ว" : "⚠️ รอดำเนินการ";
+                    tickerNews.push(`[${log.startTime}] ${log.machine} : ${log.issueType} - ${status}`);
+                });
+                rtvLogs.forEach(log => {
+                    tickerNews.push(`📦 รับคืน RTV: ${log.product} จำนวน ${log.qty} ชิ้น (${log.remark})`);
+                });
+            }
+            // เชื่อมข้อความด้วยลูกน้ำหรือสัญลักษณ์เพื่อความสวยงาม
+            ticker.innerHTML = tickerNews.join(' &nbsp;&nbsp;&nbsp; 🔴 &nbsp;&nbsp;&nbsp; ');
+
+            // 2. เตรียมสไลด์เนื้อหา
+            tvSlides = [];
+            
+            // สไลด์ 1: สรุปภาพรวมผลิต
+            const target = currentDashboardData.productionTarget || 0;
+            const fg = currentDashboardData.totalFg || 0;
+            const ng = currentDashboardData.totalNgPcs || 0;
+            const ach = target > 0 ? ((fg/target)*100).toFixed(1) : 0;
+            const yieldRate = (fg+ng) > 0 ? ((fg/(fg+ng))*100).toFixed(1) : 0;
+            
+            tvSlides.push(`
+                <div class="h-full w-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-gray-800 to-gray-900 animate-fade-in text-white">
+                    <h1 class="text-5xl font-black mb-10 text-blue-400">📊 ภาพรวมการผลิตวันนี้</h1>
+                    <div class="grid grid-cols-2 gap-8 w-full max-w-4xl">
+                        <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 text-center shadow-xl">
+                            <div class="text-gray-400 text-xl font-bold uppercase mb-2">TOTAL FG</div>
+                            <div class="text-7xl font-black text-blue-500">${fg.toLocaleString()}</div>
+                            <div class="text-gray-500 mt-2 text-lg">จากเป้าหมาย ${target.toLocaleString()}</div>
+                        </div>
+                        <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 text-center shadow-xl">
+                            <div class="text-gray-400 text-xl font-bold uppercase mb-2">% ACHIEVEMENT</div>
+                            <div class="text-7xl font-black ${ach >= 100 ? 'text-green-500' : 'text-orange-500'}">${ach}%</div>
+                        </div>
+                        <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 text-center shadow-xl">
+                            <div class="text-gray-400 text-xl font-bold uppercase mb-2">TOTAL NG</div>
+                            <div class="text-7xl font-black text-red-500">${ng.toLocaleString()}</div>
+                        </div>
+                        <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 text-center shadow-xl">
+                            <div class="text-gray-400 text-xl font-bold uppercase mb-2">% YIELD</div>
+                            <div class="text-7xl font-black text-green-400">${yieldRate}%</div>
+                        </div>
+                    </div>
+                </div>
+            `);
+
+            // สไลด์ 2: งานซ่อมบำรุงที่ค้างอยู่ (ถ้ามี)
+            const pendingMaint = maintLogs.filter(m => !m.endTime);
+            if (pendingMaint.length > 0) {
+                let mHtml = '<div class="grid grid-cols-2 gap-6 w-full max-w-6xl">';
+                pendingMaint.slice(0, 6).forEach(log => {
+                    mHtml += `
+                    <div class="bg-gray-800 p-6 rounded-xl border-l-8 border-red-500 shadow-lg flex items-center gap-4">
+                        <div class="text-5xl">⚠️</div>
+                        <div>
+                            <div class="text-2xl font-bold text-white mb-1">${log.machine} <span class="text-red-400 text-lg ml-2">${log.issueType}</span></div>
+                            <div class="text-gray-400 text-lg">เวลาแจ้ง: ${log.startTime} น. | ${log.remark}</div>
+                        </div>
+                    </div>`;
+                });
+                mHtml += '</div>';
+
+                tvSlides.push(`
+                    <div class="h-full w-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-gray-900 to-red-900 animate-fade-in text-white">
+                        <h1 class="text-5xl font-black mb-10 text-red-400 flex items-center gap-4">🚨 เครื่องจักรที่กำลังมีปัญหา (Downtime)</h1>
+                        ${mHtml}
+                    </div>
+                `);
+            }
+
+            // สไลด์ 3: งานเคลม RTV (ถ้ามี)
+            if (rtvLogs.length > 0) {
+                let rHtml = '<div class="grid grid-cols-2 gap-6 w-full max-w-6xl">';
+                rtvLogs.slice(0, 6).forEach(log => {
+                    rHtml += `
+                    <div class="bg-gray-800 p-6 rounded-xl border border-teal-700 shadow-lg flex items-center gap-4">
+                        <div class="text-5xl">📦</div>
+                        <div>
+                            <div class="text-2xl font-bold text-teal-400 mb-1">${log.product}</div>
+                            <div class="text-white text-xl">จำนวน <span class="text-red-400 font-black text-2xl">${log.qty}</span> ชิ้น</div>
+                            <div class="text-gray-400 text-sm mt-1">สาเหตุ: ${log.remark}</div>
+                        </div>
+                    </div>`;
+                });
+                rHtml += '</div>';
+
+                tvSlides.push(`
+                    <div class="h-full w-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-gray-900 to-teal-900 animate-fade-in text-white">
+                        <h1 class="text-5xl font-black mb-10 text-teal-400 flex items-center gap-4">📦 ข้อมูลงานเคลม RTV วันนี้</h1>
+                        ${rHtml}
+                    </div>
+                `);
+            }
+
+            // เริ่มรันสไลด์โชว์
+            currentSlideIdx = 0;
+            renderTVSlide();
+            
+            // เปลี่ยนสไลด์ทุกๆ 10 วินาที
+            tvModeInterval = setInterval(() => {
+                currentSlideIdx = (currentSlideIdx + 1) % tvSlides.length;
+                renderTVSlide();
+            }, 10000); 
+        };
+
+        function renderTVSlide() {
+            const contentArea = document.getElementById('tv-content-area');
+            if(contentArea && tvSlides.length > 0) {
+                contentArea.innerHTML = tvSlides[currentSlideIdx];
+            }
+        }
+
+        window.stopTVMode = function() {
+            if (tvModeInterval) clearInterval(tvModeInterval);
+            if (tvClockInterval) clearInterval(tvClockInterval);
+            
+            const modal = document.getElementById('modal-tv-mode');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            
+            // ออกจาก Fullscreen
+            try {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) { /* Safari */
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) { /* IE11 */
+                    document.msExitFullscreen();
+                }
+            } catch(e) {}
+        };
+
     </script>
+    <style>
+        /* CSS สำหรับตัววิ่ง TV Mode */
+        @keyframes marquee {
+            0% { transform: translateX(100vw); }
+            100% { transform: translateX(-100%); }
+        }
+        .animate-marquee {
+            animation: marquee 20s linear infinite;
+            white-space: nowrap;
+        }
+    </style>
 </body>
 </html>
