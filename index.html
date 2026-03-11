@@ -966,6 +966,22 @@
 
     <!-- Script ทั่วไปสำหรับ UI ย่อยๆ -->
     <script>
+        // ฟังก์ชันช่วยจัดการเวลาที่มีปัญหา ISO String (TZ) จาก Google Sheets
+        function formatTimeStr(val) {
+            if (!val) return '';
+            let str = String(val).trim();
+            if (str.includes('T')) {
+                try {
+                    let d = new Date(str);
+                    if(!isNaN(d.getTime())) {
+                        return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+                    }
+                } catch(e){}
+            }
+            let m = str.match(/(\d{1,2}:\d{2})/);
+            return m ? m[1].padStart(5, '0') : str.substring(0, 5);
+        }
+
         // Safe Caller Function ป้องกันปัญหาโหลดหน้าเว็บไม่สมบูรณ์
         function safeLoadDashboard() {
             const debugPanel = document.getElementById('debug-panel');
@@ -1500,22 +1516,21 @@
             } else {
                 html += `<div class="space-y-3 mb-6">`;
                 maintLogs.forEach(log => {
+                    let sTime = formatTimeStr(log.startTime);
+                    let eTime = formatTimeStr(log.endTime);
+                    
                     // คำนวณ Downtime
                     let durationStr = '<span class="text-red-500">ยังไม่ปิดจ๊อบ</span>';
-                    if (log.startTime && log.endTime) {
+                    if (sTime && eTime) {
                         try {
-                            const timeMatchS = String(log.startTime).match(/(\d{1,2}:\d{2})/);
-                            const timeMatchE = String(log.endTime).match(/(\d{1,2}:\d{2})/);
-                            if(timeMatchS && timeMatchE) {
-                                let s = timeMatchS[1].split(':');
-                                let e = timeMatchE[1].split(':');
-                                let mins = (parseInt(e[0])*60 + parseInt(e[1])) - (parseInt(s[0])*60 + parseInt(s[1]));
-                                if (mins < 0) mins += 1440;
-                                totalDowntimeMins += mins;
-                                let h = Math.floor(mins / 60);
-                                let m = mins % 60;
-                                durationStr = h > 0 ? `${h} ชม. ${m} นาที` : `${m} นาที`;
-                            }
+                            let s = sTime.split(':');
+                            let e = eTime.split(':');
+                            let mins = (parseInt(e[0])*60 + parseInt(e[1])) - (parseInt(s[0])*60 + parseInt(s[1]));
+                            if (mins < 0) mins += 1440;
+                            totalDowntimeMins += mins;
+                            let h = Math.floor(mins / 60);
+                            let m = mins % 60;
+                            durationStr = h > 0 ? `${h} ชม. ${m} นาที` : `${m} นาที`;
                         } catch(e){}
                     }
 
@@ -1525,7 +1540,7 @@
                     else if(log.issueType.includes('PM') || log.issueType.includes('AM')) badgeColor = 'bg-blue-100 text-blue-700 border border-blue-200';
                     else if(log.issueType.includes('Material')) badgeColor = 'bg-yellow-100 text-yellow-700 border border-yellow-200';
 
-                    let timeShow = log.startTime.substring(0,5) + (log.endTime ? ' - ' + log.endTime.substring(0,5) : ' (รอดำเนินการ)');
+                    let timeShow = sTime + (eTime ? ' - ' + eTime : ' (รอดำเนินการ)');
 
                     html += `
                     <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:border-amber-300 transition-colors">
@@ -1636,8 +1651,10 @@
                 tickerNews.push("🎉 วันนี้ไม่มีรายงานปัญหาเครื่องจักรและงานเคลม RTV เยี่ยมมาก!");
             } else {
                 maintLogs.forEach(log => {
-                    let status = log.endTime ? "✅ ซ่อมเสร็จแล้ว" : "⚠️ รอดำเนินการ";
-                    tickerNews.push(`[${log.startTime}] ${log.machine} : ${log.issueType} - ${status}`);
+                    let sTime = formatTimeStr(log.startTime);
+                    let eTime = formatTimeStr(log.endTime);
+                    let status = eTime ? "✅ ซ่อมเสร็จแล้ว" : "⚠️ รอดำเนินการ";
+                    tickerNews.push(`[${sTime}] ${log.machine} : ${log.issueType} - ${status}`);
                 });
                 rtvLogs.forEach(log => {
                     tickerNews.push(`📦 รับคืน RTV: ${log.product} จำนวน ${log.qty} ชิ้น (${log.remark})`);
@@ -1667,6 +1684,7 @@
             if (pendingMaint.length > 0) {
                 let mHtml = '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-6xl">';
                 pendingMaint.slice(0, 4).forEach(log => {
+                    let sTime = formatTimeStr(log.startTime);
                     let imgHtml = '<div class="text-6xl animate-pulse flex-none w-24 text-center">⚠️</div>';
                     if (log.imageUrl) {
                         let firstImg = log.imageUrl.split('|')[0];
@@ -1681,7 +1699,7 @@
                         ${imgHtml}
                         <div class="flex-1 overflow-hidden">
                             <div class="text-2xl md:text-3xl font-black text-white mb-2 truncate">${log.machine} <span class="bg-red-500 text-white text-sm px-3 py-1 rounded-full ml-2 align-middle">${log.issueType}</span></div>
-                            <div class="text-gray-400 text-lg md:text-xl font-medium">เวลาแจ้ง: <span class="text-red-400">${log.startTime} น.</span></div>
+                            <div class="text-gray-400 text-lg md:text-xl font-medium">เวลาแจ้ง: <span class="text-red-400">${sTime} น.</span></div>
                             <div class="text-gray-300 text-base md:text-lg mt-2 bg-gray-700 p-2 rounded truncate">📝 ${log.remark || 'ไม่มีรายละเอียดเพิ่มเติม'}</div>
                         </div>
                     </div>`;
@@ -1700,6 +1718,8 @@
             if (completedMaint.length > 0) {
                 let mHtml = '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-6xl">';
                 completedMaint.slice(0, 4).forEach(log => {
+                    let sTime = formatTimeStr(log.startTime);
+                    let eTime = formatTimeStr(log.endTime);
                     let imgHtml = '<div class="text-6xl flex-none w-24 text-center">✅</div>';
                     if (log.imageUrl) {
                         let urls = log.imageUrl.split('|');
@@ -1715,7 +1735,7 @@
                         ${imgHtml}
                         <div class="flex-1 overflow-hidden">
                             <div class="text-2xl md:text-3xl font-black text-white mb-2 truncate">${log.machine} <span class="bg-green-600 text-white text-sm px-3 py-1 rounded-full ml-2 align-middle">${log.issueType}</span></div>
-                            <div class="text-gray-400 text-lg md:text-xl font-medium">⏱️ ${log.startTime} - ${log.endTime} น.</div>
+                            <div class="text-gray-400 text-lg md:text-xl font-medium">⏱️ ${sTime} - ${eTime} น.</div>
                             <div class="text-gray-300 text-base md:text-lg mt-2 bg-gray-700 p-2 rounded truncate">📝 ${log.remark || 'แก้ไขเรียบร้อย'}</div>
                         </div>
                     </div>`;
