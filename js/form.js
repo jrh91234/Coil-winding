@@ -556,7 +556,6 @@ document.getElementById('planningForm').onsubmit = async (e) => {
 // 🌟 ระบบแจ้งซ่อม (Maintenance) - ปรับปรุงใหม่
 // ==========================================
 
-// ตัวแปรล็อกระบบป้องกันการกดรัวๆ (ทั้งแบบเช็ค State และเช็ค Time Cooldown)
 window.isSubmittingMaintenance = window.isSubmittingMaintenance || false;
 window.lastMaintSubmitTime = window.lastMaintSubmitTime || 0;
 
@@ -579,7 +578,6 @@ window.openMaintenanceModal = function() {
     }
     
     if (dStart) {
-        // บังคับเวลาให้อ่านค่าจากชั่วโมงและนาทีโดยตรง ป้องกัน Timezone เพี้ยน
         const now = new Date();
         const hh = String(now.getHours()).padStart(2, '0');
         const mm = String(now.getMinutes()).padStart(2, '0');
@@ -590,34 +588,51 @@ window.openMaintenanceModal = function() {
 };
 
 const maintFormEl = document.getElementById('maintenanceForm');
-if (maintFormEl) {
-    maintFormEl.onsubmit = async function(e) {
+const maintBtn = document.getElementById('btn-save-maint');
+
+if (maintFormEl && maintBtn) {
+    // 🛑 1. ดักจับและระงับการทำงานของโค้ดเก่าที่ฝังอยู่ในฟอร์มแบบเด็ดขาด (Capture Phase)
+    maintFormEl.addEventListener('submit', function(e) {
+        e.preventDefault();
+        e.stopImmediatePropagation(); // หยุด Listener ทุกตัวที่จะทำงานหลังจากนี้
+        maintBtn.click(); // ส่งไปรันที่ฟังก์ชันของปุ่มแทน
+    }, true); 
+
+    // 🛑 2. เปลี่ยน Type ของปุ่ม เพื่อไม่ให้เกิดการ Submit ฟอร์มโดยธรรมชาติของเบราว์เซอร์
+    maintBtn.setAttribute('type', 'button');
+    maintBtn.removeAttribute('onclick'); // ล้างฟังก์ชันเก่าที่อาจจะติดมาจาก HTML
+
+    // 🛑 3. รันตรรกะใหม่ทั้งหมดผ่านปุ่มแทนการพึ่งพา form.onsubmit แบบเดิม
+    maintBtn.onclick = async function(e) {
         e.preventDefault();
         
+        // จำลองการตรวจสอบฟิลด์แบบ Required ของ HTML5 
+        if (!maintFormEl.checkValidity()) {
+            maintFormEl.reportValidity();
+            return;
+        }
+
         const now = Date.now();
         
-        // --- ล็อกขั้นที่ 1: กันการกดคลิกเบิ้ล หรือกดซ้ำใน 3 วินาที (แก้บัคแตะเบิ้ลบนมือถือ 100%) ---
+        // ล็อกขั้นที่ 1: กันการกดคลิกเบิ้ล หรือกดซ้ำใน 3 วินาที
         if (window.isSubmittingMaintenance || (now - window.lastMaintSubmitTime < 3000)) {
-            console.warn("🔒 Blocked duplicate submit event on mobile.");
+            console.warn("🔒 Blocked duplicate submit event.");
             return false;
         }
         window.isSubmittingMaintenance = true; 
         window.lastMaintSubmitTime = now;
         
-        const btn = document.getElementById('btn-save-maint');
-        const originalText = btn.innerHTML;
+        const originalText = maintBtn.innerHTML;
         
-        // --- ล็อกขั้นที่ 2: ปิดการกดปุ่มทาง UI ทันทีแบบเด็ดขาด (ใช้ CSS style ทับไปเลย) ---
-        btn.disabled = true;
-        btn.style.pointerEvents = 'none';
-        btn.classList.add('opacity-50');
+        // ล็อกขั้นที่ 2: ปิดปุ่มทาง UI ทันที
+        maintBtn.disabled = true;
+        maintBtn.style.pointerEvents = 'none';
+        maintBtn.classList.add('opacity-50');
 
-        // --- ล็อกขั้นที่ 3: บังคับยุบคีย์บอร์ดมือถือ เพื่อไม่ให้หน้าจอขยับตอนแสดง confirm ---
         if (document.activeElement) {
             document.activeElement.blur();
         }
         
-        // หน่วงเวลาเล็กน้อย 300ms เพื่อให้ UI มือถือนิ่งสนิทก่อนเริ่มทำงาน
         await new Promise(resolve => setTimeout(resolve, 300));
         
         const machine = document.getElementById('maint-machine').value;
@@ -627,7 +642,7 @@ if (maintFormEl) {
         const remark = document.getElementById('maint-remark').value;
         const jobId = document.getElementById('maint-job-id')?.value;
 
-        btn.innerHTML = "🔍 กำลังวิเคราะห์ข้อมูลและตรวจสอบคำผิด...";
+        maintBtn.innerHTML = "🔍 กำลังวิเคราะห์ข้อมูลและตรวจสอบคำผิด...";
 
         // คำนวณ Downtime เป็นชั่วโมงและนาที
         let downtimeStr = "ยังไม่ระบุเวลาเสร็จสิ้น (รอดำเนินการ)";
@@ -635,14 +650,14 @@ if (maintFormEl) {
             const [sH, sM] = startTime.split(':').map(Number);
             const [eH, eM] = endTime.split(':').map(Number);
             let mins = (eH * 60 + eM) - (sH * 60 + sM);
-            if (mins < 0) mins += 1440; // กรณีข้ามเที่ยงคืน
+            if (mins < 0) mins += 1440; 
             
             const h = Math.floor(mins / 60);
             const m = mins % 60;
             downtimeStr = h > 0 ? `${h} ชม. ${m} นาที (${mins} นาที)` : `${m} นาที`;
         }
 
-        // เรียกใช้ API ตรวจสอบคำผิด (LanguageTool API แบบฟรี)
+        // เรียกใช้ API ตรวจสอบคำผิด
         let spellWarning = "";
         if (remark && remark.trim().length > 2) {
             try {
@@ -671,7 +686,6 @@ if (maintFormEl) {
             }
         }
 
-        // สร้างข้อความ Confirm ให้ผู้ใช้อ่านทวน
         const isCloseJob = jobId ? "(อัปเดต / ปิดจ๊อบ)" : "(เปิดแจ้งซ่อม)";
         const confirmMsg = `=== ยืนยันข้อมูลการแจ้งซ่อม ${isCloseJob} ===\n\n` +
                            `🏭 เครื่องจักร: ${machine}\n` +
@@ -683,19 +697,17 @@ if (maintFormEl) {
                            `----------------------------------\n` +
                            `กด OK เพื่อบันทึกข้อมูล หรือ Cancel เพื่อกลับไปแก้ไข`;
 
-        // ถามผู้ใช้
         if (!confirm(confirmMsg)) {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-            btn.style.pointerEvents = 'auto'; // คืนค่าการกด
-            btn.classList.remove('opacity-50');
-            window.isSubmittingMaintenance = false; // ปลดล็อกทันทีที่กดยกเลิก
-            window.lastMaintSubmitTime = 0; // ล้างเวลา cooldown เพื่อให้กดใหม่ได้ทันที
+            maintBtn.innerHTML = originalText;
+            maintBtn.disabled = false;
+            maintBtn.style.pointerEvents = 'auto'; 
+            maintBtn.classList.remove('opacity-50');
+            window.isSubmittingMaintenance = false; 
+            window.lastMaintSubmitTime = 0; 
             return;
         }
 
-        // ดำเนินการอัปโหลดรูปลง Google Drive และบันทึกข้อมูล
-        btn.innerHTML = "⏳ กำลังอัปโหลดข้อมูลและรูปภาพ...";
+        maintBtn.innerHTML = "⏳ กำลังอัปโหลดข้อมูลและรูปภาพ...";
         const fileInput = document.getElementById('maint-photo');
         let base64String = "";
 
@@ -711,10 +723,10 @@ if (maintFormEl) {
             } catch (err) {
                 console.error("Error reading file:", err);
                 alert("❌ ไม่สามารถอ่านไฟล์ภาพได้ กรุณาลองใหม่อีกครั้ง");
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-                btn.style.pointerEvents = 'auto';
-                btn.classList.remove('opacity-50');
+                maintBtn.innerHTML = originalText;
+                maintBtn.disabled = false;
+                maintBtn.style.pointerEvents = 'auto';
+                maintBtn.classList.remove('opacity-50');
                 window.isSubmittingMaintenance = false; 
                 return;
             }
@@ -741,17 +753,13 @@ if (maintFormEl) {
             
             if (result.status === 'success') {
                 alert("✅ " + result.message);
-                
-                // เคลียร์ฟอร์ม
                 document.getElementById('maintenanceForm').reset();
-                
                 const previewPanel = document.getElementById('maint-photo-preview');
                 if(previewPanel) previewPanel.classList.add('hidden');
                 
                 if(typeof window.clearPendingSelection === 'function') {
                     window.clearPendingSelection();
                 }
-                
                 document.getElementById('modal-maintenance').classList.add('hidden');
             } else {
                 alert("❌ เกิดข้อผิดพลาด: " + result.message);
@@ -759,12 +767,11 @@ if (maintFormEl) {
         } catch(err) {
             alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
         } finally {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-            btn.style.pointerEvents = 'auto';
-            btn.classList.remove('opacity-50');
-            window.isSubmittingMaintenance = false; // ปลดล็อกการส่งข้อมูลเมื่อทำงานจบกระบวนการ
-            // สังเกตว่าเราไม่ได้เคลียร์ window.lastMaintSubmitTime เพื่อให้ติด Cooldown ป้องกันต่อไปอีกนิดหน่อย
+            maintBtn.innerHTML = originalText;
+            maintBtn.disabled = false;
+            maintBtn.style.pointerEvents = 'auto';
+            maintBtn.classList.remove('opacity-50');
+            window.isSubmittingMaintenance = false; 
         }
     };
 }
