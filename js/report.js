@@ -641,12 +641,12 @@ window.renderAutoReportContent = function() {
                         plugins: { 
                             legend: { display: false }, 
                             datalabels: { 
-                                display: true, 
+                                display: false, // ปิดการแสดงตัวเลขด้านบนแท่งกราฟ
                                 anchor: 'end', 
                                 align: 'top', 
                                 offset: 4,
                                 font: { weight: 'bold', size: 11 },
-                                formatter: function(value) { return value.toLocaleString() + ' ชิ้น'; } // จัดฟอร์แมตตัวเลขเพื่อให้อ่านง่าย
+                                formatter: function(value) { return value.toLocaleString() + ' ชิ้น'; } 
                             } 
                         },
                         scales: { 
