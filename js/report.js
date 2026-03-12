@@ -396,19 +396,54 @@ window.renderAutoReportContent = async function() {
         data.dailyTrend.forEach(d => { if(d.ngBreakdown) Object.keys(d.ngBreakdown).forEach(k => { symptomTotals[k] = (symptomTotals[k] || 0) + d.ngBreakdown[k]; }); });
         const topSymptoms = Object.entries(symptomTotals).sort((a,b)=>b[1]-a[1]).slice(0,5).map(x=>x[0]);
         
-        const ngTrendDatasets = topSymptoms.map((sym, i) => {
-            const colors = ['#3b82f6', '#f97316', '#eab308', '#a855f7', '#ec4899'];
-            return {
+        // --- 🌟 ดึงข้อมูล Overall Daily Trend เข้ามาโชว์ในกราฟด้วย ---
+        const ngTrendDatasets = [];
+        
+        // 1. ใส่เส้น Overall NG Rate ไว้เป็นเส้นแรก (สีดำเด่นๆ)
+        ngTrendDatasets.push({
+            label: 'Overall NG Rate (%) - ภาพรวม',
+            data: data.dailyTrend.map(d => {
+                const totalProd = d.fg + d.ng;
+                return totalProd > 0 ? parseFloat(((d.ng / totalProd) * 100).toFixed(2)) : 0;
+            }),
+            borderColor: '#0f172a', // สีดำ/กรมท่าเข้ม
+            backgroundColor: '#0f172a',
+            borderWidth: 3, 
+            tension: 0.3,
+            fill: false
+        });
+
+        // 2. ใส่เส้นรายอาการ
+        const symptomColors = ['#3b82f6', '#f97316', '#eab308', '#a855f7', '#ec4899'];
+        topSymptoms.forEach((sym, i) => {
+            ngTrendDatasets.push({
                 label: sym + ' (%)',
                 data: data.dailyTrend.map(d => {
                     const totalProd = d.fg + d.ng;
                     const symPcs = (d.ngBreakdown && d.ngBreakdown[sym]) ? d.ngBreakdown[sym] : 0;
                     return totalProd > 0 ? parseFloat(((symPcs / totalProd) * 100).toFixed(2)) : 0;
                 }),
-                borderColor: colors[i % colors.length], backgroundColor: colors[i % colors.length], borderWidth: 2, tension: 0.3, fill: false
-            };
+                borderColor: symptomColors[i % symptomColors.length], 
+                backgroundColor: symptomColors[i % symptomColors.length], 
+                borderWidth: 2, 
+                tension: 0.3, 
+                fill: false
+            });
         });
-        ngTrendDatasets.push({ label: "Target Limit (0.5%)", data: data.dailyTrend.map(() => 0.5), borderColor: 'rgba(239, 68, 68, 1)', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false, tension: 0 });
+        
+        // 3. ใส่เส้น Target Limit
+        ngTrendDatasets.push({ 
+            label: "Target Limit (0.5%)", 
+            data: data.dailyTrend.map(() => 0.5), 
+            borderColor: 'rgba(239, 68, 68, 1)', 
+            backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+            borderWidth: 2, 
+            borderDash: [5, 5], 
+            pointRadius: 0, 
+            fill: false, 
+            tension: 0 
+        });
+
         autoReportNgTrendConfig = { labels: data.dailyTrend.map(d => d.date), datasets: ngTrendDatasets };
     }
 
@@ -452,6 +487,7 @@ window.renderAutoReportContent = async function() {
 
     // 🌟 ส่วนที่ 4: การวิเคราะห์แนวโน้มรายวันแยกตามเครื่องจักร (1-16) 🌟
     let machineChartConfigs = [];
+    let machineNgChartConfigs = []; // 🌟 เก็บ config สำหรับกราฟ NG Breakdown แนวนอน
     let machineAnalysisHtml = `<div class="page-break-before print-page mb-8">`;
     
     for(let i=1; i<=16; i++) {
@@ -572,6 +608,21 @@ window.renderAutoReportContent = async function() {
                 id: chartId, labels: chartLabels, fgData: fgData, ngData: ngData, rateData: rateData, targetData: targetData 
             });
 
+            // 🌟 เตรียมข้อมูลกราฟแนวนอน (NG Breakdown) สำหรับเครื่องนี้ 🌟
+            let ngChartId = null;
+            if (totalMNg > 0 && mData.ngBreakdownPcs && Object.keys(mData.ngBreakdownPcs).length > 0) {
+                ngChartId = `mchart_ng_${m.replace(/\W/g, '')}`;
+                let sortedBreakdown = Object.entries(mData.ngBreakdownPcs).sort((a,b) => b[1] - a[1]);
+                let bLabels = sortedBreakdown.map(item => item[0]);
+                let bData = sortedBreakdown.map(item => item[1]);
+                
+                machineNgChartConfigs.push({
+                    id: ngChartId,
+                    labels: bLabels,
+                    data: bData
+                });
+            }
+
             // ปรับคำอธิบาย หากเป็น Single Day ให้ตัดเรื่องความแปรปรวน (Variance) ทิ้ง
             let descHtml = "";
             if (isSingleDay) {
@@ -632,6 +683,16 @@ window.renderAutoReportContent = async function() {
                     <div class="bg-gray-50 p-4 rounded-lg border border-gray-100 w-full h-[250px] relative">
                         <canvas id="${chartId}" style="width:100%; height:100%;"></canvas>
                     </div>
+                    
+                    ${ngChartId ? `
+                    <div class="mt-4 pt-4 border-t border-gray-200">
+                        <p class="text-xs font-bold text-gray-700 mb-2">📊 สัดส่วนอาการของเสีย (NG Breakdown)</p>
+                        <div class="w-full h-[160px] relative">
+                            <canvas id="${ngChartId}" style="width:100%; height:100%;"></canvas>
+                        </div>
+                    </div>
+                    ` : ''}
+
                     ${maintTableHtml}
                 </div>
             `;
@@ -672,7 +733,7 @@ window.renderAutoReportContent = async function() {
                                     let remarkTrans = getTranslatedRemark(pLog.remark);
                                     return `<tr>
                                         <td class="px-2 py-2 text-gray-700 align-top whitespace-nowrap">${pLog.date}</td>
-                                        <td class="px-2 py-2 font-medium align-top whitespace-nowrap">${s} - ${e}</td>
+                                        <td class="px-2 py-2 font-medium align-top whitespace-nowrap">${s} - <span class="text-red-500 font-bold">ยังไม่ปิดจ๊อบ</span></td>
                                         <td class="px-2 py-2 text-blue-700 align-top whitespace-nowrap">${pLog.issueType}</td>
                                         <td class="px-2 py-2 align-top">
                                             <div class="space-y-0.5">
@@ -949,6 +1010,47 @@ window.renderAutoReportContent = async function() {
                 }));
             }
         });
+
+        // 🌟 เรนเดอร์กราฟแนวนอน (NG Breakdown) สำหรับแต่ละเครื่องจักร 🌟
+        machineNgChartConfigs.forEach(cfg => {
+            const ctx = document.getElementById(cfg.id);
+            if (ctx) {
+                window.autoReportCharts.push(new Chart(ctx, {
+                    type: 'bar', 
+                    data: {
+                        labels: cfg.labels,
+                        datasets: [{
+                            label: 'NG (ชิ้น)',
+                            data: cfg.data,
+                            backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                            borderColor: 'rgba(239, 68, 68, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y', // เปลี่ยนเป็นกราฟแท่งแนวนอน
+                        animation: false,
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            datalabels: {
+                                display: true,
+                                anchor: 'end',
+                                align: 'right',
+                                font: { size: 9 },
+                                formatter: (val) => val.toLocaleString() + ' ชิ้น'
+                            }
+                        },
+                        scales: {
+                            x: { beginAtZero: true, grace: '15%' }, // เพิ่ม grace เพื่อเว้นที่ว่างด้านขวาให้ตัวเลขแสดงผลไม่ล้นกรอบ
+                            y: { ticks: { autoSkip: false, font: { size: 9 } } }
+                        }
+                    }
+                }));
+            }
+        });
+
     }, 100); 
 };
 
