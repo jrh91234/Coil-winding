@@ -1,6 +1,7 @@
 // ----------------------------------------------------
 // CWM Production System - form.js (v3.55)
 // ----------------------------------------------------
+console.log("✅ CWM System: form.js is loaded correctly and up-to-date!");
 
 function getShiftDateStr() {
     const now = new Date();
