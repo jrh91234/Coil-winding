@@ -556,8 +556,9 @@ document.getElementById('planningForm').onsubmit = async (e) => {
 // 🌟 ระบบแจ้งซ่อม (Maintenance) - ปรับปรุงใหม่
 // ==========================================
 
-// ล็อกป้องกันการกดซ้ำแบบรัวๆ (เปลี่ยนมาใช้ window.isSubmittingMaintenance ป้องกันปัญหา Redeclaration Error)
+// ตัวแปรล็อกระบบป้องกันการกดรัวๆ (ทั้งแบบเช็ค State และเช็ค Time Cooldown)
 window.isSubmittingMaintenance = window.isSubmittingMaintenance || false;
+window.lastMaintSubmitTime = window.lastMaintSubmitTime || 0;
 
 window.openMaintenanceModal = function() {
     const modal = document.getElementById('modal-maintenance');
@@ -566,8 +567,6 @@ window.openMaintenanceModal = function() {
     const dMac = document.getElementById('maint-machine');
     const dStart = document.getElementById('maint-start-time');
     
-    // ถอดการสร้าง Job ID หลอกออกไป เพื่อให้ Backend รู้ว่าเป็น "เปิดจ๊อบใหม่"
-
     if (dDate) dDate.value = getShiftDateStr();
     if (dRec && window.currentUser) dRec.value = window.currentUser.name || window.currentUser.username;
     
@@ -595,16 +594,31 @@ if (maintFormEl) {
     maintFormEl.onsubmit = async function(e) {
         e.preventDefault();
         
-        // ล็อกไม่ให้รันฟังก์ชันซ้อนกันเด็ดขาด (กันการกดคลิกเบิ้ล 100%)
-        if (window.isSubmittingMaintenance) return;
+        const now = Date.now();
+        
+        // --- ล็อกขั้นที่ 1: กันการกดคลิกเบิ้ล หรือกดซ้ำใน 3 วินาที (แก้บัคแตะเบิ้ลบนมือถือ 100%) ---
+        if (window.isSubmittingMaintenance || (now - window.lastMaintSubmitTime < 3000)) {
+            console.warn("🔒 Blocked duplicate submit event on mobile.");
+            return false;
+        }
         window.isSubmittingMaintenance = true; 
+        window.lastMaintSubmitTime = now;
         
         const btn = document.getElementById('btn-save-maint');
         const originalText = btn.innerHTML;
         
-        // ปิดการกดปุ่มทาง UI ทันที
+        // --- ล็อกขั้นที่ 2: ปิดการกดปุ่มทาง UI ทันทีแบบเด็ดขาด (ใช้ CSS style ทับไปเลย) ---
         btn.disabled = true;
-        btn.classList.add('pointer-events-none', 'opacity-50');
+        btn.style.pointerEvents = 'none';
+        btn.classList.add('opacity-50');
+
+        // --- ล็อกขั้นที่ 3: บังคับยุบคีย์บอร์ดมือถือ เพื่อไม่ให้หน้าจอขยับตอนแสดง confirm ---
+        if (document.activeElement) {
+            document.activeElement.blur();
+        }
+        
+        // หน่วงเวลาเล็กน้อย 300ms เพื่อให้ UI มือถือนิ่งสนิทก่อนเริ่มทำงาน
+        await new Promise(resolve => setTimeout(resolve, 300));
         
         const machine = document.getElementById('maint-machine').value;
         const issueType = document.getElementById('maint-issue-type').value;
@@ -658,7 +672,6 @@ if (maintFormEl) {
         }
 
         // สร้างข้อความ Confirm ให้ผู้ใช้อ่านทวน
-        // ถ้ามี jobId แนบมา แสดงว่าเป็นการแก้จ๊อบเก่า (อัปเดต) ถ้าไม่มีคือจ๊อบใหม่
         const isCloseJob = jobId ? "(อัปเดต / ปิดจ๊อบ)" : "(เปิดแจ้งซ่อม)";
         const confirmMsg = `=== ยืนยันข้อมูลการแจ้งซ่อม ${isCloseJob} ===\n\n` +
                            `🏭 เครื่องจักร: ${machine}\n` +
@@ -674,8 +687,10 @@ if (maintFormEl) {
         if (!confirm(confirmMsg)) {
             btn.innerHTML = originalText;
             btn.disabled = false;
-            btn.classList.remove('pointer-events-none', 'opacity-50');
-            window.isSubmittingMaintenance = false; // ปลดล็อคเมื่อกดยกเลิก
+            btn.style.pointerEvents = 'auto'; // คืนค่าการกด
+            btn.classList.remove('opacity-50');
+            window.isSubmittingMaintenance = false; // ปลดล็อกทันทีที่กดยกเลิก
+            window.lastMaintSubmitTime = 0; // ล้างเวลา cooldown เพื่อให้กดใหม่ได้ทันที
             return;
         }
 
@@ -698,15 +713,16 @@ if (maintFormEl) {
                 alert("❌ ไม่สามารถอ่านไฟล์ภาพได้ กรุณาลองใหม่อีกครั้ง");
                 btn.innerHTML = originalText;
                 btn.disabled = false;
-                btn.classList.remove('pointer-events-none', 'opacity-50');
-                window.isSubmittingMaintenance = false; // ปลดล็อคเมื่อเกิด Error ภาพ
+                btn.style.pointerEvents = 'auto';
+                btn.classList.remove('opacity-50');
+                window.isSubmittingMaintenance = false; 
                 return;
             }
         }
 
         const payload = {
             action: 'SAVE_MAINTENANCE',
-            jobId: jobId || "", // ปล่อยว่างไว้หากเป็นจ๊อบใหม่ เพื่อให้ Backend สร้างรหัสให้เอง
+            jobId: jobId || "", 
             username: window.currentUser ? window.currentUser.username : "Unknown",
             role: window.currentUser ? window.currentUser.role : "Unknown",
             date: document.getElementById('maint-date').value,
@@ -745,8 +761,10 @@ if (maintFormEl) {
         } finally {
             btn.innerHTML = originalText;
             btn.disabled = false;
-            btn.classList.remove('pointer-events-none', 'opacity-50');
-            window.isSubmittingMaintenance = false; // ปลดล็อคการส่งข้อมูลเมื่อเสร็จสิ้นทั้งหมด
+            btn.style.pointerEvents = 'auto';
+            btn.classList.remove('opacity-50');
+            window.isSubmittingMaintenance = false; // ปลดล็อกการส่งข้อมูลเมื่อทำงานจบกระบวนการ
+            // สังเกตว่าเราไม่ได้เคลียร์ window.lastMaintSubmitTime เพื่อให้ติด Cooldown ป้องกันต่อไปอีกนิดหน่อย
         }
     };
 }
