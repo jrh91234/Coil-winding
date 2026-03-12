@@ -70,6 +70,41 @@ window.renderRecorderOptions = function() {
     }
 };
 
+// 🌟 เพิ่มฟังก์ชันสำหรับเรนเดอร์รายชื่อสินค้า (แก้ Error renderProductOptions ใน auth.js) 🌟
+window.renderProductOptions = function() {
+    // สำหรับหน้าวางแผน (Planning)
+    const planProductSelect = document.getElementById('planProduct');
+    if (planProductSelect && typeof productList !== 'undefined' && Array.isArray(productList)) {
+        const currentVal = planProductSelect.value;
+        planProductSelect.innerHTML = '<option value="">-- เลือกรุ่นสินค้า --</option>';
+        productList.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.text = p;
+            planProductSelect.appendChild(opt);
+        });
+        if (currentVal && productList.includes(currentVal)) {
+            planProductSelect.value = currentVal;
+        }
+    }
+
+    // สำหรับหน้ารับคืน/เคลม (RTV)
+    const rtvProductSelect = document.getElementById('rtvProduct');
+    if (rtvProductSelect && typeof productList !== 'undefined' && Array.isArray(productList)) {
+        const currentVal = rtvProductSelect.value;
+        rtvProductSelect.innerHTML = '<option value="">-- เลือกรุ่นสินค้า --</option>';
+        productList.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.text = p;
+            rtvProductSelect.appendChild(opt);
+        });
+        if (currentVal && productList.includes(currentVal)) {
+            rtvProductSelect.value = currentVal;
+        }
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     const pDate = document.getElementById('productionDate');
     const planDate = document.getElementById('planDate');
@@ -99,7 +134,9 @@ window.addBatchRow = function() {
     }
     
     let prodOpts = '<option value="">- เลือกรุ่น -</option>';
-    productList.forEach(p => prodOpts += `<option value="${p}">${p}</option>`);
+    if (typeof productList !== 'undefined') {
+        productList.forEach(p => prodOpts += `<option value="${p}">${p}</option>`);
+    }
 
     div.innerHTML = `
         <div class="w-full md:w-1/4">
@@ -162,7 +199,9 @@ window.openAssignModal = function() {
         const m = `CWM-${String(i).padStart(2,'0')}`;
         const currentVal = machineMapping[m] || '';
         let opts = `<option value="">-- ไม่ได้ระบุ --</option>`;
-        opts += productList.map(p => `<option value="${p}" ${currentVal===p?'selected':''}>${p}</option>`).join('');
+        if (typeof productList !== 'undefined') {
+            opts += productList.map(p => `<option value="${p}" ${currentVal===p?'selected':''}>${p}</option>`).join('');
+        }
         
         container.innerHTML += `
             <div class="flex items-center gap-2 bg-gray-50 p-2 rounded border border-gray-100 mb-1">
@@ -240,18 +279,20 @@ window.openNgModal = function(triggerEl) {
     const list = document.getElementById('modal-ng-list');
     list.innerHTML = '';
     
-    ngSymptoms.forEach((sym, idx) => {
-        const val = currentData[sym] || '';
-        list.innerHTML += `
-            <div class="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded border border-gray-100">
-                <label class="flex-1 text-sm text-gray-700">${sym}</label>
-                <input type="number" min="0" class="w-20 p-1.5 border rounded text-center text-red-600 font-bold modal-ng-val" data-sym="${sym}" value="${val}" placeholder="0">
-            </div>
-        `;
-    });
+    if (typeof ngSymptoms !== 'undefined') {
+        ngSymptoms.forEach((sym, idx) => {
+            const val = currentData[sym] || '';
+            list.innerHTML += `
+                <div class="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded border border-gray-100">
+                    <label class="flex-1 text-sm text-gray-700">${sym}</label>
+                    <input type="number" min="0" class="w-20 p-1.5 border rounded text-center text-red-600 font-bold modal-ng-val" data-sym="${sym}" value="${val}" placeholder="0">
+                </div>
+            `;
+        });
+    }
     
     for(let k in currentData) {
-        if(!ngSymptoms.includes(k)) {
+        if(typeof ngSymptoms !== 'undefined' && !ngSymptoms.includes(k)) {
             list.innerHTML += `
                 <div class="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded border border-gray-100">
                     <input type="text" class="flex-1 p-1.5 border rounded text-sm text-gray-700 modal-ng-sym-custom" value="${k}">
@@ -316,7 +357,7 @@ let currentManageListType = '';
 window.manageRecorders = function() {
     currentManageListType = 'recorder';
     document.getElementById('manage-list-title').innerText = 'จัดการรายชื่อพนักงาน';
-    renderManageList(recorderList);
+    if (typeof recorderList !== 'undefined') renderManageList(recorderList);
     document.getElementById('modal-manage-list').classList.remove('hidden');
 };
 
@@ -324,7 +365,7 @@ window.manageSymptomsFromModal = function() {
     document.getElementById('modal-ng').classList.add('hidden');
     currentManageListType = 'symptom';
     document.getElementById('manage-list-title').innerText = 'จัดการรายการอาการเสีย (NG)';
-    renderManageList(ngSymptoms);
+    if (typeof ngSymptoms !== 'undefined') renderManageList(ngSymptoms);
     document.getElementById('modal-manage-list').classList.remove('hidden');
 };
 
