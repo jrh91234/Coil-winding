@@ -298,11 +298,13 @@ window.renderAutoReportContent = async function() {
         );
 
         sec3_2_html = `
-        <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm flex flex-col page-break-inside-avoid mb-6">
-            <p class="text-base font-bold text-gray-800 mb-2">📈 แนวโน้มการเกิดซ้ำของปัญหาและสถิติการหลุดเป้าหมาย (Defect Chronology)</p>
-            ${s32_desc}
-            <div class="mt-auto w-full bg-gray-50 rounded-lg p-4 border border-gray-100 h-[300px] relative">
-                <canvas id="auto-report-ng-trend-chart" style="width:100%; height:100%;"></canvas>
+        <div class="mb-8 page-break-inside-avoid">
+            <h3 class="text-lg font-bold text-gray-800 border-l-4 border-red-500 pl-3 mb-4 bg-white shadow-sm py-2.5 rounded-r-lg">📉 แนวโน้มการเกิดซ้ำของปัญหา (Defect Chronology)</h3>
+            <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm flex flex-col">
+                ${s32_desc}
+                <div class="mt-auto w-full bg-gray-50 rounded-lg p-4 border border-gray-100 h-[300px] relative">
+                    <canvas id="auto-report-ng-trend-chart" style="width:100%; height:100%;"></canvas>
+                </div>
             </div>
         </div>
         `;
@@ -365,11 +367,11 @@ window.renderAutoReportContent = async function() {
         };
     }
 
-    // 🌟 ส่วนที่ 5: การวิเคราะห์แนวโน้มรายวันแยกตามเครื่องจักร (1-16) 🌟
+    // 🌟 ส่วนที่ 4: การวิเคราะห์แนวโน้มรายวันแยกตามเครื่องจักร (1-16) 🌟
     let machineChartConfigs = [];
-    let machineAnalysisHtml = `<div class="page-break-before print-page">
+    let machineAnalysisHtml = `<div class="page-break-before print-page mb-8">
         <div class="mb-8 page-break-inside-avoid">
-        <h3 class="text-lg font-bold text-gray-800 border-l-4 border-purple-600 pl-2 mb-4 bg-gray-50 py-1">3. การวิเคราะห์สถานะและแนวโน้มเชิงสถิติ แยกตามเครื่องจักร (CWM-01 ถึง 16)</h3>
+        <h3 class="text-lg font-bold text-gray-800 border-l-4 border-purple-600 pl-3 mb-4 bg-white shadow-sm py-2.5 rounded-r-lg">4. การวิเคราะห์สถานะและแนวโน้มเชิงสถิติ แยกตามเครื่องจักร (CWM-01 ถึง 16)</h3>
         <div class="space-y-6">`;
     
     for(let i=1; i<=16; i++) {
@@ -563,10 +565,15 @@ window.renderAutoReportContent = async function() {
     }
     machineAnalysisHtml += `</div></div></div>`;
 
-    // 🌟 ประกอบร่าง HTML สำหรับรายงาน 🌟
+    // 🌟 ประกอบร่าง HTML สำหรับรายงาน (เปลี่ยนคลาสตั้งค่า Container เพื่อกันกราฟบีบบนมือถือ) 🌟
+    // สังเกตการเพิ่ม md:hidden เป็นป้ายเตือนสำหรับผู้ใช้มือถือ
     let html = `
-        <div class="print-page bg-white shadow-lg ring-1 ring-gray-200 rounded-lg p-8 mb-6">
-            <div class="border-b-2 border-gray-800 pb-4 mb-6">
+        <div class="md:hidden bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-bold text-center py-2 px-4 rounded-lg mb-4 shadow-sm print-hide flex items-center justify-center gap-2">
+            <span>↔️</span> เลื่อนซ้าย-ขวา เพื่อดูรายงานขนาด A4 แบบเต็ม
+        </div>
+
+        <div class="print-page mb-8">
+            <div class="border-b-2 border-gray-300 pb-4 mb-6">
                 <div class="flex justify-between items-end">
                     <div>
                         <h1 class="text-3xl font-black text-gray-900 uppercase tracking-tight">Production Analytics Report</h1>
@@ -576,14 +583,14 @@ window.renderAutoReportContent = async function() {
                         <p><b>Printed:</b> ${printTime}</p>
                     </div>
                 </div>
-                <div class="mt-4 flex gap-6 text-sm bg-gray-50 p-3 rounded-lg border border-gray-200">
-                    <span class="font-bold">ขอบเขตข้อมูล: <span class="font-normal text-blue-700">${dateStr}</span></span>
-                    <span class="font-bold">กะการทำงาน: <span class="font-normal text-blue-700">${shiftName} (${shiftType})</span></span>
+                <div class="mt-4 flex gap-6 text-sm bg-white shadow-sm p-3 rounded-lg border border-gray-200">
+                    <span class="font-bold text-gray-700">ขอบเขตข้อมูล: <span class="font-normal text-blue-700">${dateStr}</span></span>
+                    <span class="font-bold text-gray-700">กะการทำงาน: <span class="font-normal text-blue-700">${shiftName} (${shiftType})</span></span>
                 </div>
             </div>
 
             <div class="mb-8">
-                <h3 class="text-lg font-bold text-gray-800 border-l-4 border-blue-600 pl-2 mb-4 bg-gray-50 py-1">1. ดัชนีชี้วัดผลการดำเนินงานหลัก (Key Performance Indicators)</h3>
+                <h3 class="text-lg font-bold text-gray-800 border-l-4 border-blue-600 pl-3 mb-4 bg-white shadow-sm py-2.5 rounded-r-lg">1. ดัชนีชี้วัดผลการดำเนินงานหลัก (Key Performance Indicators)</h3>
                 <div class="grid grid-cols-3 gap-6 text-center">
                     <div class="border border-gray-300 rounded p-4 bg-white shadow-sm">
                         <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Good (FG)</p>
@@ -604,7 +611,7 @@ window.renderAutoReportContent = async function() {
             </div>
 
             <div class="mb-8">
-                <h3 class="text-lg font-bold text-gray-800 border-l-4 border-indigo-500 pl-2 mb-4 bg-gray-50 py-1">2. การประเมินเสถียรภาพและแนวโน้มการผลิต (Production Stability Assessment)</h3>
+                <h3 class="text-lg font-bold text-gray-800 border-l-4 border-indigo-500 pl-3 mb-4 bg-white shadow-sm py-2.5 rounded-r-lg">2. การประเมินเสถียรภาพและแนวโน้มการผลิต (Production Stability Assessment)</h3>
                 <div class="grid grid-cols-1 gap-6">
                     <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm flex flex-col page-break-inside-avoid">
                         <p class="text-base font-bold text-gray-800 mb-2">${sec2_1_title}</p>
@@ -617,9 +624,9 @@ window.renderAutoReportContent = async function() {
             </div>
         </div>
 
-        <div class="print-page bg-white shadow-lg ring-1 ring-gray-200 rounded p-8 mb-6 page-break-before">
+        <div class="print-page mb-8 page-break-before">
             <div class="mb-8 page-break-inside-avoid">
-                <h3 class="text-lg font-bold text-gray-800 border-l-4 border-red-500 pl-2 mb-4 bg-gray-50 py-1">3. การวิเคราะห์สาเหตุความสูญเสียเชิงลึก (Defect Root Cause Diagnostics)</h3>
+                <h3 class="text-lg font-bold text-gray-800 border-l-4 border-red-500 pl-3 mb-4 bg-white shadow-sm py-2.5 rounded-r-lg">3. การวิเคราะห์สาเหตุความสูญเสียเชิงลึก (Defect Root Cause Diagnostics)</h3>
                 
                 <div class="bg-red-50 border border-red-200 p-5 rounded-lg mb-6 shadow-sm">
                     <p class="text-sm font-bold text-red-800 mb-3 flex items-center gap-2"><span>💡</span> สรุปสถานการณ์ความผิดปกติหลัก (Top Quality Violations):</p>
@@ -650,7 +657,7 @@ window.renderAutoReportContent = async function() {
 
         ${machineAnalysisHtml}
 
-        <div class="print-page bg-white shadow-lg ring-1 ring-gray-200 rounded p-8 mt-6 page-break-inside-avoid">
+        <div class="print-page bg-white shadow-sm border border-gray-200 rounded-xl p-8 mt-6 page-break-inside-avoid">
             <div class="pt-4 grid grid-cols-3 gap-8 text-center">
                 <div>
                     <div class="h-16 border-b border-gray-400 mb-3 w-4/5 mx-auto"></div>
@@ -675,6 +682,11 @@ window.renderAutoReportContent = async function() {
         </div>
     `;
 
+    // อัปเดตคุณสมบัติของหน้าจอ Modal เพื่อให้รองรับการ Scroll แบบแนวนอน (overflow-auto จะรับทั้งแกน X และ Y)
+    document.getElementById('modal-auto-report').className = 'fixed inset-0 bg-gray-200 z-50 flex flex-col overflow-auto pb-10 transition-opacity duration-300';
+    
+    // ตั้งค่า Content ให้เป็นก้อน 800px คงที่ (ขนาด A4) ป้องกันการถูกบีบโดยหน้าจอมือถือ
+    content.className = 'w-[800px] max-w-[800px] lg:w-[210mm] lg:max-w-[210mm] mx-auto mt-6 flex-none print:w-full print:max-w-none'; 
     content.innerHTML = html;
     
     setTimeout(() => {
