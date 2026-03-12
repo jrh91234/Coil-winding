@@ -553,7 +553,7 @@ document.getElementById('planningForm').onsubmit = async (e) => {
 };
 
 // ==========================================
-// 🌟 ระบบแจ้งซ่อม (Maintenance)
+// 🌟 ระบบแจ้งซ่อม (Maintenance) - ปรับปรุงใหม่
 // ==========================================
 window.openMaintenanceModal = function() {
     const modal = document.getElementById('modal-maintenance');
@@ -581,17 +581,91 @@ window.openMaintenanceModal = function() {
     if (modal) modal.classList.remove('hidden');
 };
 
+// นำ Event Listener มาเขียนทับด้วยฟังก์ชันใหม่ที่ให้เช็คข้อมูล + ยืนยันก่อน
 document.getElementById('maintenanceForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
+    
     const btn = document.getElementById('btn-save-maint');
     const originalText = btn.innerHTML;
-    btn.innerHTML = "⏳ กำลังอัปโหลดข้อมูล...";
+    
+    const machine = document.getElementById('maint-machine').value;
+    const issueType = document.getElementById('maint-issue-type').value;
+    const startTime = document.getElementById('maint-start-time').value;
+    const endTime = document.getElementById('maint-end-time').value;
+    const remark = document.getElementById('maint-remark').value;
+    const jobId = document.getElementById('maint-job-id')?.value;
+
+    btn.innerHTML = "🔍 กำลังวิเคราะห์ข้อมูลและตรวจสอบคำผิด...";
     btn.disabled = true;
 
+    // 1. คำนวณ Downtime เป็นชั่วโมงและนาที
+    let downtimeStr = "ยังไม่ระบุเวลาเสร็จสิ้น (รอดำเนินการ)";
+    if (startTime && endTime) {
+        const [sH, sM] = startTime.split(':').map(Number);
+        const [eH, eM] = endTime.split(':').map(Number);
+        let mins = (eH * 60 + eM) - (sH * 60 + sM);
+        if (mins < 0) mins += 1440; // กรณีข้ามเที่ยงคืน
+        
+        const h = Math.floor(mins / 60);
+        const m = mins % 60;
+        downtimeStr = h > 0 ? `${h} ชม. ${m} นาที (${mins} นาที)` : `${m} นาที`;
+    }
+
+    // 2. เรียกใช้ API ตรวจสอบคำผิด (LanguageTool API แบบฟรี)
+    let spellWarning = "";
+    if (remark && remark.trim().length > 2) {
+        try {
+            const spellRes = await fetch('https://api.languagetool.org/v2/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ 
+                    text: remark, 
+                    language: 'auto' // ตรวจจับภาษาอัตโนมัติ (รองรับไทย/อังกฤษ)
+                })
+            });
+            const spellData = await spellRes.json();
+            
+            if (spellData.matches && spellData.matches.length > 0) {
+                const mistakes = spellData.matches.map(m => {
+                    const word = remark.substring(m.offset, m.offset + m.length);
+                    const suggestions = m.replacements.slice(0, 3).map(r => r.value).join(', ');
+                    return suggestions ? `"${word}" ➡️ อาจหมายถึง: ${suggestions}` : `"${word}"`;
+                });
+                spellWarning = `\n\n[🔍 ตรวจพบคำผิด หรือคำที่อาจสะกดผิด]\n- ` + mistakes.join('\n- ');
+            } else {
+                spellWarning = `\n\n[✅ ตรวจสอบคำผิด: ไม่พบคำผิดที่ชัดเจน]`;
+            }
+        } catch (err) {
+            console.warn("LanguageTool API Error:", err);
+            // กรณี API ล่ม หรือเน็ตมีปัญหา ข้ามการเตือนไปเพื่อไม่ให้กระทบงาน
+        }
+    }
+
+    // 3. สร้างข้อความ Confirm ให้ผู้ใช้อ่านทวน
+    const isCloseJob = jobId ? "(อัปเดต / ปิดจ๊อบ)" : "(เปิดแจ้งซ่อมใหม่)";
+    const confirmMsg = `=== ยืนยันข้อมูลการแจ้งซ่อม ${isCloseJob} ===\n\n` +
+                       `🏭 เครื่องจักร: ${machine}\n` +
+                       `⚠️ ปัญหา: ${issueType}\n` +
+                       `⏱️ เวลา: ${startTime} - ${endTime || 'ยังไม่ระบุ'}\n` +
+                       `⏳ Downtime: ${downtimeStr}\n\n` +
+                       `📝 รายละเอียดที่บันทึก:\n${remark || '-'}` +
+                       `${spellWarning}\n\n` +
+                       `----------------------------------\n` +
+                       `กด OK เพื่อบันทึกข้อมูล หรือ Cancel เพื่อกลับไปแก้ไข`;
+
+    // 4. ถามผู้ใช้
+    if (!confirm(confirmMsg)) {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        return;
+    }
+
+    // 5. ดำเนินการอัปโหลดรูปลง Google Drive และบันทึกข้อมูล (ลอจิกเดิม)
+    btn.innerHTML = "⏳ กำลังอัปโหลดข้อมูลและรูปภาพ...";
     const fileInput = document.getElementById('maint-photo');
     let base64String = "";
 
-    if (fileInput.files.length > 0) {
+    if (fileInput && fileInput.files.length > 0) {
         const file = fileInput.files[0];
         try {
             base64String = await new Promise((resolve, reject) => {
@@ -611,12 +685,14 @@ document.getElementById('maintenanceForm')?.addEventListener('submit', async fun
 
     const payload = {
         action: 'SAVE_MAINTENANCE',
+        jobId: jobId || "",
         username: window.currentUser ? window.currentUser.username : "Unknown",
         role: window.currentUser ? window.currentUser.role : "Unknown",
         date: document.getElementById('maint-date').value,
         machine: document.getElementById('maint-machine').value,
         issueType: document.getElementById('maint-issue-type').value,
         startTime: document.getElementById('maint-start-time').value,
+        endDate: document.getElementById('maint-end-date') ? document.getElementById('maint-end-date').value : "",
         endTime: document.getElementById('maint-end-time').value,
         remark: document.getElementById('maint-remark').value,
         imageBase64: base64String
@@ -629,7 +705,14 @@ document.getElementById('maintenanceForm')?.addEventListener('submit', async fun
         if (result.status === 'success') {
             alert("✅ " + result.message);
             document.getElementById('maintenanceForm').reset();
-            document.getElementById('maint-photo-preview').classList.add('hidden');
+            const previewPanel = document.getElementById('maint-photo-preview');
+            if(previewPanel) previewPanel.classList.add('hidden');
+            
+            // ถ้ามีการเรียกใช้ clearPendingSelection จากไฟล์ globals/index ให้เรียกด้วย
+            if(typeof window.clearPendingSelection === 'function') {
+                window.clearPendingSelection();
+            }
+            
             document.getElementById('modal-maintenance').classList.add('hidden');
         } else {
             alert("❌ เกิดข้อผิดพลาด: " + result.message);
