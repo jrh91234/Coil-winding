@@ -565,7 +565,15 @@ window.openMaintenanceModal = function() {
     const dRec = document.getElementById('maint-reporter');
     const dMac = document.getElementById('maint-machine');
     const dStart = document.getElementById('maint-start-time');
+    const jobIdInput = document.getElementById('maint-job-id'); // ฟิลด์ซ่อนสำหรับ Job ID
     
+    // --- แก้ไขจุดสำคัญ 1: สร้าง Job ID ล่วงหน้าเพื่อป้องกัน Race Condition (การบันทึกเบิ้ล) ---
+    // หากกดปุ่มรัวๆ ข้อมูลที่วิ่งไปหา Backend จะเป็น Job ID ตัวเดียวกันทั้งหมด
+    // Backend จะอัปเดตทับบรรทัดเดิม ไม่สร้างแถวซ้ำซ้อน
+    if (jobIdInput && !jobIdInput.value) {
+        jobIdInput.value = 'MNT-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    }
+
     if (dDate) dDate.value = getShiftDateStr();
     if (dRec && window.currentUser) dRec.value = window.currentUser.name || window.currentUser.username;
     
@@ -578,8 +586,12 @@ window.openMaintenanceModal = function() {
     }
     
     if (dStart) {
+        // --- แก้ไขจุดสำคัญ 2: บังคับเวลาให้อ่านค่าจากชั่วโมงและนาทีโดยตรง ---
+        // ป้องกันเบราว์เซอร์บางรุ่นที่มีปัญหาเรื่อง Timezone แปลงเวลาเพี้ยน
         const now = new Date();
-        dStart.value = now.toTimeString().substring(0,5);
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        dStart.value = `${hh}:${mm}`;
     }
 
     if (modal) modal.classList.remove('hidden');
@@ -651,7 +663,7 @@ if (maintFormEl) {
         }
 
         // สร้างข้อความ Confirm ให้ผู้ใช้อ่านทวน
-        const isCloseJob = jobId ? "(อัปเดต / ปิดจ๊อบ)" : "(เปิดแจ้งซ่อมใหม่)";
+        const isCloseJob = document.getElementById('maint-job-id') && document.getElementById('maint-job-id').value && endTime ? "(อัปเดต / ปิดจ๊อบ)" : "(เปิดแจ้งซ่อม)";
         const confirmMsg = `=== ยืนยันข้อมูลการแจ้งซ่อม ${isCloseJob} ===\n\n` +
                            `🏭 เครื่องจักร: ${machine}\n` +
                            `⚠️ ปัญหา: ${issueType}\n` +
@@ -715,7 +727,15 @@ if (maintFormEl) {
             
             if (result.status === 'success') {
                 alert("✅ " + result.message);
+                
+                // เคลียร์ฟอร์ม
                 document.getElementById('maintenanceForm').reset();
+                
+                // --- ล้าง Job ID ทิ้ง --- 
+                // เพื่อให้การกด "เปิดแจ้งซ่อม" ครั้งถัดไป ได้รับรหัส Job ใหม่ ป้องกันการบันทึกทับงานเดิม
+                const jobIdInput = document.getElementById('maint-job-id');
+                if (jobIdInput) jobIdInput.value = "";
+                
                 const previewPanel = document.getElementById('maint-photo-preview');
                 if(previewPanel) previewPanel.classList.add('hidden');
                 
