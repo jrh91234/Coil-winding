@@ -195,6 +195,21 @@ window.renderAutoReportContent = async function() {
         return m ? m[1].padStart(5, '0') : str.substring(0, 5);
     };
 
+    // ฟังก์ชันเสริมสำหรับฟอร์แมตวันที่แบบสั้นเพื่อแสดงคู่กับเวลาปิดจ๊อบ
+    const formatDateShort = (dateStr) => {
+        if (!dateStr) return '';
+        try {
+            const d = new Date(dateStr);
+            if (!isNaN(d.getTime())) {
+                const day = d.getDate().toString().padStart(2, '0');
+                const month = (d.getMonth() + 1).toString().padStart(2, '0');
+                const year = d.getFullYear();
+                return `${day}/${month}/${year}`;
+            }
+        } catch(e) {}
+        return dateStr;
+    };
+
     const multiLang = (th, en, ch) => `
         <div class="space-y-1.5 mb-4 border-l-2 border-gray-200 pl-3">
             <p class="text-[12px] text-gray-800 leading-relaxed text-justify"><span class="font-bold text-blue-600 mr-1">[TH]</span>${th}</p>
@@ -482,7 +497,7 @@ window.renderAutoReportContent = async function() {
                         <thead class="bg-orange-50 text-orange-800 border-b border-orange-100">
                             <tr>
                                 <th class="px-2 py-1.5 w-20">วันที่</th>
-                                <th class="px-2 py-1.5 w-24">เวลาเริ่ม-เสร็จ</th>
+                                <th class="px-2 py-1.5 w-32">เวลาเริ่ม-เสร็จ</th>
                                 <th class="px-2 py-1.5 w-28">ประเภทปัญหา</th>
                                 <th class="px-2 py-1.5">รายละเอียด/การแก้ไขเบื้องต้น</th>
                             </tr>
@@ -490,7 +505,9 @@ window.renderAutoReportContent = async function() {
                         <tbody class="divide-y divide-gray-100">
                             ${logs.map(log => {
                                 let s = formatTimeStr(log.startTime);
-                                let e = log.endTime ? formatTimeStr(log.endTime) : '<span class="text-red-500 font-bold">รอดำเนินการ</span>';
+                                // แสดงวันที่คู่กับเวลาปิดจ๊อบ หากมีการแก้ไขข้ามวัน
+                                let endDateStr = log.endDate ? formatDateShort(log.endDate) + ' ' : '';
+                                let e = log.endTime ? endDateStr + formatTimeStr(log.endTime) : '<span class="text-red-500 font-bold">ยังไม่ปิดจ๊อบ</span>';
                                 let remarkTrans = getTranslatedRemark(log.remark);
                                 return `<tr>
                                     <td class="px-2 py-2 text-gray-700 align-top whitespace-nowrap">${log.date}</td>
@@ -642,7 +659,7 @@ window.renderAutoReportContent = async function() {
                             <thead class="bg-red-50 text-red-800 border-b border-red-100">
                                 <tr>
                                     <th class="px-2 py-1.5 w-20">วันที่แจ้ง</th>
-                                    <th class="px-2 py-1.5 w-24">เวลาเริ่ม-เสร็จ</th>
+                                    <th class="px-2 py-1.5 w-32">เวลาเริ่ม-เสร็จ</th>
                                     <th class="px-2 py-1.5 w-28">ประเภทปัญหา</th>
                                     <th class="px-2 py-1.5">รายละเอียด/การแก้ไขเบื้องต้น</th>
                                 </tr>
@@ -650,10 +667,12 @@ window.renderAutoReportContent = async function() {
                             <tbody class="divide-y divide-gray-100">
                                 ${pendingJobsMap[m].map(pLog => {
                                     let s = formatTimeStr(pLog.startTime);
+                                    let endDateStr = pLog.endDate ? formatDateShort(pLog.endDate) + ' ' : '';
+                                    let e = pLog.endTime ? endDateStr + formatTimeStr(pLog.endTime) : '<span class="text-red-500 font-bold">ยังไม่ปิดจ๊อบ</span>';
                                     let remarkTrans = getTranslatedRemark(pLog.remark);
                                     return `<tr>
                                         <td class="px-2 py-2 text-gray-700 align-top whitespace-nowrap">${pLog.date}</td>
-                                        <td class="px-2 py-2 font-medium align-top whitespace-nowrap">${s} - <span class="text-red-500 font-bold">ยังไม่ปิดจ๊อบ</span></td>
+                                        <td class="px-2 py-2 font-medium align-top whitespace-nowrap">${s} - ${e}</td>
                                         <td class="px-2 py-2 text-blue-700 align-top whitespace-nowrap">${pLog.issueType}</td>
                                         <td class="px-2 py-2 align-top">
                                             <div class="space-y-0.5">
