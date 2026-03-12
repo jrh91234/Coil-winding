@@ -921,9 +921,27 @@ window.closeAutoReport = function() {
 };
 
 window.printAutoReport = function() {
+    const sDate = document.getElementById('startDate').value;
+    const eDate = document.getElementById('endDate').value;
+    const shift = document.getElementById('filterShift').options[document.getElementById('filterShift').selectedIndex].text;
+    
+    // Format the date string
+    const dateObj = new Date(sDate);
+    const options = { day: 'numeric', month: 'short', year: 'numeric' };
+    const formattedDate = dateObj.toLocaleDateString('en-GB', options);
+    
+    // Set the document title
+    const originalTitle = document.title;
+    document.title = `Coil winding Shift ${shift} report ${formattedDate}`;
+
     document.body.classList.add('printing-auto-report');
     window.print();
-    setTimeout(() => { document.body.classList.remove('printing-auto-report'); }, 1000);
+    
+    // Restore the original title after printing
+    setTimeout(() => { 
+        document.body.classList.remove('printing-auto-report'); 
+        document.title = originalTitle;
+    }, 1000);
 };
 
 window.exportCSV = function() {
