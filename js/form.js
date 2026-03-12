@@ -565,7 +565,15 @@ window.openMaintenanceModal = function() {
     const dRec = document.getElementById('maint-reporter');
     const dMac = document.getElementById('maint-machine');
     const dStart = document.getElementById('maint-start-time');
+    const dRemark = document.getElementById('maint-remark');
     
+    // 🛠️ ฝังคำสั่งเปิดใช้งานระบบตรวจคำผิด (Native Spellchecker) ของอุปกรณ์
+    if (dRemark) {
+        dRemark.setAttribute('spellcheck', 'true');
+        dRemark.setAttribute('lang', 'th'); // แจ้งเบราว์เซอร์ให้ดึงพจนานุกรมไทยมาใช้
+        dRemark.setAttribute('autocomplete', 'on');
+    }
+
     if (dDate) dDate.value = getShiftDateStr();
     if (dRec && window.currentUser) dRec.value = window.currentUser.name || window.currentUser.username;
     
@@ -591,30 +599,25 @@ const maintFormEl = document.getElementById('maintenanceForm');
 const maintBtn = document.getElementById('btn-save-maint');
 
 if (maintFormEl && maintBtn) {
-    // 🛑 1. ดักจับและระงับการทำงานของโค้ดเก่าที่ฝังอยู่ในฟอร์มแบบเด็ดขาด (Capture Phase)
+    // ดักจับและระงับการทำงานของโค้ดเก่า
     maintFormEl.addEventListener('submit', function(e) {
         e.preventDefault();
-        e.stopImmediatePropagation(); // หยุด Listener ทุกตัวที่จะทำงานหลังจากนี้
-        maintBtn.click(); // ส่งไปรันที่ฟังก์ชันของปุ่มแทน
+        e.stopImmediatePropagation();
+        maintBtn.click(); 
     }, true); 
 
-    // 🛑 2. เปลี่ยน Type ของปุ่ม เพื่อไม่ให้เกิดการ Submit ฟอร์มโดยธรรมชาติของเบราว์เซอร์
     maintBtn.setAttribute('type', 'button');
-    maintBtn.removeAttribute('onclick'); // ล้างฟังก์ชันเก่าที่อาจจะติดมาจาก HTML
+    maintBtn.removeAttribute('onclick');
 
-    // 🛑 3. รันตรรกะใหม่ทั้งหมดผ่านปุ่มแทนการพึ่งพา form.onsubmit แบบเดิม
     maintBtn.onclick = async function(e) {
         e.preventDefault();
         
-        // จำลองการตรวจสอบฟิลด์แบบ Required ของ HTML5 
         if (!maintFormEl.checkValidity()) {
             maintFormEl.reportValidity();
             return;
         }
 
         const now = Date.now();
-        
-        // ล็อกขั้นที่ 1: กันการกดคลิกเบิ้ล หรือกดซ้ำใน 3 วินาที
         if (window.isSubmittingMaintenance || (now - window.lastMaintSubmitTime < 3000)) {
             console.warn("🔒 Blocked duplicate submit event.");
             return false;
@@ -624,15 +627,11 @@ if (maintFormEl && maintBtn) {
         
         const originalText = maintBtn.innerHTML;
         
-        // ล็อกขั้นที่ 2: ปิดปุ่มทาง UI ทันที
         maintBtn.disabled = true;
         maintBtn.style.pointerEvents = 'none';
         maintBtn.classList.add('opacity-50');
 
-        if (document.activeElement) {
-            document.activeElement.blur();
-        }
-        
+        if (document.activeElement) document.activeElement.blur();
         await new Promise(resolve => setTimeout(resolve, 300));
         
         const machine = document.getElementById('maint-machine').value;
@@ -644,7 +643,7 @@ if (maintFormEl && maintBtn) {
 
         maintBtn.innerHTML = "🔍 กำลังวิเคราะห์ข้อมูลและตรวจสอบคำผิด...";
 
-        // คำนวณ Downtime เป็นชั่วโมงและนาที
+        // 1. คำนวณ Downtime
         let downtimeStr = "ยังไม่ระบุเวลาเสร็จสิ้น (รอดำเนินการ)";
         if (startTime && endTime) {
             const [sH, sM] = startTime.split(':').map(Number);
@@ -657,8 +656,44 @@ if (maintFormEl && maintBtn) {
             downtimeStr = h > 0 ? `${h} ชม. ${m} นาที (${mins} นาที)` : `${m} นาที`;
         }
 
-        // เรียกใช้ API ตรวจสอบคำผิด
-        let spellWarning = "";
+        // ==========================================
+        // 🛠️ 2. ระบบตรวจสอบคำผิดแบบ Hybrid (Custom Thai + API English)
+        // ==========================================
+        let mistakeList = [];
+
+        // 2.1 พจนานุกรมคำผิดภาษาไทย (ศัพท์ช่างที่มักเขียนผิด)
+        const customThaiTypos = [
+            { wrong: /อะไหร่|อไหล่/g, correct: "อะไหล่" },
+            { wrong: /สวิทช์|สวิท|สวิช|สวิสซ์/g, correct: "สวิตช์" },
+            { wrong: /มอเตอ(?!ร์)/g, correct: "มอเตอร์" },
+            { wrong: /เซนเซอ(?!ร์)/g, correct: "เซนเซอร์" },
+            { wrong: /อินเวอเตอ(?!ร์)/g, correct: "อินเวอร์เตอร์" },
+            { wrong: /ปั้ม/g, correct: "ปั๊ม" },
+            { wrong: /วาว/g, correct: "วาล์ว" },
+            { wrong: /ล๊อค|ล๊อก/g, correct: "ล็อก" },
+            { wrong: /พาสติก|พราสติก/g, correct: "พลาสติก" },
+            { wrong: /เบรค/g, correct: "เบรก" },
+            { wrong: /อุปกร(?!ณ์)/g, correct: "อุปกรณ์" },
+            { wrong: /ชาตไฟ|ชารตไฟ|ช๊าต/g, correct: "ชาร์จ" },
+            { wrong: /สตาท|สตาร์ท/g, correct: "สตาร์ต" },
+            { wrong: /น๊อต/g, correct: "น็อต" },
+            { wrong: /เซค|เชค|เช็ก/g, correct: "เช็ก" },
+            { wrong: /ซ๊อต|ช๊อต|ช้อต/g, correct: "ช็อต" },
+            { wrong: /พาท|พาร์ท/g, correct: "พาร์ต (Part)" }
+        ];
+
+        if (remark) {
+            customThaiTypos.forEach(t => {
+                const matches = remark.match(t.wrong);
+                if (matches) {
+                    matches.forEach(m => {
+                        mistakeList.push(`"${m}" ➡️ อาจหมายถึง: ${t.correct}`);
+                    });
+                }
+            });
+        }
+
+        // 2.2 ตรวจสอบคำผิดภาษาอังกฤษด้วย API (LanguageTool)
         if (remark && remark.trim().length > 2) {
             try {
                 const spellRes = await fetch('https://api.languagetool.org/v2/check', {
@@ -666,25 +701,36 @@ if (maintFormEl && maintBtn) {
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: new URLSearchParams({ 
                         text: remark, 
-                        language: 'auto'
+                        language: 'en-US' // บังคับเช็คเฉพาะภาษาอังกฤษ
                     })
                 });
                 const spellData = await spellRes.json();
                 
                 if (spellData.matches && spellData.matches.length > 0) {
-                    const mistakes = spellData.matches.map(m => {
+                    spellData.matches.forEach(m => {
                         const word = remark.substring(m.offset, m.offset + m.length);
-                        const suggestions = m.replacements.slice(0, 3).map(r => r.value).join(', ');
-                        return suggestions ? `"${word}" ➡️ อาจหมายถึง: ${suggestions}` : `"${word}"`;
+                        // กรองแจ้งเตือนเฉพาะคำที่มีอักษรภาษาอังกฤษ
+                        if (/[a-zA-Z]/.test(word)) {
+                            const suggestions = m.replacements.slice(0, 3).map(r => r.value).join(', ');
+                            if (suggestions) mistakeList.push(`"${word}" ➡️ อาจหมายถึง: ${suggestions} (EN)`);
+                        }
                     });
-                    spellWarning = `\n\n[🔍 ตรวจพบคำผิด หรือคำที่อาจสะกดผิด]\n- ` + mistakes.join('\n- ');
-                } else {
-                    spellWarning = `\n\n[✅ ตรวจสอบคำผิด: ไม่พบคำผิดที่ชัดเจน]`;
                 }
             } catch (err) {
                 console.warn("LanguageTool API Error:", err);
             }
         }
+
+        // รวบรวมข้อความแจ้งเตือนคำผิด
+        let spellWarning = "";
+        mistakeList = [...new Set(mistakeList)]; // ตัดคำซ้ำ
+        if (mistakeList.length > 0) {
+            spellWarning = `\n\n[🔍 ตรวจพบคำที่อาจสะกดผิด]\n- ` + mistakeList.join('\n- ');
+        } else {
+            spellWarning = `\n\n[✅ ตรวจสอบคำผิด: ไม่พบคำผิดที่ชัดเจน]`;
+        }
+
+        // ==========================================
 
         const isCloseJob = jobId ? "(อัปเดต / ปิดจ๊อบ)" : "(เปิดแจ้งซ่อม)";
         const confirmMsg = `=== ยืนยันข้อมูลการแจ้งซ่อม ${isCloseJob} ===\n\n` +
