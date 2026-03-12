@@ -91,9 +91,9 @@ window.renderAutoReportContent = async function() {
         
         // กำหนดสีให้แตกต่างกันมากที่สุด (High Contrast)
         const fixedColors = {
-            "setup": "#FF0000", // สีแดงสด (Red)
-            "ปลอกฉนวนไม่หมด (insulator skin incomplete)": "#00FF00", // สีเขียวสว่าง (Lime)
-            "ระยะปลอกรูดไม่ได้ตามสเปค ( insulation skinning length error )": "#0000FF", // สีน้ำเงินสด (Blue)
+             "setup": "#FF0000", // สีแดงสด (Red)
+            "ปลอกฉนวนไม่หมด (insulator skin incomplete)": "#FFC107", // สีเหลืองอำพัน (Amber)
+            "ระยะปลอกรูดไม่ได้ตามสเปค ( insulation skinning length error )": "#808080", // สีเทา (Gray)
             "งานเสียตีกลับจากลูกค้า (rtv sorting ng )": "#FF00FF", // สีชมพูบานเย็น (Magenta)
             "ระยะปลอกขายาวไม่ได้สเปคสั้นกว่า7.10": "#00FFFF", // สีฟ้าสว่าง (Cyan)
             "ลวดถลอก (scratched)": "#FFA500", // สีส้ม (Orange)
