@@ -567,10 +567,10 @@ window.openMaintenanceModal = function() {
     const dStart = document.getElementById('maint-start-time');
     const dRemark = document.getElementById('maint-remark');
     
-    // 🛠️ ฝังคำสั่งเปิดใช้งานระบบตรวจคำผิด (Native Spellchecker) ของอุปกรณ์
+    // ฝังคำสั่งเปิดใช้งานระบบตรวจคำผิด (Native Spellchecker) เผื่อใช้สำหรับ Browser ที่รองรับ
     if (dRemark) {
         dRemark.setAttribute('spellcheck', 'true');
-        dRemark.setAttribute('lang', 'th'); // แจ้งเบราว์เซอร์ให้ดึงพจนานุกรมไทยมาใช้
+        dRemark.setAttribute('lang', 'th'); 
         dRemark.setAttribute('autocomplete', 'on');
     }
 
@@ -599,7 +599,6 @@ const maintFormEl = document.getElementById('maintenanceForm');
 const maintBtn = document.getElementById('btn-save-maint');
 
 if (maintFormEl && maintBtn) {
-    // ดักจับและระงับการทำงานของโค้ดเก่า
     maintFormEl.addEventListener('submit', function(e) {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -657,11 +656,11 @@ if (maintFormEl && maintBtn) {
         }
 
         // ==========================================
-        // 🛠️ 2. ระบบตรวจสอบคำผิดแบบ Hybrid (Custom Thai + API English)
+        // 🛠️ 2. ระบบตรวจสอบคำผิดแบบ Hybrid (Custom Thai + API TH/EN)
         // ==========================================
         let mistakeList = [];
 
-        // 2.1 พจนานุกรมคำผิดภาษาไทย (ศัพท์ช่างที่มักเขียนผิด)
+        // 2.1 พจนานุกรมคำผิดภาษาไทย (ศัพท์เฉพาะทางที่มักเขียนผิด)
         const customThaiTypos = [
             { wrong: /อะไหร่|อไหล่/g, correct: "อะไหล่" },
             { wrong: /สวิทช์|สวิท|สวิช|สวิสซ์/g, correct: "สวิตช์" },
@@ -687,35 +686,47 @@ if (maintFormEl && maintBtn) {
                 const matches = remark.match(t.wrong);
                 if (matches) {
                     matches.forEach(m => {
-                        mistakeList.push(`"${m}" ➡️ อาจหมายถึง: ${t.correct}`);
+                        mistakeList.push(`"${m}" ➡️ อาจหมายถึง: ${t.correct} (ศัพท์ช่าง)`);
                     });
                 }
             });
         }
 
-        // 2.2 ตรวจสอบคำผิดภาษาอังกฤษด้วย API (LanguageTool)
+        // 2.2 ตรวจสอบคำผิดทั่วไปด้วย API (ยิงพร้อมกัน 2 ภาษา: ไทย และ อังกฤษ)
         if (remark && remark.trim().length > 2) {
             try {
-                const spellRes = await fetch('https://api.languagetool.org/v2/check', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ 
-                        text: remark, 
-                        language: 'en-US' // บังคับเช็คเฉพาะภาษาอังกฤษ
-                    })
-                });
-                const spellData = await spellRes.json();
-                
-                if (spellData.matches && spellData.matches.length > 0) {
-                    spellData.matches.forEach(m => {
-                        const word = remark.substring(m.offset, m.offset + m.length);
-                        // กรองแจ้งเตือนเฉพาะคำที่มีอักษรภาษาอังกฤษ
-                        if (/[a-zA-Z]/.test(word)) {
-                            const suggestions = m.replacements.slice(0, 3).map(r => r.value).join(', ');
-                            if (suggestions) mistakeList.push(`"${word}" ➡️ อาจหมายถึง: ${suggestions} (EN)`);
-                        }
+                // ฟังก์ชันยิง API ไปเช็คทีละภาษา
+                const checkLanguage = async (langCode, langLabel) => {
+                    const spellRes = await fetch('https://api.languagetool.org/v2/check', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: new URLSearchParams({ text: remark, language: langCode })
                     });
-                }
+                    const spellData = await spellRes.json();
+                    
+                    if (spellData.matches && spellData.matches.length > 0) {
+                        spellData.matches.forEach(m => {
+                            const word = remark.substring(m.offset, m.offset + m.length);
+                            
+                            // กรองแยก: ถ้าตรวจอังกฤษ ต้องมีตัวอักษรภาษาอังกฤษ
+                            if (langCode === 'en-US' && !/[a-zA-Z]/.test(word)) return;
+                            
+                            const suggestions = m.replacements.slice(0, 3).map(r => r.value).join(', ');
+                            if (suggestions) {
+                                mistakeList.push(`"${word}" ➡️ อาจหมายถึง: ${suggestions} (${langLabel})`);
+                            } else {
+                                mistakeList.push(`"${word}" ➡️ อาจสะกดผิด (${langLabel})`);
+                            }
+                        });
+                    }
+                };
+
+                // ยิงคำขอไปตรวจทั้งภาษาไทย (th) และภาษาอังกฤษ (en-US) ขนานกันไปเลยเพื่อความเร็ว
+                await Promise.all([
+                    checkLanguage('th', 'TH'),
+                    checkLanguage('en-US', 'EN')
+                ]);
+
             } catch (err) {
                 console.warn("LanguageTool API Error:", err);
             }
@@ -723,7 +734,7 @@ if (maintFormEl && maintBtn) {
 
         // รวบรวมข้อความแจ้งเตือนคำผิด
         let spellWarning = "";
-        mistakeList = [...new Set(mistakeList)]; // ตัดคำซ้ำ
+        mistakeList = [...new Set(mistakeList)]; // ตัดคำซ้ำที่อาจตรวจเจอจากทั้ง 2 แหล่ง
         if (mistakeList.length > 0) {
             spellWarning = `\n\n[🔍 ตรวจพบคำที่อาจสะกดผิด]\n- ` + mistakeList.join('\n- ');
         } else {
