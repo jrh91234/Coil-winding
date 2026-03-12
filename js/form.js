@@ -556,8 +556,8 @@ document.getElementById('planningForm').onsubmit = async (e) => {
 // 🌟 ระบบแจ้งซ่อม (Maintenance) - ปรับปรุงใหม่
 // ==========================================
 
-// ล็อกป้องกันการกดซ้ำแบบรัวๆ
-let isSubmittingMaintenance = false;
+// ล็อกป้องกันการกดซ้ำแบบรัวๆ (เปลี่ยนมาใช้ window.isSubmittingMaintenance ป้องกันปัญหา Redeclaration Error)
+window.isSubmittingMaintenance = window.isSubmittingMaintenance || false;
 
 window.openMaintenanceModal = function() {
     const modal = document.getElementById('modal-maintenance');
@@ -596,8 +596,8 @@ if (maintFormEl) {
         e.preventDefault();
         
         // ล็อกไม่ให้รันฟังก์ชันซ้อนกันเด็ดขาด (กันการกดคลิกเบิ้ล 100%)
-        if (isSubmittingMaintenance) return;
-        isSubmittingMaintenance = true; 
+        if (window.isSubmittingMaintenance) return;
+        window.isSubmittingMaintenance = true; 
         
         const btn = document.getElementById('btn-save-maint');
         const originalText = btn.innerHTML;
@@ -675,7 +675,7 @@ if (maintFormEl) {
             btn.innerHTML = originalText;
             btn.disabled = false;
             btn.classList.remove('pointer-events-none', 'opacity-50');
-            isSubmittingMaintenance = false; // ปลดล็อคเมื่อกดยกเลิก
+            window.isSubmittingMaintenance = false; // ปลดล็อคเมื่อกดยกเลิก
             return;
         }
 
@@ -699,7 +699,7 @@ if (maintFormEl) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
                 btn.classList.remove('pointer-events-none', 'opacity-50');
-                isSubmittingMaintenance = false; // ปลดล็อคเมื่อเกิด Error ภาพ
+                window.isSubmittingMaintenance = false; // ปลดล็อคเมื่อเกิด Error ภาพ
                 return;
             }
         }
@@ -746,7 +746,7 @@ if (maintFormEl) {
             btn.innerHTML = originalText;
             btn.disabled = false;
             btn.classList.remove('pointer-events-none', 'opacity-50');
-            isSubmittingMaintenance = false; // ปลดล็อคการส่งข้อมูลเมื่อเสร็จสิ้นทั้งหมด
+            window.isSubmittingMaintenance = false; // ปลดล็อคการส่งข้อมูลเมื่อเสร็จสิ้นทั้งหมด
         }
     };
 }
