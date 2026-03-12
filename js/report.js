@@ -179,7 +179,25 @@ window.renderAutoReportContent = async function() {
             </thead>
             <tbody class="divide-y divide-gray-100">`;
     if(data.productData && Object.keys(data.productData).length > 0) {
-        for(let p in data.productData) {
+        // กำหนดลำดับการแสดงผลของรุ่น (Model) ตามที่ต้องการ
+        const orderedModels = [
+            "S1B29288-JR (10A)",
+            "S1B71819-JR (16A)",
+            "S1B29292-JR (20A)",
+            "51207080HC-JR (25/32A)"
+        ];
+        
+        let pKeys = Object.keys(data.productData);
+        // เรียงลำดับ Key ของข้อมูลให้ตรงกับ orderedModels
+        pKeys.sort((a, b) => {
+            let idxA = orderedModels.indexOf(a);
+            let idxB = orderedModels.indexOf(b);
+            if (idxA === -1) idxA = 999; // ถ้านอกเหนือจากที่ระบุให้ไปอยู่ท้ายสุด
+            if (idxB === -1) idxB = 999;
+            return idxA - idxB;
+        });
+
+        pKeys.forEach(p => {
             let d = data.productData[p];
             let n = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
             let f = d.fg || 0;
@@ -193,7 +211,7 @@ window.renderAutoReportContent = async function() {
                 <td class="px-4 py-2.5 text-right text-orange-600 text-xs">${kg} Kg</td>
                 <td class="px-4 py-2.5 text-right font-black text-green-700 bg-green-50/50">${y}%</td>
             </tr>`;
-        }
+        });
     } else {
         productBreakdownHtml += `<tr><td colspan="5" class="px-4 py-4 text-center text-gray-400 text-xs">ไม่มีข้อมูลการผลิตแยกตามรุ่น</td></tr>`;
     }
