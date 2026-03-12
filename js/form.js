@@ -556,7 +556,7 @@ document.getElementById('planningForm').onsubmit = async (e) => {
 // 🌟 ระบบแจ้งซ่อม (Maintenance) - ปรับปรุงใหม่
 // ==========================================
 
-// 1. เพิ่มตัวแปรสำหรับป้องกันการ Submit ซ้ำซ้อน (Lock)
+// ล็อกป้องกันการกดซ้ำแบบรัวๆ
 let isSubmittingMaintenance = false;
 
 window.openMaintenanceModal = function() {
@@ -565,14 +565,8 @@ window.openMaintenanceModal = function() {
     const dRec = document.getElementById('maint-reporter');
     const dMac = document.getElementById('maint-machine');
     const dStart = document.getElementById('maint-start-time');
-    const jobIdInput = document.getElementById('maint-job-id'); // ฟิลด์ซ่อนสำหรับ Job ID
     
-    // --- แก้ไขจุดสำคัญ 1: สร้าง Job ID ล่วงหน้าเพื่อป้องกัน Race Condition (การบันทึกเบิ้ล) ---
-    // หากกดปุ่มรัวๆ ข้อมูลที่วิ่งไปหา Backend จะเป็น Job ID ตัวเดียวกันทั้งหมด
-    // Backend จะอัปเดตทับบรรทัดเดิม ไม่สร้างแถวซ้ำซ้อน
-    if (jobIdInput && !jobIdInput.value) {
-        jobIdInput.value = 'MNT-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
-    }
+    // ถอดการสร้าง Job ID หลอกออกไป เพื่อให้ Backend รู้ว่าเป็น "เปิดจ๊อบใหม่"
 
     if (dDate) dDate.value = getShiftDateStr();
     if (dRec && window.currentUser) dRec.value = window.currentUser.name || window.currentUser.username;
@@ -586,8 +580,7 @@ window.openMaintenanceModal = function() {
     }
     
     if (dStart) {
-        // --- แก้ไขจุดสำคัญ 2: บังคับเวลาให้อ่านค่าจากชั่วโมงและนาทีโดยตรง ---
-        // ป้องกันเบราว์เซอร์บางรุ่นที่มีปัญหาเรื่อง Timezone แปลงเวลาเพี้ยน
+        // บังคับเวลาให้อ่านค่าจากชั่วโมงและนาทีโดยตรง ป้องกัน Timezone เพี้ยน
         const now = new Date();
         const hh = String(now.getHours()).padStart(2, '0');
         const mm = String(now.getMinutes()).padStart(2, '0');
@@ -597,18 +590,21 @@ window.openMaintenanceModal = function() {
     if (modal) modal.classList.remove('hidden');
 };
 
-// 2. เปลี่ยนจาก addEventListener('submit', ...) เป็น .onsubmit เพื่อให้มี Event เดียวเสมอ
 const maintFormEl = document.getElementById('maintenanceForm');
 if (maintFormEl) {
     maintFormEl.onsubmit = async function(e) {
         e.preventDefault();
         
-        // 3. ป้องกันการคลิกซ้ำหรือรันซ้อนกัน
+        // ล็อกไม่ให้รันฟังก์ชันซ้อนกันเด็ดขาด (กันการกดคลิกเบิ้ล 100%)
         if (isSubmittingMaintenance) return;
-        isSubmittingMaintenance = true; // ล็อคการทำงาน
+        isSubmittingMaintenance = true; 
         
         const btn = document.getElementById('btn-save-maint');
         const originalText = btn.innerHTML;
+        
+        // ปิดการกดปุ่มทาง UI ทันที
+        btn.disabled = true;
+        btn.classList.add('pointer-events-none', 'opacity-50');
         
         const machine = document.getElementById('maint-machine').value;
         const issueType = document.getElementById('maint-issue-type').value;
@@ -618,7 +614,6 @@ if (maintFormEl) {
         const jobId = document.getElementById('maint-job-id')?.value;
 
         btn.innerHTML = "🔍 กำลังวิเคราะห์ข้อมูลและตรวจสอบคำผิด...";
-        btn.disabled = true;
 
         // คำนวณ Downtime เป็นชั่วโมงและนาที
         let downtimeStr = "ยังไม่ระบุเวลาเสร็จสิ้น (รอดำเนินการ)";
@@ -663,7 +658,8 @@ if (maintFormEl) {
         }
 
         // สร้างข้อความ Confirm ให้ผู้ใช้อ่านทวน
-        const isCloseJob = document.getElementById('maint-job-id') && document.getElementById('maint-job-id').value && endTime ? "(อัปเดต / ปิดจ๊อบ)" : "(เปิดแจ้งซ่อม)";
+        // ถ้ามี jobId แนบมา แสดงว่าเป็นการแก้จ๊อบเก่า (อัปเดต) ถ้าไม่มีคือจ๊อบใหม่
+        const isCloseJob = jobId ? "(อัปเดต / ปิดจ๊อบ)" : "(เปิดแจ้งซ่อม)";
         const confirmMsg = `=== ยืนยันข้อมูลการแจ้งซ่อม ${isCloseJob} ===\n\n` +
                            `🏭 เครื่องจักร: ${machine}\n` +
                            `⚠️ ปัญหา: ${issueType}\n` +
@@ -678,6 +674,7 @@ if (maintFormEl) {
         if (!confirm(confirmMsg)) {
             btn.innerHTML = originalText;
             btn.disabled = false;
+            btn.classList.remove('pointer-events-none', 'opacity-50');
             isSubmittingMaintenance = false; // ปลดล็อคเมื่อกดยกเลิก
             return;
         }
@@ -701,6 +698,7 @@ if (maintFormEl) {
                 alert("❌ ไม่สามารถอ่านไฟล์ภาพได้ กรุณาลองใหม่อีกครั้ง");
                 btn.innerHTML = originalText;
                 btn.disabled = false;
+                btn.classList.remove('pointer-events-none', 'opacity-50');
                 isSubmittingMaintenance = false; // ปลดล็อคเมื่อเกิด Error ภาพ
                 return;
             }
@@ -708,7 +706,7 @@ if (maintFormEl) {
 
         const payload = {
             action: 'SAVE_MAINTENANCE',
-            jobId: jobId || "",
+            jobId: jobId || "", // ปล่อยว่างไว้หากเป็นจ๊อบใหม่ เพื่อให้ Backend สร้างรหัสให้เอง
             username: window.currentUser ? window.currentUser.username : "Unknown",
             role: window.currentUser ? window.currentUser.role : "Unknown",
             date: document.getElementById('maint-date').value,
@@ -731,11 +729,6 @@ if (maintFormEl) {
                 // เคลียร์ฟอร์ม
                 document.getElementById('maintenanceForm').reset();
                 
-                // --- ล้าง Job ID ทิ้ง --- 
-                // เพื่อให้การกด "เปิดแจ้งซ่อม" ครั้งถัดไป ได้รับรหัส Job ใหม่ ป้องกันการบันทึกทับงานเดิม
-                const jobIdInput = document.getElementById('maint-job-id');
-                if (jobIdInput) jobIdInput.value = "";
-                
                 const previewPanel = document.getElementById('maint-photo-preview');
                 if(previewPanel) previewPanel.classList.add('hidden');
                 
@@ -752,6 +745,7 @@ if (maintFormEl) {
         } finally {
             btn.innerHTML = originalText;
             btn.disabled = false;
+            btn.classList.remove('pointer-events-none', 'opacity-50');
             isSubmittingMaintenance = false; // ปลดล็อคการส่งข้อมูลเมื่อเสร็จสิ้นทั้งหมด
         }
     };
