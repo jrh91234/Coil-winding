@@ -89,22 +89,24 @@ window.renderAutoReportContent = async function() {
         // ทำการ trim และ lowercase เพื่อให้เทียบง่ายขึ้น
         const sName = symptomName.trim().toLowerCase();
         
+        // กำหนดสีให้แตกต่างกันมากที่สุด (High Contrast)
         const fixedColors = {
-            "ปลอกฉนวนไม่หมด (insulator skin incomplete)": "#ef4444", // แดง (Red)
-            "ระยะปลอกรูดไม่ได้ตามสเปค ( insulation skinning length error )": "#f97316", // ส้ม (Orange)
-            "งานเสียตีกลับจากลูกค้า (rtv sorting ng )": "#eab308", // เหลือง (Yellow)
-            "ระยะปลอกขายาวไม่ได้สเปคสั้นกว่า7.10": "#84cc16", // เขียวอ่อน (Lime)
-            "ลวดถลอก (scratched)": "#22c55e", // เขียว (Green)
-            "งานผิดดรูป (deform)": "#06b6d4", // ฟ้า (Cyan)
-            "ขาสั้นไม่ได้มาตรฐานต่ำกว่า5.5": "#3b82f6", // น้ำเงิน (Blue)
-            "เส้นสีแดง (oxidize)": "#6366f1", // น้ำเงินม่วง (Indigo)
-            "ขดลวดพันฟู ( fluted coil )": "#a855f7", // ม่วง (Purple)
-            "งานไม่ปลอก (not skin)": "#d946ef", // ชมพูม่วง (Fuchsia)
-            "ขาสั้นไม่ได้มาตรฐานมากกว่า6.3": "#ec4899", // ชมพู (Pink)
-            "ปลอกเป็นขุย skin insulation fraying": "#f43f5e", // แดงอมชมพู (Rose)
-            "ขาดีดรูป (leg deform)": "#64748b", // เทา (Slate)
-            "ความยาวรวมมีเกินค่า length out max": "#a1a1aa", // เทากลาง (Zinc)
-            "งานครีบสูงเกิน 0.1 mm (burr)": "#3f3f46", // เทาเข้ม (Zinc)
+            "setup": "#FF0000", // สีแดงสด (Red)
+            "ปลอกฉนวนไม่หมด (insulator skin incomplete)": "#00FF00", // สีเขียวสด (Lime)
+            "ระยะปลอกรูดไม่ได้ตามสเปค ( insulation skinning length error )": "#0000FF", // สีน้ำเงินสด (Blue)
+            "งานเสียตีกลับจากลูกค้า (rtv sorting ng )": "#FF00FF", // สีชมพูบานเย็น (Magenta)
+            "ระยะปลอกขายาวไม่ได้สเปคสั้นกว่า7.10": "#00FFFF", // สีฟ้าสว่าง (Cyan)
+            "ลวดถลอก (scratched)": "#FFA500", // สีส้ม (Orange)
+            "งานผิดดรูป (deform)": "#8A2BE2", // สีม่วงน้ำเงิน (Blue Violet)
+            "ขาสั้นไม่ได้มาตรฐานต่ำกว่า5.5": "#A52A2A", // สีน้ำตาล (Brown)
+            "เส้นสีแดง (oxidize)": "#2E8B57", // สีเขียวทะเล (Sea Green)
+            "ขดลวดพันฟู ( fluted coil )": "#FF1493", // สีชมพูเข้ม (Deep Pink)
+            "งานไม่ปลอก (not skin)": "#D2691E", // สีช็อกโกแลต (Chocolate)
+            "ขาสั้นไม่ได้มาตรฐานมากกว่า6.3": "#4B0082", // สีน้ำเงินเข้ม (Indigo)
+            "ปลอกเป็นขุย skin insulation fraying": "#DC143C", // สีแดงอมชมพู (Crimson)
+            "ขาดีดรูป (leg deform)": "#008080", // สีเขียวอมน้ำเงิน (Teal)
+            "ความยาวรวมมีเกินค่า length out max": "#B8860B", // สีเหลืองทอง (Dark Goldenrod)
+            "งานครีบสูงเกิน 0.1 mm (burr)": "#4682B4", // สีฟ้าอมเทา (Steel Blue)
         };
         
         // ค้นหาสีตาม key ถ้าเจอตรงๆ
@@ -124,7 +126,7 @@ window.renderAutoReportContent = async function() {
         for (let i = 0; i < symptomName.length; i++) {
             hash = symptomName.charCodeAt(i) + ((hash << 5) - hash);
         }
-        const fallbackColors = ['#10b981', '#14b8a6', '#8b5cf6', '#0ea5e9'];
+        const fallbackColors = ['#FF4500', '#32CD32', '#DAA520', '#4169E1', '#9932CC', '#D2691E'];
         return fallbackColors[Math.abs(hash) % fallbackColors.length];
     };
 
@@ -1261,9 +1263,9 @@ window.exportCSV = function() {
                 
                 let weightPerPc = 0.003; 
                 if (productAssigned.includes("10A")) weightPerPc = 0.00228;
-                else if (productAssigned.includes("16A")) weightPerPc = 0.0028;
-                else if (productAssigned.includes("20A")) weightPerPc = 0.0036;
-                else if (productAssigned.includes("25/32A")) weightPerPc = 0.0045; 
+                else if (productAssigned.includes("16A")) weightPerPc = 0.00279;
+                else if (productAssigned.includes("20A")) weightPerPc = 0.00357;
+                else if (productAssigned.includes("25/32A")) weightPerPc = 0.005335; 
                 
                 const ngKg = (ngPcs * weightPerPc).toFixed(2);
                 const total = fg + ngPcs;
