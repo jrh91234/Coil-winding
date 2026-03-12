@@ -96,11 +96,11 @@ window.renderAutoReportContent = function() {
         return m ? m[1].padStart(5, '0') : str.substring(0, 5);
     };
 
-    const multiLang = (th, en, jp) => `
+    const multiLang = (th, en, ch) => `
         <div class="space-y-1.5 mb-4 border-l-2 border-gray-200 pl-3">
             <p class="text-[12px] text-gray-800 leading-relaxed text-justify"><span class="font-bold text-blue-600 mr-1">[TH]</span>${th}</p>
             <p class="text-[11px] text-gray-600 leading-relaxed text-justify"><span class="font-bold text-red-600 mr-1">[EN]</span>${en}</p>
-            <p class="text-[11px] text-gray-500 leading-relaxed text-justify"><span class="font-bold text-gray-700 mr-1">[JP]</span>${jp}</p>
+            <p class="text-[11px] text-gray-500 leading-relaxed text-justify"><span class="font-bold text-gray-700 mr-1">[CH]</span>${ch}</p>
         </div>
     `;
 
@@ -172,7 +172,7 @@ window.renderAutoReportContent = function() {
         sec2_1_desc = multiLang(
             `การประเมินความสม่ำเสมอของการเดินสายพานใน 1 วัน/กะ พบว่ามีจุดสูบฉีดผลผลิตสูงสุด (Peak Performance Hour) ที่ช่วงเวลา <b>${peakHour.label}</b> โดยทำศักยภาพได้ถึง <b>${peakHour.fg.toLocaleString()}</b> ชิ้น หากมีความแตกต่างสูงระหว่างชั่วโมง อาจเกิดจากความสูญเปล่าแฝง (Hidden Waste) หรือการหยุดซ่อมบำรุง`,
             `Evaluating the assembly line consistency in 1 day/shift reveals the peak performance hour at <b>${peakHour.label}</b>, reaching <b>${peakHour.fg.toLocaleString()}</b> pcs. High variance between hours may indicate hidden waste or maintenance downtime.`,
-            `1日/シフトの生産ラインの安定性を評価した結果、ピークパフォーマンス時間は <b>${peakHour.label}</b> であり、<b>${peakHour.fg.toLocaleString()}</b> 個に達しました。時間ごとの差異が大きい場合は、隠れた無駄や設備の停止を示している可能性があります。`
+            `通过对 1 天/班次的生产线稳定性评估，发现峰值产能时段在 <b>${peakHour.label}</b>，产量达到 <b>${peakHour.fg.toLocaleString()}</b> 件。如果不同时段差异较大，可能意味着存在隐性浪费或设备停机维护。`
         );
         sec2_1_img = getChartImg('hourlyChart');
     } else {
@@ -180,7 +180,7 @@ window.renderAutoReportContent = function() {
         sec2_1_desc = multiLang(
             `จากการวิเคราะห์ความสัมพันธ์ระหว่างปริมาณงานดี (FG) และความสูญเสีย (NG) สะท้อนให้เห็นถึงขีดความสามารถการเดินเครื่องของฝ่ายผลิตตลอดช่วงเวลาที่เลือก หากกราฟแท่งมีความสม่ำเสมอ บ่งชี้ถึงประสิทธิภาพการดำเนินงานที่คงที่`,
             `The analysis of Finished Goods (FG) and No Good (NG) reflects the machine's capacity over the selected period. A consistent bar graph indicates stable operational efficiency and resource readiness.`,
-            `良品（FG）と不良品（NG）の割合の分析により、選択した期間の生産能力が反映されます。棒グラフが一定である場合は、安定した稼働効率とリソースの準備が整っていることを示しています。`
+            `通过对良品 (FG) 和不良品 (NG) 比例的分析，反映了所选期间内的生产能力。如果柱状图分布均匀，则表明运行效率稳定且资源准备充分。`
         );
         sec2_1_img = getChartImg('dailyOutputChart');
     }
@@ -206,7 +206,7 @@ window.renderAutoReportContent = function() {
     let paretoDesc = multiLang(
         `อ้างอิงจากหลักการพาเรโต (80/20) ปัญหาคอขวดด้านคุณภาพที่หล่อเลี้ยงความสูญเสียมากที่สุดคือ <b>${topNgSymptomName}</b> ซึ่งกินสัดส่วนสูงถึง <b>${topNgSymptomRatio}%</b> การพุ่งเป้าแก้ไขปัญหานี้เป็นอันดับแรกจะช่วยกอบกู้ Yield กลับมาได้เร็วที่สุด`,
         `Based on the Pareto principle (80/20), the primary quality bottleneck causing the most loss is <b>${topNgSymptomName}</b>, accounting for <b>${topNgSymptomRatio}%</b>. Targeting this issue first will maximize Yield recovery.`,
-        `パレートの法則（80/20）に基づき、最大の損失をもたらす品質のボトルネックは <b>${topNgSymptomName}</b> であり、<b>${topNgSymptomRatio}%</b> を占めています。この問題の解決を優先することで、歩留まりの回復を最大化できます。`
+        `根据帕累托法则 (80/20)，造成最大损失的主要质量瓶颈是 <b>${topNgSymptomName}</b>，占 <b>${topNgSymptomRatio}%</b>。优先解决此问题将最快地恢复良率。`
     );
 
     // สร้างรูปกราฟ Pareto
@@ -231,7 +231,7 @@ window.renderAutoReportContent = function() {
     if (!isSingleDay && data.dailyTrend && data.dailyTrend.length > 0) {
         let breachedDays = 0;
         let peakNgDay = { date: '-', rate: 0 };
-        let trendDescTH = "ทรงตัว", trendDescEN = "Stable", trendDescJP = "安定";
+        let trendDescTH = "ทรงตัว", trendDescEN = "Stable", trendDescCH = "保持稳定";
         
         data.dailyTrend.forEach(d => {
             let total = d.fg + d.ng;
@@ -242,13 +242,13 @@ window.renderAutoReportContent = function() {
         
         let firstHalf = data.dailyTrend.slice(0, Math.ceil(data.dailyTrend.length/2)).reduce((a,b)=>a+(b.fg+b.ng>0?(b.ng/(b.fg+b.ng)*100):0),0);
         let secondHalf = data.dailyTrend.slice(Math.ceil(data.dailyTrend.length/2)).reduce((a,b)=>a+(b.fg+b.ng>0?(b.ng/(b.fg+b.ng)*100):0),0);
-        if(secondHalf > firstHalf * 1.2) { trendDescTH = "มีแนวโน้มเพิ่มสูงขึ้น"; trendDescEN = "Upward trend"; trendDescJP = "増加傾向"; }
-        else if (firstHalf > secondHalf * 1.2) { trendDescTH = "มีแนวโน้มลดลง (ดีขึ้น)"; trendDescEN = "Downward trend (Improving)"; trendDescJP = "減少傾向（改善）"; }
+        if(secondHalf > firstHalf * 1.2) { trendDescTH = "มีแนวโน้มเพิ่มสูงขึ้น"; trendDescEN = "Upward trend"; trendDescCH = "呈上升趋势"; }
+        else if (firstHalf > secondHalf * 1.2) { trendDescTH = "มีแนวโน้มลดลง (ดีขึ้น)"; trendDescEN = "Downward trend (Improving)"; trendDescCH = "呈下降趋势 (改善)"; }
 
         let s32_desc = multiLang(
             `จากการวิเคราะห์ภาพรวมพบว่าอัตราของเสีย <b>${trendDescTH}</b> โดยมีวันที่สัดส่วนทะลุเพดานควบคุม (Target > 0.5%) จำนวน <b>${breachedDays} วัน</b> จุดวิกฤตสูงสุดเกิดขึ้นในวันที่ <b>${peakNgDay.date}</b> ที่อัตรา <b>${peakNgDay.rate.toFixed(2)}%</b>`,
             `Analysis indicates an overall <b>${trendDescEN}</b> in defect rates. There were <b>${breachedDays} days</b> breaching the 0.5% limit. The peak crisis occurred on <b>${peakNgDay.date}</b> at <b>${peakNgDay.rate.toFixed(2)}%</b>.`,
-            `分析の結果、不良率全体としては <b>${trendDescJP}</b> にあります。0.5%の制限を超えた日は <b>${breachedDays} 日</b> ありました。ピーク時の危機は <b>${peakNgDay.date}</b> に <b>${peakNgDay.rate.toFixed(2)}%</b> で発生しました。`
+            `分析结果表明，整体不良率 <b>${trendDescCH}</b>。共有 <b>${breachedDays} 天</b> 突破了 0.5% 的控制上限。最高峰危机发生在 <b>${peakNgDay.date}</b>，不良率达到 <b>${peakNgDay.rate.toFixed(2)}%</b>。`
         );
 
         sec3_2_html = `
@@ -295,12 +295,13 @@ window.renderAutoReportContent = function() {
     let top3Macs = macNgList.slice(0,3);
     let top3StrTH = top3Macs.map((m, i) => `อันดับ ${i+1} <b>${m.name}</b> (${m.ng.toLocaleString()} ชิ้น)`).join(', ');
     let top3StrEN = top3Macs.map((m, i) => `Rank ${i+1}: <b>${m.name}</b> (${m.ng.toLocaleString()} pcs)`).join(', ');
-    if(top3Macs.length === 0) { top3StrTH = "ไม่มีข้อมูลของเสีย"; top3StrEN = "No defects found"; }
+    let top3StrCH = top3Macs.map((m, i) => `第 ${i+1} 名: <b>${m.name}</b> (${m.ng.toLocaleString()} 件)`).join('，');
+    if(top3Macs.length === 0) { top3StrTH = "ไม่มีข้อมูลของเสีย"; top3StrEN = "No defects found"; top3StrCH = "未发现缺陷"; }
     
     let sec3_3_desc = multiLang(
         `ผลลัพธ์จากการ Mapping พบว่าเครื่องจักรที่เป็นแหล่งกำเนิดของเสียสูงสุด 3 อันดับแรก ได้แก่ ${top3StrTH} ควรยกระดับแผนการซ่อมบำรุงเชิงป้องกัน (PM) อย่างเร่งด่วน`,
         `Defect mapping reveals the top 3 machines generating the most defects are: ${top3StrEN}. Elevating Preventive Maintenance (PM) plans for these machines is highly recommended.`,
-        `欠陥マッピングの結果、不良発生トップ3の機械は次のとおりです：${top3StrEN}。 これらの機械の予防保全（PM）計画を直ちに強化することを強く推奨します。`
+        `缺陷分布图显示，产生缺陷最多的前3台机器是：${top3StrCH}。强烈建议立即加强这些机器的预防性维护 (PM) 计划。`
     );
 
     // สร้าง Config กราฟสำหรับหัวข้อ 3.3 Defect Source Mapping
@@ -385,9 +386,11 @@ window.renderAutoReportContent = function() {
             
             let stabilityTH = variance < 5 ? "ความเสถียรสูง" : (variance < 15 ? "ผันผวนปานกลาง" : "ผันผวนสูงมาก");
             let stabilityEN = variance < 5 ? "Highly Stable" : (variance < 15 ? "Moderate Variance" : "Highly Unstable");
+            let stabilityCH = variance < 5 ? "高度稳定" : (variance < 15 ? "中等波动" : "极不稳定");
             
             let targetEvalTH = parseFloat(avgMNgRate) <= 0.5 ? "ผ่านเกณฑ์" : "ตกเกณฑ์มาตรฐาน (NG > 0.5%)";
             let targetEvalEN = parseFloat(avgMNgRate) <= 0.5 ? "Target Passed" : "Target Failed (NG > 0.5%)";
+            let targetEvalCH = parseFloat(avgMNgRate) <= 0.5 ? "达标" : "未达标 (NG > 0.5%)";
             let targetColor = parseFloat(avgMNgRate) <= 0.5 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700";
 
             let chartId = `mchart_${m.replace(/\W/g, '')}`;
@@ -417,11 +420,21 @@ window.renderAutoReportContent = function() {
                 id: chartId, labels: chartLabels, fgData: fgData, ngData: ngData, rateData: rateData, targetData: targetData 
             });
 
-            let descHtml = multiLang(
-                `เดินผลผลิต FG รวม <b>${totalMFg.toLocaleString()} ชิ้น</b> พบของเสีย <b>${totalMNg.toLocaleString()} ชิ้น</b> (${targetEvalTH}) มีความแปรปรวน ${variance}% (${stabilityTH}) จุดวิกฤตของเสียสูงสุดที่ <b>${maxNgRate.toFixed(2)}%</b>`,
-                `Produced FG <b>${totalMFg.toLocaleString()} pcs</b>, defects <b>${totalMNg.toLocaleString()} pcs</b> (${targetEvalEN}). Variance is ${variance}% (${stabilityEN}). Peak NG crisis hit <b>${maxNgRate.toFixed(2)}%</b>.`,
-                `総生産量(FG) <b>${totalMFg.toLocaleString()} 個</b>、不良品 <b>${totalMNg.toLocaleString()} 個</b>。 変動率は ${variance}% (${stabilityEN}) です。ピーク時の不良率は <b>${maxNgRate.toFixed(2)}%</b> でした。`
-            );
+            // ปรับคำอธิบาย หากเป็น Single Day ให้ตัดเรื่องความแปรปรวน (Variance) ทิ้ง
+            let descHtml = "";
+            if (isSingleDay) {
+                descHtml = multiLang(
+                    `เดินผลผลิต FG รวม <b>${totalMFg.toLocaleString()} ชิ้น</b> พบของเสีย <b>${totalMNg.toLocaleString()} ชิ้น</b> (${targetEvalTH}) จุดวิกฤตของเสียสูงสุดที่ <b>${maxNgRate.toFixed(2)}%</b>`,
+                    `Produced FG <b>${totalMFg.toLocaleString()} pcs</b>, defects <b>${totalMNg.toLocaleString()} pcs</b> (${targetEvalEN}). Peak NG crisis hit <b>${maxNgRate.toFixed(2)}%</b>.`,
+                    `总产量(FG) <b>${totalMFg.toLocaleString()} 件</b>，不良品 <b>${totalMNg.toLocaleString()} 件</b> (${targetEvalCH})。最高不良率达到 <b>${maxNgRate.toFixed(2)}%</b>。`
+                );
+            } else {
+                descHtml = multiLang(
+                    `เดินผลผลิต FG รวม <b>${totalMFg.toLocaleString()} ชิ้น</b> พบของเสีย <b>${totalMNg.toLocaleString()} ชิ้น</b> (${targetEvalTH}) มีความแปรปรวน ${variance}% (${stabilityTH}) จุดวิกฤตของเสียสูงสุดที่ <b>${maxNgRate.toFixed(2)}%</b>`,
+                    `Produced FG <b>${totalMFg.toLocaleString()} pcs</b>, defects <b>${totalMNg.toLocaleString()} pcs</b> (${targetEvalEN}). Variance is ${variance}% (${stabilityEN}). Peak NG crisis hit <b>${maxNgRate.toFixed(2)}%</b>.`,
+                    `总产量(FG) <b>${totalMFg.toLocaleString()} 件</b>，不良品 <b>${totalMNg.toLocaleString()} 件</b> (${targetEvalCH})。波动率为 ${variance}% (${stabilityCH})。最高不良率达到 <b>${maxNgRate.toFixed(2)}%</b>。`
+                );
+            }
 
             machineAnalysisHtml += `
                 <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm page-break-inside-avoid">
@@ -618,12 +631,28 @@ window.renderAutoReportContent = function() {
         if (autoReportMachineNgConfig) {
             const ctxMachineNg = document.getElementById('auto-report-machine-ng-chart');
             if (ctxMachineNg) {
+                // คำนวณขอบเขต Y สูงสุดเพื่อให้ตัวเลข Datelabels ไม่ทับขอบบนเวลาแสดงบนมือถือ (iOS/Android)
+                const maxNgValue = Math.max(...macNgList.map(m => m.ng));
                 window.autoReportCharts.push(new Chart(ctxMachineNg, {
                     type: 'bar', data: autoReportMachineNgConfig,
                     options: {
                         animation: false, responsive: true, maintainAspectRatio: false,
-                        plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' } } },
-                        scales: { y: { beginAtZero: true, title: { display: true, text: 'NG (ชิ้น)' } } }
+                        layout: { padding: { top: 30 } }, // แก้ปัญหาตัวเลขทับขอบ
+                        plugins: { 
+                            legend: { display: false }, 
+                            datalabels: { 
+                                display: true, 
+                                anchor: 'end', 
+                                align: 'top', 
+                                offset: 4,
+                                font: { weight: 'bold', size: 11 },
+                                formatter: function(value) { return value.toLocaleString() + ' ชิ้น'; } // จัดฟอร์แมตตัวเลขเพื่อให้อ่านง่าย
+                            } 
+                        },
+                        scales: { 
+                            y: { beginAtZero: true, suggestedMax: maxNgValue * 1.2, title: { display: true, text: 'NG (ชิ้น)' } },
+                            x: { ticks: { autoSkip: false, maxRotation: 45, minRotation: 0 } }
+                        }
                     }
                 }));
             }
