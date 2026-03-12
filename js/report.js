@@ -369,10 +369,7 @@ window.renderAutoReportContent = async function() {
 
     // 🌟 ส่วนที่ 4: การวิเคราะห์แนวโน้มรายวันแยกตามเครื่องจักร (1-16) 🌟
     let machineChartConfigs = [];
-    let machineAnalysisHtml = `<div class="page-break-before print-page mb-8">
-        <div class="mb-8 page-break-inside-avoid">
-        <h3 class="text-lg font-bold text-gray-800 border-l-4 border-purple-600 pl-3 mb-4 bg-white shadow-sm py-2.5 rounded-r-lg">4. การวิเคราะห์สถานะและแนวโน้มเชิงสถิติ แยกตามเครื่องจักร (CWM-01 ถึง 16)</h3>
-        <div class="space-y-6">`;
+    let machineAnalysisHtml = `<div class="page-break-before print-page mb-8">`;
     
     for(let i=1; i<=16; i++) {
         let m = `CWM-${String(i).padStart(2,'0')}`;
@@ -433,6 +430,8 @@ window.renderAutoReportContent = async function() {
                 </div>
             </div>`;
         }
+
+        let cardHtml = '';
 
         if (totalMFg > 0 || totalMNg > 0) {
             // กรณีมีผลผลิต -> โชว์กราฟ และกล่องสรุป FG/NG
@@ -523,8 +522,8 @@ window.renderAutoReportContent = async function() {
                 </div>
             </div>`;
 
-            machineAnalysisHtml += `
-                <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm page-break-inside-avoid">
+            cardHtml = `
+                <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm">
                     <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
                         <h4 class="font-black text-blue-800 text-base flex items-center gap-2">🏭 เครื่องจักร: ${m}</h4>
                         <span class="text-xs font-bold ${targetColor} px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
@@ -542,8 +541,8 @@ window.renderAutoReportContent = async function() {
         } else {
             // กรณีไม่มียอดผลิต (เช็คประวัติแจ้งซ่อม)
             if (logs.length > 0) {
-                machineAnalysisHtml += `
-                <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm page-break-inside-avoid">
+                cardHtml = `
+                <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm">
                     <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
                         <h4 class="font-bold text-gray-500 text-base flex items-center gap-2">🏭 เครื่องจักร: ${m}</h4>
                         <span class="text-xs font-bold bg-orange-100 text-orange-700 px-3 py-1.5 rounded-full border border-orange-200 shadow-sm">
@@ -553,8 +552,8 @@ window.renderAutoReportContent = async function() {
                     ${maintTableHtml}
                 </div>`;
             } else {
-                machineAnalysisHtml += `
-                <div class="border border-gray-200 p-4 rounded-xl bg-gray-50 shadow-sm page-break-inside-avoid opacity-70 flex items-center justify-between">
+                cardHtml = `
+                <div class="border border-gray-200 p-4 rounded-xl bg-gray-50 shadow-sm opacity-70 flex items-center justify-between">
                     <h4 class="font-bold text-gray-500 text-base flex items-center gap-2">🏭 เครื่องจักร: ${m}</h4>
                     <span class="text-xs font-bold bg-gray-200 text-gray-600 px-3 py-1.5 rounded-full border border-gray-300">
                         💤 เครื่องจักรหยุดรอ (Idle) / ไม่มีการเดินเครื่องและไม่มีประวัติแจ้งปัญหา
@@ -562,8 +561,17 @@ window.renderAutoReportContent = async function() {
                 </div>`;
             }
         }
+
+        let headerHtml = (i === 1) ? `<h3 class="text-lg font-bold text-gray-800 border-l-4 border-purple-600 pl-3 mb-4 bg-white shadow-sm py-2.5 rounded-r-lg">4. การวิเคราะห์สถานะและแนวโน้มเชิงสถิติ แยกตามเครื่องจักร (CWM-01 ถึง 16)</h3>` : '';
+
+        machineAnalysisHtml += `
+            <div class="page-break-inside-avoid mb-6">
+                ${headerHtml}
+                ${cardHtml}
+            </div>
+        `;
     }
-    machineAnalysisHtml += `</div></div></div>`;
+    machineAnalysisHtml += `</div>`;
 
     // 🌟 ประกอบร่าง HTML สำหรับรายงาน (เปลี่ยนคลาสตั้งค่า Container เพื่อกันกราฟบีบบนมือถือ) 🌟
     // สังเกตการเพิ่ม md:hidden เป็นป้ายเตือนสำหรับผู้ใช้มือถือ
