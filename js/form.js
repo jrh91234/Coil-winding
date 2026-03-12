@@ -1,138 +1,5 @@
-// ----------------------------------------------------
-// CWM Production System - form.js (v3.55)
-// ----------------------------------------------------
-
-function getShiftDateStr() {
-    const now = new Date();
-    if (now.getHours() < 8) {
-        now.setDate(now.getDate() - 1);
-    }
-    return now.toISOString().split('T')[0];
-}
-
-window.updateHourSlots = function(shiftType) {
-    const slotSelect = document.getElementById('hourSlot');
-    if (!slotSelect) return;
-    slotSelect.innerHTML = '';
-    
-    let hours = [];
-    if (shiftType === 'Day') {
-        hours = ["08:00-09:00", "09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "OT 17:30-18:00", "OT 18:00-19:00", "OT 19:00-20:00"];
-    } else {
-        hours = ["20:00-21:00", "21:00-22:00", "22:00-23:00", "23:00-00:00", "00:00-01:00", "01:00-02:00", "02:00-03:00", "03:00-04:00", "04:00-05:00", "OT 05:30-06:00", "OT 06:00-07:00", "OT 07:00-08:00"];
-    }
-    
-    hours.forEach(h => {
-        const opt = document.createElement('option');
-        opt.value = h;
-        opt.text = h;
-        slotSelect.appendChild(opt);
-    });
-    
-    const now = new Date();
-    const currentHour = now.getHours();
-    let defaultIndex = 0;
-    
-    if (shiftType === 'Day') {
-        if (currentHour >= 8 && currentHour < 17) defaultIndex = currentHour - 8;
-        else if (currentHour >= 17 && currentHour < 20) defaultIndex = 8 + (currentHour - 17);
-    } else {
-        if (currentHour >= 20) defaultIndex = currentHour - 20;
-        else if (currentHour < 5) defaultIndex = currentHour + 4;
-        else if (currentHour >= 5 && currentHour < 8) defaultIndex = 8 + (currentHour - 5);
-    }
-    
-    if(slotSelect.options.length > defaultIndex) {
-        slotSelect.selectedIndex = defaultIndex;
-    }
-};
-
-document.addEventListener('DOMContentLoaded', () => {
-    const pDate = document.getElementById('productionDate');
-    const planDate = document.getElementById('planDate');
-    if(pDate) pDate.value = getShiftDateStr();
-    if(planDate) planDate.value = getShiftDateStr();
-    
-    const currentHour = new Date().getHours();
-    const isDay = (currentHour >= 8 && currentHour < 20);
-    const shiftTypeRadio = document.querySelector(`input[name="shift_type_toggle"][value="${isDay ? 'Day' : 'Night'}"]`);
-    if(shiftTypeRadio) shiftTypeRadio.checked = true;
-    updateHourSlots(isDay ? 'Day' : 'Night');
-    
-    setTimeout(() => { if (document.getElementById('batchList') && document.getElementById('batchList').children.length === 0) window.addBatchRow(); }, 500);
-});
-
-window.addBatchRow = function() {
-    const list = document.getElementById('batchList');
-    if(!list) return;
-    const rowCount = list.children.length;
-    const div = document.createElement('div');
-    div.className = 'batch-row bg-gray-50 p-3 rounded-lg border border-gray-200 relative animate-fade-in flex flex-col md:flex-row gap-3 items-end';
-    
-    let macOpts = '<option value="">- เลือก -</option>';
-    for(let i=1; i<=16; i++) {
-        let m = `CWM-${String(i).padStart(2,'0')}`;
-        macOpts += `<option value="${m}">${m}</option>`;
-    }
-    
-    let prodOpts = '<option value="">- เลือกรุ่น -</option>';
-    productList.forEach(p => prodOpts += `<option value="${p}">${p}</option>`);
-
-    div.innerHTML = `
-        <div class="w-full md:w-1/4">
-            <label class="block text-[10px] font-bold text-gray-500 mb-0.5">เครื่องจักร (Machine)</label>
-            <select class="w-full p-2 border rounded text-sm bg-white font-bold text-blue-700 select-machine" required onchange="window.autoAssignProduct(this)">
-                ${macOpts}
-            </select>
-        </div>
-        <div class="w-full md:w-2/4">
-            <label class="block text-[10px] font-bold text-gray-500 mb-0.5">รุ่นสินค้า (Product Model)</label>
-            <select class="w-full p-2 border rounded text-sm bg-white select-product" required>
-                ${prodOpts}
-            </select>
-        </div>
-        <div class="w-full md:w-1/4 flex gap-2">
-            <div class="flex-1">
-                <label class="block text-[10px] font-bold text-green-600 mb-0.5">FG (งานดี)</label>
-                <input type="number" min="0" class="w-full p-2 border rounded text-sm text-center font-bold text-green-700 bg-green-50 focus:bg-white input-fg" placeholder="0" required onchange="window.updateTotalFields(this.closest('.batch-row'))">
-            </div>
-            <div class="flex-1 relative">
-                <label class="block text-[10px] font-bold text-red-600 mb-0.5">NG (ของเสีย)</label>
-                <div class="flex">
-                    <input type="number" min="0" readonly class="w-full p-2 border rounded-l text-sm text-center font-bold text-red-700 bg-red-50 input-ng cursor-pointer" placeholder="0" onclick="window.openNgModal(this)">
-                    <input type="hidden" class="input-ng-json" value="{}">
-                    <button type="button" class="bg-red-100 border border-l-0 border-red-200 px-2 rounded-r text-red-600 hover:bg-red-200" onclick="window.openNgModal(this)">📝</button>
-                </div>
-            </div>
-        </div>
-        ${rowCount > 0 ? `<button type="button" onclick="window.removeBatchRow(this)" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow hover:bg-red-600">&times;</button>` : ''}
-    `;
-    list.appendChild(div);
-};
-
-window.removeBatchRow = function(btn) {
-    btn.closest('.batch-row').remove();
-};
-
-window.autoAssignProduct = function(selectEl) {
-    const m = selectEl.value;
-    const row = selectEl.closest('.batch-row');
-    const prodSelect = row.querySelector('.select-product');
-    if(m && machineMapping[m]) {
-        prodSelect.value = machineMapping[m];
-    }
-};
-
-window.updateTotalFields = function(row) {
-    const fg = parseInt(row.querySelector('.input-fg').value) || 0;
-    const ng = parseInt(row.querySelector('.input-ng').value) || 0;
-    // เพิ่ม Logic คำนวณเพิ่มเติมได้ที่นี่
-};
-
-// --- Assign Modal ---
 window.openAssignModal = function() {
     const container = document.getElementById('assign-list-container');
-    if(!container) return;
     container.innerHTML = '';
     
     for(let i=1; i<=16; i++) {
@@ -166,542 +33,592 @@ window.saveAssignment = async function() {
         const m = sel.dataset.machine;
         const v = sel.value;
         if(machineMapping[m] !== v) {
-            machineMapping[m] = v;
             hasChanges = true;
-            logEntries.push({machine: m, product: v});
+            if(v) {
+                machineMapping[m] = v;
+                logEntries.push({machine: m, product: v});
+            } else {
+                delete machineMapping[m];
+                logEntries.push({machine: m, product: "Unassigned"});
+            }
         }
     });
     
-    if(!hasChanges) {
-        window.closeAssignModal();
-        return;
+    localStorage.setItem('CWM_MACHINE_MAPPING', JSON.stringify(machineMapping));
+    window.closeAssignModal();
+    
+    const rows = document.getElementById('batchList').children;
+    for(let r of rows) {
+        const mSel = r.querySelector('.machine-select-trigger');
+        const pSel = r.querySelector('.product-select-target');
+        if(mSel && mSel.value && machineMapping[mSel.value]) {
+            pSel.value = machineMapping[mSel.value];
+            pSel.dispatchEvent(new Event('change'));
+        }
     }
-    
-    const btn = document.querySelector('#modal-assign button[onclick="window.saveAssignment()"]');
-    const oriText = btn.innerText;
-    btn.innerText = "⏳ Saving...";
-    btn.disabled = true;
-    
-    try {
-        await fetch(SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            body: JSON.stringify({ action: 'SAVE_MAPPING', data: machineMapping })
-        });
-        alert("✅ บันทึกการตั้งค่าเครื่องจักรสำเร็จ");
-        window.closeAssignModal();
-        
-        const rows = document.querySelectorAll('.batch-row');
-        rows.forEach(row => {
-            const mSel = row.querySelector('.select-machine');
-            if(mSel && mSel.value) window.autoAssignProduct(mSel);
-        });
-    } catch(e) {
-        alert("Error saving: " + e.message);
-    } finally {
-        btn.innerText = oriText;
-        btn.disabled = false;
+
+    if(hasChanges && logEntries.length > 0) {
+        const payload = { 
+            action: 'SAVE_ASSIGNMENT', 
+            timestamp: new Date().toLocaleString('th-TH'),
+            logs: logEntries,
+            recorder: document.getElementById('recorder').value || "System"
+        };
+        fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) })
+        .catch(e => console.log("Error logging assignment:", e));
+
+        systemLog('ASSIGN_MACHINE', `บันทึกการตั้งค่าเครื่องจักร ${logEntries.length} รายการ`);
     }
 };
 
-// --- NG Modal ---
-let currentNgTargetInput = null;
+window.addBatchRow = function() {
+    const container = document.getElementById('batchList');
+    const rowId = 'row-' + Date.now() + Math.random().toString(36).substr(2, 5);
+    let machineOpts = '<option value="">เลือกเครื่อง...</option>';
+    for(let i=1; i<=16; i++) {
+        machineOpts += `<option value="CWM-${String(i).padStart(2,'0')}">CWM-${String(i).padStart(2,'0')}</option>`;
+    }
+    let prodOpts = productList.map(p => `<option value="${p}">${p}</option>`).join('');
 
-window.openNgModal = function(triggerEl) {
-    const row = triggerEl.closest('.batch-row');
-    currentNgTargetInput = row.querySelector('.input-ng');
-    const jsonInput = row.querySelector('.input-ng-json');
-    let currentData = {};
-    try { currentData = JSON.parse(jsonInput.value || '{}'); } catch(e){}
+    const div = document.createElement('div');
+    div.id = rowId;
+    div.className = "bg-white p-3 border border-gray-200 rounded-lg shadow-sm flex flex-col md:flex-row gap-3 items-end md:items-center";
+    div.innerHTML = `
+        <div class="flex-1 w-full">
+            <label class="text-[10px] text-gray-400 font-bold uppercase">Machine</label>
+            <select name="machine" class="machine-select-trigger w-full p-2 border rounded bg-gray-50 text-sm font-bold">${machineOpts}</select>
+        </div>
+        <div class="flex-1 w-full">
+            <label class="text-[10px] text-gray-400 font-bold uppercase">Product</label>
+            <select name="productCode" class="product-select-target w-full p-2 border rounded bg-gray-50 text-sm">${prodOpts}</select>
+        </div>
+        <div class="w-24">
+            <label class="text-[10px] text-gray-400 font-bold uppercase">FG</label>
+            <input type="number" name="fgAmount" value="1000" class="w-full p-2 border rounded text-center font-bold text-green-600 bg-green-50 focus:bg-white" min="0">
+        </div>
+        <div class="w-full md:w-auto flex gap-2">
+            <button type="button" onclick="window.openNgModal('${rowId}')" class="flex-1 md:flex-none bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded font-bold text-sm hover:bg-red-100 relative">
+                NG (Kg) <span id="ng-badge-${rowId}" class="hidden absolute -top-2 -right-2 bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">0</span>
+            </button>
+            <button type="button" onclick="window.removeBatchRow('${rowId}')" class="text-gray-400 hover:text-red-500 px-2 text-xl">&times;</button>
+        </div>
+    `;
+    container.appendChild(div);
+    batchNgData[rowId] = [];
+
+    const mSelect = div.querySelector('.machine-select-trigger');
+    const pSelect = div.querySelector('.product-select-target');
+    const fgInput = div.querySelector('input[name="fgAmount"]');
     
+    const checkProductForFg = () => {
+        if(pSelect.value === "51207080HC-JR (25/32A)") {
+            fgInput.value = "800";
+        } else {
+            fgInput.value = "1000";
+        }
+    };
+
+    mSelect.addEventListener('change', function() {
+        const selectedM = this.value;
+        if(selectedM && machineMapping[selectedM]) {
+            pSelect.value = machineMapping[selectedM];
+            checkProductForFg(); 
+        }
+    });
+
+    pSelect.addEventListener('change', checkProductForFg);
+    checkProductForFg();
+};
+
+window.removeBatchRow = function(id) { 
+    const el = document.getElementById(id);
+    if(el) el.remove(); 
+    delete batchNgData[id]; 
+};
+
+window.openNgModal = function(rowId) {
+    currentRowIdForNg = rowId;
+    const modal = document.getElementById('modal-ng');
     const list = document.getElementById('modal-ng-list');
     list.innerHTML = '';
     
-    ngSymptoms.forEach((sym, idx) => {
-        const val = currentData[sym] || '';
-        list.innerHTML += `
-            <div class="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded border border-gray-100">
-                <label class="flex-1 text-sm text-gray-700">${sym}</label>
-                <input type="number" min="0" class="w-20 p-1.5 border rounded text-center text-red-600 font-bold modal-ng-val" data-sym="${sym}" value="${val}" placeholder="0">
-            </div>
-        `;
+    ngSymptoms.forEach(s => {
+        const existing = batchNgData[rowId].find(x => x.type === s);
+        const val = existing ? existing.qty : '';
+        const remark = existing ? existing.remark : '';
+        window.renderNgItem(list, s, val, remark);
     });
+
+    const customItems = batchNgData[rowId].filter(x => !ngSymptoms.some(s => s.toLowerCase() === x.type.toLowerCase()));
+    customItems.forEach(item => { 
+        window.renderNgItem(list, item.type, item.qty, item.remark, true); 
+    });
+
+    modal.classList.remove('hidden');
+};
+
+window.renderNgItem = function(container, label, qty, remark, isCustom=false) {
+    const div = document.createElement('div'); 
+    div.className = "border-b pb-2 mb-2 ng-item-row";
     
-    for(let k in currentData) {
-        if(!ngSymptoms.includes(k)) {
-            list.innerHTML += `
-                <div class="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded border border-gray-100">
-                    <input type="text" class="flex-1 p-1.5 border rounded text-sm text-gray-700 modal-ng-sym-custom" value="${k}">
-                    <input type="number" min="0" class="w-20 p-1.5 border rounded text-center text-red-600 font-bold modal-ng-val-custom" value="${currentData[k]}" placeholder="0">
-                    <button type="button" onclick="this.parentElement.remove()" class="text-red-500 font-bold px-2">&times;</button>
-                </div>
-            `;
+    const typeInput = isCustom 
+        ? `<input type="text" class="ng-type-name w-full p-1 border rounded text-sm font-bold text-red-700 mb-1" value="${label}" placeholder="ระบุชื่ออาการ...">` 
+        : `<span class="text-sm font-medium text-gray-700 ng-type-label" data-label="${label}">${label}</span>`;
+    
+    div.innerHTML = `
+        <div class="flex justify-between items-center mb-1">
+            <div class="flex-1">${typeInput}</div>
+            <div class="flex items-center ml-2">
+                <input type="number" class="ng-input-qty w-20 p-1 border rounded text-right" value="${qty}" placeholder="0.00" min="0" step="0.01">
+                <span class="text-xs text-gray-500 ml-1">Kg</span>
+            </div>
+        </div>
+        <input type="text" class="ng-input-remark w-full p-1 border rounded text-xs bg-gray-50" value="${remark}" placeholder="หมายเหตุ...">
+    `;
+    container.appendChild(div);
+};
+
+window.addCustomNgField = function() { 
+    const list = document.getElementById('modal-ng-list'); 
+    window.renderNgItem(list, "", "", "", true); 
+    list.scrollTop = list.scrollHeight; 
+};
+
+window.saveCurrentNgInputs = function() {
+    if(!currentRowIdForNg) return;
+    const rows = document.querySelectorAll('.ng-item-row');
+    const newData = [];
+    let total = 0;
+
+    rows.forEach(row => {
+        let type = "";
+        const labelSpan = row.querySelector('.ng-type-label');
+        const nameInput = row.querySelector('.ng-type-name');
+        if (labelSpan) type = labelSpan.dataset.label; 
+        else if (nameInput) type = nameInput.value.trim();
+        
+        const qty = parseFloat(row.querySelector('.ng-input-qty').value);
+        const remark = row.querySelector('.ng-input-remark').value;
+        if (type && qty > 0) { 
+            newData.push({ type: capitalizeFirst(type), qty, remark }); 
+            total += qty; 
+        }
+    });
+
+    batchNgData[currentRowIdForNg] = newData;
+    const badge = document.getElementById(`ng-badge-${currentRowIdForNg}`);
+    const fgInput = document.querySelector(`#${currentRowIdForNg} input[name="fgAmount"]`);
+    
+    if(total > 0) { 
+        badge.innerText = total.toFixed(2); 
+        badge.classList.remove('hidden'); 
+        if (fgInput) {
+            fgInput.value = 0;
+            fgInput.readOnly = true;
+            fgInput.classList.remove('bg-green-50', 'text-green-600', 'focus:bg-white');
+            fgInput.classList.add('bg-gray-100', 'text-gray-400', 'cursor-not-allowed', 'opacity-60');
+            fgInput.title = "ช่องนี้ถูกล็อคเนื่องจากมีการลง NG (หากต้องการลง FG กรุณาเพิ่มรายการใหม่)";
+        }
+    } else { 
+        badge.classList.add('hidden'); 
+        if (fgInput && fgInput.readOnly) {
+            fgInput.readOnly = false;
+            fgInput.classList.remove('bg-gray-100', 'text-gray-400', 'cursor-not-allowed', 'opacity-60');
+            fgInput.classList.add('bg-green-50', 'text-green-600', 'focus:bg-white');
+            fgInput.title = "";
         }
     }
-    
-    document.getElementById('modal-ng').classList.remove('hidden');
 };
 
 window.closeNgModal = function(save) {
-    if(save && currentNgTargetInput) {
-        const row = currentNgTargetInput.closest('.batch-row');
-        const jsonInput = row.querySelector('.input-ng-json');
-        
-        let newData = {};
-        let totalNg = 0;
-        
-        document.querySelectorAll('.modal-ng-val').forEach(inp => {
-            const v = parseInt(inp.value);
-            if(v > 0) {
-                newData[inp.dataset.sym] = v;
-                totalNg += v;
-            }
-        });
-        
-        document.querySelectorAll('.modal-ng-sym-custom').forEach(inp => {
-            const sym = inp.value.trim();
-            const valInp = inp.nextElementSibling;
-            const v = parseInt(valInp.value);
-            if(sym && v > 0) {
-                newData[sym] = (newData[sym] || 0) + v;
-                totalNg += v;
-            }
-        });
-        
-        currentNgTargetInput.value = totalNg > 0 ? totalNg : '';
-        jsonInput.value = JSON.stringify(newData);
-        window.updateTotalFields(row);
-    }
+    if(save) window.saveCurrentNgInputs();
     document.getElementById('modal-ng').classList.add('hidden');
-    currentNgTargetInput = null;
-};
-
-window.addCustomNgField = function() {
-    const list = document.getElementById('modal-ng-list');
-    list.innerHTML += `
-        <div class="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded border border-gray-100">
-            <input type="text" class="flex-1 p-1.5 border rounded text-sm text-gray-700 modal-ng-sym-custom" placeholder="ระบุอาการ...">
-            <input type="number" min="0" class="w-20 p-1.5 border rounded text-center text-red-600 font-bold modal-ng-val-custom" placeholder="0">
-            <button type="button" onclick="this.parentElement.remove()" class="text-red-500 font-bold px-2">&times;</button>
-        </div>
-    `;
-};
-
-// --- Manage List ---
-let currentManageListType = '';
-
-window.manageRecorders = function() {
-    currentManageListType = 'recorder';
-    document.getElementById('manage-list-title').innerText = 'จัดการรายชื่อพนักงาน';
-    renderManageList(recorderList);
-    document.getElementById('modal-manage-list').classList.remove('hidden');
+    currentRowIdForNg = null;
 };
 
 window.manageSymptomsFromModal = function() {
-    document.getElementById('modal-ng').classList.add('hidden');
-    currentManageListType = 'symptom';
-    document.getElementById('manage-list-title').innerText = 'จัดการรายการอาการเสีย (NG)';
-    renderManageList(ngSymptoms);
-    document.getElementById('modal-manage-list').classList.remove('hidden');
+    window.saveCurrentNgInputs(); 
+    window.manageSymptoms(); 
 };
 
-function renderManageList(arr) {
-    const c = document.getElementById('manage-list-content');
-    c.innerHTML = '';
-    arr.forEach((item, idx) => {
-        c.innerHTML += `
-            <div class="flex justify-between items-center p-2 bg-gray-50 border-b last:border-0">
-                <span class="text-sm text-gray-700">${item}</span>
-                <button type="button" onclick="window.removeItemFromList(${idx})" class="text-red-500 hover:bg-red-100 px-2 py-0.5 rounded font-bold text-xs">ลบ</button>
-            </div>
-        `;
-    });
-}
+window.renderRecorderOptions = function() { 
+    const select = document.getElementById('recorder'); 
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">เลือกพนักงาน...</option>'; 
+    recorderList.forEach(r => { 
+        const opt = document.createElement('option'); 
+        opt.value = r; 
+        opt.text = r; 
+        select.appendChild(opt); 
+    }); 
+    if (recorderList.includes(currentVal)) {
+        select.value = currentVal;
+    }
+};
+
+window.renderProductOptions = function() { 
+    const s = document.getElementById('planProduct'); 
+    if(s) s.innerHTML = productList.map(p=>`<option value="${p}">${p}</option>`).join(''); 
+};
+
+window.manageRecorders = function() { 
+    currentManageType = 'recorder'; 
+    window.openManageListModal('จัดการรายชื่อผู้บันทึก', recorderList); 
+};
+
+window.manageSymptoms = function() { 
+    currentManageType = 'symptom'; 
+    window.openManageListModal('จัดการรายการอาการ NG', ngSymptoms); 
+};
+
+window.openManageListModal = function(title, list) { 
+    const modal = document.getElementById('modal-manage-list'); 
+    document.getElementById('manage-list-title').innerText = title; 
+    window.renderManageListContent(list); 
+    modal.classList.remove('hidden'); 
+};
+
+window.renderManageListContent = function(list) { 
+    const container = document.getElementById('manage-list-content'); 
+    container.innerHTML = list.map((item, i) => `
+        <div class="flex justify-between items-center bg-gray-50 p-2 rounded mb-1">
+            <span class="text-sm font-medium text-gray-700">${item}</span>
+            <button onclick="window.deleteListItem(${i})" class="text-red-500 hover:bg-red-100 px-2 py-1 rounded text-xs">🗑️ ลบ</button>
+        </div>
+    `).join(''); 
+};
 
 window.addNewItemToList = function() {
-    const inp = document.getElementById('new-item-input');
-    const val = inp.value.trim();
-    if(!val) return;
-    
-    if(currentManageListType === 'recorder') {
-        if(!recorderList.includes(val)) recorderList.push(val);
-        renderManageList(recorderList);
-    } else {
-        if(!ngSymptoms.includes(val)) ngSymptoms.push(val);
-        renderManageList(ngSymptoms);
-    }
-    inp.value = '';
+     const rawVal = document.getElementById('new-item-input').value.trim();
+     if(!rawVal) return;
+     if (currentManageType === 'recorder') { 
+         if (!recorderList.some(r => r.toLowerCase() === rawVal.toLowerCase())) { 
+             recorderList.push(rawVal); 
+             localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
+             window.renderRecorderOptions(); 
+             window.renderManageListContent(recorderList); 
+         } 
+     } else if (currentManageType === 'symptom') { 
+         const stdVal = capitalizeFirst(rawVal);
+         if (!ngSymptoms.some(s => s.toLowerCase() === stdVal.toLowerCase())) { 
+             ngSymptoms.push(stdVal); 
+             localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
+             window.renderManageListContent(ngSymptoms); 
+         } 
+     }
+     document.getElementById('new-item-input').value = '';
+     if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
+         window.openNgModal(currentRowIdForNg);
+     }
 };
 
-window.removeItemFromList = function(idx) {
-    if(currentManageListType === 'recorder') {
-        recorderList.splice(idx, 1);
-        renderManageList(recorderList);
-    } else {
-        ngSymptoms.splice(idx, 1);
-        renderManageList(ngSymptoms);
-    }
+window.deleteListItem = function(index) {
+     if (!confirm('ยืนยันการลบรายการนี้ (ออกจาก Local)?')) return;
+     if (currentManageType === 'recorder') { 
+         recorderList.splice(index, 1); 
+         localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
+         window.renderRecorderOptions(); 
+         window.renderManageListContent(recorderList); 
+     } else if (currentManageType === 'symptom') { 
+         ngSymptoms.splice(index, 1); 
+         localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
+         window.renderManageListContent(ngSymptoms); 
+     }
+     if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
+         window.openNgModal(currentRowIdForNg);
+     }
 };
 
 window.saveListToCloud = async function() {
     const btn = document.getElementById('btn-save-cloud');
-    const oriText = btn.innerText;
-    btn.innerText = '⏳ กำลังอัปเดต...';
+    const originalText = btn.innerHTML;
+    btn.innerHTML = "⏳ กำลังอัปเดต...";
     btn.disabled = true;
-    
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
     try {
-        const payload = { action: 'UPDATE_GLOBALS' };
-        if(currentManageListType === 'recorder') payload.recorders = recorderList;
-        else payload.ngSymptoms = ngSymptoms;
-        
-        await fetch(SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            body: JSON.stringify(payload)
-        });
-        
-        alert("✅ อัปเดตข้อมูลขึ้น Cloud สำเร็จ");
-        if(currentManageListType === 'recorder') window.renderSelectOptions();
-        window.closeManageListModal();
-    } catch(e) {
-        alert("❌ ผิดพลาด: " + e.message);
+        const actionName = (currentManageType === 'symptom') ? 'SAVE_NG_SYMPTOMS' : 'SAVE_RECORDERS';
+        const dataList = (currentManageType === 'symptom') ? ngSymptoms : recorderList;
+        const payload = { 
+            action: actionName, 
+            timestamp: new Date().toLocaleString('th-TH'),
+            data: dataList,
+            recorder: document.getElementById('recorder').value || "System"
+        };
+        await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
+        systemLog('UPDATE_MASTER_LIST', `บันทึก Master List: ${actionName}`);
+        alert("☁️ อัปเดตข้อมูลขึ้น Cloud เรียบร้อยแล้ว!\n(ระบบจะจำรายการเหล่านี้ไปใช้กับเครื่องอื่นด้วย)");
+    } catch (error) {
+        alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อ Cloud: " + error.message);
     } finally {
-        btn.innerText = oriText;
+        btn.innerHTML = originalText;
         btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
 };
 
-window.closeManageListModal = function() {
-    document.getElementById('modal-manage-list').classList.add('hidden');
-    if(currentManageListType === 'symptom') {
-        document.getElementById('modal-ng').classList.remove('hidden');
-    }
+window.closeManageListModal = function() { 
+    document.getElementById('modal-manage-list').classList.add('hidden'); 
 };
-
-// --- Undo System ---
-let lastSubmitData = null;
 
 window.showUndoToast = function() {
     const toast = document.getElementById('undo-toast');
+    const btn = document.getElementById('btn-undo-action');
+    btn.innerHTML = "↩️ ยกเลิก (Undo)";
+    btn.disabled = false;
+    btn.classList.remove('bg-green-600', 'hover:bg-green-700');
+    btn.classList.add('bg-red-600', 'hover:bg-red-700');
     toast.classList.remove('translate-y-24', 'opacity-0', 'pointer-events-none');
-    setTimeout(() => window.closeUndoToast(), 15000);
 };
 
 window.closeUndoToast = function() {
     const toast = document.getElementById('undo-toast');
     toast.classList.add('translate-y-24', 'opacity-0', 'pointer-events-none');
+    window.lastBatchId = null;
 };
 
 window.undoLastSubmit = async function() {
-    if(!lastSubmitData) return;
+    if(!window.lastBatchId) return;
     const btn = document.getElementById('btn-undo-action');
+    const originalText = btn.innerHTML;
     btn.innerHTML = "⏳ กำลังยกเลิก...";
     btn.disabled = true;
-    
     try {
-        await fetch(SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            body: JSON.stringify({ action: 'UNDO_BATCH', batchId: lastSubmitData.batchId })
-        });
-        alert("✅ ยกเลิกข้อมูลชุดล่าสุดเรียบร้อยแล้ว");
-        window.closeUndoToast();
-        lastSubmitData = null;
-    } catch(e) {
-        alert("❌ ไม่สามารถยกเลิกได้: " + e.message);
-    } finally {
+        const payload = { action: 'UNDO_BATCH_PRODUCTION', batchId: window.lastBatchId };
+        await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
+        systemLog('UNDO_PRODUCTION', `ยกเลิกรายการผลิต Batch: ${window.lastBatchId}`);
+        btn.innerHTML = "✅ ยกเลิกสำเร็จ!";
+        btn.classList.remove('bg-red-600', 'hover:bg-red-700');
+        btn.classList.add('bg-green-600', 'hover:bg-green-700');
+        setTimeout(() => {
+            window.closeUndoToast();
+            setTimeout(() => {
+                btn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                btn.classList.add('bg-red-600', 'hover:bg-red-700');
+            }, 500);
+        }, 1500);
+    } catch(e) { 
+        alert("❌ เกิดข้อผิดพลาดในการยกเลิก: " + e.message); 
         btn.innerHTML = "↩️ ยกเลิก (Undo)";
         btn.disabled = false;
+    } 
+};
+
+document.getElementById('productionForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('submitBtn'); 
+    const txt = btn.innerText;
+    btn.disabled = true; 
+    btn.innerText = "⏳ กำลังตรวจสอบยอดปัจจุบัน...";
+    
+    const fd = new FormData(e.target);
+    const shiftType = document.querySelector('input[name="shift_type_toggle"]:checked').value;
+    const currentRec = fd.get('recorder');
+    const date = fd.get('productionDate');
+    const hourSlot = fd.get('hourSlot');
+    
+    if(currentRec && !recorderList.some(r => r.toLowerCase() === currentRec.toLowerCase())) { 
+        recorderList.push(currentRec); 
+        localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
+        window.renderRecorderOptions(); 
+    }
+    
+    const newBatchId = 'BATCH-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+
+    const common = { 
+        timestamp: new Date().toLocaleString('th-TH'), 
+        productionDate: date, shift: fd.get('shift'), shiftType: shiftType, 
+        recorder: currentRec, hourSlot: hourSlot, batchId: newBatchId 
+    };
+    
+    const items = []; 
+    const rowDivs = document.getElementById('batchList').children;
+    let newNgTypes = [];
+    
+    for(let div of rowDivs) {
+        const machine = div.querySelector('[name="machine"]').value;
+        const product = div.querySelector('[name="productCode"]').value;
+        const fg = parseInt(div.querySelector('[name="fgAmount"]').value) || 0;
+        if(!machine) continue;
+        const ngDetails = batchNgData[div.id] || [];
+        ngDetails.forEach(ng => { 
+            if (ng.type) {
+                const stdType = capitalizeFirst(ng.type);
+                ng.type = stdType; 
+                if (!ngSymptoms.some(s => s.toLowerCase() === stdType.toLowerCase()) && !newNgTypes.some(s => s.toLowerCase() === stdType.toLowerCase())) {
+                    newNgTypes.push(stdType);
+                } 
+            }
+        });
+        items.push({ machine, productCode: product, fgAmount: fg, ngDetails });
+    }
+
+    if(newNgTypes.length > 0) { 
+        ngSymptoms = [...ngSymptoms, ...newNgTypes]; 
+        localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
+    }
+
+    if(items.length === 0) { 
+        alert("กรุณาเพิ่มรายการ"); 
+        btn.disabled = false; 
+        btn.innerText = txt; 
+        return; 
+    }
+
+    try {
+        const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${date}&end=${date}&shift=All&shiftType=All&_t=${Date.now()}`);
+        const dbData = await res.json();
+        const hourIdx = dbData.hourlyLabels ? dbData.hourlyLabels.indexOf(hourSlot) : -1;
+        let validationMsg = `📊 สรุปยอดผลิตในระบบ ช่วงเวลา [${hourSlot}]\n\n`;
+        let hasError = false;
+        let errorMsg = "";
+
+        for (let item of items) {
+            let existingFg = 0;
+            if (hourIdx !== -1 && dbData.machineData && dbData.machineData[item.machine]) {
+                existingFg = dbData.machineData[item.machine].hourlyFg[hourIdx] || 0;
+            }
+            let totalFg = existingFg + item.fgAmount;
+            validationMsg += `▶ ${item.machine}:\n   - ยอดในระบบมีแล้ว: ${existingFg} ตัว\n   - กำลังบันทึกเพิ่ม: ${item.fgAmount} ตัว\n   - รวมเป็น: ${totalFg} ตัว\n\n`;
+
+            if (totalFg > 2000) {
+                hasError = true;
+                errorMsg += `❌ ${item.machine}: ยอดรวม (${totalFg} ตัว) เกิน 2,000 ตัว/ชั่วโมง\n`;
+            }
+        }
+
+        if (hasError) {
+            alert("⚠️ ปฏิเสธการบันทึก!\n\n" + errorMsg + "\nไม่อนุญาตให้บันทึกยอด FG เกิน 2,000 ตัวในชั่วโมงเดียวกัน กรุณาตรวจสอบใหม่อีกครั้ง");
+            btn.disabled = false; 
+            btn.innerText = txt; 
+            return; 
+        }
+
+        const confirmSave = confirm(validationMsg + "✅ ข้อมูลถูกต้อง ยืนยันที่จะบันทึกใช่หรือไม่?");
+        if (!confirmSave) {
+            btn.disabled = false; 
+            btn.innerText = txt; 
+            return; 
+        }
+
+        btn.innerText = "กำลังบันทึกข้อมูลเข้าฐานข้อมูล...";
+        const payload = { action: 'SAVE_BATCH_PRODUCTION', common, items };
+        await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
+        systemLog('SAVE_PRODUCTION', `บันทึกรายการผลิต ${items.length} รายการ (Batch: ${newBatchId})`);
+
+        document.getElementById('batchList').innerHTML = ''; 
+        batchNgData = {}; 
+        window.addBatchRow(); 
+        btn.disabled = false; 
+        btn.innerText = txt;
+        window.lastBatchId = newBatchId;
+        window.showUndoToast();
+
+    } catch(e) { 
+        alert("Error ระหว่างตรวจสอบ: " + e.message); 
+        btn.disabled = false; 
+        btn.innerText = txt; 
+    } 
+};
+
+document.getElementById('planningForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('planSubmitBtn');
+    const originalText = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = "⏳ กำลังบันทึกแผน...";
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+    const fd = new FormData(e.target);
+    const payload = { 
+        action: 'SAVE_PLAN', 
+        planDate: fd.get('planDate'), 
+        product: fd.get('planProduct'), 
+        shift: fd.get('planShift'), 
+        qty: fd.get('planQty') 
+    };
+    
+    try {
+        await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', body:JSON.stringify(payload)}); 
+        systemLog('SAVE_PLAN', `บันทึกแผนการผลิต ${fd.get('planProduct')} จำนวน ${fd.get('planQty')} ชิ้น`);
+        alert("✅ บันทึกแผนสำเร็จ"); 
+        e.target.reset();
+        document.getElementById('planDate').value = getShiftDateStr();
+    } catch (error) {
+        alert("❌ เกิดข้อผิดพลาด: " + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = originalText;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
 };
 
-// --- Form Submit: Production ---
-document.getElementById('productionForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!window.currentUser) {
-        alert("กรุณาล็อคอินก่อนบันทึกข้อมูล");
-        return;
-    }
-
-    const btn = document.getElementById('submitBtn');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = "⏳ กำลังบันทึกข้อมูล...";
-    btn.disabled = true;
-
-    const date = document.getElementById('productionDate').value;
-    const shift = document.getElementById('shift').value;
-    const isDay = document.querySelector('input[name="shift_type_toggle"][value="Day"]').checked;
-    const shiftType = isDay ? "Day" : "Night";
-    const hourSlot = document.getElementById('hourSlot').value;
-    const recorder = document.getElementById('recorder').value;
+// ==========================================
+// 🌟 ระบบแจ้งซ่อม (Maintenance)
+// ==========================================
+window.openMaintenanceModal = function() {
+    const modal = document.getElementById('modal-maintenance');
+    const dDate = document.getElementById('maint-date');
+    const dRec = document.getElementById('maint-reporter');
+    const dMac = document.getElementById('maint-machine');
+    const dStart = document.getElementById('maint-start-time');
     
-    const rows = document.querySelectorAll('.batch-row');
-    let batchData = [];
+    if (dDate) dDate.value = getShiftDateStr();
+    if (dRec && window.currentUser) dRec.value = window.currentUser.name || window.currentUser.username;
     
-    rows.forEach(row => {
-        const m = row.querySelector('.select-machine').value;
-        const p = row.querySelector('.select-product').value;
-        const fg = parseInt(row.querySelector('.input-fg').value) || 0;
-        const ng = parseInt(row.querySelector('.input-ng').value) || 0;
-        const ngJson = row.querySelector('.input-ng-json').value;
-        
-        if (m && p && (fg > 0 || ng > 0)) {
-            batchData.push({ machine: m, product: p, fg: fg, ng: ng, ngDetails: ngJson });
+    if (dMac) {
+        let macOpts = '<option value="">-- เลือกเครื่องจักร --</option>';
+        for(let i=1; i<=16; i++) {
+            macOpts += `<option value="CWM-${String(i).padStart(2,'0')}">CWM-${String(i).padStart(2,'0')}</option>`;
         }
-    });
+        dMac.innerHTML = macOpts;
+    }
     
-    if (batchData.length === 0) {
-        alert("❌ กรุณากรอกข้อมูลให้ครบถ้วนอย่างน้อย 1 รายการ (ต้องมียอด FG หรือ NG)");
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-        return;
+    if (dStart) {
+        const now = new Date();
+        dStart.value = now.toTimeString().substring(0,5);
     }
 
-    const batchId = "B_" + Date.now();
-    const payload = {
-        action: 'SAVE_PRODUCTION_BATCH',
-        username: window.currentUser.username,
-        role: window.currentUser.role,
-        date: date,
-        shift: shift,
-        shiftType: shiftType,
-        hour: hourSlot,
-        recorder: recorder,
-        batchId: batchId,
-        data: batchData
-    };
-
-    try {
-        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
-        const result = await res.json();
-        
-        if (result.status === 'success') {
-            document.getElementById('batchList').innerHTML = '';
-            window.addBatchRow();
-            
-            // Advance Time Slot
-            const sel = document.getElementById('hourSlot');
-            if(sel.selectedIndex < sel.options.length - 1) sel.selectedIndex++;
-            
-            lastSubmitData = { batchId: batchId, count: batchData.length };
-            window.showUndoToast();
-        } else {
-            alert("❌ เกิดข้อผิดพลาดจากเซิร์ฟเวอร์: " + result.message);
-        }
-    } catch(err) {
-        alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
-    } finally {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-    }
-});
-
-// --- Form Submit: Planning ---
-document.getElementById('planningForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!window.currentUser) return;
-    
-    const btn = document.getElementById('planSubmitBtn');
-    const ori = btn.innerText;
-    btn.innerText = "⏳ กำลังบันทึก...";
-    btn.disabled = true;
-    
-    const payload = {
-        action: 'SAVE_PLAN',
-        username: window.currentUser.username,
-        role: window.currentUser.role,
-        date: document.getElementById('planDate').value,
-        product: document.getElementById('planProduct').value,
-        shift: document.getElementById('planShift').value,
-        qty: document.getElementById('planQty').value
-    };
-    
-    try {
-        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
-        const result = await res.json();
-        if(result.status === 'success') {
-            alert('✅ บันทึกแผนสำเร็จ');
-            document.getElementById('planningForm').reset();
-            document.getElementById('planDate').value = getShiftDateStr();
-        } else {
-            alert('❌ ' + result.message);
-        }
-    } catch(e) {
-        alert('❌ Error connection');
-    } finally {
-        btn.innerText = ori;
-        btn.disabled = false;
-    }
-});
-
-// ----------------------------------------------------
-// 🌟 ส่วนที่ปรับปรุง: ฟอร์มแจ้งซ่อม (Double Submit Lock, Spell Check, Downtime) 🌟
-// ----------------------------------------------------
-let isSubmittingMaintenance = false;
+    if (modal) modal.classList.remove('hidden');
+};
 
 document.getElementById('maintenanceForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
-
-    // 1. ป้องกันการกดเบิ้ล (บันทึกซ้ำ)
-    if (isSubmittingMaintenance) {
-        console.log("บล็อกการส่งข้อมูลซ้ำ");
-        return;
-    }
-
-    const jobId = document.getElementById('maint-job-id')?.value || '';
-    const startDateStr = document.getElementById('maint-date').value;
-    const machine = document.getElementById('maint-machine').value;
-    const issueType = document.getElementById('maint-issue-type').value;
-    const startTimeStr = document.getElementById('maint-start-time').value;
-    
-    // เช็คกรณีปิดจ๊อบข้ามวัน
-    const endDateInput = document.getElementById('maint-end-date');
-    const endDateStr = (endDateInput && !endDateInput.parentElement.classList.contains('hidden')) ? endDateInput.value : startDateStr;
-    const endTimeStr = document.getElementById('maint-end-time').value;
-    let remark = document.getElementById('maint-remark').value;
-
-    // ตรวจสอบการปิดจ๊อบ
-    if (jobId && !endTimeStr) {
-        alert("❌ กรุณาระบุ 'ทำงานต่อ (End)' เพื่อปิดจ๊อบ");
-        return;
-    }
-
-    // 2. ระบบตรวจคำผิด (Smart Spell Checker สำหรับช่าง)
-    const spellCheckDict = {
-        "เปลียน": "เปลี่ยน", "เซนเซอ": "เซ็นเซอร์", "เซนเซอร์": "เซ็นเซอร์",
-        "มอเตอ": "มอเตอร์", "ทำความสอาด": "ทำความสะอาด", "สอาด": "สะอาด",
-        "ปั้ม": "ปั๊ม", "น๊อต": "น็อต", "ล๊อค": "ล็อก", "ล้อค": "ล็อก",
-        "ช๊อต": "ช็อต", "ชาจ": "ชาร์จ", "รีเซท": "รีเซ็ต", "เบรคดาว": "เบรกดาวน์", 
-        "เบรค": "เบรก", "พังง": "พัง", "อคิลิค": "อะคริลิก"
-    };
-    
-    let correctedRemark = remark;
-    let typoFound = false;
-    for (let wrongWord in spellCheckDict) {
-        if (correctedRemark.includes(wrongWord)) {
-            correctedRemark = correctedRemark.replace(new RegExp(wrongWord, 'g'), spellCheckDict[wrongWord]);
-            typoFound = true;
-        }
-    }
-
-    // 3. คำนวณ Downtime เพื่อยืนยัน
-    let downtimeMsg = "ยังไม่ระบุเวลาเสร็จ (เปิดงานค้างไว้)";
-    if (startTimeStr && endTimeStr) {
-        try {
-            let start = new Date(`${startDateStr}T${startTimeStr}`);
-            let end = new Date(`${endDateStr}T${endTimeStr}`);
-            
-            // ถ้าระบุเวลาเสร็จน้อยกว่าเวลาเริ่ม แสดงว่าข้ามวัน
-            if (end < start) end.setDate(end.getDate() + 1); 
-            
-            let diffMins = Math.round((end - start) / 60000);
-            let h = Math.floor(diffMins / 60);
-            let m = diffMins % 60;
-            downtimeMsg = diffMins > 0 ? (h > 0 ? `${h} ชั่วโมง ${m} นาที` : `${m} นาที`) : "0 นาที";
-        } catch(err) {
-            downtimeMsg = "ไม่สามารถคำนวณเวลาได้";
-        }
-    }
-
-    // 4. แสดง Pop-up ทวนข้อมูลก่อนบันทึก
-    let confirmMsg = `📋 ทวนสอบข้อมูลการแจ้งซ่อม (กรุณาตรวจสอบก่อนบันทึก):\n`;
-    confirmMsg += `----------------------------------------\n`;
-    confirmMsg += `🏭 เครื่องจักร: ${machine}\n`;
-    confirmMsg += `⚠️ อาการปัญหา: ${issueType}\n`;
-    confirmMsg += `⏱️ เวลาหยุด: ${startTimeStr} น.\n`;
-    if (endTimeStr) confirmMsg += `✅ เวลาทำงานต่อ: ${endTimeStr} น.\n`;
-    confirmMsg += `⏳ รวมเวลา Downtime: ${downtimeMsg}\n`;
-    confirmMsg += `----------------------------------------\n`;
-    
-    if (typoFound) {
-        confirmMsg += `✨ ระบบตรวจพบคำผิดและปรับแก้ให้อัตโนมัติ:\n[เดิม]: "${remark}"\n[ใหม่]: "${correctedRemark}"\n\n`;
-        remark = correctedRemark; 
-        document.getElementById('maint-remark').value = correctedRemark; // อัปเดต UI กลับไปเป็นคำที่ถูก
-    } else {
-        confirmMsg += `📝 รายละเอียด: ${remark || '-'}\n\n`;
-    }
-
-    confirmMsg += `กด 'ตกลง (OK)' เพื่อยืนยันการบันทึกข้อมูล`;
-
-    // รอกดยืนยันจากผู้ใช้
-    if (!confirm(confirmMsg)) {
-        return; // หากกดยกเลิก ให้หยุดการทำงาน
-    }
-
-    // เริ่มดำเนินการบันทึก (ล็อคปุ่ม)
-    isSubmittingMaintenance = true; 
     const btn = document.getElementById('btn-save-maint');
     const originalText = btn.innerHTML;
-    btn.innerHTML = "⏳ กำลังบันทึกข้อมูล...";
+    btn.innerHTML = "⏳ กำลังอัปโหลดข้อมูล...";
     btn.disabled = true;
 
-    let base64String = "";
     const fileInput = document.getElementById('maint-photo');
-    
-    // ฟังก์ชันบีบอัดรูปภาพ
-    async function compressImage(file, maxSizeKB) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = function(event) {
-                const img = new Image();
-                img.src = event.target.result;
-                img.onload = function() {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-                    const MAX_DIMENSION = 1200;
-                    if (width > height && width > MAX_DIMENSION) {
-                        height *= MAX_DIMENSION / width;
-                        width = MAX_DIMENSION;
-                    } else if (height > MAX_DIMENSION) {
-                        width *= MAX_DIMENSION / height;
-                        height = MAX_DIMENSION;
-                    }
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    let quality = 0.8;
-                    let dataUrl = canvas.toDataURL('image/jpeg', quality);
-                    while (Math.round((dataUrl.length * 3 / 4) / 1024) > maxSizeKB && quality > 0.1) {
-                        quality -= 0.1;
-                        dataUrl = canvas.toDataURL('image/jpeg', quality);
-                    }
-                    resolve(dataUrl);
-                };
-                img.onerror = reject;
-            };
-            reader.onerror = reject;
-        });
-    }
+    let base64String = "";
 
-    if (fileInput && fileInput.files.length > 0) {
+    if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
         try {
-            btn.innerHTML = "⏳ กำลังบีบอัดรูปภาพ...";
-            base64String = await compressImage(fileInput.files[0], 256);
-            btn.innerHTML = "⏳ กำลังบันทึกข้อมูล...";
+            base64String = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
         } catch (err) {
-            alert("❌ ไม่สามารถประมวลผลไฟล์ภาพได้");
+            console.error("Error reading file:", err);
+            alert("❌ ไม่สามารถอ่านไฟล์ภาพได้ กรุณาลองใหม่อีกครั้ง");
             btn.innerHTML = originalText;
             btn.disabled = false;
-            isSubmittingMaintenance = false;
             return;
         }
     }
 
     const payload = {
         action: 'SAVE_MAINTENANCE',
-        jobId: jobId,
         username: window.currentUser ? window.currentUser.username : "Unknown",
         role: window.currentUser ? window.currentUser.role : "Unknown",
-        date: startDateStr,
-        machine: machine,
-        issueType: issueType,
-        startTime: startTimeStr,
-        endDate: endDateStr,
-        endTime: endTimeStr,
-        remark: remark,
+        date: document.getElementById('maint-date').value,
+        machine: document.getElementById('maint-machine').value,
+        issueType: document.getElementById('maint-issue-type').value,
+        startTime: document.getElementById('maint-start-time').value,
+        endTime: document.getElementById('maint-end-time').value,
+        remark: document.getElementById('maint-remark').value,
         imageBase64: base64String
     };
 
@@ -711,10 +628,8 @@ document.getElementById('maintenanceForm')?.addEventListener('submit', async fun
         
         if (result.status === 'success') {
             alert("✅ " + result.message);
-            if (typeof window.clearPendingSelection === 'function') window.clearPendingSelection();
             document.getElementById('maintenanceForm').reset();
-            const photoPreview = document.getElementById('maint-photo-preview');
-            if (photoPreview) photoPreview.classList.add('hidden');
+            document.getElementById('maint-photo-preview').classList.add('hidden');
             document.getElementById('modal-maintenance').classList.add('hidden');
         } else {
             alert("❌ เกิดข้อผิดพลาด: " + result.message);
@@ -724,51 +639,5 @@ document.getElementById('maintenanceForm')?.addEventListener('submit', async fun
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
-        isSubmittingMaintenance = false; // ปลดล็อค
-    }
-});
-
-// --- RTV Form Submit ---
-document.addEventListener('DOMContentLoaded', () => {
-    const rtvForm = document.getElementById('rtvForm');
-    if (rtvForm) {
-        rtvForm.onsubmit = async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('btn-save-rtv');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = "⏳ กำลังบันทึก...";
-            btn.disabled = true;
-
-            const payload = {
-                action: 'SAVE_RTV',
-                date: document.getElementById('rtvDate').value,
-                recorder: document.getElementById('rtvRecorder').value,
-                source: '-', 
-                product: document.getElementById('rtvProduct').value,
-                qty: document.getElementById('rtvQty').value,
-                remark: document.getElementById('rtvRemark').value
-            };
-
-            try {
-                const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
-                const result = await res.json();
-                
-                if (result.status === 'success') {
-                    alert("✅ บันทึกงานเคลม (RTV) สำเร็จ");
-                    rtvForm.reset();
-                    document.getElementById('rtvDate').value = getShiftDateStr();
-                    if(window.currentUser) {
-                        document.getElementById('rtvRecorder').value = window.currentUser.name || window.currentUser.username;
-                    }
-                } else {
-                    alert("❌ เกิดข้อผิดพลาด: " + result.message);
-                }
-            } catch(err) {
-                alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
-            } finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
-        };
     }
 });
