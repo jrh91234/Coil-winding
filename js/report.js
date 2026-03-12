@@ -107,8 +107,11 @@ window.renderAutoReportContent = async function() {
             pastData.maintenanceLogs.forEach(log => {
                 // ถ้าไม่มี endTime หรือระบุว่ายังไม่เสร็จ ถือว่าเป็น Pending
                 if (!log.endTime || log.endTime.trim() === '' || log.endTime === '-') {
-                    // เก็บทับเพื่อให้ได้จ๊อบล่าสุดของเครื่องนั้นที่ค้างอยู่
-                    pendingJobsMap[log.machine] = log;
+                    // เก็บรวบรวมจ๊อบค้างทั้งหมดของเครื่องนั้นๆ ใส่ Array
+                    if (!pendingJobsMap[log.machine]) {
+                        pendingJobsMap[log.machine] = [];
+                    }
+                    pendingJobsMap[log.machine].push(log);
                 }
             });
         }
@@ -147,7 +150,9 @@ window.renderAutoReportContent = async function() {
         allRemarksToTranslate.push(...data.maintenanceLogs.map(log => log.remark));
     }
     if (Object.keys(pendingJobsMap).length > 0) {
-        allRemarksToTranslate.push(...Object.values(pendingJobsMap).map(log => log.remark));
+        Object.values(pendingJobsMap).forEach(machineLogs => {
+            allRemarksToTranslate.push(...machineLogs.map(log => log.remark));
+        });
     }
 
     const uniqueRemarks = [...new Set(allRemarksToTranslate.filter(r => r && r.trim() !== '-' && r.trim() !== ''))];
@@ -605,15 +610,11 @@ window.renderAutoReportContent = async function() {
             // 🌟 กรณีไม่มียอดผลิต (เช็คประวัติแจ้งซ่อม) 🌟
             
             let pastPendingHtml = '';
-            // ถ้าวันนี้ไม่มี log ซ่อม แต่ดันมี log ค้างเก่าที่ระบบไปขุดมาจากอดีต 60 วัน
-            if (logs.length === 0 && pendingJobsMap[m]) {
-                let pLog = pendingJobsMap[m];
-                let s = formatTimeStr(pLog.startTime);
-                let remarkTrans = getTranslatedRemark(pLog.remark);
-                
+            // ถ้าวันนี้ไม่มี log ซ่อม แต่ดันมี log ค้างเก่าที่ระบบไปขุดมาจากอดีต 60 วัน (อาจมีหลายจ๊อบ)
+            if (logs.length === 0 && pendingJobsMap[m] && pendingJobsMap[m].length > 0) {
                 pastPendingHtml = `
                 <div class="mt-4">
-                    <h5 class="text-xs font-bold text-red-700 mb-1 flex items-center gap-1">⚠️ <span class="bg-red-100 px-2 py-0.5 rounded">พบงานแจ้งซ่อมค้างจากวันที่ ${pLog.date}</span></h5>
+                    <h5 class="text-xs font-bold text-red-700 mb-1 flex items-center gap-1">⚠️ <span class="bg-red-100 px-2 py-0.5 rounded">พบงานแจ้งซ่อมค้าง ${pendingJobsMap[m].length} รายการ</span></h5>
                     <div class="border border-red-200 rounded overflow-hidden">
                         <table class="w-full text-[10px] text-left bg-white">
                             <thead class="bg-red-50 text-red-800 border-b border-red-100">
@@ -625,18 +626,22 @@ window.renderAutoReportContent = async function() {
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-100">
-                                <tr>
-                                    <td class="px-2 py-2 text-gray-700 align-top whitespace-nowrap">${pLog.date}</td>
-                                    <td class="px-2 py-2 font-medium align-top whitespace-nowrap">${s} - <span class="text-red-500 font-bold">ยังไม่ปิดจ๊อบ</span></td>
-                                    <td class="px-2 py-2 text-blue-700 align-top whitespace-nowrap">${pLog.issueType}</td>
-                                    <td class="px-2 py-2 align-top">
-                                        <div class="space-y-0.5">
-                                            <p class="text-[10px] text-gray-800"><span class="font-bold text-blue-600 mr-1">[TH]</span>${remarkTrans.th}</p>
-                                            <p class="text-[9px] text-gray-600"><span class="font-bold text-red-600 mr-1">[EN]</span>${remarkTrans.en}</p>
-                                            <p class="text-[9px] text-gray-500"><span class="font-bold text-gray-700 mr-1">[CH]</span>${remarkTrans.ch}</p>
-                                        </div>
-                                    </td>
-                                </tr>
+                                ${pendingJobsMap[m].map(pLog => {
+                                    let s = formatTimeStr(pLog.startTime);
+                                    let remarkTrans = getTranslatedRemark(pLog.remark);
+                                    return `<tr>
+                                        <td class="px-2 py-2 text-gray-700 align-top whitespace-nowrap">${pLog.date}</td>
+                                        <td class="px-2 py-2 font-medium align-top whitespace-nowrap">${s} - <span class="text-red-500 font-bold">ยังไม่ปิดจ๊อบ</span></td>
+                                        <td class="px-2 py-2 text-blue-700 align-top whitespace-nowrap">${pLog.issueType}</td>
+                                        <td class="px-2 py-2 align-top">
+                                            <div class="space-y-0.5">
+                                                <p class="text-[10px] text-gray-800"><span class="font-bold text-blue-600 mr-1">[TH]</span>${remarkTrans.th}</p>
+                                                <p class="text-[9px] text-gray-600"><span class="font-bold text-red-600 mr-1">[EN]</span>${remarkTrans.en}</p>
+                                                <p class="text-[9px] text-gray-500"><span class="font-bold text-gray-700 mr-1">[CH]</span>${remarkTrans.ch}</p>
+                                            </div>
+                                        </td>
+                                    </tr>`;
+                                }).join('')}
                             </tbody>
                         </table>
                     </div>
@@ -735,7 +740,6 @@ window.renderAutoReportContent = async function() {
                 ${productBreakdownHtml}
             </div>
 
-            <!-- เพิ่ม class page-break-inside-avoid ครอบทั้งหัวข้อและเนื้อหาไว้ด้วยกัน -->
             <div class="mb-8 page-break-inside-avoid">
                 <h3 class="text-lg font-bold text-gray-800 border-l-4 border-indigo-500 pl-3 mb-4 bg-white shadow-sm py-2.5 rounded-r-lg">2. การประเมินเสถียรภาพและแนวโน้มการผลิต (Production Stability Assessment)</h3>
                 <div class="grid grid-cols-1 gap-6">
