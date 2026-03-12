@@ -84,6 +84,50 @@ window.renderAutoReportContent = async function() {
     const sDate = document.getElementById('startDate').value;
     const eDate = document.getElementById('endDate').value;
 
+    // 🌟 ฟังก์ชันจัดการสีของเส้นกราฟแต่ละอาการ (Fixed Colors) 🌟
+    const getSymptomColor = (symptomName) => {
+        // ทำการ trim และ lowercase เพื่อให้เทียบง่ายขึ้น
+        const sName = symptomName.trim().toLowerCase();
+        
+        const fixedColors = {
+            "ปลอกฉนวนไม่หมด (insulator skin incomplete)": "#ef4444", // แดง (Red)
+            "ระยะปลอกรูดไม่ได้ตามสเปค ( insulation skinning length error )": "#f97316", // ส้ม (Orange)
+            "งานเสียตีกลับจากลูกค้า (rtv sorting ng )": "#eab308", // เหลือง (Yellow)
+            "ระยะปลอกขายาวไม่ได้สเปคสั้นกว่า7.10": "#84cc16", // เขียวอ่อน (Lime)
+            "ลวดถลอก (scratched)": "#22c55e", // เขียว (Green)
+            "งานผิดดรูป (deform)": "#06b6d4", // ฟ้า (Cyan)
+            "ขาสั้นไม่ได้มาตรฐานต่ำกว่า5.5": "#3b82f6", // น้ำเงิน (Blue)
+            "เส้นสีแดง (oxidize)": "#6366f1", // น้ำเงินม่วง (Indigo)
+            "ขดลวดพันฟู ( fluted coil )": "#a855f7", // ม่วง (Purple)
+            "งานไม่ปลอก (not skin)": "#d946ef", // ชมพูม่วง (Fuchsia)
+            "ขาสั้นไม่ได้มาตรฐานมากกว่า6.3": "#ec4899", // ชมพู (Pink)
+            "ปลอกเป็นขุย skin insulation fraying": "#f43f5e", // แดงอมชมพู (Rose)
+            "ขาดีดรูป (leg deform)": "#64748b", // เทา (Slate)
+            "ความยาวรวมมีเกินค่า length out max": "#a1a1aa", // เทากลาง (Zinc)
+            "งานครีบสูงเกิน 0.1 mm (burr)": "#3f3f46", // เทาเข้ม (Zinc)
+        };
+        
+        // ค้นหาสีตาม key ถ้าเจอตรงๆ
+        if (fixedColors[sName]) {
+            return fixedColors[sName];
+        } 
+        
+        // ค้นหาแบบรวมๆ (เผื่อพิมพ์ผิดเว้นวรรค)
+        for (const key in fixedColors) {
+            if (sName.includes(key.split(' ')[0])) { // ตรวจสอบจากคำแรก
+                return fixedColors[key];
+            }
+        }
+
+        // ถ้าไม่มีในรายการที่ตั้งไว้ ให้สุ่มสีจากชุดสีสำรองตาม Hash
+        let hash = 0;
+        for (let i = 0; i < symptomName.length; i++) {
+            hash = symptomName.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const fallbackColors = ['#10b981', '#14b8a6', '#8b5cf6', '#0ea5e9'];
+        return fallbackColors[Math.abs(hash) % fallbackColors.length];
+    };
+
     // 🌟 ค้นหาประวัติแจ้งซ่อมที่ค้างอยู่ (Pending Jobs) ย้อนหลัง 60 วัน สำหรับเครื่องที่ไม่ได้รัน 🌟
     let pendingJobsMap = {};
     try {
@@ -345,10 +389,14 @@ window.renderAutoReportContent = async function() {
         const pDataPcs = ngItems.map(item => item.pcs);
         let cumulativeAcc = 0;
         const pDataCum = pDataPcs.map(val => { cumulativeAcc += val; return (cumulativeAcc / totalNG * 100).toFixed(2); });
+        
+        // กำหนดสีให้แท่ง Pareto ตามอาการ (ใช้ฟังก์ชัน getSymptomColor ที่สร้างไว้)
+        const pBarColors = pLabels.map(label => getSymptomColor(label));
+        
         autoReportParetoConfig = {
             labels: pLabels,
             datasets: [
-                { type: 'bar', label: 'NG (ชิ้น)', data: pDataPcs, backgroundColor: 'rgba(239, 68, 68, 0.8)', yAxisID: 'y' },
+                { type: 'bar', label: 'NG (ชิ้น)', data: pDataPcs, backgroundColor: pBarColors, yAxisID: 'y' },
                 { type: 'line', label: 'Cumulative (%)', data: pDataCum, borderColor: 'rgba(59, 130, 246, 1)', backgroundColor: 'rgba(59, 130, 246, 1)', borderWidth: 2, tension: 0.3, yAxisID: 'y1' }
             ]
         };
@@ -414,8 +462,8 @@ window.renderAutoReportContent = async function() {
         });
 
         // 2. ใส่เส้นรายอาการ
-        const symptomColors = ['#3b82f6', '#f97316', '#eab308', '#a855f7', '#ec4899'];
-        topSymptoms.forEach((sym, i) => {
+        topSymptoms.forEach((sym) => {
+            let color = getSymptomColor(sym); // 🌟 ใช้สีคงที่ตามพจนานุกรม
             ngTrendDatasets.push({
                 label: sym + ' (%)',
                 data: data.dailyTrend.map(d => {
@@ -423,8 +471,8 @@ window.renderAutoReportContent = async function() {
                     const symPcs = (d.ngBreakdown && d.ngBreakdown[sym]) ? d.ngBreakdown[sym] : 0;
                     return totalProd > 0 ? parseFloat(((symPcs / totalProd) * 100).toFixed(2)) : 0;
                 }),
-                borderColor: symptomColors[i % symptomColors.length], 
-                backgroundColor: symptomColors[i % symptomColors.length], 
+                borderColor: color, 
+                backgroundColor: color, 
                 borderWidth: 2, 
                 tension: 0.3, 
                 fill: false
@@ -616,8 +664,8 @@ window.renderAutoReportContent = async function() {
                 let sortedBreakdown = Object.entries(mData.ngBreakdownPcs).sort((a,b) => b[1] - a[1]);
                 let topSyms = sortedBreakdown.slice(0, 5).map(item => item[0]); // เอาเฉพาะ 5 อาการแรกสุด
                 
-                let sDatasets = topSyms.map((sym, idx) => {
-                    const colors = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#a855f7'];
+                let sDatasets = topSyms.map((sym) => {
+                    let color = getSymptomColor(sym); // 🌟 ใช้สีคงที่
                     let sData = [];
                     
                     if (isSingleDay) {
@@ -636,8 +684,8 @@ window.renderAutoReportContent = async function() {
                     return {
                         label: sym,
                         data: sData,
-                        borderColor: colors[idx % colors.length],
-                        backgroundColor: colors[idx % colors.length],
+                        borderColor: color,
+                        backgroundColor: color,
                         borderWidth: 2,
                         tension: 0.3,
                         fill: false,
@@ -657,6 +705,10 @@ window.renderAutoReportContent = async function() {
                     });
                 } else {
                     // Fallback: หากระบบหลังบ้านไม่ได้ส่งข้อมูล Time-series มาให้ จะแสดงผลรวมเป็นกราฟแท่งแนวตั้งแทน (Pareto Style)
+                    
+                    // สร้าง Array สีให้ตรงกับ Label แต่ละแท่ง
+                    const barColors = sortedBreakdown.map(x => getSymptomColor(x[0]));
+                    
                     machineNgChartConfigs.push({
                         id: ngChartId,
                         isTrend: false,
@@ -664,8 +716,8 @@ window.renderAutoReportContent = async function() {
                         datasets: [{
                             label: 'NG (ชิ้น)',
                             data: sortedBreakdown.map(x => x[1]),
-                            backgroundColor: 'rgba(239, 68, 68, 0.7)',
-                            borderColor: 'rgba(239, 68, 68, 1)',
+                            backgroundColor: barColors,
+                            borderColor: barColors,
                             borderWidth: 1,
                             type: 'bar'
                         }]
@@ -696,7 +748,8 @@ window.renderAutoReportContent = async function() {
             if (mData.ngBreakdownPcs && Object.keys(mData.ngBreakdownPcs).length > 0) {
                 let ngItems = Object.entries(mData.ngBreakdownPcs).sort((a,b)=>b[1]-a[1]);
                 ngItems.forEach(item => {
-                    ngModelSymptomHtml += `<li class="ml-4 text-[10px] text-red-600">- ${item[0]}: ${item[1].toLocaleString()} ชิ้น</li>`;
+                    let c = getSymptomColor(item[0]);
+                    ngModelSymptomHtml += `<li class="ml-4 text-[10px] flex items-center gap-1"><span class="w-2 h-2 inline-block rounded-full" style="background-color:${c}"></span><span class="text-gray-700">${item[0]}: <b class="text-red-600">${item[1].toLocaleString()}</b> ชิ้น</span></li>`;
                 });
             } else if (totalMNg > 0) {
                 ngModelSymptomHtml += `<li class="ml-4 text-[10px] text-red-600">- ไม่ระบุรายละเอียดอาการ: ${totalMNg.toLocaleString()} ชิ้น</li>`;
