@@ -69,8 +69,7 @@ window.openAutoReport = async function() {
     content.innerHTML = `
         <div class="flex flex-col items-center justify-center h-[50vh] text-gray-600 bg-white shadow-xl rounded-xl mt-10 border border-gray-200">
             <div class="text-5xl mb-4 animate-bounce">🤖</div>
-            <div class="text-xl font-bold text-blue-700 mb-2">AI กำลังวิเคราะห์และแปลภาษารายงาน...</div>
-            <div class="text-sm font-medium">กำลังเชื่อมต่อ Google Translate API (อาจใช้เวลา 2-5 วินาที)</div>
+            <div class="text-xl font-bold text-blue-700 mb-2">ระบบกำลังเตรียมข้อมูลรายงาน...</div>
         </div>
     `;
     setTimeout(() => { modal.classList.remove('opacity-0'); }, 10);
@@ -82,6 +81,49 @@ window.openAutoReport = async function() {
 window.renderAutoReportContent = async function() {
     const data = currentDashboardData;
     const content = document.getElementById('auto-report-content');
+    const sDate = document.getElementById('startDate').value;
+    const eDate = document.getElementById('endDate').value;
+
+    // 🌟 ค้นหาประวัติแจ้งซ่อมที่ค้างอยู่ (Pending Jobs) ย้อนหลัง 60 วัน สำหรับเครื่องที่ไม่ได้รัน 🌟
+    let pendingJobsMap = {};
+    try {
+        content.innerHTML = `
+            <div class="flex flex-col items-center justify-center h-[50vh] text-gray-600 bg-white shadow-xl rounded-xl mt-10 border border-gray-200">
+                <div class="text-5xl mb-4 animate-spin">🔍</div>
+                <div class="text-xl font-bold text-blue-700 mb-2">กำลังตรวจสอบประวัติเครื่องจักรย้อนหลัง...</div>
+                <div class="text-sm font-medium">เพื่อค้นหางานซ่อมที่ยังค้างอยู่ (Pending Jobs)</div>
+            </div>
+        `;
+
+        let endObj = new Date(sDate);
+        let startObj = new Date(endObj);
+        startObj.setDate(startObj.getDate() - 60); // ย้อนหลัง 60 วัน
+        let sStr = startObj.toISOString().split('T')[0];
+        
+        const res = await fetch(`${SCRIPT_URL}?action=GET_DASHBOARD&start=${sStr}&end=${sDate}&shift=All&shiftType=All`);
+        const pastData = await res.json();
+        
+        if (pastData.maintenanceLogs) {
+            pastData.maintenanceLogs.forEach(log => {
+                // ถ้าไม่มี endTime หรือระบุว่ายังไม่เสร็จ ถือว่าเป็น Pending
+                if (!log.endTime || log.endTime.trim() === '' || log.endTime === '-') {
+                    // เก็บทับเพื่อให้ได้จ๊อบล่าสุดของเครื่องนั้นที่ค้างอยู่
+                    pendingJobsMap[log.machine] = log;
+                }
+            });
+        }
+    } catch(e) {
+        console.warn("Failed to fetch past pending jobs", e);
+    }
+
+    // อัปเดตสถานะเป็นกำลังแปลภาษา
+    content.innerHTML = `
+        <div class="flex flex-col items-center justify-center h-[50vh] text-gray-600 bg-white shadow-xl rounded-xl mt-10 border border-gray-200">
+            <div class="text-5xl mb-4 animate-bounce">🤖</div>
+            <div class="text-xl font-bold text-blue-700 mb-2">AI กำลังวิเคราะห์และแปลภาษารายงาน...</div>
+            <div class="text-sm font-medium">กำลังเชื่อมต่อ Google Translate API (อาจใช้เวลา 2-5 วินาที)</div>
+        </div>
+    `;
 
     // 🌟 ระบบแปลภาษาด้วย Free Google Translate API 🌟
     const translateText = async (text, targetLang) => {
@@ -97,21 +139,27 @@ window.renderAutoReportContent = async function() {
         }
     };
 
-    // ค้นหาและเตรียมแปลประวัติแจ้งซ่อมทั้งหมดที่มีในรอบวัน
+    // รวบรวม Remark ทั้งหมด (ทั้งจากวันนี้ และที่ค้างจากอดีต) มาแปล
     const translatedRemarks = {};
+    let allRemarksToTranslate = [];
+    
     if (data.maintenanceLogs && data.maintenanceLogs.length > 0) {
-        // หาข้อความที่ไม่ซ้ำกันเพื่อลดภาระการเรียก API
-        const uniqueRemarks = [...new Set(data.maintenanceLogs.map(log => log.remark).filter(r => r && r.trim() !== '-' && r.trim() !== ''))];
-        
-        // รันการแปลพร้อมกันทั้งหมด
-        await Promise.all(uniqueRemarks.map(async (text) => {
-            const [enText, chText] = await Promise.all([
-                translateText(text, 'en'),
-                translateText(text, 'zh-CN')
-            ]);
-            translatedRemarks[text] = { th: text, en: enText, ch: chText };
-        }));
+        allRemarksToTranslate.push(...data.maintenanceLogs.map(log => log.remark));
     }
+    if (Object.keys(pendingJobsMap).length > 0) {
+        allRemarksToTranslate.push(...Object.values(pendingJobsMap).map(log => log.remark));
+    }
+
+    const uniqueRemarks = [...new Set(allRemarksToTranslate.filter(r => r && r.trim() !== '-' && r.trim() !== ''))];
+    
+    // รันการแปลพร้อมกันทั้งหมด
+    await Promise.all(uniqueRemarks.map(async (text) => {
+        const [enText, chText] = await Promise.all([
+            translateText(text, 'en'),
+            translateText(text, 'zh-CN')
+        ]);
+        translatedRemarks[text] = { th: text, en: enText, ch: chText };
+    }));
 
     const getTranslatedRemark = (text) => {
         if (!text || text.trim() === '-' || text.trim() === '') return { th: '-', en: '-', ch: '-' };
@@ -150,8 +198,6 @@ window.renderAutoReportContent = async function() {
         </div>
     `;
 
-    const sDate = document.getElementById('startDate').value;
-    const eDate = document.getElementById('endDate').value;
     const isSingleDay = (sDate === eDate); 
     const dateStr = isSingleDay ? sDate : `${sDate} ถึง ${eDate}`;
     const shiftName = document.getElementById('filterShift').options[document.getElementById('filterShift').selectedIndex].text;
@@ -188,11 +234,10 @@ window.renderAutoReportContent = async function() {
         ];
         
         let pKeys = Object.keys(data.productData);
-        // เรียงลำดับ Key ของข้อมูลให้ตรงกับ orderedModels
         pKeys.sort((a, b) => {
             let idxA = orderedModels.indexOf(a);
             let idxB = orderedModels.indexOf(b);
-            if (idxA === -1) idxA = 999; // ถ้านอกเหนือจากที่ระบุให้ไปอยู่ท้ายสุด
+            if (idxA === -1) idxA = 999; 
             if (idxB === -1) idxB = 999;
             return idxA - idxB;
         });
@@ -378,7 +423,7 @@ window.renderAutoReportContent = async function() {
             datasets: [{
                 label: 'NG (ชิ้น)',
                 data: macNgList.map(m => m.ng),
-                backgroundColor: 'rgba(249, 115, 22, 0.8)', // Orange color
+                backgroundColor: 'rgba(249, 115, 22, 0.8)', 
                 borderColor: 'rgba(249, 115, 22, 1)',
                 borderWidth: 1
             }]
@@ -557,24 +602,78 @@ window.renderAutoReportContent = async function() {
                 </div>
             `;
         } else {
-            // กรณีไม่มียอดผลิต (เช็คประวัติแจ้งซ่อม)
+            // 🌟 กรณีไม่มียอดผลิต (เช็คประวัติแจ้งซ่อม) 🌟
+            
+            let pastPendingHtml = '';
+            // ถ้าวันนี้ไม่มี log ซ่อม แต่ดันมี log ค้างเก่าที่ระบบไปขุดมาจากอดีต 60 วัน
+            if (logs.length === 0 && pendingJobsMap[m]) {
+                let pLog = pendingJobsMap[m];
+                let s = formatTimeStr(pLog.startTime);
+                let remarkTrans = getTranslatedRemark(pLog.remark);
+                
+                pastPendingHtml = `
+                <div class="mt-4">
+                    <h5 class="text-xs font-bold text-red-700 mb-1 flex items-center gap-1">⚠️ <span class="bg-red-100 px-2 py-0.5 rounded">พบงานแจ้งซ่อมค้างจากวันที่ ${pLog.date}</span></h5>
+                    <div class="border border-red-200 rounded overflow-hidden">
+                        <table class="w-full text-[10px] text-left bg-white">
+                            <thead class="bg-red-50 text-red-800 border-b border-red-100">
+                                <tr>
+                                    <th class="px-2 py-1.5 w-20">วันที่แจ้ง</th>
+                                    <th class="px-2 py-1.5 w-24">เวลาเริ่ม-เสร็จ</th>
+                                    <th class="px-2 py-1.5 w-28">ประเภทปัญหา</th>
+                                    <th class="px-2 py-1.5">รายละเอียด/การแก้ไขเบื้องต้น</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr>
+                                    <td class="px-2 py-2 text-gray-700 align-top whitespace-nowrap">${pLog.date}</td>
+                                    <td class="px-2 py-2 font-medium align-top whitespace-nowrap">${s} - <span class="text-red-500 font-bold">ยังไม่ปิดจ๊อบ</span></td>
+                                    <td class="px-2 py-2 text-blue-700 align-top whitespace-nowrap">${pLog.issueType}</td>
+                                    <td class="px-2 py-2 align-top">
+                                        <div class="space-y-0.5">
+                                            <p class="text-[10px] text-gray-800"><span class="font-bold text-blue-600 mr-1">[TH]</span>${remarkTrans.th}</p>
+                                            <p class="text-[9px] text-gray-600"><span class="font-bold text-red-600 mr-1">[EN]</span>${remarkTrans.en}</p>
+                                            <p class="text-[9px] text-gray-500"><span class="font-bold text-gray-700 mr-1">[CH]</span>${remarkTrans.ch}</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+            }
+
             if (logs.length > 0) {
+                // กรณีมีแจ้งซ่อมในวันนี้
                 cardHtml = `
                 <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm">
                     <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
                         <h4 class="font-bold text-gray-500 text-base flex items-center gap-2">🏭 เครื่องจักร: ${m}</h4>
                         <span class="text-xs font-bold bg-orange-100 text-orange-700 px-3 py-1.5 rounded-full border border-orange-200 shadow-sm">
-                            ไม่มีผลผลิต (ติดปัญหาแจ้งซ่อม)
+                            ไม่มีผลผลิต (ติดปัญหาแจ้งซ่อมวันนี้)
                         </span>
                     </div>
                     ${maintTableHtml}
                 </div>`;
+            } else if (pastPendingHtml !== '') {
+                // กรณีไม่มีแจ้งซ่อมวันนี้ แต่ไปเจอของเก่าค้างอยู่
+                cardHtml = `
+                <div class="border border-red-200 p-5 rounded-xl bg-red-50/30 shadow-sm">
+                    <div class="flex justify-between items-center mb-3 border-b border-red-100 pb-2">
+                        <h4 class="font-bold text-red-700 text-base flex items-center gap-2">🏭 เครื่องจักร: ${m}</h4>
+                        <span class="text-xs font-bold bg-red-100 text-red-700 px-3 py-1.5 rounded-full border border-red-200 shadow-sm animate-pulse">
+                            ไม่มีผลผลิต (เครื่องเสียค้างจากวันก่อนหน้า)
+                        </span>
+                    </div>
+                    ${pastPendingHtml}
+                </div>`;
             } else {
+                // กรณีไม่มีอะไรเลยจริงๆ (Idle)
                 cardHtml = `
                 <div class="border border-gray-200 p-4 rounded-xl bg-gray-50 shadow-sm opacity-70 flex items-center justify-between">
                     <h4 class="font-bold text-gray-500 text-base flex items-center gap-2">🏭 เครื่องจักร: ${m}</h4>
                     <span class="text-xs font-bold bg-gray-200 text-gray-600 px-3 py-1.5 rounded-full border border-gray-300">
-                        💤 เครื่องจักรหยุดรอ (Idle) / ไม่มีการเดินเครื่องและไม่มีประวัติแจ้งปัญหา
+                        💤 เครื่องจักรหยุดรอ (Idle) / ไม่มีการเดินเครื่องและไม่มีประวัติแจ้งปัญหาค้าง
                     </span>
                 </div>`;
             }
@@ -600,15 +699,13 @@ window.renderAutoReportContent = async function() {
         <div class="print-page mb-8">
             <div class="border-b-2 border-gray-300 pb-4 mb-6">
                 <div class="flex justify-between items-start gap-4">
-                    <div class="flex items-center gap-4">
-                        <img src="Logo JR.jpg" alt="Company Logo" class="h-16 md:h-20 w-auto object-contain print:h-16" onerror="this.style.display='none'">
-                        <div>
-                            <h1 class="text-3xl font-black text-gray-900 uppercase tracking-tight">Production Analytics Report</h1>
-                            <p class="text-gray-600 mt-1 font-medium">รายงานวิเคราะห์ผลการผลิตและดัชนีชี้วัดคุณภาพเชิงลึก (Target Limit: NG ≤ 0.5%)</p>
-                        </div>
+                    <div class="flex-1">
+                        <h1 class="text-3xl font-black text-gray-900 uppercase tracking-tight">Production Analytics Report</h1>
+                        <p class="text-gray-600 mt-1 font-medium">รายงานวิเคราะห์ผลการผลิตและดัชนีชี้วัดคุณภาพเชิงลึก (Target Limit: NG ≤ 0.5%)</p>
                     </div>
-                    <div class="text-right text-sm text-gray-500 shrink-0 self-end">
-                        <p><b>Printed:</b> ${printTime}</p>
+                    <div class="flex flex-col items-end shrink-0">
+                        <img src="Logo JR.jpg" alt="Company Logo" class="h-16 md:h-20 w-auto object-contain print:h-16 mb-2" onerror="this.style.display='none'">
+                        <p class="text-xs text-gray-500"><b>Printed:</b> ${printTime}</p>
                     </div>
                 </div>
                 <div class="mt-4 flex gap-6 text-sm bg-white shadow-sm p-3 rounded-lg border border-gray-200">
@@ -638,10 +735,11 @@ window.renderAutoReportContent = async function() {
                 ${productBreakdownHtml}
             </div>
 
-            <div class="mb-8">
+            <!-- เพิ่ม class page-break-inside-avoid ครอบทั้งหัวข้อและเนื้อหาไว้ด้วยกัน -->
+            <div class="mb-8 page-break-inside-avoid">
                 <h3 class="text-lg font-bold text-gray-800 border-l-4 border-indigo-500 pl-3 mb-4 bg-white shadow-sm py-2.5 rounded-r-lg">2. การประเมินเสถียรภาพและแนวโน้มการผลิต (Production Stability Assessment)</h3>
                 <div class="grid grid-cols-1 gap-6">
-                    <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm flex flex-col page-break-inside-avoid">
+                    <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm flex flex-col">
                         <p class="text-base font-bold text-gray-800 mb-2">${sec2_1_title}</p>
                         ${sec2_1_desc}
                         <div class="mt-auto w-full bg-gray-50 rounded-lg p-2 border border-gray-100">
