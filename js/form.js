@@ -3,6 +3,9 @@
 // ----------------------------------------------------
 console.log("✅ CWM System: form.js is loaded correctly and up-to-date!");
 
+// 🌟 ตัวแปร Global สำหรับควบคุมหน้าต่าง (ใส่ไว้บนสุดเพื่อป้องกัน Redeclaration Error) 🌟
+window.isSubmittingMaintenance = window.isSubmittingMaintenance || false;
+
 function getShiftDateStr() {
     const now = new Date();
     if (now.getHours() < 8) {
@@ -48,7 +51,6 @@ window.updateHourSlots = function(shiftType) {
     }
 };
 
-// 🌟 เพิ่มฟังก์ชันที่หายไปสำหรับเรนเดอร์รายชื่อพนักงาน (แก้ Error auth.js) 🌟
 window.renderRecorderOptions = function() {
     const recorderSelect = document.getElementById('recorder');
     if (!recorderSelect) return;
@@ -64,16 +66,13 @@ window.renderRecorderOptions = function() {
             recorderSelect.appendChild(opt);
         });
         
-        // คืนค่าเดิมที่เคยเลือกไว้ ถ้ายังมีอยู่ในลิสต์
         if (currentVal && recorderList.includes(currentVal)) {
             recorderSelect.value = currentVal;
         }
     }
 };
 
-// 🌟 เพิ่มฟังก์ชันสำหรับเรนเดอร์รายชื่อสินค้า (แก้ Error renderProductOptions ใน auth.js) 🌟
 window.renderProductOptions = function() {
-    // สำหรับหน้าวางแผน (Planning)
     const planProductSelect = document.getElementById('planProduct');
     if (planProductSelect && typeof productList !== 'undefined' && Array.isArray(productList)) {
         const currentVal = planProductSelect.value;
@@ -89,7 +88,6 @@ window.renderProductOptions = function() {
         }
     }
 
-    // สำหรับหน้ารับคืน/เคลม (RTV)
     const rtvProductSelect = document.getElementById('rtvProduct');
     if (rtvProductSelect && typeof productList !== 'undefined' && Array.isArray(productList)) {
         const currentVal = rtvProductSelect.value;
@@ -117,6 +115,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const shiftTypeRadio = document.querySelector(`input[name="shift_type_toggle"][value="${isDay ? 'Day' : 'Night'}"]`);
     if(shiftTypeRadio) shiftTypeRadio.checked = true;
     updateHourSlots(isDay ? 'Day' : 'Night');
+    
+    if (typeof window.renderRecorderOptions === 'function') window.renderRecorderOptions();
+    if (typeof window.renderProductOptions === 'function') window.renderProductOptions();
     
     setTimeout(() => { if (document.getElementById('batchList') && document.getElementById('batchList').children.length === 0) window.addBatchRow(); }, 500);
 });
@@ -187,10 +188,8 @@ window.autoAssignProduct = function(selectEl) {
 window.updateTotalFields = function(row) {
     const fg = parseInt(row.querySelector('.input-fg').value) || 0;
     const ng = parseInt(row.querySelector('.input-ng').value) || 0;
-    // เพิ่ม Logic คำนวณเพิ่มเติมได้ที่นี่
 };
 
-// --- Assign Modal ---
 window.openAssignModal = function() {
     const container = document.getElementById('assign-list-container');
     if(!container) return;
@@ -267,7 +266,6 @@ window.saveAssignment = async function() {
     }
 };
 
-// --- NG Modal ---
 let currentNgTargetInput = null;
 
 window.openNgModal = function(triggerEl) {
@@ -524,7 +522,7 @@ document.getElementById('productionForm')?.addEventListener('submit', async (e) 
 
     const batchId = "B_" + Date.now();
     const payload = {
-        action: 'SAVE_PRODUCTION_BATCH',
+        action: 'SAVE_BATCH',
         username: window.currentUser.username,
         role: window.currentUser.role,
         date: date,
@@ -600,112 +598,41 @@ document.getElementById('planningForm')?.addEventListener('submit', async (e) =>
 });
 
 // ----------------------------------------------------
-// 🌟 ส่วนที่ปรับปรุง: ฟอร์มแจ้งซ่อม (Double Submit Lock, Spell Check, Downtime) 🌟
+// 🌟 แบบฟอร์มแจ้งซ่อมเครื่องจักร (Reverted Version + Image Compress) 🌟
 // ----------------------------------------------------
-
-// ใช้ window.isSubmittingMaintenance เพื่อป้องกันปัญหา SyntaxError จากการประกาศซ้ำ
-window.isSubmittingMaintenance = window.isSubmittingMaintenance || false;
 
 document.getElementById('maintenanceForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
 
-    // 1. ป้องกันการกดเบิ้ล (บันทึกซ้ำ)
     if (window.isSubmittingMaintenance) {
         console.log("บล็อกการส่งข้อมูลซ้ำ");
         return;
     }
+    
+    window.isSubmittingMaintenance = true;
+
+    const btn = document.getElementById('btn-save-maint');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = "⏳ กำลังดำเนินการ...";
+    btn.disabled = true;
 
     const jobId = document.getElementById('maint-job-id')?.value || '';
     const startDateStr = document.getElementById('maint-date').value;
-    const machine = document.getElementById('maint-machine').value;
-    const issueType = document.getElementById('maint-issue-type').value;
-    const startTimeStr = document.getElementById('maint-start-time').value;
-    
-    // เช็คกรณีปิดจ๊อบข้ามวัน
     const endDateInput = document.getElementById('maint-end-date');
     const endDateStr = (endDateInput && !endDateInput.parentElement.classList.contains('hidden')) ? endDateInput.value : startDateStr;
     const endTimeStr = document.getElementById('maint-end-time').value;
-    let remark = document.getElementById('maint-remark').value;
 
-    // ตรวจสอบการปิดจ๊อบ
     if (jobId && !endTimeStr) {
         alert("❌ กรุณาระบุ 'ทำงานต่อ (End)' เพื่อปิดจ๊อบ");
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        window.isSubmittingMaintenance = false;
         return;
     }
 
-    // 2. ระบบตรวจคำผิด (Smart Spell Checker สำหรับช่าง)
-    const spellCheckDict = {
-        "เปลียน": "เปลี่ยน", "เซนเซอ": "เซ็นเซอร์", "เซนเซอร์": "เซ็นเซอร์",
-        "มอเตอ": "มอเตอร์", "ทำความสอาด": "ทำความสะอาด", "สอาด": "สะอาด",
-        "ปั้ม": "ปั๊ม", "น๊อต": "น็อต", "ล๊อค": "ล็อก", "ล้อค": "ล็อก",
-        "ช๊อต": "ช็อต", "ชาจ": "ชาร์จ", "รีเซท": "รีเซ็ต", "เบรคดาว": "เบรกดาวน์", 
-        "เบรค": "เบรก", "พังง": "พัง", "อคิลิค": "อะคริลิก"
-    };
-    
-    let correctedRemark = remark;
-    let typoFound = false;
-    for (let wrongWord in spellCheckDict) {
-        if (correctedRemark.includes(wrongWord)) {
-            correctedRemark = correctedRemark.replace(new RegExp(wrongWord, 'g'), spellCheckDict[wrongWord]);
-            typoFound = true;
-        }
-    }
-
-    // 3. คำนวณ Downtime เพื่อยืนยัน
-    let downtimeMsg = "ยังไม่ระบุเวลาเสร็จ (เปิดงานค้างไว้)";
-    if (startTimeStr && endTimeStr) {
-        try {
-            let start = new Date(`${startDateStr}T${startTimeStr}`);
-            let end = new Date(`${endDateStr}T${endTimeStr}`);
-            
-            // ถ้าระบุเวลาเสร็จน้อยกว่าเวลาเริ่ม แสดงว่าข้ามวัน
-            if (end < start) end.setDate(end.getDate() + 1); 
-            
-            let diffMins = Math.round((end - start) / 60000);
-            let h = Math.floor(diffMins / 60);
-            let m = diffMins % 60;
-            downtimeMsg = diffMins > 0 ? (h > 0 ? `${h} ชั่วโมง ${m} นาที` : `${m} นาที`) : "0 นาที";
-        } catch(err) {
-            downtimeMsg = "ไม่สามารถคำนวณเวลาได้";
-        }
-    }
-
-    // 4. แสดง Pop-up ทวนข้อมูลก่อนบันทึก
-    let confirmMsg = `📋 ทวนสอบข้อมูลการแจ้งซ่อม (กรุณาตรวจสอบก่อนบันทึก):\n`;
-    confirmMsg += `----------------------------------------\n`;
-    confirmMsg += `🏭 เครื่องจักร: ${machine}\n`;
-    confirmMsg += `⚠️ อาการปัญหา: ${issueType}\n`;
-    confirmMsg += `⏱️ เวลาหยุด: ${startTimeStr} น.\n`;
-    if (endTimeStr) confirmMsg += `✅ เวลาทำงานต่อ: ${endTimeStr} น.\n`;
-    confirmMsg += `⏳ รวมเวลา Downtime: ${downtimeMsg}\n`;
-    confirmMsg += `----------------------------------------\n`;
-    
-    if (typoFound) {
-        confirmMsg += `✨ ระบบตรวจพบคำผิดและปรับแก้ให้อัตโนมัติ:\n[เดิม]: "${remark}"\n[ใหม่]: "${correctedRemark}"\n\n`;
-        remark = correctedRemark; 
-        document.getElementById('maint-remark').value = correctedRemark; // อัปเดต UI กลับไปเป็นคำที่ถูก
-    } else {
-        confirmMsg += `📝 รายละเอียด: ${remark || '-'}\n\n`;
-    }
-
-    confirmMsg += `กด 'ตกลง (OK)' เพื่อยืนยันการบันทึกข้อมูล`;
-
-    // รอกดยืนยันจากผู้ใช้
-    if (!confirm(confirmMsg)) {
-        return; // หากกดยกเลิก ให้หยุดการทำงาน
-    }
-
-    // เริ่มดำเนินการบันทึก (ล็อคปุ่ม)
-    window.isSubmittingMaintenance = true; 
-    const btn = document.getElementById('btn-save-maint');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = "⏳ กำลังบันทึกข้อมูล...";
-    btn.disabled = true;
-
-    let base64String = "";
     const fileInput = document.getElementById('maint-photo');
+    let base64String = "";
     
-    // ฟังก์ชันบีบอัดรูปภาพ
     async function compressImage(file, maxSizeKB) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -763,12 +690,12 @@ document.getElementById('maintenanceForm')?.addEventListener('submit', async fun
         username: window.currentUser ? window.currentUser.username : "Unknown",
         role: window.currentUser ? window.currentUser.role : "Unknown",
         date: startDateStr,
-        machine: machine,
-        issueType: issueType,
-        startTime: startTimeStr,
+        machine: document.getElementById('maint-machine').value,
+        issueType: document.getElementById('maint-issue-type').value,
+        startTime: document.getElementById('maint-start-time').value,
         endDate: endDateStr,
         endTime: endTimeStr,
-        remark: remark,
+        remark: document.getElementById('maint-remark').value,
         imageBase64: base64String
     };
 
@@ -791,7 +718,7 @@ document.getElementById('maintenanceForm')?.addEventListener('submit', async fun
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
-        window.isSubmittingMaintenance = false; // ปลดล็อค
+        window.isSubmittingMaintenance = false;
     }
 });
 
