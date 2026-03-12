@@ -458,7 +458,19 @@ window.renderAutoReportContent = async function() {
 
         // 🌟 ดึงข้อมูลแจ้งซ่อมของเครื่องนี้ 🌟
         let logs = [];
-        if(data.maintenanceLogs) logs = data.maintenanceLogs.filter(log => log.machine === m);
+        if(data.maintenanceLogs) {
+            logs = data.maintenanceLogs.filter(log => log.machine === m);
+            // เรียงลำดับตามวันที่และเวลา (เก่าไปใหม่)
+            logs.sort((a, b) => {
+                let dA = new Date(a.date).getTime();
+                let dB = new Date(b.date).getTime();
+                if (dA === dB) {
+                    return (a.startTime || "").localeCompare(b.startTime || "");
+                }
+                return dA - dB;
+            });
+        }
+        
         let maintTableHtml = '';
         
         if (logs.length > 0) {
@@ -612,6 +624,16 @@ window.renderAutoReportContent = async function() {
             let pastPendingHtml = '';
             // ถ้าวันนี้ไม่มี log ซ่อม แต่ดันมี log ค้างเก่าที่ระบบไปขุดมาจากอดีต 60 วัน (อาจมีหลายจ๊อบ)
             if (logs.length === 0 && pendingJobsMap[m] && pendingJobsMap[m].length > 0) {
+                // เรียงลำดับตามวันที่และเวลา (เก่าไปใหม่)
+                pendingJobsMap[m].sort((a, b) => {
+                    let dA = new Date(a.date).getTime();
+                    let dB = new Date(b.date).getTime();
+                    if (dA === dB) {
+                        return (a.startTime || "").localeCompare(b.startTime || "");
+                    }
+                    return dA - dB;
+                });
+                
                 pastPendingHtml = `
                 <div class="mt-4">
                     <h5 class="text-xs font-bold text-red-700 mb-1 flex items-center gap-1">⚠️ <span class="bg-red-100 px-2 py-0.5 rounded">พบงานแจ้งซ่อมค้าง ${pendingJobsMap[m].length} รายการ</span></h5>
