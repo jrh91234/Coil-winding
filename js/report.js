@@ -55,22 +55,68 @@ window.applyWidgetVisibility = function() {
     });
 };
 
-window.openAutoReport = function() {
+window.openAutoReport = async function() {
     if (!currentDashboardData) {
         alert("⚠️ กรุณากดปุ่ม 🔍ค้นหา เพื่อดึงข้อมูลสำหรับสร้างรายงานก่อนครับ");
         return;
     }
     const modal = document.getElementById('modal-auto-report');
-    window.renderAutoReportContent();
+    const content = document.getElementById('auto-report-content');
+    
+    // แสดงหน้าจอ Loading รอการแปลภาษาจาก Google API
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+    content.innerHTML = `
+        <div class="flex flex-col items-center justify-center h-[50vh] text-gray-600 bg-white shadow-xl rounded-xl mt-10 border border-gray-200">
+            <div class="text-5xl mb-4 animate-bounce">🤖</div>
+            <div class="text-xl font-bold text-blue-700 mb-2">AI กำลังวิเคราะห์และแปลภาษารายงาน...</div>
+            <div class="text-sm font-medium">กำลังเชื่อมต่อ Google Translate API (อาจใช้เวลา 2-5 วินาที)</div>
+        </div>
+    `;
     setTimeout(() => { modal.classList.remove('opacity-0'); }, 10);
-    document.body.style.overflow = '';
+
+    // ประมวลผลเนื้อหา (แบบ Asynchronous)
+    await window.renderAutoReportContent();
 };
 
-window.renderAutoReportContent = function() {
+window.renderAutoReportContent = async function() {
     const data = currentDashboardData;
     const content = document.getElementById('auto-report-content');
+
+    // 🌟 ระบบแปลภาษาด้วย Free Google Translate API 🌟
+    const translateText = async (text, targetLang) => {
+        if (!text || text.trim() === '-' || text.trim() === '') return '-';
+        try {
+            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=th&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+            const response = await fetch(url);
+            const result = await response.json();
+            return result[0].map(item => item[0]).join(''); // รวมประโยคทั้งหมดที่แปล
+        } catch (error) {
+            console.warn("Translation Error:", error);
+            return text + (targetLang === 'en' ? ' (API Error)' : ' (API 错误)');
+        }
+    };
+
+    // ค้นหาและเตรียมแปลประวัติแจ้งซ่อมทั้งหมดที่มีในรอบวัน
+    const translatedRemarks = {};
+    if (data.maintenanceLogs && data.maintenanceLogs.length > 0) {
+        // หาข้อความที่ไม่ซ้ำกันเพื่อลดภาระการเรียก API
+        const uniqueRemarks = [...new Set(data.maintenanceLogs.map(log => log.remark).filter(r => r && r.trim() !== '-' && r.trim() !== ''))];
+        
+        // รันการแปลพร้อมกันทั้งหมด
+        await Promise.all(uniqueRemarks.map(async (text) => {
+            const [enText, chText] = await Promise.all([
+                translateText(text, 'en'),
+                translateText(text, 'zh-CN')
+            ]);
+            translatedRemarks[text] = { th: text, en: enText, ch: chText };
+        }));
+    }
+
+    const getTranslatedRemark = (text) => {
+        if (!text || text.trim() === '-' || text.trim() === '') return { th: '-', en: '-', ch: '-' };
+        return translatedRemarks[text] || { th: text, en: text, ch: text };
+    };
 
     // 🌟 Helper Function สำหรับคำนวณ Kg, Time String และ Multilingual Text 🌟
     const getKgFromPcs = (prod, pcs) => {
@@ -103,49 +149,6 @@ window.renderAutoReportContent = function() {
             <p class="text-[11px] text-gray-500 leading-relaxed text-justify"><span class="font-bold text-gray-700 mr-1">[CH]</span>${ch}</p>
         </div>
     `;
-
-    // 🌟 ระบบดิกชันนารีแปลภาษาคำชี้แจงแจ้งซ่อมเบื้องต้น 🌟
-    const getTranslatedRemark = (text) => {
-        if (!text || text.trim() === '-' || text.trim() === '') return { th: '-', en: '-', ch: '-' };
-        let enText = text;
-        let chText = text;
-        
-        const dict = [
-            { th: "เปลี่ยนอะไหล่", en: "Replaced parts", ch: "更换零件" },
-            { th: "ทำความสะอาด", en: "Cleaned", ch: "清洁" },
-            { th: "รอช่าง", en: "Waiting for technician", ch: "等待维修人员" },
-            { th: "รอวัตถุดิบ", en: "Waiting for materials", ch: "等待材料" },
-            { th: "ซ่อมเสร็จ", en: "Repair completed", ch: "维修完成" },
-            { th: "มอเตอร์", en: "Motor", ch: "电机" },
-            { th: "เซ็นเซอร์", en: "Sensor", ch: "传感器" },
-            { th: "สายพาน", en: "Belt", ch: "皮带" },
-            { th: "ไฟตก", en: "Power dip", ch: "电压下降" },
-            { th: "ตั้งค่า", en: "Setup/Configured", ch: "设置" },
-            { th: "ปรับ", en: "Adjusted", ch: "调整" },
-            { th: "แก้ไข", en: "Fixed", ch: "修复" },
-            { th: "ปกติ", en: "Normal", ch: "正常" },
-            { th: "พัง", en: "Broken", ch: "损坏" },
-            { th: "ไหม้", en: "Burnt", ch: "烧毁" },
-            { th: "รั่ว", en: "Leaked", ch: "泄漏" }
-        ];
-
-        let matched = false;
-        dict.forEach(k => {
-            if (text.includes(k.th)) {
-                enText = enText.replace(new RegExp(k.th, 'g'), k.en + " ");
-                chText = chText.replace(new RegExp(k.th, 'g'), k.ch + " ");
-                matched = true;
-            }
-        });
-
-        // หากไม่มีคำในดิกชันนารีเลย ให้แสดงเป็นภาษาเดิมและใส่หมายเหตุกำกับ
-        if (!matched && !/^[a-zA-Z0-9\s]+$/.test(text)) {
-            enText = text + " (Auto-translate pending)";
-            chText = text + " (待翻译)";
-        }
-
-        return { th: text, en: enText.trim(), ch: chText.trim() };
-    };
 
     const sDate = document.getElementById('startDate').value;
     const eDate = document.getElementById('endDate').value;
@@ -672,8 +675,6 @@ window.renderAutoReportContent = function() {
         </div>
     `;
 
-    document.getElementById('modal-auto-report').className = 'fixed inset-0 bg-gray-200 z-50 flex flex-col overflow-y-auto pb-10 transition-opacity duration-300';
-    content.className = 'w-full max-w-[210mm] mx-auto mt-6 px-4 md:px-0'; 
     content.innerHTML = html;
     
     setTimeout(() => {
@@ -714,17 +715,16 @@ window.renderAutoReportContent = function() {
         if (autoReportMachineNgConfig) {
             const ctxMachineNg = document.getElementById('auto-report-machine-ng-chart');
             if (ctxMachineNg) {
-                // คำนวณขอบเขต Y สูงสุดเพื่อให้ตัวเลข Datelabels ไม่ทับขอบบนเวลาแสดงบนมือถือ (iOS/Android)
                 const maxNgValue = Math.max(...macNgList.map(m => m.ng));
                 window.autoReportCharts.push(new Chart(ctxMachineNg, {
                     type: 'bar', data: autoReportMachineNgConfig,
                     options: {
                         animation: false, responsive: true, maintainAspectRatio: false,
-                        layout: { padding: { top: 30 } }, // แก้ปัญหาตัวเลขทับขอบ
+                        layout: { padding: { top: 30 } },
                         plugins: { 
                             legend: { display: false }, 
                             datalabels: { 
-                                display: false, // ปิดการแสดงตัวเลขด้านบนแท่งกราฟ
+                                display: false,
                                 anchor: 'end', 
                                 align: 'top', 
                                 offset: 4,
