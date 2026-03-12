@@ -591,8 +591,7 @@ window.renderAutoReportContent = async function() {
     }
     machineAnalysisHtml += `</div>`;
 
-    // 🌟 ประกอบร่าง HTML สำหรับรายงาน (เปลี่ยนคลาสตั้งค่า Container เพื่อกันกราฟบีบบนมือถือ) 🌟
-    // สังเกตการเพิ่ม md:hidden เป็นป้ายเตือนสำหรับผู้ใช้มือถือ
+    // 🌟 ประกอบร่าง HTML สำหรับรายงาน พร้อมเพิ่มโลโก้บริษัทด้านบนสุด 🌟
     let html = `
         <div class="md:hidden bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-bold text-center py-2 px-4 rounded-lg mb-4 shadow-sm print-hide flex items-center justify-center gap-2">
             <span>↔️</span> เลื่อนซ้าย-ขวา เพื่อดูรายงานขนาด A4 แบบเต็ม
@@ -600,12 +599,15 @@ window.renderAutoReportContent = async function() {
 
         <div class="print-page mb-8">
             <div class="border-b-2 border-gray-300 pb-4 mb-6">
-                <div class="flex justify-between items-end">
-                    <div>
-                        <h1 class="text-3xl font-black text-gray-900 uppercase tracking-tight">Production Analytics Report</h1>
-                        <p class="text-gray-600 mt-1 font-medium">รายงานวิเคราะห์ผลการผลิตและดัชนีชี้วัดคุณภาพเชิงลึก (Target Limit: NG ≤ 0.5%)</p>
+                <div class="flex justify-between items-start gap-4">
+                    <div class="flex items-center gap-4">
+                        <img src="Logo JR.jpg" alt="Company Logo" class="h-16 md:h-20 w-auto object-contain print:h-16" onerror="this.style.display='none'">
+                        <div>
+                            <h1 class="text-3xl font-black text-gray-900 uppercase tracking-tight">Production Analytics Report</h1>
+                            <p class="text-gray-600 mt-1 font-medium">รายงานวิเคราะห์ผลการผลิตและดัชนีชี้วัดคุณภาพเชิงลึก (Target Limit: NG ≤ 0.5%)</p>
+                        </div>
                     </div>
-                    <div class="text-right text-sm text-gray-500">
+                    <div class="text-right text-sm text-gray-500 shrink-0 self-end">
                         <p><b>Printed:</b> ${printTime}</p>
                     </div>
                 </div>
