@@ -104,6 +104,49 @@ window.renderAutoReportContent = function() {
         </div>
     `;
 
+    // 🌟 ระบบดิกชันนารีแปลภาษาคำชี้แจงแจ้งซ่อมเบื้องต้น 🌟
+    const getTranslatedRemark = (text) => {
+        if (!text || text.trim() === '-' || text.trim() === '') return { th: '-', en: '-', ch: '-' };
+        let enText = text;
+        let chText = text;
+        
+        const dict = [
+            { th: "เปลี่ยนอะไหล่", en: "Replaced parts", ch: "更换零件" },
+            { th: "ทำความสะอาด", en: "Cleaned", ch: "清洁" },
+            { th: "รอช่าง", en: "Waiting for technician", ch: "等待维修人员" },
+            { th: "รอวัตถุดิบ", en: "Waiting for materials", ch: "等待材料" },
+            { th: "ซ่อมเสร็จ", en: "Repair completed", ch: "维修完成" },
+            { th: "มอเตอร์", en: "Motor", ch: "电机" },
+            { th: "เซ็นเซอร์", en: "Sensor", ch: "传感器" },
+            { th: "สายพาน", en: "Belt", ch: "皮带" },
+            { th: "ไฟตก", en: "Power dip", ch: "电压下降" },
+            { th: "ตั้งค่า", en: "Setup/Configured", ch: "设置" },
+            { th: "ปรับ", en: "Adjusted", ch: "调整" },
+            { th: "แก้ไข", en: "Fixed", ch: "修复" },
+            { th: "ปกติ", en: "Normal", ch: "正常" },
+            { th: "พัง", en: "Broken", ch: "损坏" },
+            { th: "ไหม้", en: "Burnt", ch: "烧毁" },
+            { th: "รั่ว", en: "Leaked", ch: "泄漏" }
+        ];
+
+        let matched = false;
+        dict.forEach(k => {
+            if (text.includes(k.th)) {
+                enText = enText.replace(new RegExp(k.th, 'g'), k.en + " ");
+                chText = chText.replace(new RegExp(k.th, 'g'), k.ch + " ");
+                matched = true;
+            }
+        });
+
+        // หากไม่มีคำในดิกชันนารีเลย ให้แสดงเป็นภาษาเดิมและใส่หมายเหตุกำกับ
+        if (!matched && !/^[a-zA-Z0-9\s]+$/.test(text)) {
+            enText = text + " (Auto-translate pending)";
+            chText = text + " (待翻译)";
+        }
+
+        return { th: text, en: enText.trim(), ch: chText.trim() };
+    };
+
     const sDate = document.getElementById('startDate').value;
     const eDate = document.getElementById('endDate').value;
     const isSingleDay = (sDate === eDate); 
@@ -329,6 +372,7 @@ window.renderAutoReportContent = function() {
     for(let i=1; i<=16; i++) {
         let m = `CWM-${String(i).padStart(2,'0')}`;
         let mData = data.machineData && data.machineData[m] ? data.machineData[m] : null;
+        let assignedProduct = machineMapping[m] || 'ไม่ระบุรุ่น (Unassigned)';
         
         let mDaily = mData ? mData.daily : {};
         let dates = Object.keys(mDaily).sort();
@@ -365,11 +409,18 @@ window.renderAutoReportContent = function() {
                             ${logs.map(log => {
                                 let s = formatTimeStr(log.startTime);
                                 let e = log.endTime ? formatTimeStr(log.endTime) : '<span class="text-red-500 font-bold">รอดำเนินการ</span>';
+                                let remarkTrans = getTranslatedRemark(log.remark);
                                 return `<tr>
-                                    <td class="px-2 py-1.5 text-gray-700">${log.date}</td>
-                                    <td class="px-2 py-1.5 font-medium">${s} - ${e}</td>
-                                    <td class="px-2 py-1.5 text-blue-700">${log.issueType}</td>
-                                    <td class="px-2 py-1.5 text-gray-600">${log.remark||'-'}</td>
+                                    <td class="px-2 py-2 text-gray-700 align-top whitespace-nowrap">${log.date}</td>
+                                    <td class="px-2 py-2 font-medium align-top whitespace-nowrap">${s} - ${e}</td>
+                                    <td class="px-2 py-2 text-blue-700 align-top whitespace-nowrap">${log.issueType}</td>
+                                    <td class="px-2 py-2 align-top">
+                                        <div class="space-y-0.5">
+                                            <p class="text-[10px] text-gray-800"><span class="font-bold text-blue-600 mr-1">[TH]</span>${remarkTrans.th}</p>
+                                            <p class="text-[9px] text-gray-600"><span class="font-bold text-red-600 mr-1">[EN]</span>${remarkTrans.en}</p>
+                                            <p class="text-[9px] text-gray-500"><span class="font-bold text-gray-700 mr-1">[CH]</span>${remarkTrans.ch}</p>
+                                        </div>
+                                    </td>
                                 </tr>`;
                             }).join('')}
                         </tbody>
@@ -379,7 +430,7 @@ window.renderAutoReportContent = function() {
         }
 
         if (totalMFg > 0 || totalMNg > 0) {
-            // กรณีมีผลผลิต -> โชว์กราฟ (ถ้ารายวันจะดึง Hourly, ถ้าหลายวันดึง Daily)
+            // กรณีมีผลผลิต -> โชว์กราฟ และกล่องสรุป FG/NG
             const avgMYield = totalMFg + totalMNg > 0 ? ((totalMFg / (totalMFg + totalMNg)) * 100).toFixed(2) : 0;
             const avgMNgRate = (100 - avgMYield).toFixed(2);
             const variance = trend.length > 1 ? (Math.max(...trend) - Math.min(...trend)).toFixed(2) : 0;
@@ -424,17 +475,48 @@ window.renderAutoReportContent = function() {
             let descHtml = "";
             if (isSingleDay) {
                 descHtml = multiLang(
-                    `เดินผลผลิต FG รวม <b>${totalMFg.toLocaleString()} ชิ้น</b> พบของเสีย <b>${totalMNg.toLocaleString()} ชิ้น</b> (${targetEvalTH}) จุดวิกฤตของเสียสูงสุดที่ <b>${maxNgRate.toFixed(2)}%</b>`,
-                    `Produced FG <b>${totalMFg.toLocaleString()} pcs</b>, defects <b>${totalMNg.toLocaleString()} pcs</b> (${targetEvalEN}). Peak NG crisis hit <b>${maxNgRate.toFixed(2)}%</b>.`,
-                    `总产量(FG) <b>${totalMFg.toLocaleString()} 件</b>，不良品 <b>${totalMNg.toLocaleString()} 件</b> (${targetEvalCH})。最高不良率达到 <b>${maxNgRate.toFixed(2)}%</b>。`
+                    `เดินผลผลิตรวม <b>${(totalMFg+totalMNg).toLocaleString()} ชิ้น</b> พบของเสีย <b>${totalMNg.toLocaleString()} ชิ้น</b> (${targetEvalTH}) จุดวิกฤตของเสียสูงสุดที่ <b>${maxNgRate.toFixed(2)}%</b>`,
+                    `Total output <b>${(totalMFg+totalMNg).toLocaleString()} pcs</b>, defects <b>${totalMNg.toLocaleString()} pcs</b> (${targetEvalEN}). Peak NG crisis hit <b>${maxNgRate.toFixed(2)}%</b>.`,
+                    `总产量 <b>${(totalMFg+totalMNg).toLocaleString()} 件</b>，不良品 <b>${totalMNg.toLocaleString()} 件</b> (${targetEvalCH})。最高不良率达到 <b>${maxNgRate.toFixed(2)}%</b>。`
                 );
             } else {
                 descHtml = multiLang(
-                    `เดินผลผลิต FG รวม <b>${totalMFg.toLocaleString()} ชิ้น</b> พบของเสีย <b>${totalMNg.toLocaleString()} ชิ้น</b> (${targetEvalTH}) มีความแปรปรวน ${variance}% (${stabilityTH}) จุดวิกฤตของเสียสูงสุดที่ <b>${maxNgRate.toFixed(2)}%</b>`,
-                    `Produced FG <b>${totalMFg.toLocaleString()} pcs</b>, defects <b>${totalMNg.toLocaleString()} pcs</b> (${targetEvalEN}). Variance is ${variance}% (${stabilityEN}). Peak NG crisis hit <b>${maxNgRate.toFixed(2)}%</b>.`,
-                    `总产量(FG) <b>${totalMFg.toLocaleString()} 件</b>，不良品 <b>${totalMNg.toLocaleString()} 件</b> (${targetEvalCH})。波动率为 ${variance}% (${stabilityCH})。最高不良率达到 <b>${maxNgRate.toFixed(2)}%</b>。`
+                    `เดินผลผลิตรวม <b>${(totalMFg+totalMNg).toLocaleString()} ชิ้น</b> พบของเสีย <b>${totalMNg.toLocaleString()} ชิ้น</b> (${targetEvalTH}) มีความแปรปรวน ${variance}% (${stabilityTH}) จุดวิกฤตของเสียสูงสุดที่ <b>${maxNgRate.toFixed(2)}%</b>`,
+                    `Total output <b>${(totalMFg+totalMNg).toLocaleString()} pcs</b>, defects <b>${totalMNg.toLocaleString()} pcs</b> (${targetEvalEN}). Variance is ${variance}% (${stabilityEN}). Peak NG crisis hit <b>${maxNgRate.toFixed(2)}%</b>.`,
+                    `总产量 <b>${(totalMFg+totalMNg).toLocaleString()} 件</b>，不良品 <b>${totalMNg.toLocaleString()} 件</b> (${targetEvalCH})。波动率为 ${variance}% (${stabilityCH})。最高不良率达到 <b>${maxNgRate.toFixed(2)}%</b>。`
                 );
             }
+
+            // 🌟 สร้าง HTML กล่องสรุป FG/NG แบบเจาะลึก 🌟
+            let fgModelHtml = `<li><span class="font-medium text-gray-600">รุ่น (Model):</span> <b>${assignedProduct}</b> = ${totalMFg.toLocaleString()} ชิ้น</li>`;
+            
+            let ngModelSymptomHtml = `<li><span class="font-medium text-gray-600">รุ่น (Model):</span> <b>${assignedProduct}</b></li>`;
+            if (mData.ngBreakdownPcs && Object.keys(mData.ngBreakdownPcs).length > 0) {
+                let ngItems = Object.entries(mData.ngBreakdownPcs).sort((a,b)=>b[1]-a[1]);
+                ngItems.forEach(item => {
+                    ngModelSymptomHtml += `<li class="ml-4 text-[10px] text-red-600">- ${item[0]}: ${item[1].toLocaleString()} ชิ้น</li>`;
+                });
+            } else if (totalMNg > 0) {
+                ngModelSymptomHtml += `<li class="ml-4 text-[10px] text-red-600">- ไม่ระบุรายละเอียดอาการ: ${totalMNg.toLocaleString()} ชิ้น</li>`;
+            } else {
+                ngModelSymptomHtml = `<li class="text-green-600 font-bold mt-1">🎉 ไม่มีของเสีย (Zero Defect)</li>`;
+            }
+
+            let breakdownCardsHtml = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="bg-blue-50 p-3 rounded-lg border border-blue-100 shadow-sm">
+                    <p class="text-xs font-bold text-blue-800 border-b border-blue-200 pb-1 mb-2">📦 ยอดงานดี (Total FG): <span class="text-sm">${totalMFg.toLocaleString()} ชิ้น</span></p>
+                    <ul class="text-[11px] text-blue-900 space-y-1 list-none">
+                        ${fgModelHtml}
+                    </ul>
+                </div>
+                <div class="bg-red-50 p-3 rounded-lg border border-red-100 shadow-sm">
+                    <p class="text-xs font-bold text-red-800 border-b border-red-200 pb-1 mb-2">🗑️ ยอดของเสีย (Total NG): <span class="text-sm">${totalMNg.toLocaleString()} ชิ้น</span></p>
+                    <ul class="text-[11px] text-red-900 space-y-1 list-none">
+                        ${ngModelSymptomHtml}
+                    </ul>
+                </div>
+            </div>`;
 
             machineAnalysisHtml += `
                 <div class="border border-gray-200 p-5 rounded-xl bg-white shadow-sm page-break-inside-avoid">
@@ -445,6 +527,7 @@ window.renderAutoReportContent = function() {
                         </span>
                     </div>
                     ${descHtml}
+                    ${breakdownCardsHtml}
                     <div class="bg-gray-50 p-4 rounded-lg border border-gray-100 w-full h-[250px] relative">
                         <canvas id="${chartId}" style="width:100%; height:100%;"></canvas>
                     </div>
