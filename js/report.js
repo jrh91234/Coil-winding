@@ -487,7 +487,7 @@ window.renderAutoReportContent = async function() {
 
     // 🌟 ส่วนที่ 4: การวิเคราะห์แนวโน้มรายวันแยกตามเครื่องจักร (1-16) 🌟
     let machineChartConfigs = [];
-    let machineNgChartConfigs = []; // 🌟 เก็บ config สำหรับกราฟ NG Breakdown แนวนอน
+    let machineNgChartConfigs = []; // 🌟 เก็บ config สำหรับกราฟ NG Trend Breakdown
     let machineAnalysisHtml = `<div class="page-break-before print-page mb-8">`;
     
     for(let i=1; i<=16; i++) {
@@ -608,19 +608,69 @@ window.renderAutoReportContent = async function() {
                 id: chartId, labels: chartLabels, fgData: fgData, ngData: ngData, rateData: rateData, targetData: targetData 
             });
 
-            // 🌟 เตรียมข้อมูลกราฟแนวนอน (NG Breakdown) สำหรับเครื่องนี้ 🌟
+            // 🌟 เตรียมข้อมูลกราฟแนวโน้ม (NG Trend Breakdown) สำหรับเครื่องนี้ 🌟
             let ngChartId = null;
             if (totalMNg > 0 && mData.ngBreakdownPcs && Object.keys(mData.ngBreakdownPcs).length > 0) {
                 ngChartId = `mchart_ng_${m.replace(/\W/g, '')}`;
-                let sortedBreakdown = Object.entries(mData.ngBreakdownPcs).sort((a,b) => b[1] - a[1]);
-                let bLabels = sortedBreakdown.map(item => item[0]);
-                let bData = sortedBreakdown.map(item => item[1]);
                 
-                machineNgChartConfigs.push({
-                    id: ngChartId,
-                    labels: bLabels,
-                    data: bData
+                let sortedBreakdown = Object.entries(mData.ngBreakdownPcs).sort((a,b) => b[1] - a[1]);
+                let topSyms = sortedBreakdown.slice(0, 5).map(item => item[0]); // เอาเฉพาะ 5 อาการแรกสุด
+                
+                let sDatasets = topSyms.map((sym, idx) => {
+                    const colors = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#a855f7'];
+                    let sData = [];
+                    
+                    if (isSingleDay) {
+                        sData = chartLabels.map((_, hIdx) => {
+                            let bd = (mData.hourlyNgBreakdown && mData.hourlyNgBreakdown[hIdx]) ? mData.hourlyNgBreakdown[hIdx] : {};
+                            return bd[sym] || bd[sym.toLowerCase()] || 0;
+                        });
+                    } else {
+                        sData = chartLabels.map(d => {
+                            let dData = mDaily[d] || {};
+                            let bd = dData.ngBreakdownPcs || dData.ngBreakdown || {};
+                            return bd[sym] || bd[sym.toLowerCase()] || 0;
+                        });
+                    }
+                    
+                    return {
+                        label: sym,
+                        data: sData,
+                        borderColor: colors[idx % colors.length],
+                        backgroundColor: colors[idx % colors.length],
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: false,
+                        type: 'line'
+                    };
                 });
+
+                // ตรวจสอบว่าระบบมีข้อมูลสัดส่วนแยกตามวัน/เวลา จริงๆ หรือไม่
+                let hasTimeSeriesData = sDatasets.some(ds => ds.data.some(v => v > 0));
+
+                if (hasTimeSeriesData) {
+                    machineNgChartConfigs.push({
+                        id: ngChartId,
+                        isTrend: true,
+                        labels: chartLabels,
+                        datasets: sDatasets
+                    });
+                } else {
+                    // Fallback: หากระบบหลังบ้านไม่ได้ส่งข้อมูล Time-series มาให้ จะแสดงผลรวมเป็นกราฟแท่งแนวตั้งแทน (Pareto Style)
+                    machineNgChartConfigs.push({
+                        id: ngChartId,
+                        isTrend: false,
+                        labels: sortedBreakdown.map(x => x[0]),
+                        datasets: [{
+                            label: 'NG (ชิ้น)',
+                            data: sortedBreakdown.map(x => x[1]),
+                            backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                            borderColor: 'rgba(239, 68, 68, 1)',
+                            borderWidth: 1,
+                            type: 'bar'
+                        }]
+                    });
+                }
             }
 
             // ปรับคำอธิบาย หากเป็น Single Day ให้ตัดเรื่องความแปรปรวน (Variance) ทิ้ง
@@ -686,8 +736,8 @@ window.renderAutoReportContent = async function() {
                     
                     ${ngChartId ? `
                     <div class="mt-4 pt-4 border-t border-gray-200">
-                        <p class="text-xs font-bold text-gray-700 mb-2">📊 สัดส่วนอาการของเสีย (NG Breakdown)</p>
-                        <div class="w-full h-[160px] relative">
+                        <p class="text-xs font-bold text-gray-700 mb-2">📉 แนวโน้มอาการของเสีย (NG Trend Breakdown)</p>
+                        <div class="w-full h-[180px] relative">
                             <canvas id="${ngChartId}" style="width:100%; height:100%;"></canvas>
                         </div>
                     </div>
@@ -1011,40 +1061,33 @@ window.renderAutoReportContent = async function() {
             }
         });
 
-        // 🌟 เรนเดอร์กราฟแนวนอน (NG Breakdown) สำหรับแต่ละเครื่องจักร 🌟
+        // 🌟 เรนเดอร์กราฟ NG Trend / Breakdown สำหรับแต่ละเครื่องจักร 🌟
         machineNgChartConfigs.forEach(cfg => {
             const ctx = document.getElementById(cfg.id);
             if (ctx) {
                 window.autoReportCharts.push(new Chart(ctx, {
-                    type: 'bar', 
+                    type: cfg.isTrend ? 'line' : 'bar', 
                     data: {
                         labels: cfg.labels,
-                        datasets: [{
-                            label: 'NG (ชิ้น)',
-                            data: cfg.data,
-                            backgroundColor: 'rgba(239, 68, 68, 0.7)',
-                            borderColor: 'rgba(239, 68, 68, 1)',
-                            borderWidth: 1
-                        }]
+                        datasets: cfg.datasets
                     },
                     options: {
-                        indexAxis: 'y', // เปลี่ยนเป็นกราฟแท่งแนวนอน
                         animation: false,
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            legend: { display: false },
+                            legend: { display: cfg.isTrend, position: 'top', labels: { boxWidth: 10, font: { size: 10 } } },
                             datalabels: {
-                                display: true,
+                                display: !cfg.isTrend, // ปิดตัวเลขแบบจุดสำหรับกราฟเส้น, เปิดสำหรับกราฟแท่ง (Fallback)
                                 anchor: 'end',
-                                align: 'right',
+                                align: 'top',
                                 font: { size: 9 },
-                                formatter: (val) => val.toLocaleString() + ' ชิ้น'
+                                formatter: (val) => val > 0 ? val.toLocaleString() + ' ชิ้น' : ''
                             }
                         },
                         scales: {
-                            x: { beginAtZero: true, grace: '15%' }, // เพิ่ม grace เพื่อเว้นที่ว่างด้านขวาให้ตัวเลขแสดงผลไม่ล้นกรอบ
-                            y: { ticks: { autoSkip: false, font: { size: 9 } } }
+                            x: { ticks: { font: { size: 9 } } },
+                            y: { beginAtZero: true, grace: '10%', ticks: { stepSize: 1, font: { size: 9 } } }
                         }
                     }
                 }));
