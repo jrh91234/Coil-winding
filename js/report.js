@@ -740,6 +740,7 @@ window.renderAutoReportContent = async function() {
                 ${productBreakdownHtml}
             </div>
 
+            <!-- เพิ่มคลาส page-break-inside-avoid ครอบไว้เพื่อไม่ให้หัวข้อขาดจากกราฟ -->
             <div class="mb-8 page-break-inside-avoid">
                 <h3 class="text-lg font-bold text-gray-800 border-l-4 border-indigo-500 pl-3 mb-4 bg-white shadow-sm py-2.5 rounded-r-lg">2. การประเมินเสถียรภาพและแนวโน้มการผลิต (Production Stability Assessment)</h3>
                 <div class="grid grid-cols-1 gap-6">
@@ -921,23 +922,53 @@ window.closeAutoReport = function() {
 };
 
 window.printAutoReport = function() {
+    // ดึงค่า วันที่ และ กะ ที่ผู้ใช้เลือก
     const sDate = document.getElementById('startDate').value;
     const eDate = document.getElementById('endDate').value;
-    const shift = document.getElementById('filterShift').options[document.getElementById('filterShift').selectedIndex].text;
     
-    // Format the date string
-    const dateObj = new Date(sDate);
-    const options = { day: 'numeric', month: 'short', year: 'numeric' };
-    const formattedDate = dateObj.toLocaleDateString('en-GB', options);
+    // ดึงเฉพาะตัวหนังสือที่เป็นชื่อกะ เช่น A, B, C ไม่เอา Value ที่เป็น All
+    const shiftElement = document.getElementById('filterShift');
+    const shift = shiftElement.options[shiftElement.selectedIndex].text;
     
-    // Set the document title
+    // จัดรูปแบบวันที่ให้อ่านง่าย เช่น 12 Mar 2026
+    let dateStr = "";
+    if (sDate) {
+        const dateObj = new Date(sDate);
+        if (!isNaN(dateObj.getTime())) { // เช็คว่าวันที่ถูกต้อง
+            const options = { day: 'numeric', month: 'short', year: 'numeric' };
+            // ใช้ en-GB เพื่อให้ format เป็น DD MMM YYYY (เช่น 12 Mar 2026)
+            dateStr = dateObj.toLocaleDateString('en-GB', options);
+        } else {
+             dateStr = sDate; // กรณีเกิดข้อผิดพลาดในการแปลงวันที่ ให้ใช้วันที่เดิม
+        }
+    } else {
+         dateStr = "Unknown Date";
+    }
+
+    // ถ้าเลือกช่วงวัน ให้เพิ่มวันที่สิ้นสุดเข้าไปด้วย
+    if (eDate && eDate !== sDate) {
+         const eDateObj = new Date(eDate);
+         if (!isNaN(eDateObj.getTime())) {
+             const eOptions = { day: 'numeric', month: 'short', year: 'numeric' };
+             dateStr += ` to ${eDateObj.toLocaleDateString('en-GB', eOptions)}`;
+         }
+    }
+
+    // กำหนดชื่อไฟล์เป้าหมาย
+    const targetTitle = `Coil winding Shift ${shift} report ${dateStr}`;
+    
+    // เก็บชื่อ Title เดิมของหน้าเว็บไว้
     const originalTitle = document.title;
-    document.title = `Coil winding Shift ${shift} report ${formattedDate}`;
+    
+    // เปลี่ยน Title หน้าเว็บเป็นชื่อไฟล์เป้าหมาย (เพื่อให้เบราว์เซอร์ใช้ชื่อนี้ในการ Save PDF)
+    document.title = targetTitle;
 
     document.body.classList.add('printing-auto-report');
+    
+    // สั่งพิมพ์
     window.print();
     
-    // Restore the original title after printing
+    // คืนค่า Title และ Class เดิมหลังจากหน้าต่าง Print ปิดลง
     setTimeout(() => { 
         document.body.classList.remove('printing-auto-report'); 
         document.title = originalTitle;
