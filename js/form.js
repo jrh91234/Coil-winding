@@ -522,7 +522,7 @@ document.getElementById('productionForm')?.addEventListener('submit', async (e) 
 
     const batchId = "B_" + Date.now();
     const payload = {
-        action: 'SAVE_BATCH',
+        action: 'SAVE_PRODUCTION_BATCH',
         username: window.currentUser.username,
         role: window.currentUser.role,
         date: date,
