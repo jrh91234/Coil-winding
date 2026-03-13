@@ -91,7 +91,7 @@ window.renderAutoReportContent = async function() {
         
         // กำหนดสีให้แตกต่างกันมากที่สุด (High Contrast)
         const fixedColors = {
-             "setup": "#FF0000", // สีแดงสด (Red)
+            "setup": "#FF0000", // สีแดงสด (Red)
             "ปลอกฉนวนไม่หมด (insulator skin incomplete)": "#FFC107", // สีเหลืองอำพัน (Amber)
             "ระยะปลอกรูดไม่ได้ตามสเปค ( insulation skinning length error )": "#808080", // สีเทา (Gray)
             "งานเสียตีกลับจากลูกค้า (rtv sorting ng )": "#FF00FF", // สีชมพูบานเย็น (Magenta)
@@ -174,17 +174,27 @@ window.renderAutoReportContent = async function() {
         </div>
     `;
 
-    // 🌟 ระบบแปลภาษาด้วย Free Google Translate API 🌟
+    // 🌟 ระบบแปลภาษาด้วย Free Google Translate API (ปรับแก้เพื่อลดปัญหามือถือค้าง) 🌟
     const translateText = async (text, targetLang) => {
         if (!text || text.trim() === '-' || text.trim() === '') return '-';
         try {
+            // เพิ่ม Timeout 5 วินาที ป้องกันการค้างถาวร
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); 
+
             const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=th&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
-            const response = await fetch(url);
+            const response = await fetch(url, { signal: controller.signal });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) throw new Error("API Limit Reached");
+            
             const result = await response.json();
             return result[0].map(item => item[0]).join(''); // รวมประโยคทั้งหมดที่แปล
         } catch (error) {
-            console.warn("Translation Error:", error);
-            return text + (targetLang === 'en' ? ' (API Error)' : ' (API 错误)');
+            console.warn("Translation Error for:", text, error);
+            // หากดึงไม่สำเร็จ หรือถูก Block จะไม่แสดงวงเล็บ Error ให้รกรายงาน
+            return text; 
         }
     };
 
@@ -203,14 +213,16 @@ window.renderAutoReportContent = async function() {
 
     const uniqueRemarks = [...new Set(allRemarksToTranslate.filter(r => r && r.trim() !== '-' && r.trim() !== ''))];
     
-    // รันการแปลพร้อมกันทั้งหมด
-    await Promise.all(uniqueRemarks.map(async (text) => {
+    // ทำการแปลทีละข้อความ (Sequential) เพื่อป้องกันไม่ให้มือถือยิง Request ถี่เกินไปจนค้าง หรือโดนแบน
+    for (const text of uniqueRemarks) {
         const [enText, chText] = await Promise.all([
             translateText(text, 'en'),
             translateText(text, 'zh-CN')
         ]);
         translatedRemarks[text] = { th: text, en: enText, ch: chText };
-    }));
+        // หน่วงเวลาเล็กน้อยระหว่างแต่ละคำขอ
+        await new Promise(resolve => setTimeout(resolve, 300));
+    }
 
     const getTranslatedRemark = (text) => {
         if (!text || text.trim() === '-' || text.trim() === '') return { th: '-', en: '-', ch: '-' };
@@ -593,7 +605,7 @@ window.renderAutoReportContent = async function() {
                                 let s = formatTimeStr(log.startTime);
                                 // แสดงวันที่คู่กับเวลาปิดจ๊อบ หากมีการแก้ไขข้ามวัน
                                 let endDateStr = log.endDate ? formatDateShort(log.endDate) + ' ' : '';
-                                let e = log.endTime ? endDateStr + formatTimeStr(log.endTime) : '<span class="text-red-500 font-bold">ยังไม่ปิดจ๊อบ</span>';
+                                let e = log.endTime ? endDateStr + formatTimeStr(log.endTime) : '<span class="text-red-500 font-bold">รอดำเนินการ</span>';
                                 let remarkTrans = getTranslatedRemark(log.remark);
                                 return `<tr>
                                     <td class="px-2 py-2 text-gray-700 align-top whitespace-nowrap">${log.date}</td>
