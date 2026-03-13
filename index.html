@@ -93,7 +93,7 @@
             <button onclick="window.toggleMenu(); window.location.href='https://jrh91234.github.io/CMW-rawmat/';" id="tab-rw" class="hidden py-4 px-6 text-left text-gray-500 border-l-4 border-transparent hover:bg-gray-50 transition-colors text-lg w-full text-left">📦 รับเข้า (RW) ↗️</button>
             
             <!-- เมนู จัดการพาเลท (Packing) -->
-            <button onclick="window.openPackingModal(); window.toggleMenu()" id="tab-packing" class="py-4 px-6 text-left text-indigo-600 font-bold border-l-4 border-transparent hover:bg-indigo-50 transition-colors text-lg border-t border-gray-100">📦 จัดการพาเลท (Packing)</button>
+            <button onclick="window.openPackingModal(); window.toggleMenu()" id="tab-packing" class="hidden py-4 px-6 text-left text-indigo-600 font-bold border-l-4 border-transparent hover:bg-indigo-50 transition-colors text-lg border-t border-gray-100">📦 จัดการพาเลท (Packing)</button>
 
             <!-- เมนู แจ้งซ่อมและเคลม RTV -->
             <button onclick="window.openMaintenanceModal(); window.toggleMenu()" id="tab-maint" class="hidden py-4 px-6 text-left text-orange-600 font-bold border-l-4 border-transparent hover:bg-orange-50 transition-colors text-lg border-t border-gray-100">🛠️ แจ้งซ่อมเครื่องจักร</button>
@@ -717,7 +717,7 @@
                 <div class="grid grid-cols-2 gap-3 mb-2">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">วันที่แจ้ง</label>
-                        <input type="date" id="maint-date" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-50 bg-white">
+                        <input type="date" id="maint-date" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white">
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">ผู้แจ้งปัญหา</label>
@@ -1857,80 +1857,6 @@
             } catch(e) {}
         };
 
-        // ==========================================
-        // 🌟 window.onload ทำงานเมื่อหน้าเว็บโหลดเสร็จ
-        // ==========================================
-        window.onload = async () => {
-            const token = localStorage.getItem('cwm_auth_token');
-            const userDataStr = localStorage.getItem('cwm_user_data');
-            
-            if (!token || !userDataStr) {
-                window.location.href = 'login.html';
-                return;
-            }
-
-            window.currentUser = JSON.parse(userDataStr);
-            document.getElementById('desktop-user-display').innerText = window.currentUser.name || window.currentUser.username;
-            document.getElementById('mobile-user-display').innerText = window.currentUser.name || window.currentUser.username;
-            document.getElementById('nav-user-name').innerText = window.currentUser.name || window.currentUser.username;
-            document.getElementById('nav-user-role').innerText = window.currentUser.role;
-            document.getElementById('nav-user-name-mobile').innerText = window.currentUser.name || window.currentUser.username;
-            document.getElementById('nav-user-role-mobile').innerText = window.currentUser.role;
-            
-            let initial = (window.currentUser.name || window.currentUser.username).charAt(0).toUpperCase();
-            document.getElementById('user-avatar').innerText = initial;
-
-            document.getElementById('productionDate').value = getShiftDateStr();
-            document.getElementById('planDate').value = getShiftDateStr();
-            document.getElementById('startDate').value = getShiftDateStr();
-            document.getElementById('endDate').value = getShiftDateStr();
-            document.getElementById('display-date-production').innerText = new Date().toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'numeric'});
-            
-            const h = new Date().getHours();
-            if (h >= 8 && h < 17) document.querySelector('input[name="shift"][value="A"]').checked = true;
-            else if (h >= 17 && h < 20) document.querySelector('input[name="shift"][value="B"]').checked = true;
-            else document.querySelector('input[name="shift"][value="C"]').checked = true;
-            
-            // ดึง Master Data และการตั้งค่า Dashboard จาก Cloud ถ้ามี
-            try {
-                const res = await fetch(`${SCRIPT_URL}?action=GET_MASTER_DATA`);
-                const md = await res.json();
-                if(md.recorders && md.recorders.length > 0) { recorderList = md.recorders; localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); }
-                if(md.ngSymptoms && md.ngSymptoms.length > 0) { ngSymptoms = md.ngSymptoms; localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); }
-                if(md.dashboardSettings && md.dashboardSettings.hiddenWidgets) { hiddenWidgets = md.dashboardSettings.hiddenWidgets; }
-            } catch(e) { console.log("Offline mode, using local master data."); }
-
-            window.applyWidgetVisibility();
-            window.renderRecorderOptions();
-            window.renderProductOptions();
-            window.updateTimeSlots();
-            window.addBatchRow();
-            
-            // ตรวจสอบสิทธิ์การแสดงผล Dashboard
-            if(window.currentUser.role !== 'Admin') {
-                const navDashboard = document.getElementById('tab-dashboard'); // มือถือ
-                if (navDashboard) {
-                    navDashboard.style.display = 'none';
-                    switchTab('production');
-                }
-            } else {
-                switchTab('dashboard');
-            }
-
-            // 🌟 เพิ่มการเช็คสิทธิ์สำหรับเมนู Packing (Admin และ Production เท่านั้นถึงจะเห็น) 🌟
-            if (window.currentUser.role !== 'Admin' && window.currentUser.role !== 'Production') {
-                const navPacking = document.getElementById('nav-packing'); // เมนูฝั่งซ้าย (คอม)
-                const tabPacking = document.getElementById('tab-packing'); // เมนู Hamberger (มือถือ)
-                if (navPacking) navPacking.style.display = 'none';
-                if (tabPacking) tabPacking.style.display = 'none';
-            }
-        };
-
-        function logout() {
-            localStorage.removeItem('cwm_auth_token');
-            localStorage.removeItem('cwm_user_data');
-            window.location.href = 'login.html';
-        }
     </script>
 </body>
 </html>
