@@ -1174,31 +1174,28 @@ window.closeAutoReport = function() {
     }, 300);
 };
 
+// =========================================================
+// 🌟 แก้ปัญหา Android Mobile Chrome พิมพ์หน้าจอไม่ได้ 🌟
+// =========================================================
 window.printAutoReport = function() {
-    // ดึงค่า วันที่ และ กะ ที่ผู้ใช้เลือก
     const sDate = document.getElementById('startDate').value;
     const eDate = document.getElementById('endDate').value;
-    
-    // ดึงเฉพาะตัวหนังสือที่เป็นชื่อกะ เช่น A, B, C ไม่เอา Value ที่เป็น All
     const shiftElement = document.getElementById('filterShift');
     const shift = shiftElement.options[shiftElement.selectedIndex].text;
     
-    // จัดรูปแบบวันที่ให้อ่านง่าย เช่น 12 Mar 2026
     let dateStr = "";
     if (sDate) {
         const dateObj = new Date(sDate);
-        if (!isNaN(dateObj.getTime())) { // เช็คว่าวันที่ถูกต้อง
+        if (!isNaN(dateObj.getTime())) { 
             const options = { day: 'numeric', month: 'short', year: 'numeric' };
-            // ใช้ en-GB เพื่อให้ format เป็น DD MMM YYYY (เช่น 12 Mar 2026)
             dateStr = dateObj.toLocaleDateString('en-GB', options);
         } else {
-             dateStr = sDate; // กรณีเกิดข้อผิดพลาดในการแปลงวันที่ ให้ใช้วันที่เดิม
+             dateStr = sDate; 
         }
     } else {
          dateStr = "Unknown Date";
     }
 
-    // ถ้าเลือกช่วงวัน ให้เพิ่มวันที่สิ้นสุดเข้าไปด้วย
     if (eDate && eDate !== sDate) {
          const eDateObj = new Date(eDate);
          if (!isNaN(eDateObj.getTime())) {
@@ -1207,25 +1204,35 @@ window.printAutoReport = function() {
          }
     }
 
-    // กำหนดชื่อไฟล์เป้าหมาย
-    const targetTitle = `Coil winding Shift ${shift} report ${dateStr}`;
-    
-    // เก็บชื่อ Title เดิมของหน้าเว็บไว้
+    const targetTitle = `CWM_Report_Shift_${shift}_${dateStr.replace(/ /g, '_')}`;
     const originalTitle = document.title;
-    
-    // เปลี่ยน Title หน้าเว็บเป็นชื่อไฟล์เป้าหมาย (เพื่อให้เบราว์เซอร์ใช้ชื่อนี้ในการ Save PDF)
     document.title = targetTitle;
 
+    const modal = document.getElementById('modal-auto-report');
+    
+    // เก็บ Class ดั้งเดิมไว้
+    const originalModalClasses = modal.className;
+
+    // ถอดความเป็น Modal ชั่วคราว (ทิ้ง Fixed / inset-0) เพราะ Android จะงงเวลา Spool PDF
     document.body.classList.add('printing-auto-report');
+    modal.className = 'block w-full bg-white z-50'; // กำหนดให้เป็นเอกสารธรรมดา
+    document.body.style.overflow = 'visible'; // บังคับให้ Scroll ได้ขณะพิมพ์
+
+    // เลื่อนจอขึ้นบนสุดเพื่อให้ระบบ Spooler ของมือถือเก็บภาพได้ครบถ้วน
+    window.scrollTo(0, 0);
     
-    // สั่งพิมพ์
-    window.print();
-    
-    // คืนค่า Title และ Class เดิมหลังจากหน้าต่าง Print ปิดลง
-    setTimeout(() => { 
-        document.body.classList.remove('printing-auto-report'); 
-        document.title = originalTitle;
-    }, 1000);
+    // หน่วงเวลาให้เบราว์เซอร์จัดเรียง DOM ใหม่ (Reflow) ก่อนสั่งพิมพ์
+    setTimeout(() => {
+        window.print();
+        
+        // คืนค่าเดิมหลังจากพิมพ์เสร็จ
+        setTimeout(() => { 
+            document.body.classList.remove('printing-auto-report'); 
+            modal.className = originalModalClasses; // สวมชุด Modal กลับคืน
+            document.title = originalTitle;
+            document.body.style.overflow = '';
+        }, 1000);
+    }, 800); // ดีเลย์ 800ms ให้ Canvas และ Layout วาดตัวเสร็จ
 };
 
 window.exportCSV = function() {
