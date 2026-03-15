@@ -32,18 +32,56 @@ td { @apply px-6 py-4 border-b text-sm text-gray-700 whitespace-nowrap; }
     background-color: #ffffff !important;
 }
 
+/* =========================================================
+   🌟 CSS FOR PRINTING (Optimized for Android/iOS PDF) 🌟
+   ========================================================= */
 @media print {
-    @page { margin: 10mm; size: A4 portrait; }
-    body { background-color: white !important; font-size: 12pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { 
+        margin: 10mm; 
+        size: A4 portrait; 
+    }
     
-    body.printing-auto-report > *:not(#modal-auto-report) { display: none !important; }
-    body.printing-auto-report #modal-auto-report { position: absolute !important; top: 0; left: 0; display: block !important; opacity: 1 !important; background: white !important; width: 100%; height: auto; overflow: visible !important; }
-    body.printing-auto-report #modal-auto-report > div { width: 100% !important; max-width: 100% !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; max-height: none !important; overflow: visible !important; }
-    body.printing-auto-report .auto-report-hide { display: none !important; }
+    body { 
+        background-color: white !important; 
+        font-size: 12pt; 
+        -webkit-print-color-adjust: exact; 
+        print-color-adjust: exact; 
+        overflow: visible !important; /* สำคัญมากสำหรับ Android */
+    }
     
-    nav, #section-form, #section-planning, #section-admin, .loader, #debug-panel, #undo-toast { display: none !important; }
-    .print-hide { display: none !important; }
-    .widget-header button { display: none !important; }
+    /* 1. ซ่อนทุกอย่างในหน้าเว็บยกเว้น Modal รายงาน */
+    body.printing-auto-report > *:not(#modal-auto-report) { 
+        display: none !important; 
+    }
+    
+    /* 2. บังคับให้ Modal กลายเป็นเอกสารธรรมดา (ถอด Fixed/Absolute ออก) */
+    body.printing-auto-report #modal-auto-report { 
+        position: relative !important; /* ห้ามใช้ absolute หรือ fixed บนมือถือเด็ดขาด */
+        display: block !important; 
+        opacity: 1 !important; 
+        background: white !important; 
+        width: 100% !important; 
+        height: auto !important; 
+        overflow: visible !important; 
+    }
+    
+    body.printing-auto-report #modal-auto-report > div { 
+        width: 100% !important; 
+        max-width: 100% !important; 
+        box-shadow: none !important; 
+        margin: 0 !important; 
+        padding: 0 !important; 
+        max-height: none !important; 
+        overflow: visible !important; 
+    }
+    
+    /* 3. ซ่อน UI ควบคุมและปุ่มต่างๆ ในขณะพิมพ์ */
+    body.printing-auto-report .auto-report-hide,
+    nav, #section-form, #section-planning, #section-admin, .loader, #debug-panel, #undo-toast, .print-hide, .widget-header button, #print-header { 
+        display: none !important; 
+    }
+    
+    /* 4. การจัดการพื้นที่และหน้ากระดาษ */
     #section-dashboard { max-width: 100% !important; padding: 0 !important; margin: 0 !important; display: block !important; }
     .bg-white.p-4.rounded-xl.shadow-md { box-shadow: none !important; border: none !important; padding: 0 !important; margin-bottom: 20px !important; }
     .widget-card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; break-inside: avoid !important; margin-bottom: 20px !important; }
@@ -51,9 +89,8 @@ td { @apply px-6 py-4 border-b text-sm text-gray-700 whitespace-nowrap; }
     #sortable-grid > div { width: 100% !important; height: auto !important; min-height: 350px !important; margin-bottom: 20px !important; }
     .table-container { overflow: visible !important; box-shadow: none !important; border: none !important; }
     
+    /* 5. ควบคุมไม่ให้กราฟ/ตาราง โดนตัดครึ่งกลางหน้ากระดาษ */
     .page-break-before { page-break-before: always !important; break-before: page !important; }
-    .page-break-inside-avoid { page-break-inside: avoid !important; break-inside: avoid !important; }
-    
-    #print-header { display: none; }
+    .page-break-inside-avoid { page-break-inside: avoid !important; break-inside: avoid !important; display: block !important; }
 }
 #print-header { display: none; }
