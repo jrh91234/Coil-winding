@@ -2,9 +2,9 @@
 // 📦 ระบบจัดการไลน์ Packing & Pallet (Updated)
 // ==========================================
 
-// 1. โหลดข้อมูลหมายเลขพาเลทจาก Local Storage (ถ้าไม่มีให้สร้าง P-01 ถึง P-20)
+// 1. โหลดข้อมูลหมายเลขพาเลทจาก Local Storage (ถ้าไม่มีให้สร้าง P01 ถึง P20)
 window.palletList = JSON.parse(localStorage.getItem('CWM_PALLET_LIST')) || 
-                    Array.from({length: 20}, (_, i) => `P-${String(i + 1).padStart(2, '0')}`);
+                    Array.from({length: 20}, (_, i) => `P${String(i + 1).padStart(2, '0')}`);
 
 // 2. ฟังก์ชันสำหรับเรนเดอร์ตัวเลือก Dropdown ของหมายเลขพาเลท
 window.renderPalletDropdown = function() {
@@ -22,7 +22,7 @@ window.renderPalletDropdown = function() {
 
 // 3. ฟังก์ชันเพิ่มหมายเลขพาเลทใหม่ (Local)
 window.addPalletLocal = function() {
-    const newPalletNo = prompt("ระบุ 'หมายเลขพาเลท' ใหม่ที่ต้องการเพิ่ม (เช่น P-21):");
+    const newPalletNo = prompt("ระบุ 'หมายเลขพาเลท' ใหม่ที่ต้องการเพิ่ม (เช่น P21):");
     if (!newPalletNo || newPalletNo.trim() === '') return;
     
     const cleanNo = newPalletNo.trim().toUpperCase();
@@ -37,7 +37,7 @@ window.addPalletLocal = function() {
 
 // 4. ฟังก์ชันลบหมายเลขพาเลท (Local)
 window.deletePalletLocal = function() {
-    const palletNo = prompt("ระบุ 'หมายเลขพาเลท' ที่ต้องการลบ (เช่น P-01):");
+    const palletNo = prompt("ระบุ 'หมายเลขพาเลท' ที่ต้องการลบ (เช่น P01):");
     if (!palletNo || !window.palletList.includes(palletNo.toUpperCase())) {
         if(palletNo) alert("ไม่พบหมายเลขพาเลทนี้ในระบบ");
         return;
@@ -86,13 +86,13 @@ window.addPackingRow = function() {
         <div id="${rowId}" class="pack-row grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-50 p-3 rounded-lg border border-gray-200 items-end">
             <div>
                 <label class="block text-xs font-bold text-gray-600 mb-1">จากเครื่อง (Machine)</label>
-                <select class="pack-machine w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+                <select class="pack-machine w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white" onchange="window.autoFillPackingInfo('${rowId}')">
                     ${machineOpts}
                 </select>
             </div>
             <div>
                 <label class="block text-xs font-bold text-gray-600 mb-1">รุ่นสินค้า (Model)</label>
-                <select class="pack-model w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+                <select class="pack-model w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white" onchange="window.autoFillPackingQty('${rowId}')">
                     ${productOpts}
                 </select>
             </div>
@@ -110,12 +110,55 @@ window.addPackingRow = function() {
     container.insertAdjacentHTML('beforeend', html);
 };
 
+// [NEW] ฟังก์ชันเลือกรุ่นและยอดให้อัตโนมัติเมื่อเลือกเครื่องจักร
+window.autoFillPackingInfo = function(rowId) {
+    const row = document.getElementById(rowId);
+    if(!row) return;
+    
+    const machineSelect = row.querySelector('.pack-machine');
+    const modelSelect = row.querySelector('.pack-model');
+    const machine = machineSelect.value;
+    
+    // 1. เลือกรุ่นให้อัตโนมัติจาก machineMapping (อิงจากการจ่ายงาน Production)
+    if (machine && typeof machineMapping !== 'undefined' && machineMapping[machine]) {
+        const assignedProduct = machineMapping[machine];
+        if (assignedProduct !== 'Unassigned') {
+            modelSelect.value = assignedProduct;
+        }
+    }
+    
+    // 2. ดึงยอดแพ็คมาตรฐานตามรุ่น
+    window.autoFillPackingQty(rowId);
+};
+
+// [NEW] ฟังก์ชันดึงยอดมาตรฐานเมื่อมีการเปลี่ยนรุ่นสินค้า
+window.autoFillPackingQty = function(rowId) {
+    const row = document.getElementById(rowId);
+    if(!row) return;
+    
+    const model = row.querySelector('.pack-model').value;
+    const qtyInput = row.querySelector('.pack-qty');
+    
+    // สมมติค่ายอดแพ็คมาตรฐานต่อรุ่น (แก้ไขตัวเลขได้ตามต้องการ)
+    if (model) {
+        if (model.includes("10A") || model.includes("16A")) {
+            qtyInput.value = 1000;
+        } else if (model.includes("20A") || model.includes("25/32A")) {
+            qtyInput.value = 800;
+        } else {
+            qtyInput.value = 1000; // ค่าเริ่มต้นถ้าไม่มีชื่อตรง
+        }
+    } else {
+        qtyInput.value = "";
+    }
+};
+
 window.removePackingRow = function(rowId) {
     const el = document.getElementById(rowId);
     if(el) el.remove();
 };
 
-// 7. [NEW] ฟังก์ชันบันทึกข้อมูล Packing ลง Google Sheet
+// 7. ฟังก์ชันบันทึกข้อมูล Packing ลง Google Sheet
 window.savePackingToSheet = async function() {
     const date = document.getElementById('pack-date').value;
     const palletNo = document.getElementById('pack-pallet-no').value;
@@ -199,7 +242,7 @@ window.submitPacking = function(e) {
     window.savePackingToSheet();
 };
 
-// 9. ฟังก์ชันพิมพ์ใบพาเลท (คงเดิม)
+// 9. ฟังก์ชันพิมพ์ใบพาเลท
 window.printPallet = function() {
     const date = document.getElementById('pack-date').value;
     const palletNo = document.getElementById('pack-pallet-no').value;
