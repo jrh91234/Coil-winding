@@ -66,6 +66,15 @@ function initAppAfterLogin() {
     ngSymptoms = normalizeSymptomList(ngSymptoms);
     localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
 
+    // 🌟 โหลดข้อมูล Pallet (ถ้ามีใน LocalStorage หรือใช้ค่าเริ่มต้น 1-20) 🌟
+    if(localStorage.getItem('CWM_PALLET_LIST')) {
+        window.palletList = JSON.parse(localStorage.getItem('CWM_PALLET_LIST'));
+    } else {
+        window.palletList = Array.from({length: 20}, (_, i) => String(i + 1));
+    }
+    window.renderPalletDropdown(); // แสดงผล Dropdown ทันที
+    window.fetchPalletsFromCloud(); // อัปเดตรายการล่าสุดจาก Cloud
+
     // 🌟 ดึงข้อมูลอาการเสียลง Dropdown ของ RTV ทันทีที่เข้าสู่ระบบ 🌟
     if (typeof window.renderRtvSymptomsOptions === 'function') {
         window.renderRtvSymptomsOptions();
@@ -292,5 +301,80 @@ window.deleteUser = async function(username) {
         }
     } catch (e) {
         alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    }
+};
+
+// ==========================================
+// 📦 ระบบจัดการ Pallet No. (Cloud / Local)
+// ==========================================
+window.palletList = Array.from({length: 20}, (_, i) => String(i + 1));
+
+// ฟังก์ชันดึงหมายเลขพาเลทไปใส่ใน Dropdown อัตโนมัติ
+window.renderPalletDropdown = function() {
+    // กำหนดให้ Select ใดๆ ในระบบที่มีคลาส "pallet-no-select" ดึงข้อมูลจากส่วนนี้
+    const selects = document.querySelectorAll('.pallet-no-select'); 
+    selects.forEach(sel => {
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="">เลือกหมายเลขพาเลท...</option>' + 
+            window.palletList.map(p => `<option value="${p}">Pallet No. ${p}</option>`).join('');
+        if (currentVal && window.palletList.includes(currentVal)) {
+            sel.value = currentVal;
+        }
+    });
+};
+
+// ฟังก์ชันดึงข้อมูลจาก Cloud แบบเงียบๆ ตอน Login
+window.fetchPalletsFromCloud = async function() {
+    try {
+        const res = await fetch(`${SCRIPT_URL}?action=GET_PALLETS&_t=${Date.now()}`);
+        const data = await res.json();
+        if (data.success && data.pallets && data.pallets.length > 0) {
+            window.palletList = data.pallets;
+            localStorage.setItem('CWM_PALLET_LIST', JSON.stringify(window.palletList));
+            window.renderPalletDropdown();
+        }
+    } catch (e) {
+        console.warn("ไม่สามารถดึงข้อมูล Pallet จาก Cloud ได้, กำลังใช้ข้อมูล Local 1-20");
+    }
+};
+
+// เพิ่มหมายเลขพาเลทใหม่
+window.addPalletToCloud = async function() {
+    const newPalletNo = prompt("ระบุ 'หมายเลขพาเลท' ใหม่ที่ต้องการเพิ่ม (เช่น 21, 22, หรือชื่อเฉพาะ):");
+    if (!newPalletNo) return;
+    
+    try {
+        const payload = { action: 'ADD_PALLET', palletNo: newPalletNo, adminUsername: window.currentUser.username };
+        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (data.success) {
+            alert("เพิ่มหมายเลขพาเลทสำเร็จ!");
+            window.fetchPalletsFromCloud(); // โหลดใหม่ให้ Dropdown อัปเดต
+        } else {
+            alert("เกิดข้อผิดพลาด: " + data.message);
+        }
+    } catch (e) {
+        alert("การเชื่อมต่อเซิร์ฟเวอร์ล้มเหลว");
+    }
+};
+
+// ลบหมายเลขพาเลท
+window.deletePalletFromCloud = async function() {
+    const palletNo = prompt("ระบุ 'หมายเลขพาเลท' ที่ต้องการลบ:");
+    if (!palletNo) return;
+
+    if (!confirm(`ยืนยันการลบพาเลทหมายเลข: ${palletNo} ใช่หรือไม่?`)) return;
+    try {
+        const payload = { action: 'DELETE_PALLET', palletNo: palletNo, adminUsername: window.currentUser.username };
+        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (data.success) {
+            alert("ลบหมายเลขพาเลทสำเร็จ!");
+            window.fetchPalletsFromCloud();
+        } else {
+            alert("เกิดข้อผิดพลาด: " + data.message);
+        }
+    } catch (e) {
+        alert("การเชื่อมต่อเซิร์ฟเวอร์ล้มเหลว");
     }
 };
