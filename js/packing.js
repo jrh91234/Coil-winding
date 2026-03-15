@@ -1,6 +1,59 @@
 // ==========================================
-// 📦 ระบบจัดการไลน์ Packing & Pallet
+// 📦 ระบบจัดการไลน์ Packing & Pallet (Local Storage Mode)
 // ==========================================
+
+// โหลดข้อมูลหมายเลขพาเลทจาก Local Storage (ถ้าไม่มีให้สร้างค่าเริ่มต้น 1-20)
+window.palletList = JSON.parse(localStorage.getItem('CWM_PALLET_LIST')) || Array.from({length: 20}, (_, i) => String(i + 1));
+
+// ฟังก์ชันสำหรับเรนเดอร์ตัวเลือก Dropdown ของหมายเลขพาเลท
+window.renderPalletDropdown = function() {
+    const selects = document.querySelectorAll('.pallet-no-select'); 
+    selects.forEach(sel => {
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="">เลือกหมายเลขพาเลท...</option>' + 
+            window.palletList.map(p => `<option value="${p}">Pallet No. ${p}</option>`).join('');
+        // ถ้าค่าเดิมยังอยู่ในลิสต์ ให้เลือกค่าเดิม
+        if (currentVal && window.palletList.includes(currentVal)) {
+            sel.value = currentVal;
+        }
+    });
+};
+
+// ฟังก์ชันเพิ่มหมายเลขพาเลทใหม่ (Local)
+window.addPalletLocal = function() {
+    const newPalletNo = prompt("ระบุ 'หมายเลขพาเลท' ใหม่ที่ต้องการเพิ่ม (เช่น 21, 22, หรือชื่อเฉพาะ):");
+    if (!newPalletNo || newPalletNo.trim() === '') return;
+    
+    const cleanNo = newPalletNo.trim();
+    if (window.palletList.includes(cleanNo)) {
+        alert("มีหมายเลขพาเลทนี้อยู่แล้ว!");
+        return;
+    }
+    
+    window.palletList.push(cleanNo);
+    localStorage.setItem('CWM_PALLET_LIST', JSON.stringify(window.palletList));
+    window.renderPalletDropdown();
+    alert("เพิ่มหมายเลขพาเลทสำเร็จ!");
+};
+
+// ฟังก์ชันลบหมายเลขพาเลท (Local)
+window.deletePalletLocal = function() {
+    const palletNo = prompt("ระบุ 'หมายเลขพาเลท' ที่ต้องการลบ:");
+    if (!palletNo || palletNo.trim() === '') return;
+    
+    const cleanNo = palletNo.trim();
+    if (!window.palletList.includes(cleanNo)) {
+        alert("ไม่พบหมายเลขพาเลทนี้ในระบบ!");
+        return;
+    }
+    
+    if (!confirm(`ยืนยันการลบพาเลทหมายเลข: ${cleanNo} ใช่หรือไม่?`)) return;
+    
+    window.palletList = window.palletList.filter(p => p !== cleanNo);
+    localStorage.setItem('CWM_PALLET_LIST', JSON.stringify(window.palletList));
+    window.renderPalletDropdown();
+    alert("ลบหมายเลขพาเลทสำเร็จ!");
+};
 
 // ฟังก์ชันเปิดหน้าต่างบันทึก Packing
 window.openPackingModal = function() {
@@ -11,7 +64,7 @@ window.openPackingModal = function() {
     }
     
     // ตั้งค่าเริ่มต้น
-    document.getElementById('pack-date').value = getShiftDateStr();
+    document.getElementById('pack-date').value = typeof getShiftDateStr === 'function' ? getShiftDateStr() : new Date().toISOString().split('T')[0];
     if (window.currentUser) {
         document.getElementById('pack-recorder').value = window.currentUser.name || window.currentUser.username;
     }
@@ -19,6 +72,30 @@ window.openPackingModal = function() {
     // ล้างรายการเดิมและสร้างแถวใหม่ 1 แถว
     document.getElementById('pack-batch-list').innerHTML = '';
     window.addPackingRow();
+
+    // 🌟 เพิ่มระบบจัดการพาเลท (เพิ่ม/ลบ) อัตโนมัติ โดยไม่ต้องแก้ HTML 🌟
+    const palletSelect = document.getElementById('pack-pallet-no') || document.querySelector('select[id*="pallet"]');
+    if (palletSelect) {
+        if (!palletSelect.classList.contains('pallet-no-select')) {
+            palletSelect.classList.add('pallet-no-select');
+        }
+        
+        // เช็คสิทธิ์ว่ามีปุ่มหรือยัง ถ้ายังไม่มี และเป็น Production หรือ Admin ให้เสกปุ่มขึ้นมา (เปลี่ยนเป็นเรียก Local Function)
+        if (!document.getElementById('btn-manage-pallet') && window.currentUser && (window.currentUser.role === 'Admin' || window.currentUser.role === 'Production')) {
+            const btnContainer = document.createElement('div');
+            btnContainer.id = 'btn-manage-pallet';
+            btnContainer.className = 'flex gap-2 mt-2';
+            btnContainer.innerHTML = `
+                <button type="button" onclick="addPalletLocal()" class="text-xs bg-green-100 text-green-700 font-bold px-3 py-1.5 rounded shadow-sm border border-green-300 hover:bg-green-200 transition-colors flex items-center gap-1">➕ เพิ่มพาเลท</button>
+                <button type="button" onclick="deletePalletLocal()" class="text-xs bg-red-100 text-red-700 font-bold px-3 py-1.5 rounded shadow-sm border border-red-300 hover:bg-red-200 transition-colors flex items-center gap-1">🗑️ ลบพาเลท</button>
+            `;
+            palletSelect.parentNode.appendChild(btnContainer);
+        }
+        
+        if(typeof window.renderPalletDropdown === 'function') {
+            window.renderPalletDropdown();
+        }
+    }
 
     modal.classList.remove('hidden');
 };
@@ -37,167 +114,133 @@ window.addPackingRow = function() {
     for(let i=1; i<=16; i++) {
         machineOpts += `<option value="CWM-${String(i).padStart(2,'0')}">CWM-${String(i).padStart(2,'0')}</option>`;
     }
-    let prodOpts = productList.map(p => `<option value="${p}">${p}</option>`).join('');
-
-    const div = document.createElement('div');
-    div.id = rowId;
-    div.className = "bg-blue-50 p-3 border border-blue-200 rounded-lg shadow-sm flex flex-col md:flex-row gap-3 items-end md:items-center relative";
     
-    // 💡 สังเกตว่าไม่มีปุ่ม NG แล้ว มีแค่ยอด FG (งานดี)
-    div.innerHTML = `
-        <div class="flex-1 w-full">
-            <label class="text-[10px] text-gray-500 font-bold uppercase">ดึงงานมาจากเครื่อง (Machine)</label>
-            <select class="pack-machine w-full p-2 border rounded bg-white text-sm font-bold text-blue-800">${machineOpts}</select>
+    let productOpts = '<option value="">เลือกรุ่น...</option>';
+    if (typeof productList !== 'undefined') {
+        productList.forEach(p => {
+            productOpts += `<option value="${p}">${p}</option>`;
+        });
+    }
+    
+    const rowHtml = `
+        <div id="${rowId}" class="flex flex-col md:flex-row gap-3 items-end bg-gray-50 p-3 rounded-lg border border-gray-200 mb-2 relative transition-all">
+            <div class="w-full md:w-1/3">
+                <label class="block text-xs font-bold text-gray-700 mb-1">แหล่งที่มา (Machine)</label>
+                <select class="pack-machine w-full p-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500" onchange="window.autoSelectProductPacking('${rowId}')" required>
+                    ${machineOpts}
+                </select>
+            </div>
+            <div class="w-full md:w-1/3">
+                <label class="block text-xs font-bold text-gray-700 mb-1">รุ่นสินค้า (Model)</label>
+                <select class="pack-product w-full p-2 border border-gray-300 rounded-lg text-sm bg-gray-100" required>
+                    ${productOpts}
+                </select>
+            </div>
+            <div class="w-full md:w-1/4">
+                <label class="block text-xs font-bold text-gray-700 mb-1">จำนวน (Pcs)</label>
+                <input type="number" class="pack-qty w-full p-2 border border-gray-300 rounded-lg text-sm text-right font-bold text-blue-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="0" required min="1">
+            </div>
+            <div class="w-full md:w-auto">
+                <button type="button" onclick="document.getElementById('${rowId}').remove()" class="w-full md:w-auto px-4 py-2 bg-red-50 text-red-600 rounded-lg font-bold hover:bg-red-100 border border-red-200 transition-colors">
+                    ลบ
+                </button>
+            </div>
         </div>
-        <div class="flex-1 w-full">
-            <label class="text-[10px] text-gray-500 font-bold uppercase">รุ่นสินค้า (Product)</label>
-            <select class="pack-product w-full p-2 border rounded bg-white text-sm text-gray-700">${prodOpts}</select>
-        </div>
-        <div class="w-32">
-            <label class="text-[10px] text-gray-500 font-bold uppercase">จำนวนบรรจุ (ชิ้น)</label>
-            <input type="number" class="pack-qty w-full p-2 border border-green-300 rounded text-center font-black text-green-700 bg-white shadow-inner" value="1000" min="1">
-        </div>
-        <button type="button" onclick="document.getElementById('${rowId}').remove()" class="absolute -top-2 -right-2 bg-red-100 text-red-600 hover:bg-red-500 hover:text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold shadow-sm transition-colors">&times;</button>
     `;
-    container.appendChild(div);
-
-    // ดึงค่ารุ่นอัตโนมัติเมื่อเลือกเครื่อง
-    const mSelect = div.querySelector('.pack-machine');
-    const pSelect = div.querySelector('.pack-product');
-    
-    mSelect.addEventListener('change', function() {
-        const selectedM = this.value;
-        // อาศัย machineMapping จาก form.js ตัวเดิม
-        if(selectedM && typeof machineMapping !== 'undefined' && machineMapping[selectedM]) {
-            pSelect.value = machineMapping[selectedM];
-        }
-    });
+    container.insertAdjacentHTML('beforeend', rowHtml);
 };
 
-// ฟังก์ชันบันทึกและสร้างใบแท็กพาเลท (Save & Print)
-window.submitPacking = async function(event) {
-    event.preventDefault();
-    const btn = document.getElementById('btn-save-pack');
-    const originalText = btn.innerHTML;
-    
-    const palletNo = document.getElementById('pack-pallet-no').value.trim();
-    const category = document.getElementById('pack-category').value;
-    const date = document.getElementById('pack-date').value;
-    const recorder = document.getElementById('pack-recorder').value;
-
-    if (!palletNo) {
-        alert("กรุณาระบุหมายเลขพาเลท (Pallet No.)");
-        return;
-    }
-
-    // รวบรวมข้อมูลรายการ
-    const rows = document.getElementById('pack-batch-list').children;
-    const items = [];
-    let totalQty = 0;
-
-    for (let row of rows) {
-        const machine = row.querySelector('.pack-machine').value;
-        const product = row.querySelector('.pack-product').value;
-        const qty = parseInt(row.querySelector('.pack-qty').value) || 0;
-
-        if (machine && qty > 0) {
-            items.push({ machine, product, qty });
-            totalQty += qty;
-        }
-    }
-
-    if (items.length === 0) {
-        alert("กรุณาเพิ่มรายการเครื่องจักรและจำนวนงานอย่างน้อย 1 รายการ");
-        return;
-    }
-
-    // เตรียม Payload ส่ง Backend
-    const payload = {
-        action: 'SAVE_PACKING',
-        timestamp: new Date().toLocaleString('th-TH'),
-        date: date,
-        palletNo: palletNo,
-        category: category,
-        recorder: recorder,
-        totalQty: totalQty,
-        items: items // Array ของแต่ละเครื่องที่อยู่ในพาเลทนี้
-    };
-
-    btn.disabled = true;
-    btn.innerHTML = "⏳ กำลังบันทึกข้อมูล...";
-
-    try {
-        // ส่งข้อมูลไปเซิร์ฟเวอร์
-        await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
-        
-        // เมื่อบันทึกเสร็จ ให้เด้งหน้าต่างปริ้นใบแท็กพาเลททันที
-        window.closePackingModal();
-        window.printPalletTag(payload);
-        
-    } catch(e) {
-        alert("เกิดข้อผิดพลาดในการบันทึก: " + e.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
+// ดึงรุ่นสินค้ามาใส่อัตโนมัติตามเครื่องที่เลือก
+window.autoSelectProductPacking = function(rowId) {
+    const row = document.getElementById(rowId);
+    if(!row) return;
+    const mSel = row.querySelector('.pack-machine');
+    const pSel = row.querySelector('.pack-product');
+    if(mSel.value && typeof machineMapping !== 'undefined' && machineMapping[mSel.value]) {
+        pSel.value = machineMapping[mSel.value];
     }
 };
 
-// 🌟 ฟังก์ชันสร้างใบแท็กพาเลทสำหรับสั่งพิมพ์ (Pallet Tag Printout) 🌟
-window.printPalletTag = function(data) {
-    // กำหนดสีของประเภทงาน
-    let catColor = "text-gray-800 border-gray-800";
-    if (data.category === "งานส่งคืนทดแทน") catColor = "text-orange-600 border-orange-600 bg-orange-50";
-    else if (data.category.includes("ตีกลับ")) catColor = "text-purple-600 border-purple-600 bg-purple-50";
+// ฟังก์ชันพิมพ์ใบปะหน้าพาเลท
+window.printPackingTag = function() {
+    const date = document.getElementById('pack-date')?.value || '-';
+    const palletNo = document.getElementById('pack-pallet-no')?.value || document.querySelector('.pallet-no-select')?.value || '-';
+    const recorder = document.getElementById('pack-recorder')?.value || '-';
+    
+    if (palletNo === '-' || palletNo === '') {
+        alert("⚠️ กรุณาเลือกหมายเลขพาเลทก่อนพิมพ์");
+        return;
+    }
 
-    // สร้างตารางรายการเครื่องจักร
+    const rows = document.querySelectorAll('#pack-batch-list > div');
+    if (rows.length === 0) {
+        alert("⚠️ กรุณาเพิ่มรายการลงพาเลทก่อนพิมพ์");
+        return;
+    }
+
     let itemsHtml = '';
-    data.items.forEach((item, index) => {
+    let totalQty = 0;
+    let isComplete = true;
+
+    rows.forEach((row, idx) => {
+        const m = row.querySelector('.pack-machine').value;
+        const p = row.querySelector('.pack-product').value;
+        const q = parseInt(row.querySelector('.pack-qty').value) || 0;
+        
+        if(!m || !p || q <= 0) isComplete = false;
+
+        totalQty += q;
         itemsHtml += `
-            <tr class="border-b border-dashed border-gray-400">
-                <td class="py-2 text-center">${index + 1}</td>
-                <td class="py-2 font-bold">${item.machine}</td>
-                <td class="py-2 text-sm">${item.product}</td>
-                <td class="py-2 text-right font-black text-lg">${item.qty.toLocaleString()}</td>
+            <tr>
+                <td style="text-align:center;">${idx + 1}</td>
+                <td>${m}</td>
+                <td>${p}</td>
+                <td class="right">${q.toLocaleString()}</td>
             </tr>
         `;
     });
 
-    // สร้างหน้าต่าง HTML สำหรับปริ้น
+    if (!isComplete) {
+        alert("⚠️ กรุณากรอกข้อมูล (เครื่อง, รุ่น, จำนวน) ให้ครบถ้วนทุกแถว");
+        return;
+    }
+
+    // สร้างหน้าต่างสำหรับพิมพ์
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     printWindow.document.write(`
         <html>
         <head>
-            <title>Pallet Tag - ${data.palletNo}</title>
+            <title>Pallet Tag No. ${palletNo}</title>
             <style>
-                @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700;800&display=swap');
-                body { font-family: 'Sarabun', sans-serif; padding: 20px; color: #000; }
-                .tag-container { border: 3px solid #000; padding: 20px; max-width: 500px; margin: 0 auto; border-radius: 10px; position: relative; }
-                .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-                .pallet-no { font-size: 48px; font-weight: 900; margin: 10px 0; letter-spacing: 2px; }
-                .category-badge { display: inline-block; padding: 5px 15px; border: 2px solid; border-radius: 50px; font-weight: bold; font-size: 18px; margin-bottom: 15px; }
-                .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; font-size: 14px; }
+                body { font-family: 'Sarabun', 'Segoe UI', sans-serif; padding: 20px; color: #000; }
+                .tag-container { border: 2px solid #000; padding: 20px; max-width: 100%; border-radius: 8px; }
+                .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 20px; }
+                .header h1 { margin: 0; font-size: 28px; text-transform: uppercase; }
+                .header p { margin: 5px 0 0 0; font-size: 14px; color: #555; }
+                .info-grid { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 16px; font-weight: bold; }
+                .pallet-badge { background: #000; color: #fff; padding: 5px 15px; border-radius: 4px; font-size: 20px; }
                 table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                th { background-color: #f0f0f0; border-bottom: 2px solid #000; padding: 8px; text-align: left; font-size: 12px; }
-                th.right { text-align: right; }
-                .total-box { background-color: #000; color: #fff; padding: 15px; text-align: center; border-radius: 5px; }
-                .total-box .lbl { font-size: 14px; }
-                .total-box .val { font-size: 36px; font-weight: 900; }
+                th, td { border: 1px solid #000; padding: 10px; font-size: 14px; }
+                th { background-color: #f0f0f0; text-align: left; }
+                .right { text-align: right; }
+                .total-box { display: flex; justify-content: space-between; border: 2px solid #000; padding: 10px; font-size: 18px; font-weight: bold; background: #f9f9f9; }
                 @media print {
-                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    body { padding: 0; }
+                    .tag-container { border: none; }
                 }
             </style>
         </head>
         <body>
             <div class="tag-container">
                 <div class="header">
-                    <h2 style="margin:0; color:#555;">PRODUCTION PALLET TAG</h2>
-                    <div class="pallet-no">${data.palletNo}</div>
-                    <div class="category-badge ${catColor}">${data.category}</div>
+                    <h1>PALLET IDENTIFICATION TAG</h1>
+                    <p>ใบปะหน้าพาเลทสินค้า (Finished Goods)</p>
                 </div>
                 
                 <div class="info-grid">
-                    <div><b>วันที่บรรจุ:</b> ${data.date}</div>
-                    <div style="text-align:right;"><b>ผู้บรรจุ:</b> ${data.recorder}</div>
+                    <div>วันที่บันทึก (Date): ${date}</div>
+                    <div>ผู้จัดพาเลท (Packer): ${recorder}</div>
+                    <div class="pallet-badge">PALLET NO. ${palletNo}</div>
                 </div>
 
                 <table>
@@ -216,7 +259,7 @@ window.printPalletTag = function(data) {
 
                 <div class="total-box">
                     <div class="lbl">TOTAL QUANTITY / ยอดรวมทั้งพาเลท</div>
-                    <div class="val">${data.totalQty.toLocaleString()} PCS</div>
+                    <div class="val">${totalQty.toLocaleString()} PCS</div>
                 </div>
                 
                 <div style="margin-top:30px; display:flex; justify-content:space-between; font-size:12px; text-align:center;">
@@ -225,12 +268,9 @@ window.printPalletTag = function(data) {
                 </div>
             </div>
             <script>
-                // สั่งปริ้นอัตโนมัติเมื่อหน้าโหลดเสร็จ
                 window.onload = function() {
                     setTimeout(function() {
                         window.print();
-                        // ปิดหน้าต่างนี้หลังปริ้นเสร็จ (ทางเลือกเสริม)
-                        // window.close(); 
                     }, 500);
                 };
             </script>
