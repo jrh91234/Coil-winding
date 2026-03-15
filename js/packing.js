@@ -8,7 +8,17 @@ window.palletList = JSON.parse(localStorage.getItem('CWM_PALLET_LIST')) ||
 
 // 2. ฟังก์ชันสำหรับเรนเดอร์ตัวเลือก Dropdown ของหมายเลขพาเลท
 window.renderPalletDropdown = function() {
-    const selects = document.querySelectorAll('.pallet-no-select'); 
+    // [NEW] แปลงช่องกรอกหมายเลขพาเลทใน HTML ให้เป็น Dropdown อัตโนมัติ (ในกรณีที่หน้า HTML ยังเป็น Input)
+    let palletEl = document.getElementById('pack-pallet-no');
+    if (palletEl && palletEl.tagName.toLowerCase() === 'input') {
+        const selectEl = document.createElement('select');
+        selectEl.id = 'pack-pallet-no';
+        selectEl.className = palletEl.className + ' pallet-no-select'; // นำ class เดิมมาใช้
+        palletEl.parentNode.replaceChild(selectEl, palletEl);
+    }
+
+    // ค้นหาและอัปเดตตัวเลือกใน Dropdown พาเลท
+    const selects = document.querySelectorAll('.pallet-no-select, #pack-pallet-no'); 
     selects.forEach(sel => {
         const currentVal = sel.value;
         sel.innerHTML = '<option value="">เลือกหมายเลขพาเลท...</option>' + 
