@@ -113,17 +113,17 @@ function initAppAfterLogin() {
 function applyPermissions() {
     const role = window.currentUser.role;
     
-    // ซ่อนเมนูทั้งหมดก่อน (รวมถึง rtv ด้วย)
-    ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv'].forEach(id => {
+    // ซ่อนเมนูทั้งหมดก่อน (เพิ่ม tab-packing เข้าไปในรายการซ่อน)
+    ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing'].forEach(id => {
         const el = document.getElementById(id);
         if(el) el.classList.add('hidden');
     });
 
     let defaultTab = '';
 
-    // จัดการสิทธิ์การมองเห็นเมนู
+    // จัดการสิทธิ์การมองเห็นเมนู (เปิด tab-packing ให้ Production และ Admin)
     if (role === 'Production') {
-        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-rtv'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-rtv', 'tab-packing'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'form';
     } 
     else if (role === 'QC') {
@@ -139,7 +139,7 @@ function applyPermissions() {
         defaultTab = 'dashboard';
     } 
     else if (role === 'Admin') {
-        ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'dashboard'; 
         
         const btnWidgetMgr = document.getElementById('btn-widget-manager');
@@ -161,7 +161,7 @@ window.openAdminPanel = function() {
         return;
     }
     
-    ['form', 'planning', 'dashboard', 'rtv'].forEach(t => {
+    ['form', 'planning', 'dashboard', 'rtv', 'packing'].forEach(t => {
         const el = document.getElementById('section-'+t);
         if(el) el.classList.add('hidden');
     });
