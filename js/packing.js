@@ -156,7 +156,7 @@ window.savePackingToSheet = async function() {
         }
     };
 
-    const btnSave = document.getElementById('btn-save-packing') || document.querySelector('#modal-packing button.bg-blue-600');
+    const btnSave = document.getElementById('btn-save-packing') || document.querySelector('#modal-packing button.bg-blue-600') || document.getElementById('btn-save-pack');
     let originalText = btnSave ? btnSave.innerHTML : 'บันทึกข้อมูล';
     if (btnSave) {
         btnSave.disabled = true;
@@ -175,6 +175,7 @@ window.savePackingToSheet = async function() {
             // ถามผู้ใช้ว่าต้องการพิมพ์ใบแปะพาเลทด้วยเลยหรือไม่
             if (confirm("บันทึกข้อมูลสำเร็จ! คุณต้องการพิมพ์ใบระบุพาเลท (Pallet Tag) ด้วยหรือไม่?")) {
                 window.printPallet();
+                window.closePackingModal();
             } else {
                 window.closePackingModal();
             }
@@ -192,7 +193,13 @@ window.savePackingToSheet = async function() {
     }
 };
 
-// 8. ฟังก์ชันพิมพ์ใบพาเลท (คงเดิม)
+// 8. ฟังก์ชันจัดการการ Submit ฟอร์ม (กันหน้าเว็บรีเฟรช)
+window.submitPacking = function(e) {
+    if (e) e.preventDefault();
+    window.savePackingToSheet();
+};
+
+// 9. ฟังก์ชันพิมพ์ใบพาเลท (คงเดิม)
 window.printPallet = function() {
     const date = document.getElementById('pack-date').value;
     const palletNo = document.getElementById('pack-pallet-no').value;
