@@ -317,7 +317,7 @@ window.updateHourSlots = function(type) {
     if(match) select.value = match;
 };
 
-// 🌟 อัปเดตสิทธิ์การเข้าถึงให้เมนู RTV และ Packing 🌟
+// 🌟 อัปเดตสิทธิ์การเข้าถึงให้เมนู RTV, Packing และ Sort 🌟
 window.switchTab = function(tab) {
     if (!window.currentUser) return;
     const role = window.currentUser.role;
@@ -325,11 +325,11 @@ window.switchTab = function(tab) {
     // จำกัดสิทธิ์
     if (role === 'Production' && (tab === 'planning' || tab === 'admin')) return;
     if (role === 'QC' && (tab === 'planning' || tab === 'admin' || tab === 'packing')) return;
-    if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin' || tab === 'maint' || tab === 'rtv' || tab === 'packing')) return;
+    if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin' || tab === 'maint' || tab === 'rtv' || tab === 'packing' || tab === 'sort')) return;
     if (role === 'Viewer' && tab !== 'dashboard') return;
 
     // สลับหน้าจอ Section
-    ['form', 'planning', 'dashboard', 'admin', 'rtv', 'packing'].forEach(t => {
+    ['form', 'planning', 'dashboard', 'admin', 'rtv', 'packing', 'sort'].forEach(t => {
         const el = document.getElementById('section-'+t);
         if(el) el.classList.toggle('hidden', t !== tab);
         
@@ -351,7 +351,7 @@ function applyPermissions() {
     const role = window.currentUser.role;
     
     // ซ่อนเมนูทั้งหมดก่อน
-    ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing'].forEach(id => {
+    ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort'].forEach(id => {
         const el = document.getElementById(id);
         if(el) el.classList.add('hidden');
     });
@@ -359,11 +359,11 @@ function applyPermissions() {
     let defaultTab = '';
 
     if (role === 'Production') {
-        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-rtv', 'tab-packing'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'form';
     } 
     else if (role === 'QC') {
-        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv', 'tab-sort'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'form';
     }
     else if (role === 'Planning') {
@@ -375,7 +375,7 @@ function applyPermissions() {
         defaultTab = 'dashboard';
     } 
     else if (role === 'Admin') {
-        ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'dashboard'; 
         
         const btnWidgetMgr = document.getElementById('btn-widget-manager');
