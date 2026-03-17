@@ -350,58 +350,27 @@ function applyPermissions() {
     const role = window.currentUser?.role;
     if (!role) return;
 
-    // 🚀 ส่วนที่ 1: ตรวจสอบและบังคับสร้างปุ่ม "งานรอ Sort" หากใน index.html ไม่มี
-    
-    // [1.1] สร้างปุ่มบน Desktop Navbar (ถ้าไม่มี)
-    let desktopBtn = document.getElementById('btn-desktop-sort');
-    if (!desktopBtn) {
-        const userNameSpan = document.getElementById('nav-user-name');
-        if (userNameSpan && userNameSpan.parentElement && userNameSpan.parentElement.parentElement) {
-            const navContainer = userNameSpan.parentElement.parentElement;
-            desktopBtn = document.createElement('button');
-            desktopBtn.id = 'btn-desktop-sort';
-            desktopBtn.onclick = () => window.open('https://jrh91234.github.io/CWM-sorting-system-/', '_blank');
-            desktopBtn.className = "ml-3 bg-pink-100 hover:bg-pink-200 text-pink-700 border border-pink-300 px-3 py-1.5 rounded-lg text-sm font-bold transition-all items-center gap-1 shadow-sm";
-            desktopBtn.innerHTML = "🔍 งานรอ Sort ↗️";
-            navContainer.appendChild(desktopBtn);
-        }
-    }
-
-    // [1.2] สร้างปุ่มในมือถือ Hamburger (ถ้าไม่มี)
-    let mobileBtn = document.getElementById('tab-sort');
-    if (!mobileBtn) {
-        const adminBtn = document.getElementById('tab-admin');
-        if (adminBtn && adminBtn.parentElement) {
-            mobileBtn = document.createElement('button');
-            mobileBtn.id = 'tab-sort';
-            mobileBtn.onclick = () => { window.toggleMenu(); window.open('https://jrh91234.github.io/CWM-sorting-system-/', '_blank'); };
-            mobileBtn.className = "py-4 px-6 text-left text-pink-600 font-bold border-l-4 border-transparent hover:bg-pink-50 transition-colors text-lg border-t border-gray-100 w-full";
-            mobileBtn.innerHTML = "🔍 ระบบงานรอ Sort ↗️";
-            adminBtn.parentElement.insertBefore(mobileBtn, adminBtn);
-        }
-    }
-
-    // 🚀 ส่วนที่ 2: บังคับซ่อนเมนูทั้งหมดก่อน (ใช้ style.display = 'none' ทะลุ CSS Tailwind)
-    const allMenus = ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort', 'btn-desktop-sort', 'btn-link-sort'];
+    // 1. ซ่อนเมนูทั้งหมดก่อน
+    const allMenus = ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort', 'btn-desktop-sort'];
     
     allMenus.forEach(id => {
         const el = document.getElementById(id);
         if(el) {
             el.classList.add('hidden');
-            el.style.display = 'none'; // บังคับซ่อนเด็ดขาด
+            el.style.display = 'none'; // บังคับซ่อน
         }
     });
 
     let defaultTab = '';
     let allowedMenus = [];
 
-    // 🚀 ส่วนที่ 3: กำหนดว่า Role ไหนเห็นเมนูไหนบ้าง
+    // 2. กำหนดว่า Role ไหนเห็นเมนูไหนบ้าง
     if (role === 'Production') {
-        allowedMenus = ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort', 'btn-desktop-sort', 'btn-link-sort'];
+        allowedMenus = ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort', 'btn-desktop-sort'];
         defaultTab = 'form';
     } 
     else if (role === 'QC') {
-        allowedMenus = ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv', 'tab-sort', 'btn-desktop-sort', 'btn-link-sort'];
+        allowedMenus = ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv', 'tab-sort', 'btn-desktop-sort'];
         defaultTab = 'form';
     }
     else if (role === 'Planning') {
@@ -423,13 +392,12 @@ function applyPermissions() {
         }
     }
 
-    // 🚀 ส่วนที่ 4: เปิดแสดงเฉพาะปุ่มที่ได้รับสิทธิ์ (บังคับเปิดด้วย style.display = 'block')
+    // 3. เปิดแสดงเฉพาะปุ่มที่ได้รับสิทธิ์
     allowedMenus.forEach(id => {
         const el = document.getElementById(id);
         if(el) {
             el.classList.remove('hidden');
-            // ถ้าเป็นปุ่มด้านบนสุด (Desktop) ใช้ flex, ถ้าเป็นปุ่มใหญ่ใช้ block
-            if (id === 'btn-desktop-sort' || id === 'btn-link-sort') {
+            if (id === 'btn-desktop-sort') {
                 el.style.display = 'flex';
             } else {
                 el.style.display = 'block';
