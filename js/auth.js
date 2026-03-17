@@ -86,7 +86,10 @@ function initAppAfterLogin() {
     window.renderRecorderOptions();
     window.renderProductOptions();
 
-    applyPermissions(); 
+    // 🌟 เรียกใช้ applyPermissions จาก globals.js 🌟
+    if (typeof applyPermissions === 'function') {
+        applyPermissions(); 
+    }
 
     document.addEventListener('dblclick', function(e) {
         if (e.target.tagName === 'CANVAS') {
@@ -113,48 +116,6 @@ function initAppAfterLogin() {
             }
         }
     });
-}
-
-function applyPermissions() {
-    const role = window.currentUser.role;
-    
-    // ซ่อนเมนูทั้งหมดก่อน
-    ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing'].forEach(id => {
-        const el = document.getElementById(id);
-        if(el) el.classList.add('hidden');
-    });
-
-    let defaultTab = '';
-
-    // จัดการสิทธิ์การมองเห็นเมนู
-    if (role === 'Production') {
-        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-rtv', 'tab-packing'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
-        defaultTab = 'form';
-    } 
-    else if (role === 'QC') {
-        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
-        defaultTab = 'form';
-    }
-    else if (role === 'Planning') {
-        ['tab-planning', 'tab-dashboard'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
-        defaultTab = 'planning';
-    } 
-    else if (role === 'Viewer') {
-        ['tab-dashboard'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
-        defaultTab = 'dashboard';
-    } 
-    else if (role === 'Admin') {
-        ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
-        defaultTab = 'dashboard'; 
-        
-        const btnWidgetMgr = document.getElementById('btn-widget-manager');
-        if (btnWidgetMgr) {
-            btnWidgetMgr.classList.remove('hidden');
-            btnWidgetMgr.classList.add('flex');
-        }
-    }
-
-    window.switchTab(defaultTab);
 }
 
 // ==========================================
