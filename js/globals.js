@@ -327,8 +327,8 @@ window.switchTab = function(tab) {
     if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin' || tab === 'maint' || tab === 'rtv' || tab === 'packing' || tab === 'sort')) return;
     if (role === 'Viewer' && tab !== 'dashboard') return;
 
-    // สลับหน้าจอ Section
-    ['form', 'planning', 'dashboard', 'admin', 'rtv', 'packing', 'sort'].forEach(t => {
+    // สลับหน้าจอ Section (เอา 'sort', 'rw', 'maint' ออกจากลูปนี้ เพราะเป็น Modal/ลิงก์แยก)
+    ['form', 'planning', 'dashboard', 'admin', 'rtv', 'packing'].forEach(t => {
         const el = document.getElementById('section-'+t);
         if(el) el.classList.toggle('hidden', t !== tab);
         
@@ -348,6 +348,7 @@ window.switchTab = function(tab) {
 
 function applyPermissions() {
     const role = window.currentUser.role;
+    console.log("[System] กำลังเปิดสิทธิ์ให้ Role:", role); // เพิ่มสำหรับ Debug
     
     // 1. ซ่อนปุ่มทั้งหมดก่อน รวมถึงปุ่ม Sort บนคอม(btn-link-sort) และบนมือถือ(tab-sort)
     ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort', 'btn-link-sort'].forEach(id => {
