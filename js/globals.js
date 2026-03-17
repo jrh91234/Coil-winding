@@ -350,14 +350,18 @@ function applyPermissions() {
     const role = window.currentUser?.role;
     if (!role) return;
 
-    // 1. ซ่อนเมนูทั้งหมดก่อน
-    const allMenus = ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort', 'btn-desktop-sort'];
+    // รองรับ ID ทั้งรูปแบบเก่าและใหม่ที่คุณอาจจะพิมพ์ลงใน index.html
+    const desktopSortIds = ['btn-desktop-sort', 'btn-link-sort'];
+    const mobileSortIds = ['tab-sort', 'tab-sort-mobile'];
+
+    // 1. ซ่อนเมนูทั้งหมดก่อน รวมถึงปุ่ม Sort ทุกแบบที่อาจมี
+    const allMenus = ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
     
     allMenus.forEach(id => {
         const el = document.getElementById(id);
         if(el) {
             el.classList.add('hidden');
-            el.style.display = 'none'; // บังคับซ่อน
+            el.style.setProperty('display', 'none', 'important'); // บังคับซ่อนเด็ดขาด
         }
     });
 
@@ -366,11 +370,11 @@ function applyPermissions() {
 
     // 2. กำหนดว่า Role ไหนเห็นเมนูไหนบ้าง
     if (role === 'Production') {
-        allowedMenus = ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort', 'btn-desktop-sort'];
+        allowedMenus = ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-rtv', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
         defaultTab = 'form';
     } 
     else if (role === 'QC') {
-        allowedMenus = ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv', 'tab-sort', 'btn-desktop-sort'];
+        allowedMenus = ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv', ...desktopSortIds, ...mobileSortIds];
         defaultTab = 'form';
     }
     else if (role === 'Planning') {
@@ -392,15 +396,15 @@ function applyPermissions() {
         }
     }
 
-    // 3. เปิดแสดงเฉพาะปุ่มที่ได้รับสิทธิ์
+    // 3. เปิดแสดงเฉพาะปุ่มที่ได้รับสิทธิ์ แบบบังคับเปิดทะลุคลาส Tailwind
     allowedMenus.forEach(id => {
         const el = document.getElementById(id);
         if(el) {
             el.classList.remove('hidden');
-            if (id === 'btn-desktop-sort') {
-                el.style.display = 'flex';
+            if (id.includes('desktop') || id.includes('link')) {
+                el.style.setProperty('display', 'flex', 'important'); // เปิดปุ่ม Desktop
             } else {
-                el.style.display = 'block';
+                el.style.setProperty('display', 'block', 'important'); // เปิดปุ่ม Hamburger
             }
         }
     });
