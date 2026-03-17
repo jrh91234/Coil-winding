@@ -124,7 +124,6 @@ window.fetchOptions = async function() {
            ngSymptoms = normalizeSymptomList(ngSymptoms);
            localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
            
-           // 🌟 อัปเดตข้อมูลอาการเสียลง Dropdown ของ RTV ใหม่เมื่อโหลดจาก Cloud เสร็จ 🌟
            if (typeof window.renderRtvSymptomsOptions === 'function') {
                window.renderRtvSymptomsOptions();
            }
@@ -317,7 +316,7 @@ window.updateHourSlots = function(type) {
     if(match) select.value = match;
 };
 
-// 🌟 อัปเดตสิทธิ์การเข้าถึงให้เมนู RTV, Packing และ Sort 🌟
+// 🌟 อัปเดตสิทธิ์การเข้าถึง (สลับ Section) 🌟
 window.switchTab = function(tab) {
     if (!window.currentUser) return;
     const role = window.currentUser.role;
@@ -350,20 +349,21 @@ window.switchTab = function(tab) {
 function applyPermissions() {
     const role = window.currentUser.role;
     
-    // ซ่อนเมนูทั้งหมดก่อน
-    ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort'].forEach(id => {
+    // 1. ซ่อนปุ่มทั้งหมดก่อน รวมถึงปุ่ม Sort บนคอม(btn-link-sort) และบนมือถือ(tab-sort)
+    ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort', 'btn-link-sort'].forEach(id => {
         const el = document.getElementById(id);
         if(el) el.classList.add('hidden');
     });
 
     let defaultTab = '';
 
+    // 2. กำหนดสิทธิ์การมองเห็น
     if (role === 'Production') {
-        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort', 'btn-link-sort'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'form';
     } 
     else if (role === 'QC') {
-        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv', 'tab-sort'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv', 'tab-sort', 'btn-link-sort'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'form';
     }
     else if (role === 'Planning') {
@@ -375,7 +375,7 @@ function applyPermissions() {
         defaultTab = 'dashboard';
     } 
     else if (role === 'Admin') {
-        ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing', 'tab-sort', 'btn-link-sort'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
         defaultTab = 'dashboard'; 
         
         const btnWidgetMgr = document.getElementById('btn-widget-manager');
