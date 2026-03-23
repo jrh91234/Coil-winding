@@ -713,8 +713,15 @@ function doPost(e) {
 
           if (foundRow > -1) {
               const now = new Date();
+
+              // === ป้องกันบันทึกซ้ำ: ถ้า status ปัจจุบันเป็น Completed อยู่แล้ว ไม่ต้องทำซ้ำ ===
+              const currentStatus = String(rows[foundRow - 1][getCol("Status")] || "").trim();
+              if (data.status === "Completed" && currentStatus === "Completed") {
+                  return ContentService.createTextOutput(JSON.stringify({status: "success", message: "งานนี้ถูกอนุมัติไปแล้ว"})).setMimeType(ContentService.MimeType.JSON);
+              }
+
               sheet.getRange(foundRow, statCol).setValue(data.status);
-              
+
               if (data.status === "Wait QC") {
                   // 2. ผู้คัด (Sorter) คัดเสร็จ ส่งยอดให้ QC
                   if (data.fgQty) sheet.getRange(foundRow, fgCol).setValue(data.fgQty);
@@ -736,7 +743,7 @@ function doPost(e) {
                       const symptom = String(sortRow[getCol("Symptom")] || "");
                       const ngQtyRaw = String(sortRow[getCol("NG_Qty")] || "");
                       const fgQtyRaw = String(sortRow[getCol("FG_Qty")] || "");
-                      const sortDateRaw = String(sortRow[getCol("Date")] || "");
+                      const sortDateRaw = sortRow[getCol("Date")];
                       const recorder = String(sortRow[getCol("Recorder")] || "");
 
                       // แยก Machine และ Product จาก "CWM-01 : S1B29288-JR (10A)"
@@ -748,7 +755,7 @@ function doPost(e) {
                       let ngKg = 0;
                       const ngVal = parseFloat(ngQtyRaw) || 0;
                       if (ngVal > 0) {
-                          if (ngQtyRaw.includes("ชิ้น")) {
+                          if (String(ngQtyRaw).includes("ชิ้น")) {
                               // แปลงชิ้นเป็น kg โดยใช้น้ำหนักต่อชิ้นตามรุ่น
                               let wpp = 0.003;
                               if (sortProduct.includes("10A")) wpp = 0.00228;
@@ -765,18 +772,27 @@ function doPost(e) {
                       let fgPcs = 0;
                       const fgVal = parseFloat(fgQtyRaw) || 0;
                       if (fgVal > 0) {
-                          if (fgQtyRaw.includes("kg")) {
+                          if (String(fgQtyRaw).includes("kg")) {
                               fgPcs = getPcsFromKg(sortProduct, fgVal);
                           } else {
                               fgPcs = Math.round(fgVal); // ชิ้นอยู่แล้ว
                           }
                       }
 
-                      // แยกวันที่และเวลาจาก "2026-02-17 21:00"
-                      const dateParts = sortDateRaw.split(" ");
-                      const dateStr = dateParts[0] || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
-                      const timeStr = dateParts[1] || "";
-                      const hourNum = parseInt(timeStr.split(":")[0]) || 0;
+                      // === แปลงวันที่จาก Sorting_Data (รองรับทั้ง Date object และ string) ===
+                      let dateStr = "";
+                      let hourNum = 0;
+                      if (sortDateRaw instanceof Date && !isNaN(sortDateRaw.getTime())) {
+                          dateStr = Utilities.formatDate(sortDateRaw, "GMT+7", "yyyy-MM-dd");
+                          hourNum = parseInt(Utilities.formatDate(sortDateRaw, "GMT+7", "HH")) || 0;
+                      } else if (sortDateRaw) {
+                          const dateParts = String(sortDateRaw).split(" ");
+                          dateStr = dateParts[0] || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+                          const timeStr = dateParts[1] || "";
+                          hourNum = parseInt(timeStr.split(":")[0]) || 0;
+                      } else {
+                          dateStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+                      }
                       const shiftType = (hourNum >= 8 && hourNum < 20) ? "Day" : "Night";
 
                       // เขียน row ใหม่ลง Production_Data
