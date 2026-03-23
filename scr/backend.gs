@@ -744,7 +744,7 @@ function doPost(e) {
                       const ngQtyRaw = String(sortRow[getCol("NG_Qty")] || "");
                       const fgQtyRaw = String(sortRow[getCol("FG_Qty")] || "");
                       const sortDateRaw = sortRow[getCol("Date")];
-                      const recorder = String(sortRow[getCol("Recorder")] || "");
+                      const recorder = String(sortRow[getCol("Sorter")] || sortRow[getCol("Recorder")] || "");
 
                       // แยก Machine และ Product จาก "CWM-01 : S1B29288-JR (10A)"
                       const pParts = productStr.split(" : ");
