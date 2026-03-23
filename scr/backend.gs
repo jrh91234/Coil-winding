@@ -726,8 +726,92 @@ function doPost(e) {
               else if (data.status === "Completed") {
                   // 3. QC อนุมัติผ่าน (เก็บชื่อ QC ลงคอลัมน์ Closed_By)
                   sheet.getRange(foundRow, closedByCol).setValue(data.closedBy);
-                  sheet.getRange(foundRow, closedDateCol).setValue(now.toLocaleString('th-TH')); 
+                  sheet.getRange(foundRow, closedDateCol).setValue(now.toLocaleString('th-TH'));
                   logUserAction(data.closedBy, "System", "QC_APPROVE", `QC อนุมัติงาน: ${data.jobId}`);
+
+                  // === เพิ่ม NG หลัง Sort เข้า Production_Data เป็น row ใหม่ ===
+                  try {
+                      const sortRow = rows[foundRow - 1];
+                      const productStr = String(sortRow[getCol("Product")] || "");
+                      const symptom = String(sortRow[getCol("Symptom")] || "");
+                      const ngQtyRaw = String(sortRow[getCol("NG_Qty")] || "");
+                      const fgQtyRaw = String(sortRow[getCol("FG_Qty")] || "");
+                      const sortDateRaw = String(sortRow[getCol("Date")] || "");
+                      const recorder = String(sortRow[getCol("Recorder")] || "");
+
+                      // แยก Machine และ Product จาก "CWM-01 : S1B29288-JR (10A)"
+                      const pParts = productStr.split(" : ");
+                      const sortMachine = pParts[0] ? pParts[0].trim() : "-";
+                      const sortProduct = pParts[1] ? pParts[1].trim() : productStr.trim();
+
+                      // แปลง NG_Qty เป็น kg
+                      let ngKg = 0;
+                      const ngVal = parseFloat(ngQtyRaw) || 0;
+                      if (ngVal > 0) {
+                          if (ngQtyRaw.includes("ชิ้น")) {
+                              // แปลงชิ้นเป็น kg โดยใช้น้ำหนักต่อชิ้นตามรุ่น
+                              let wpp = 0.003;
+                              if (sortProduct.includes("10A")) wpp = 0.00228;
+                              else if (sortProduct.includes("16A")) wpp = 0.00279;
+                              else if (sortProduct.includes("20A")) wpp = 0.00357;
+                              else if (sortProduct.includes("25/32A")) wpp = 0.005335;
+                              ngKg = ngVal * wpp;
+                          } else {
+                              ngKg = ngVal; // kg อยู่แล้ว
+                          }
+                      }
+
+                      // แปลง FG_Qty เป็นชิ้น (สำหรับ FG ใน Production_Data)
+                      let fgPcs = 0;
+                      const fgVal = parseFloat(fgQtyRaw) || 0;
+                      if (fgVal > 0) {
+                          if (fgQtyRaw.includes("kg")) {
+                              fgPcs = getPcsFromKg(sortProduct, fgVal);
+                          } else {
+                              fgPcs = Math.round(fgVal); // ชิ้นอยู่แล้ว
+                          }
+                      }
+
+                      // แยกวันที่และเวลาจาก "2026-02-17 21:00"
+                      const dateParts = sortDateRaw.split(" ");
+                      const dateStr = dateParts[0] || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+                      const timeStr = dateParts[1] || "";
+                      const hourNum = parseInt(timeStr.split(":")[0]) || 0;
+                      const shiftType = (hourNum >= 8 && hourNum < 20) ? "Day" : "Night";
+
+                      // เขียน row ใหม่ลง Production_Data
+                      if (ngKg > 0) {
+                          let prodSheet = ss.getSheetByName("Production_Data");
+                          if (prodSheet) {
+                              syncHeaders(prodSheet);
+                              const prodHeaders = prodSheet.getRange(1, 1, 1, prodSheet.getLastColumn()).getValues()[0];
+                              const getProdCol = (name) => prodHeaders.findIndex(h => h.toString().trim().toLowerCase() === name.toLowerCase());
+
+                              const newRow = new Array(prodHeaders.length).fill("");
+                              const mapData = (colName, value) => { const idx = getProdCol(colName); if (idx !== -1) newRow[idx] = value; };
+
+                              const ngDetails = [{ type: symptom, qty: parseFloat(ngKg.toFixed(4)), unit: "kg" }];
+
+                              mapData("Timestamp", now.toLocaleString('th-TH'));
+                              mapData("Date", dateStr);
+                              mapData("Machine", sortMachine);
+                              mapData("Shift", "-");
+                              mapData("Recorder", recorder);
+                              mapData("Product", sortProduct);
+                              mapData("Hour", "Sort");
+                              mapData("FG", fgPcs);
+                              mapData("NG_Total", parseFloat(ngKg.toFixed(4)));
+                              mapData("NG_Details_JSON", JSON.stringify(ngDetails));
+                              mapData("Shift_Type", shiftType);
+                              mapData("Batch_ID", "SORT-" + data.jobId);
+
+                              prodSheet.appendRow(newRow);
+                          }
+                      }
+                  } catch (sortErr) {
+                      // ไม่ให้ error ของ Production_Data ไปกระทบการอนุมัติ Sorting
+                      console.error("Error writing sorting NG to Production_Data: " + sortErr.toString());
+                  }
               }
               else if (data.status === "Rejected") {
                   // 3. QC ตีกลับ (เพิ่มชื่อ QC ที่ตีกลับไว้ในหมายเหตุด้วย)
