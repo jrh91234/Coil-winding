@@ -782,18 +782,49 @@ function doPost(e) {
                       // === แปลงวันที่จาก Sorting_Data (รองรับทั้ง Date object และ string) ===
                       let dateStr = "";
                       let hourNum = 0;
+                      let timeStr = "";
                       if (sortDateRaw instanceof Date && !isNaN(sortDateRaw.getTime())) {
                           dateStr = Utilities.formatDate(sortDateRaw, "GMT+7", "yyyy-MM-dd");
                           hourNum = parseInt(Utilities.formatDate(sortDateRaw, "GMT+7", "HH")) || 0;
+                          timeStr = Utilities.formatDate(sortDateRaw, "GMT+7", "HH:mm");
                       } else if (sortDateRaw) {
                           const dateParts = String(sortDateRaw).split(" ");
                           dateStr = dateParts[0] || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
-                          const timeStr = dateParts[1] || "";
-                          hourNum = parseInt(timeStr.split(":")[0]) || 0;
+                          const rawTime = dateParts[1] || "";
+                          hourNum = parseInt(rawTime.split(":")[0]) || 0;
+                          timeStr = rawTime || "";
                       } else {
                           dateStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
                       }
                       const shiftType = (hourNum >= 8 && hourNum < 20) ? "Day" : "Night";
+
+                      // === ค้นหา Shift (A/B) จาก Production_Data โดย match เครื่อง+วันที่ ===
+                      let matchedShift = "-";
+                      try {
+                          let prodSheet = ss.getSheetByName("Production_Data");
+                          if (prodSheet && prodSheet.getLastRow() > 1) {
+                              const prodRows = prodSheet.getDataRange().getValues();
+                              const prodHeaders = prodRows[0].map(h => h.toString().trim().toLowerCase());
+                              const pDateIdx = prodHeaders.indexOf("date");
+                              const pMachIdx = prodHeaders.indexOf("machine");
+                              const pShiftIdx = prodHeaders.indexOf("shift");
+                              // ตัด (A)/(B) line suffix ออกจาก sortMachine เพื่อ match กับ Production_Data
+                              const baseMachine = sortMachine.replace(/\([AB]\)$/, "").trim();
+                              if (pDateIdx !== -1 && pMachIdx !== -1 && pShiftIdx !== -1) {
+                                  for (let p = prodRows.length - 1; p >= 1; p--) {
+                                      const pDate = String(prodRows[p][pDateIdx] || "").trim();
+                                      const pMach = String(prodRows[p][pMachIdx] || "").trim();
+                                      const pShift = String(prodRows[p][pShiftIdx] || "").trim();
+                                      if (pDate === dateStr && pMach === baseMachine && (pShift === "A" || pShift === "B")) {
+                                          matchedShift = pShift;
+                                          break;
+                                      }
+                                  }
+                              }
+                          }
+                      } catch (lookupErr) {
+                          console.error("Error looking up shift from Production_Data: " + lookupErr.toString());
+                      }
 
                       // เขียน row ใหม่ลง Production_Data
                       if (ngKg > 0) {
@@ -811,10 +842,10 @@ function doPost(e) {
                               mapData("Timestamp", now.toLocaleString('th-TH'));
                               mapData("Date", dateStr);
                               mapData("Machine", sortMachine);
-                              mapData("Shift", "-");
+                              mapData("Shift", matchedShift);
                               mapData("Recorder", recorder);
                               mapData("Product", sortProduct);
-                              mapData("Hour", "Sort");
+                              mapData("Hour", timeStr || "Sort");
                               mapData("FG", fgPcs);
                               mapData("NG_Total", parseFloat(ngKg.toFixed(4)));
                               mapData("NG_Details_JSON", JSON.stringify(ngDetails));
