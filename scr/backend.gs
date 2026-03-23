@@ -814,16 +814,24 @@ function doPost(e) {
                               const pHourIdx = prodHeaders.indexOf("hour");
                               // ตัด (A)/(B) line suffix ออกจาก sortMachine เพื่อ match กับ Production_Data
                               const baseMachine = sortMachine.replace(/\([AB]\)$/, "").trim();
+
+                              // ฟังก์ชันแปลง Date cell เป็น yyyy-MM-dd (รองรับทั้ง Date object และ string)
+                              const formatProdDate = (val) => {
+                                  if (val instanceof Date && !isNaN(val.getTime())) {
+                                      return Utilities.formatDate(val, "GMT+7", "yyyy-MM-dd");
+                                  }
+                                  return String(val || "").trim();
+                              };
+
                               if (pDateIdx !== -1 && pMachIdx !== -1 && pShiftIdx !== -1) {
+                                  // รอบแรก: match เครื่อง + วันที่ + เวลาตกในช่วง Hour
                                   for (let p = prodRows.length - 1; p >= 1; p--) {
-                                      const pDate = String(prodRows[p][pDateIdx] || "").trim();
+                                      const pDate = formatProdDate(prodRows[p][pDateIdx]);
                                       const pMach = String(prodRows[p][pMachIdx] || "").trim();
                                       const pShift = String(prodRows[p][pShiftIdx] || "").trim();
                                       if (pDate === dateStr && pMach === baseMachine && (pShift === "A" || pShift === "B")) {
-                                          // เช็คว่าเวลา sorting ตกในช่วง Hour ของ row นี้หรือไม่
                                           if (pHourIdx !== -1) {
                                               const pHour = String(prodRows[p][pHourIdx] || "").trim();
-                                              // parse ช่วงเวลา เช่น "09:00-10:00"
                                               const hParts = pHour.split("-");
                                               if (hParts.length === 2) {
                                                   const rangeStart = parseInt(hParts[0].split(":")[0]) || 0;
@@ -833,7 +841,6 @@ function doPost(e) {
                                                       break;
                                                   }
                                               } else {
-                                                  // Hour ไม่ใช่ช่วง → match แค่เครื่อง+วันที่
                                                   matchedShift = pShift;
                                                   break;
                                               }
@@ -843,10 +850,10 @@ function doPost(e) {
                                           }
                                       }
                                   }
-                                  // ถ้ายังไม่เจอจาก Hour match → fallback match แค่เครื่อง+วันที่
+                                  // รอบสอง (fallback): match แค่เครื่อง + วันที่
                                   if (matchedShift === "-") {
                                       for (let p = prodRows.length - 1; p >= 1; p--) {
-                                          const pDate = String(prodRows[p][pDateIdx] || "").trim();
+                                          const pDate = formatProdDate(prodRows[p][pDateIdx]);
                                           const pMach = String(prodRows[p][pMachIdx] || "").trim();
                                           const pShift = String(prodRows[p][pShiftIdx] || "").trim();
                                           if (pDate === dateStr && pMach === baseMachine && (pShift === "A" || pShift === "B")) {
