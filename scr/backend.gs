@@ -745,6 +745,7 @@ function doPost(e) {
                       const fgQtyRaw = String(sortRow[getCol("FG_Qty")] || "");
                       const sortDateRaw = sortRow[getCol("Date")];
                       const recorder = String(sortRow[getCol("Sorter")] || sortRow[getCol("Recorder")] || "");
+                      const remarkStr = String(sortRow[getCol("Remark")] || "");
 
                       // แยก Machine และ Product จาก "CWM-01 : S1B29288-JR (10A)"
                       const pParts = productStr.split(" : ");
@@ -769,13 +770,17 @@ function doPost(e) {
                       }
 
                       // แปลง FG_Qty เป็นชิ้น (สำหรับ FG ใน Production_Data)
+                      // ถ้าพบที่ FG → ไม่ดึงยอด FG มา (เพราะ FG ถูกนับไปแล้วในระบบผลิต)
                       let fgPcs = 0;
-                      const fgVal = parseFloat(fgQtyRaw) || 0;
-                      if (fgVal > 0) {
-                          if (String(fgQtyRaw).includes("kg")) {
-                              fgPcs = getPcsFromKg(sortProduct, fgVal);
-                          } else {
-                              fgPcs = Math.round(fgVal); // ชิ้นอยู่แล้ว
+                      const isFoundAtFG = /พบที่:\s*FG/i.test(remarkStr);
+                      if (!isFoundAtFG) {
+                          const fgVal = parseFloat(fgQtyRaw) || 0;
+                          if (fgVal > 0) {
+                              if (String(fgQtyRaw).includes("kg")) {
+                                  fgPcs = getPcsFromKg(sortProduct, fgVal);
+                              } else {
+                                  fgPcs = Math.round(fgVal); // ชิ้นอยู่แล้ว
+                              }
                           }
                       }
 
