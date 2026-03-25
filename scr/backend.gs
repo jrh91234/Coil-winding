@@ -722,10 +722,14 @@ function doPost(e) {
           if (foundRow > -1) {
               const now = new Date();
 
-              // === ป้องกันบันทึกซ้ำ: ถ้า status ปัจจุบันเป็น Completed อยู่แล้ว ไม่ต้องทำซ้ำ ===
+              // === ป้องกันบันทึกซ้ำ: ถ้า status ปัจจุบันเป็น Completed และไม่ได้ถูก Recall กลับมา ===
               const currentStatus = String(rows[foundRow - 1][getCol("Status")] || "").trim();
               if (data.status === "Completed" && currentStatus === "Completed") {
                   return ContentService.createTextOutput(JSON.stringify({status: "success", message: "งานนี้ถูกอนุมัติไปแล้ว"})).setMimeType(ContentService.MimeType.JSON);
+              }
+              // ป้องกัน Reject ซ้ำ: ถ้า status ปัจจุบันเป็น Rejected อยู่แล้ว ไม่ต้องทำซ้ำ
+              if (data.status === "Rejected" && currentStatus === "Rejected") {
+                  return ContentService.createTextOutput(JSON.stringify({status: "success", message: "งานนี้ถูกตีกลับไปแล้ว"})).setMimeType(ContentService.MimeType.JSON);
               }
 
               // === Batch write: รวมการเขียนหลาย cell เป็นครั้งเดียว ลด API calls ===
@@ -881,31 +885,68 @@ function doPost(e) {
                                   if (matchedShift === "-") matchedShift = fallbackShift;
                               }
 
-                              // เขียน row ใหม่ลง Production_Data (ใช้ prodHeaders ที่อ่านไว้แล้ว ไม่อ่านซ้ำ)
+                              // === เขียน/อัปเดต Production_Data — รองรับ Recall ===
+                              syncHeaders(prodSheet);
+                              const freshHeaders = prodSheet.getRange(1, 1, 1, prodSheet.getLastColumn()).getValues()[0];
+                              const getProdCol = (name) => freshHeaders.findIndex(h => h.toString().trim().toLowerCase() === name.toLowerCase());
+                              const batchId = "SORT-" + data.jobId;
+
+                              // ค้นหาแถวเดิมที่มี Batch_ID ตรงกัน (กรณี recall)
+                              const batchIdx = getProdCol("Batch_ID");
+                              let existingProdRow = -1;
+                              if (batchIdx !== -1) {
+                                  const prodAllData = prodSheet.getDataRange().getValues();
+                                  for (let p = prodAllData.length - 1; p >= 1; p--) {
+                                      if (String(prodAllData[p][batchIdx] || "").trim() === batchId) {
+                                          existingProdRow = p + 1;
+                                          break;
+                                      }
+                                  }
+                              }
+
                               if (ngKg > 0) {
-                                  syncHeaders(prodSheet);
-                                  const freshHeaders = prodSheet.getRange(1, 1, 1, prodSheet.getLastColumn()).getValues()[0];
-                                  const getProdCol = (name) => freshHeaders.findIndex(h => h.toString().trim().toLowerCase() === name.toLowerCase());
-
-                                  const newRow = new Array(freshHeaders.length).fill("");
-                                  const mapData = (colName, value) => { const idx = getProdCol(colName); if (idx !== -1) newRow[idx] = value; };
-
                                   const ngDetails = [{ type: symptom, qty: parseFloat(ngKg.toFixed(4)), unit: "kg" }];
 
-                                  mapData("Timestamp", now.toLocaleString('th-TH'));
-                                  mapData("Date", dateStr);
-                                  mapData("Machine", sortMachine);
-                                  mapData("Shift", matchedShift);
-                                  mapData("Recorder", recorder);
-                                  mapData("Product", sortProduct);
-                                  mapData("Hour", hourSlot);
-                                  mapData("FG", fgPcs);
-                                  mapData("NG_Total", parseFloat(ngKg.toFixed(4)));
-                                  mapData("NG_Details_JSON", JSON.stringify(ngDetails));
-                                  mapData("Shift_Type", shiftType);
-                                  mapData("Batch_ID", "SORT-" + data.jobId);
+                                  if (existingProdRow > 0) {
+                                      // === Recall: อัปเดตแถวเดิมแทนการ append ===
+                                      const updateCell = (colName, value) => {
+                                          const idx = getProdCol(colName);
+                                          if (idx !== -1) prodSheet.getRange(existingProdRow, idx + 1).setValue(value);
+                                      };
+                                      updateCell("Timestamp", now.toLocaleString('th-TH'));
+                                      updateCell("Date", dateStr);
+                                      updateCell("Machine", sortMachine);
+                                      updateCell("Shift", matchedShift);
+                                      updateCell("Recorder", recorder);
+                                      updateCell("Product", sortProduct);
+                                      updateCell("Hour", hourSlot);
+                                      updateCell("FG", fgPcs);
+                                      updateCell("NG_Total", parseFloat(ngKg.toFixed(4)));
+                                      updateCell("NG_Details_JSON", JSON.stringify(ngDetails));
+                                      updateCell("Shift_Type", shiftType);
+                                  } else {
+                                      // === งานปกติ: append แถวใหม่ ===
+                                      const newRow = new Array(freshHeaders.length).fill("");
+                                      const mapData = (colName, value) => { const idx = getProdCol(colName); if (idx !== -1) newRow[idx] = value; };
 
-                                  prodSheet.appendRow(newRow);
+                                      mapData("Timestamp", now.toLocaleString('th-TH'));
+                                      mapData("Date", dateStr);
+                                      mapData("Machine", sortMachine);
+                                      mapData("Shift", matchedShift);
+                                      mapData("Recorder", recorder);
+                                      mapData("Product", sortProduct);
+                                      mapData("Hour", hourSlot);
+                                      mapData("FG", fgPcs);
+                                      mapData("NG_Total", parseFloat(ngKg.toFixed(4)));
+                                      mapData("NG_Details_JSON", JSON.stringify(ngDetails));
+                                      mapData("Shift_Type", shiftType);
+                                      mapData("Batch_ID", batchId);
+
+                                      prodSheet.appendRow(newRow);
+                                  }
+                              } else if (existingProdRow > 0) {
+                                  // Recall แล้วคัดใหม่ได้ NG = 0 → ลบแถวเดิมออกจาก Production_Data
+                                  prodSheet.deleteRow(existingProdRow);
                               }
                           }
                       } catch (lookupErr) {
