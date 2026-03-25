@@ -979,6 +979,83 @@ function doPost(e) {
       }
   }
 
+  // --- ระบบ Recall งาน Sort ที่ QC อนุมัติแล้ว กลับมาแก้ไข/อนุมัติใหม่ ---
+  if (action === "RECALL_SORTING") {
+      const lock = LockService.getScriptLock();
+      try {
+          lock.waitLock(10000);
+          let sheet = ss.getSheetByName("Sorting_Data");
+          if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบ Sheet Sorting_Data"})).setMimeType(ContentService.MimeType.JSON);
+
+          const rows = sheet.getDataRange().getValues();
+          const headers = rows[0];
+          const getCol = (name) => headers.findIndex(h => String(h).trim().toLowerCase() === name.toLowerCase());
+
+          let jobCol = getCol("Job_ID");
+          let statCol = getCol("Status") + 1;
+          let closedByCol = getCol("Closed_By") + 1;
+          let closedDateCol = getCol("Closed_Date") + 1;
+          let remCol = getCol("Remark") + 1;
+
+          let foundRow = -1;
+          for (let i = 1; i < rows.length; i++) {
+              if (rows[i][jobCol] === data.jobId) { foundRow = i + 1; break; }
+          }
+
+          if (foundRow === -1) {
+              return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบรหัสงานนี้"})).setMimeType(ContentService.MimeType.JSON);
+          }
+
+          const currentStatus = String(rows[foundRow - 1][getCol("Status")] || "").trim();
+          if (currentStatus !== "Completed") {
+              return ContentService.createTextOutput(JSON.stringify({status: "error", message: "งานนี้ยังไม่ได้อนุมัติ ไม่สามารถ Recall ได้"})).setMimeType(ContentService.MimeType.JSON);
+          }
+
+          // 1. เปลี่ยนสถานะกลับเป็น Wait QC
+          sheet.getRange(foundRow, statCol).setValue("Wait QC");
+          // 2. ล้าง Closed_By (QC) แต่เก็บ Sorter ไว้
+          if (closedByCol > 0) sheet.getRange(foundRow, closedByCol).setValue("");
+          // 3. ล้าง Closed_Date
+          if (closedDateCol > 0) sheet.getRange(foundRow, closedDateCol).setValue("");
+          // 4. เพิ่ม Remark ว่า Recall โดยใคร
+          let oldRemark = sheet.getRange(foundRow, remCol).getValue();
+          const now = new Date();
+          let recallNote = `[Recall โดย ${data.recalledBy} เมื่อ ${Utilities.formatDate(now, "GMT+7", "dd/MM/yyyy HH:mm")}${data.reason ? ': ' + data.reason : ''}]`;
+          sheet.getRange(foundRow, remCol).setValue(recallNote + " | " + oldRemark);
+
+          SpreadsheetApp.flush();
+
+          // 5. ลบ row NG ที่เขียนเข้า Production_Data ตอนอนุมัติ (Batch_ID = "SORT-" + jobId)
+          try {
+              let prodSheet = ss.getSheetByName("Production_Data");
+              if (prodSheet && prodSheet.getLastRow() > 1) {
+                  const prodRows = prodSheet.getDataRange().getValues();
+                  const prodHeaders = prodRows[0];
+                  const batchIdx = prodHeaders.findIndex(h => String(h).trim().toLowerCase() === "batch_id");
+                  if (batchIdx !== -1) {
+                      // ลบจากล่างขึ้นบนเพื่อไม่ให้ index เลื่อน
+                      for (let p = prodRows.length - 1; p >= 1; p--) {
+                          if (String(prodRows[p][batchIdx]).trim() === "SORT-" + data.jobId) {
+                              prodSheet.deleteRow(p + 1);
+                          }
+                      }
+                      SpreadsheetApp.flush();
+                  }
+              }
+          } catch (prodErr) {
+              console.error("Recall: ลบ Production_Data row error: " + prodErr.toString());
+          }
+
+          logUserAction(data.recalledBy, data.role || "QC", "RECALL_SORTING", `Recall งาน ${data.jobId}${data.reason ? ' เหตุผล: ' + data.reason : ''}`);
+          return ContentService.createTextOutput(JSON.stringify({status: "success", message: `Recall งาน ${data.jobId} สำเร็จ กลับสู่สถานะ Wait QC`})).setMimeType(ContentService.MimeType.JSON);
+
+      } catch (err) {
+          return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+      } finally {
+          lock.releaseLock();
+      }
+  }
+
   // --- ส่วนที่ 2.6: ระบบ Packing ลงพาเลท ---
   if (action === "SAVE_PACKING") {
       const lock = LockService.getScriptLock();
