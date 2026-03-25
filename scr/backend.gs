@@ -770,10 +770,10 @@ function doPost(e) {
                       }
 
                       // แปลง FG_Qty เป็นชิ้น (สำหรับ FG ใน Production_Data)
-                      // ถ้าพบที่ FG → ไม่ดึงยอด FG มา (เพราะ FG ถูกนับไปแล้วในระบบผลิต)
+                      // ถ้าพบที่ FG หรือ RTV → ไม่ดึงยอด FG มา (เพราะ FG ถูกนับไปแล้วในระบบผลิต)
                       let fgPcs = 0;
-                      const isFoundAtFG = /พบที่:\s*FG/i.test(remarkStr);
-                      if (!isFoundAtFG) {
+                      const isFoundAtFGorRTV = /พบที่:\s*(FG|RTV)/i.test(remarkStr);
+                      if (!isFoundAtFGorRTV) {
                           const fgVal = parseFloat(fgQtyRaw) || 0;
                           if (fgVal > 0) {
                               if (String(fgQtyRaw).includes("kg")) {
