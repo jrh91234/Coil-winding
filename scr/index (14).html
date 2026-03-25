@@ -562,6 +562,36 @@
     </div>
 
 
+    <!-- Modal สำหรับ Recall งานที่อนุมัติแล้ว -->
+    <div id="recallModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 mx-4 border-t-4 border-amber-500 transition-all relative">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h3 class="text-lg font-bold text-amber-700">🔄 Recall งานที่อนุมัติแล้ว</h3>
+                <button type="button" onclick="closeRecallModal()" class="text-gray-400 hover:text-red-600 text-xl font-bold transition-colors" title="ปิด">✖</button>
+            </div>
+
+            <form id="recallForm" onsubmit="submitRecall(event)">
+                <input type="hidden" id="recall-job-id">
+
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-800">
+                    <b>⚠️ งานรหัส: <span id="recall-job-display"></span></b><br>
+                    การ Recall จะเปลี่ยนสถานะกลับเป็น "Wait QC"<br>
+                    เพื่อให้สามารถแก้ไขยอดหรืออนุมัติใหม่ได้
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-xs font-bold text-gray-600 mb-1">เหตุผลในการ Recall (ไม่บังคับ)</label>
+                    <textarea id="recall-reason" rows="2" class="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500" placeholder="เช่น นับยอดผิด, ต้องคัดใหม่..."></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3 mt-4 pt-2 border-t border-gray-100">
+                    <button type="button" onclick="closeRecallModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300 transition">ยกเลิก</button>
+                    <button type="submit" id="btn-submit-recall" class="px-5 py-2 bg-amber-600 text-white rounded-lg font-bold hover:bg-amber-700 transition shadow">🔄 ยืนยัน Recall</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- เพิ่ม Flatpickr JS สำหรับสร้าง Time Picker 24H -->
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
@@ -1167,10 +1197,10 @@
             });
 
             let sortedDates = Object.keys(dailyData).sort();
-            if (sortedDates.length > 1) {
+            if (sortedDates.length >= 1) {
                 html += `
                     <div class="col-span-full mt-3 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                        <h4 class="font-bold text-gray-800 text-sm mb-2">📊 เทรนด์การคัดรายวัน (FG vs NG)</h4>
+                        <h4 class="font-bold text-gray-800 text-sm mb-2">📊 ${sortedDates.length > 1 ? 'เทรนด์การคัดรายวัน' : 'สรุปยอดคัดวันนี้'} (FG vs NG)</h4>
                         <div style="position:relative;height:250px;max-height:300px;">
                             <canvas id="dailyTrendChart"></canvas>
                         </div>
@@ -1181,7 +1211,7 @@
 
             // วาดกราฟหลัง DOM พร้อม
             try {
-                if (sortedDates.length > 1 && typeof Chart !== 'undefined' && document.getElementById('dailyTrendChart')) {
+                if (sortedDates.length >= 1 && typeof Chart !== 'undefined' && document.getElementById('dailyTrendChart')) {
                     if (dailyTrendChartInstance) {
                         dailyTrendChartInstance.destroy();
                         dailyTrendChartInstance = null;
@@ -1395,6 +1425,10 @@
                             <div class="bg-green-100 text-green-700 py-2 rounded-lg text-[11px] font-bold border border-green-200 text-center w-full shadow-sm">
                                 ✔ จบงานแล้ว
                             </div>
+                            ${(currentUser.role === 'QC' || currentUser.role === 'Admin') ? `
+                            <button onclick="openRecallModal('${job.jobId}')" class="bg-amber-100 hover:bg-amber-200 text-amber-800 py-1.5 rounded text-xs font-bold transition-colors border border-amber-300 shadow-sm w-full">
+                                🔄 Recall
+                            </button>` : ''}
                         </div>
                     `;
                 }
@@ -1884,6 +1918,58 @@
                 }
             } catch(e) { 
                 alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อ"); 
+            }
+        }
+
+        // ==========================================
+        // Recall งานที่ QC อนุมัติแล้ว
+        // ==========================================
+        function openRecallModal(jobId) {
+            document.getElementById('recall-job-id').value = jobId;
+            document.getElementById('recall-job-display').textContent = jobId;
+            document.getElementById('recall-reason').value = "";
+            document.getElementById('recallModal').classList.remove('hidden');
+        }
+
+        function closeRecallModal() {
+            document.getElementById('recallModal').classList.add('hidden');
+        }
+
+        async function submitRecall(e) {
+            e.preventDefault();
+            const jobId = document.getElementById('recall-job-id').value;
+            const reason = document.getElementById('recall-reason').value.trim();
+            const btn = document.getElementById('btn-submit-recall');
+
+            if (!confirm(`ยืนยัน Recall งาน ${jobId}?\n\nสถานะจะเปลี่ยนกลับเป็น "Wait QC"\nยอด NG ที่บันทึกเข้า Production จะถูกลบออก`)) return;
+
+            btn.disabled = true;
+            btn.innerHTML = "⏳ กำลังดำเนินการ...";
+
+            try {
+                const res = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'RECALL_SORTING',
+                        jobId: jobId,
+                        recalledBy: currentUser.name || currentUser.username,
+                        role: currentUser.role,
+                        reason: reason
+                    })
+                });
+                const result = await res.json();
+                if (result.status === 'success') {
+                    alert("✅ " + result.message);
+                    closeRecallModal();
+                    loadSortJobs();
+                } else {
+                    alert("❌ " + result.message);
+                }
+            } catch (err) {
+                alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อ");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = "🔄 ยืนยัน Recall";
             }
         }
 
