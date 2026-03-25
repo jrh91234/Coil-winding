@@ -95,6 +95,7 @@ function doGet(e) {
       let closedByCol = getCol("Closed_By"); 
       let closedDateCol = getCol("Closed_Date");
       let sorterCol = getCol("Sorter");
+      let rejectTargetCol = getCol("Reject_Target");
 
       if (jobCol === -1 || statCol === -1) return ContentService.createTextOutput(JSON.stringify({status: "success", data: [], summaryData: []})).setMimeType(ContentService.MimeType.JSON);
 
@@ -204,7 +205,8 @@ function doGet(e) {
             ngQty: ngCol > -1 ? r[ngCol] : "",
             closedBy: closedByCol > -1 ? r[closedByCol] : "",
             closedDate: cDate,
-            sorter: sorterCol > -1 ? r[sorterCol] : ""
+            sorter: sorterCol > -1 ? r[sorterCol] : "",
+            rejectTarget: rejectTargetCol > -1 ? r[rejectTargetCol] : ""
           });
         }
 
@@ -224,9 +226,11 @@ function doGet(e) {
             summaryJobs.push({
                 jobId: r[jobCol],
                 product: r[prodCol],
+                symptom: r[sympCol] || "",
                 fgQty: fgCol > -1 ? r[fgCol] : "",
                 ngQty: ngCol > -1 ? r[ngCol] : "",
-                status: currentStatus
+                status: currentStatus,
+                sortDate: summaryTargetISO
             });
         }
       }
@@ -695,6 +699,9 @@ function doPost(e) {
           let sorterColIdx = getCol("Sorter");
           if (sorterColIdx === -1) { sorterColIdx = headers.length; sheet.getRange(1, sorterColIdx + 1).setValue("Sorter"); headers.push("Sorter"); }
 
+          let rejectTargetColIdx = getCol("Reject_Target");
+          if (rejectTargetColIdx === -1) { rejectTargetColIdx = headers.length; sheet.getRange(1, rejectTargetColIdx + 1).setValue("Reject_Target"); headers.push("Reject_Target"); }
+
           let jobCol = getCol("Job_ID");
           let statCol = getCol("Status") + 1;
           let remCol = getCol("Remark") + 1;
@@ -705,6 +712,7 @@ function doPost(e) {
           let closedByCol = closedByColIdx + 1;
           let closedDateCol = closedDateColIdx + 1;
           let sorterCol = sorterColIdx + 1;
+          let rejectTargetCol = rejectTargetColIdx + 1;
 
           let foundRow = -1;
           for (let i = 1; i < rows.length; i++) { 
@@ -720,23 +728,38 @@ function doPost(e) {
                   return ContentService.createTextOutput(JSON.stringify({status: "success", message: "งานนี้ถูกอนุมัติไปแล้ว"})).setMimeType(ContentService.MimeType.JSON);
               }
 
-              sheet.getRange(foundRow, statCol).setValue(data.status);
+              // === Batch write: รวมการเขียนหลาย cell เป็นครั้งเดียว ลด API calls ===
+              const cellUpdates = []; // เก็บ {row, col, value} แล้วเขียนรวมทีเดียว
+              const queueWrite = (row, col, value) => cellUpdates.push({row, col, value});
+
+              queueWrite(foundRow, statCol, data.status);
 
               if (data.status === "Wait QC") {
                   // 2. ผู้คัด (Sorter) คัดเสร็จ ส่งยอดให้ QC
-                  if (data.fgQty) sheet.getRange(foundRow, fgCol).setValue(data.fgQty);
-                  if (data.ngQty) sheet.getRange(foundRow, ngCol).setValue(data.ngQty);
-                  sheet.getRange(foundRow, sorterCol).setValue(data.closedBy); // บันทึกชื่อคนคัดลงคอลัมน์ Sorter
-                  sheet.getRange(foundRow, closedDateCol).setValue(now.toLocaleString('th-TH'));
+                  if (data.fgQty) queueWrite(foundRow, fgCol, data.fgQty);
+                  if (data.ngQty) queueWrite(foundRow, ngCol, data.ngQty);
+                  queueWrite(foundRow, sorterCol, data.closedBy);
+                  queueWrite(foundRow, closedDateCol, now.toLocaleString('th-TH'));
+                  queueWrite(foundRow, rejectTargetCol, "");
+
+                  // Batch write ทั้งหมดในครั้งเดียว
+                  cellUpdates.forEach(u => sheet.getRange(u.row, u.col).setValue(u.value));
+                  SpreadsheetApp.flush();
+
                   logUserAction(data.closedBy, "System", "SUBMIT_QC", `ส่งงาน ${data.jobId} ให้ QC ตรวจ`);
-              } 
+              }
               else if (data.status === "Completed") {
                   // 3. QC อนุมัติผ่าน (เก็บชื่อ QC ลงคอลัมน์ Closed_By)
-                  sheet.getRange(foundRow, closedByCol).setValue(data.closedBy);
-                  sheet.getRange(foundRow, closedDateCol).setValue(now.toLocaleString('th-TH'));
+                  queueWrite(foundRow, closedByCol, data.closedBy);
+                  queueWrite(foundRow, closedDateCol, now.toLocaleString('th-TH'));
+
+                  // Batch write Sorting_Data ก่อน — ให้ QC เห็นผลทันที
+                  cellUpdates.forEach(u => sheet.getRange(u.row, u.col).setValue(u.value));
+                  SpreadsheetApp.flush();
+
                   logUserAction(data.closedBy, "System", "QC_APPROVE", `QC อนุมัติงาน: ${data.jobId}`);
 
-                  // === เพิ่ม NG หลัง Sort เข้า Production_Data เป็น row ใหม่ ===
+                  // === เพิ่ม NG หลัง Sort เข้า Production_Data เป็น row ใหม่ (ทำหลัง flush เพื่อไม่บล็อก QC) ===
                   try {
                       const sortRow = rows[foundRow - 1];
                       const productStr = String(sortRow[getCol("Product")] || "");
@@ -757,7 +780,6 @@ function doPost(e) {
                       const ngVal = parseFloat(ngQtyRaw) || 0;
                       if (ngVal > 0) {
                           if (String(ngQtyRaw).includes("ชิ้น")) {
-                              // แปลงชิ้นเป็น kg โดยใช้น้ำหนักต่อชิ้นตามรุ่น
                               let wpp = 0.003;
                               if (sortProduct.includes("10A")) wpp = 0.00228;
                               else if (sortProduct.includes("16A")) wpp = 0.00279;
@@ -765,7 +787,7 @@ function doPost(e) {
                               else if (sortProduct.includes("25/32A")) wpp = 0.005335;
                               ngKg = ngVal * wpp;
                           } else {
-                              ngKg = ngVal; // kg อยู่แล้ว
+                              ngKg = ngVal;
                           }
                       }
 
@@ -779,12 +801,12 @@ function doPost(e) {
                               if (String(fgQtyRaw).includes("kg")) {
                                   fgPcs = getPcsFromKg(sortProduct, fgVal);
                               } else {
-                                  fgPcs = Math.round(fgVal); // ชิ้นอยู่แล้ว
+                                  fgPcs = Math.round(fgVal);
                               }
                           }
                       }
 
-                      // === แปลงวันที่จาก Sorting_Data (รองรับทั้ง Date object และ string) ===
+                      // === แปลงวันที่จาก Sorting_Data ===
                       let dateStr = "";
                       let hourNum = 0;
                       if (sortDateRaw instanceof Date && !isNaN(sortDateRaw.getTime())) {
@@ -800,14 +822,14 @@ function doPost(e) {
                       }
                       const shiftType = (hourNum >= 8 && hourNum < 20) ? "Day" : "Night";
 
-                      // สร้าง Hour slot แบบช่วงเวลา เช่น "20:00-21:00"
                       const hStart = String(hourNum).padStart(2, '0') + ":00";
                       const nextHour = (hourNum + 1) % 24;
                       const hEnd = String(nextHour).padStart(2, '0') + ":00";
                       const hourSlot = hStart + "-" + hEnd;
 
-                      // === ค้นหา Shift (A/B) จาก Production_Data โดย match เครื่อง+วันที่+เวลาตกในช่วง Hour ===
+                      // === ค้นหา Shift (A/B) — รวมเป็นลูปเดียว แทนที่จะวน 2 รอบ ===
                       let matchedShift = "-";
+                      let fallbackShift = "-";
                       try {
                           let prodSheet = ss.getSheetByName("Production_Data");
                           if (prodSheet && prodSheet.getLastRow() > 1) {
@@ -817,10 +839,8 @@ function doPost(e) {
                               const pMachIdx = prodHeaders.indexOf("machine");
                               const pShiftIdx = prodHeaders.indexOf("shift");
                               const pHourIdx = prodHeaders.indexOf("hour");
-                              // ตัด (A)/(B) line suffix ออกจาก sortMachine เพื่อ match กับ Production_Data
                               const baseMachine = sortMachine.replace(/\([AB]\)$/, "").trim();
 
-                              // ฟังก์ชันแปลง Date cell เป็น yyyy-MM-dd (รองรับทั้ง Date object และ string)
                               const formatProdDate = (val) => {
                                   if (val instanceof Date && !isNaN(val.getTime())) {
                                       return Utilities.formatDate(val, "GMT+7", "yyyy-MM-dd");
@@ -829,12 +849,14 @@ function doPost(e) {
                               };
 
                               if (pDateIdx !== -1 && pMachIdx !== -1 && pShiftIdx !== -1) {
-                                  // รอบแรก: match เครื่อง + วันที่ + เวลาตกในช่วง Hour
+                                  // ลูปเดียว: หาทั้ง exact match (Machine+Date+Hour) และ fallback (Machine+Date)
                                   for (let p = prodRows.length - 1; p >= 1; p--) {
                                       const pDate = formatProdDate(prodRows[p][pDateIdx]);
                                       const pMach = String(prodRows[p][pMachIdx] || "").trim();
                                       const pShift = String(prodRows[p][pShiftIdx] || "").trim();
                                       if (pDate === dateStr && pMach === baseMachine && (pShift === "A" || pShift === "B")) {
+                                          // เก็บ fallback ไว้เผื่อ exact match ไม่เจอ
+                                          if (fallbackShift === "-") fallbackShift = pShift;
                                           if (pHourIdx !== -1) {
                                               const pHour = String(prodRows[p][pHourIdx] || "").trim();
                                               const hParts = pHour.split("-");
@@ -855,67 +877,56 @@ function doPost(e) {
                                           }
                                       }
                                   }
-                                  // รอบสอง (fallback): match แค่เครื่อง + วันที่
-                                  if (matchedShift === "-") {
-                                      for (let p = prodRows.length - 1; p >= 1; p--) {
-                                          const pDate = formatProdDate(prodRows[p][pDateIdx]);
-                                          const pMach = String(prodRows[p][pMachIdx] || "").trim();
-                                          const pShift = String(prodRows[p][pShiftIdx] || "").trim();
-                                          if (pDate === dateStr && pMach === baseMachine && (pShift === "A" || pShift === "B")) {
-                                              matchedShift = pShift;
-                                              break;
-                                          }
-                                      }
-                                  }
+                                  // ใช้ fallback ถ้า exact match ไม่เจอ
+                                  if (matchedShift === "-") matchedShift = fallbackShift;
+                              }
+
+                              // เขียน row ใหม่ลง Production_Data (ใช้ prodHeaders ที่อ่านไว้แล้ว ไม่อ่านซ้ำ)
+                              if (ngKg > 0) {
+                                  syncHeaders(prodSheet);
+                                  const freshHeaders = prodSheet.getRange(1, 1, 1, prodSheet.getLastColumn()).getValues()[0];
+                                  const getProdCol = (name) => freshHeaders.findIndex(h => h.toString().trim().toLowerCase() === name.toLowerCase());
+
+                                  const newRow = new Array(freshHeaders.length).fill("");
+                                  const mapData = (colName, value) => { const idx = getProdCol(colName); if (idx !== -1) newRow[idx] = value; };
+
+                                  const ngDetails = [{ type: symptom, qty: parseFloat(ngKg.toFixed(4)), unit: "kg" }];
+
+                                  mapData("Timestamp", now.toLocaleString('th-TH'));
+                                  mapData("Date", dateStr);
+                                  mapData("Machine", sortMachine);
+                                  mapData("Shift", matchedShift);
+                                  mapData("Recorder", recorder);
+                                  mapData("Product", sortProduct);
+                                  mapData("Hour", hourSlot);
+                                  mapData("FG", fgPcs);
+                                  mapData("NG_Total", parseFloat(ngKg.toFixed(4)));
+                                  mapData("NG_Details_JSON", JSON.stringify(ngDetails));
+                                  mapData("Shift_Type", shiftType);
+                                  mapData("Batch_ID", "SORT-" + data.jobId);
+
+                                  prodSheet.appendRow(newRow);
                               }
                           }
                       } catch (lookupErr) {
                           console.error("Error looking up shift from Production_Data: " + lookupErr.toString());
                       }
-
-                      // เขียน row ใหม่ลง Production_Data
-                      if (ngKg > 0) {
-                          let prodSheet = ss.getSheetByName("Production_Data");
-                          if (prodSheet) {
-                              syncHeaders(prodSheet);
-                              const prodHeaders = prodSheet.getRange(1, 1, 1, prodSheet.getLastColumn()).getValues()[0];
-                              const getProdCol = (name) => prodHeaders.findIndex(h => h.toString().trim().toLowerCase() === name.toLowerCase());
-
-                              const newRow = new Array(prodHeaders.length).fill("");
-                              const mapData = (colName, value) => { const idx = getProdCol(colName); if (idx !== -1) newRow[idx] = value; };
-
-                              const ngDetails = [{ type: symptom, qty: parseFloat(ngKg.toFixed(4)), unit: "kg" }];
-
-                              mapData("Timestamp", now.toLocaleString('th-TH'));
-                              mapData("Date", dateStr);
-                              mapData("Machine", sortMachine);
-                              mapData("Shift", matchedShift);
-                              mapData("Recorder", recorder);
-                              mapData("Product", sortProduct);
-                              mapData("Hour", hourSlot);
-                              mapData("FG", fgPcs);
-                              mapData("NG_Total", parseFloat(ngKg.toFixed(4)));
-                              mapData("NG_Details_JSON", JSON.stringify(ngDetails));
-                              mapData("Shift_Type", shiftType);
-                              mapData("Batch_ID", "SORT-" + data.jobId);
-
-                              prodSheet.appendRow(newRow);
-                          }
-                      }
                   } catch (sortErr) {
-                      // ไม่ให้ error ของ Production_Data ไปกระทบการอนุมัติ Sorting
                       console.error("Error writing sorting NG to Production_Data: " + sortErr.toString());
                   }
               }
               else if (data.status === "Rejected") {
-                  // 3. QC ตีกลับ (เพิ่มชื่อ QC ที่ตีกลับไว้ในหมายเหตุด้วย)
+                  // 3. QC ตีกลับ
                   let oldRemark = sheet.getRange(foundRow, remCol).getValue();
                   let rejectNote = `[QC ${data.closedBy} ตีกลับ ${data.rejectTarget}: ${data.rejectReason}]`;
-                  sheet.getRange(foundRow, remCol).setValue(`${rejectNote} | ${oldRemark}`);
+                  queueWrite(foundRow, remCol, `${rejectNote} | ${oldRemark}`);
+                  queueWrite(foundRow, rejectTargetCol, data.rejectTarget || "");
+
+                  cellUpdates.forEach(u => sheet.getRange(u.row, u.col).setValue(u.value));
+                  SpreadsheetApp.flush();
+
                   logUserAction(data.closedBy, "System", "QC_REJECT", `QC ตีกลับงาน: ${data.jobId} (${data.rejectTarget})`);
               }
-
-              SpreadsheetApp.flush();
               return ContentService.createTextOutput(JSON.stringify({status: "success", message: "อัปเดตสถานะสำเร็จ"})).setMimeType(ContentService.MimeType.JSON);
           } else {
               return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบรหัสงานนี้"})).setMimeType(ContentService.MimeType.JSON);
