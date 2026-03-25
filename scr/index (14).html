@@ -614,7 +614,6 @@
         let filterStartDate = "";
         let filterEndDate = "";
         let filterTypeStr = "reported"; // ประเภทการกรองเริ่มต้น
-        let pendingSwitchToHistory = false; // flag สลับไป history เฉพาะตอนกดค้นหา
         
         let dailyCapacityPcs = 0;
         let dailyCapacityKg = 0;
@@ -720,8 +719,6 @@
                 summaryTitle.innerHTML = `🎯 สรุปยอดผลงาน Sort วันนี้`;
             }
 
-            // ตั้ง flag ว่าเป็นการค้นหาจากปุ่ม → ให้สลับไป history หลัง load เสร็จ
-            pendingSwitchToHistory = true;
             loadSortJobs();
         }
 
@@ -1019,13 +1016,7 @@
                     updateQCBadge();
                     renderTodaySummary(); 
                     
-                    // สลับไปแท็บ History เฉพาะตอนกดค้นหา (ไม่ใช่ทุกครั้งที่ reload)
-                    if (pendingSwitchToHistory && activeTab === 'prod') {
-                        pendingSwitchToHistory = false;
-                        switchTab('history');
-                    } else {
-                        renderTable();
-                    }
+                    renderTable();
                 }
             } catch (err) {
                 console.error("loadSortJobs error:", err);
