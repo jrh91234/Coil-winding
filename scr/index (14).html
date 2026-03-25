@@ -9,6 +9,12 @@
     <!-- เพิ่ม Flatpickr CSS สำหรับหน้าต่างเลือกเวลาแบบ 24 ชม. -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     
+    <!-- เพิ่มไลบรารี SheetJS สำหรับ Export Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- Chart.js สำหรับกราฟเทรนด์ -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    
     <style>
         body { font-family: 'Sarabun', sans-serif; }
         .loader { border-top-color: #3498db; animation: spinner 1.5s linear infinite; }
@@ -57,6 +63,43 @@
             max-height: none !important;
             overflow-y: visible !important;
         }
+
+        /* 🖨️ สไตล์สำหรับการ Print (Auto Report) */
+        @media print {
+            @page { size: landscape; margin: 10mm; }
+            body { background-color: white !important; font-size: 11px !important; }
+            
+            /* ซ่อนส่วนที่ไม่จำเป็นเวลาปริ้น */
+            nav, .no-print, #manageStageModal, #editJobModal, #closeJobModal, #qcRejectModal { 
+                display: none !important; 
+            }
+            
+            /* ลบ shadow และปรับ container ให้เต็ม */
+            .max-w-7xl { max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+            .bg-white { box-shadow: none !important; border: 1px solid #ddd !important; padding: 10px !important; margin-bottom: 10px !important; }
+            .bg-gray-100 { background-color: white !important; }
+            
+            /* กาง Scrollbar ทั้งหมดออกให้เห็นข้อมูลครบถ้วน */
+            .overflow-x-auto, .overflow-y-auto, .max-h-[600px], .max-h-[600px], .max-h-48, .max-h-40 {
+                overflow: visible !important;
+                max-height: none !important;
+            }
+
+            /* ปรับแต่งตารางให้ปริ้นได้สวยงาม */
+            table { width: 100% !important; border-collapse: collapse !important; page-break-inside: auto; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            th, td { border: 1px solid #ccc !important; padding: 6px !important; font-size: 10px !important; }
+            thead { display: table-header-group; }
+            
+            /* ซ่อนคอลัมน์ "จัดการ" ในตาราง */
+            th:last-child, td:last-child { display: none !important; }
+            
+            /* ปุ่มในกล่องสรุปให้ซ่อน */
+            button { display: none !important; }
+            
+            /* ให้สี Background ของกล่องแสดงเวลาพิมพ์ */
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -82,8 +125,8 @@
     <!-- Main Content -->
     <div class="max-w-7xl mx-auto px-4 py-6">
         
-        <!-- Form Section -->
-        <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+        <!-- Form Section (ซ่อนเวลา Print) -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6 no-print">
             <h2 class="text-lg font-bold text-gray-800 border-b pb-2 mb-4">📥 ลงบันทึกงานรอ Sort ใหม่</h2>
             <form id="sortForm" onsubmit="submitSortJob(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 
@@ -99,12 +142,19 @@
                     <input type="text" id="sort-time" required placeholder="HH:MM" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
                 </div>
 
-                <!-- 3. เครื่องจักร -->
+                <!-- 3. เครื่องจักร + Line A/B -->
                 <div>
                     <label class="block text-xs font-bold text-gray-600 mb-1">จากเครื่อง (Machine)</label>
-                    <select id="sort-machine" required onchange="onMachineChange('sort-machine', 'sort-product')" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
-                        <option value="">-- กำลังโหลดข้อมูล... --</option>
-                    </select>
+                    <div class="flex gap-2">
+                        <select id="sort-machine" required onchange="onMachineChange('sort-machine', 'sort-product')" class="w-2/3 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+                            <option value="">-- กำลังโหลดข้อมูล... --</option>
+                        </select>
+                        <select id="sort-line" class="w-1/3 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+                            <option value="">-</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- 4. รุ่นสินค้า -->
@@ -167,8 +217,8 @@
             </form>
         </div>
 
-        <!-- 🌟 แถบเครื่องมือกรองวันที่ (Date Range Filter) 🌟 -->
-        <div class="flex flex-col md:flex-row gap-3 mb-6 bg-white p-4 rounded-xl shadow-md border-t-4 border-indigo-500 items-start md:items-end justify-between">
+        <!-- 🌟 แถบเครื่องมือกรองวันที่ (Date Range Filter) - ซ่อนเวลา Print 🌟 -->
+        <div class="flex flex-col md:flex-row gap-3 mb-6 bg-white p-4 rounded-xl shadow-md border-t-4 border-indigo-500 items-start md:items-end justify-between no-print">
             <div class="flex flex-col md:flex-row gap-3 w-full md:w-auto">
                 <div class="w-full md:w-auto">
                     <label class="block text-xs font-bold text-gray-600 mb-1">กรองวันที่ตาม</label>
@@ -200,12 +250,12 @@
         </div>
 
         <!-- 🌟 TODAY'S SUMMARY SECTION 🌟 -->
-        <div id="today-summary-container" class="bg-white rounded-xl shadow-md p-6 mb-6 border-t-4 border-blue-500 transition-all relative">
+        <div id="today-summary-container" class="bg-white rounded-xl shadow-md p-6 mb-6 border-t-4 border-blue-500 transition-all relative print-break-inside">
             <div class="flex justify-between items-center border-b pb-2 mb-4">
                 <h2 id="summary-title" class="text-lg font-bold text-gray-800 flex items-center gap-2">
                     🎯 สรุปยอดผลงาน Sort วันนี้
                 </h2>
-                <button type="button" onclick="toggleMaximizeContainer('today-summary-container')" class="text-gray-400 hover:text-blue-600 text-xl transition-colors" title="ขยายเต็มจอ/ย่อขนาด">🗖</button>
+                <button type="button" onclick="toggleMaximizeContainer('today-summary-container')" class="text-gray-400 hover:text-blue-600 text-xl transition-colors no-print" title="ขยายเต็มจอ/ย่อขนาด">🗖</button>
             </div>
             <div id="today-summary-content" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="col-span-full text-center py-4 text-gray-500">กำลังโหลดข้อมูล...</div>
@@ -213,10 +263,10 @@
         </div>
 
         <!-- Table Section with TABS -->
-        <div class="bg-white rounded-xl shadow-md overflow-hidden mb-8">
+        <div class="bg-white rounded-xl shadow-md overflow-hidden mb-8 print-break-inside">
             
-            <!-- Tabs Header -->
-            <div class="flex border-b bg-gray-50 px-2 pt-2 gap-1 overflow-x-auto" id="tabs-container">
+            <!-- Tabs Header (ซ่อนเวลา Print) -->
+            <div class="flex border-b bg-gray-50 px-2 pt-2 gap-1 overflow-x-auto no-print" id="tabs-container">
                 <button onclick="switchTab('prod')" id="tab-prod" class="tab-btn active px-6 py-3 text-gray-600 font-medium rounded-t-lg whitespace-nowrap">
                     📦 งานรอ Sort (Production)
                 </button>
@@ -233,9 +283,17 @@
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center pb-3 mb-2 gap-3">
                     <h2 class="text-lg font-bold text-gray-800" id="table-title">📋 รายการงานรอ Sort</h2>
                     
-                    <div class="flex w-full md:w-auto gap-2">
+                    <div class="flex flex-wrap w-full md:w-auto gap-2 no-print">
                         <!-- ช่องค้นหาข้อมูลอัจฉริยะ -->
                         <input type="text" id="searchInput" oninput="renderTable()" placeholder="🔍 ค้นหา (ชื่อ, รุ่น, อาการ, จำนวน)..." class="w-full md:w-64 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        
+                        <!-- 🌟 ปุ่ม Export Excel และ Print -->
+                        <button onclick="exportToExcel()" class="text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg transition-colors whitespace-nowrap font-bold shadow-sm">
+                            📊 Excel
+                        </button>
+                        <button onclick="printReport()" class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg transition-colors whitespace-nowrap font-bold shadow-sm">
+                            🖨️ พิมพ์
+                        </button>
                         
                         <button onclick="loadSortJobs()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition-colors whitespace-nowrap font-bold border">
                             🔄 รีเฟรช
@@ -251,7 +309,7 @@
                                 <th class="p-3 border-b bg-gray-100">รหัสงาน</th>
                                 <th class="p-3 border-b bg-gray-100 sortable-header transition-colors group" onclick="toggleSort('date')">
                                     <div class="flex items-center justify-between">
-                                        วันที่ <span id="sort-icon-date" class="text-blue-500 ml-1">▼</span>
+                                        วันที่ <span id="sort-icon-date" class="text-blue-500 ml-1 no-print">▼</span>
                                     </div>
                                 </th>
                                 <th class="p-3 border-b bg-gray-100">รุ่นสินค้า</th>
@@ -327,12 +385,19 @@
                     <input type="text" id="edit-sort-time" required placeholder="HH:MM" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-yellow-500 bg-white">
                 </div>
 
-                <!-- 3. เครื่องจักร -->
+                <!-- 3. เครื่องจักร + Line A/B -->
                 <div>
                     <label class="block text-xs font-bold text-gray-600 mb-1">จากเครื่อง (Machine)</label>
-                    <select id="edit-sort-machine" required onchange="onMachineChange('edit-sort-machine', 'edit-sort-product')" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-yellow-500 bg-white">
-                        <!-- Options generated by JS -->
-                    </select>
+                    <div class="flex gap-2">
+                        <select id="edit-sort-machine" required onchange="onMachineChange('edit-sort-machine', 'edit-sort-product')" class="w-2/3 p-2 border rounded-lg focus:ring-2 focus:ring-yellow-500 bg-white">
+                            <!-- Options generated by JS -->
+                        </select>
+                        <select id="edit-sort-line" class="w-1/3 p-2 border rounded-lg focus:ring-2 focus:ring-yellow-500 bg-white">
+                            <option value="">-</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- 4. รุ่นสินค้า -->
@@ -406,10 +471,20 @@
             <form id="closeJobForm" onsubmit="submitToQC(event)">
                 <input type="hidden" id="modal-job-id">
                 <input type="hidden" id="modal-product-str">
-                
+                <input type="hidden" id="modal-is-resubmit" value="">
+                <input type="hidden" id="modal-reject-target" value="">
+                <input type="hidden" id="modal-prev-fg" value="">
+                <input type="hidden" id="modal-prev-ng" value="">
+
                 <div class="mb-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
                     <p class="text-sm text-gray-600">รหัสงาน: <span id="modal-job-id-text" class="font-bold text-blue-800"></span></p>
                     <p class="text-sm text-gray-600 mt-1">รุ่นสินค้า: <span id="modal-product-text" class="font-bold text-gray-800"></span></p>
+                </div>
+
+                <div id="modal-resubmit-info" class="hidden mb-4 bg-orange-50 p-3 rounded-lg border border-orange-300">
+                    <p class="text-xs font-bold text-orange-800 mb-1">&#x26A0; งานตีกลับ - กรอกเฉพาะยอดที่คัดใหม่</p>
+                    <p class="text-xs text-orange-700" id="modal-resubmit-detail"></p>
+                    <p class="text-xs text-gray-600 mt-1" id="modal-prev-values"></p>
                 </div>
 
                 <!-- ยอด FG -->
@@ -500,6 +575,8 @@
         let allPendingJobs = []; 
         let todaySortedData = []; 
         let activeTab = 'prod'; 
+        let currentSort = { field: 'date', order: 'desc' };
+        let dailyTrendChartInstance = null;
         
         let timePickerInstance = null;
         let timePickerEditInstance = null;
@@ -511,7 +588,7 @@
         let dailyCapacityPcs = 0;
         let dailyCapacityKg = 0;
 
-        const DEFAULT_STAGES = ["ระหว่างกระบวนการผลิต", "FG"];
+        const DEFAULT_STAGES = ["ระหว่างกระบวนการผลิต", "FG", "RTV"];
         let currentStages = JSON.parse(localStorage.getItem('CWM_STAGES')) || DEFAULT_STAGES;
 
         window.onload = () => {
@@ -714,8 +791,9 @@
         }
 
         function parseQuantity(qtyStr, productStr) {
-            if (!qtyStr) return { pcs: 0, kg: 0, display: "-" };
-            const val = parseFloat(qtyStr); 
+            if (!qtyStr && qtyStr !== 0) return { pcs: 0, kg: 0, display: "-" };
+            qtyStr = String(qtyStr);
+            const val = parseFloat(qtyStr);
             if (isNaN(val)) return { pcs: 0, kg: 0, display: qtyStr };
             
             const wpp = getWeightPerPc(productStr);
@@ -815,13 +893,14 @@
             btn.disabled = true; 
             btn.innerHTML = "⏳ กำลังบันทึก...";
 
-            const dateVal = document.getElementById('sort-date').value; 
+            const dateVal = document.getElementById('sort-date').value;
             const timeVal = document.getElementById('sort-time').value;
-            const machineVal = document.getElementById('sort-machine').value; 
+            const machineVal = document.getElementById('sort-machine').value;
+            const lineVal = document.getElementById('sort-line').value;
             const productVal = document.getElementById('sort-product').value;
             const stageVal = document.getElementById('sort-stage').value;
             const symptomVal = document.getElementById('sort-symptom').value;
-            
+
             if (!symptomVal) {
                 alert("กรุณาเลือกอาการเสียจากระบบ");
                 btn.disabled = false;
@@ -829,7 +908,8 @@
                 return;
             }
 
-            const finalProduct = machineVal ? `${machineVal} : ${productVal}` : productVal;
+            const machineWithLine = lineVal ? `${machineVal}(${lineVal})` : machineVal;
+            const finalProduct = machineWithLine ? `${machineWithLine} : ${productVal}` : productVal;
             const finalQty = `${document.getElementById('sort-qty').value} ${document.getElementById('sort-unit').value}`;
             const finalDate = `${dateVal} ${timeVal}`;
             
@@ -869,6 +949,7 @@
                     document.getElementById('sortForm').reset();
                     setDefaultDateTime(); 
                     document.getElementById('sort-unit').value = 'kg';
+                    document.getElementById('sort-line').value = '';
                     document.getElementById('sort-stage').value = '';
                     loadSortJobs(); 
                 } else {
@@ -913,7 +994,12 @@
                     }
                 }
             } catch (err) {
+                console.error("loadSortJobs error:", err);
                 tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-red-500">❌ โหลดข้อมูลไม่สำเร็จ</td></tr>';
+                const summaryContainer = document.getElementById('today-summary-content');
+                if (summaryContainer) {
+                    summaryContainer.innerHTML = '<div class="col-span-full text-center py-4 text-red-500 font-bold">❌ โหลดข้อมูลสรุปไม่สำเร็จ</div>';
+                }
             }
         }
 
@@ -937,9 +1023,12 @@
             let totalFgKg = 0, totalFgPcs = 0;
             let totalNgKg = 0, totalNgPcs = 0;
 
+            // วนลูปข้อมูลทั้งหมดเพื่อจัดกลุ่มตามรุ่น (Model) และอาการ (Symptom)
             todaySortedData.forEach(job => {
-                let model = job.product.includes(" : ") ? job.product.split(" : ")[1].trim() : job.product;
-                
+                let product = job.product ? String(job.product) : "";
+                let model = product.includes(" : ") ? product.split(" : ")[1].trim() : product;
+                let symptom = job.symptom || "ไม่ระบุ";
+
                 let fgInfo = parseQuantity(job.fgQty, model);
                 let ngInfo = parseQuantity(job.ngQty, model);
 
@@ -948,18 +1037,31 @@
                 totalNgKg += ngInfo.kg;
                 totalNgPcs += ngInfo.pcs;
 
-                if(!summaryByModel[model]) summaryByModel[model] = { fgKg: 0, fgPcs: 0, ngKg: 0, ngPcs: 0 };
+                // 1. จัดกลุ่มตาม Model ก่อน
+                if(!summaryByModel[model]) {
+                    summaryByModel[model] = { fgKg: 0, fgPcs: 0, ngKg: 0, ngPcs: 0, symptoms: {} };
+                }
                 summaryByModel[model].fgKg += fgInfo.kg;
                 summaryByModel[model].fgPcs += fgInfo.pcs;
                 summaryByModel[model].ngKg += ngInfo.kg;
                 summaryByModel[model].ngPcs += ngInfo.pcs;
+
+                // 2. ภายใต้ Model ค่อยแยกตามอาการ (Symptom Breakdown)
+                if(!summaryByModel[model].symptoms[symptom]) {
+                    summaryByModel[model].symptoms[symptom] = { fgKg: 0, fgPcs: 0, ngKg: 0, ngPcs: 0, count: 0 };
+                }
+                summaryByModel[model].symptoms[symptom].fgKg += fgInfo.kg;
+                summaryByModel[model].symptoms[symptom].fgPcs += fgInfo.pcs;
+                summaryByModel[model].symptoms[symptom].ngKg += ngInfo.kg;
+                summaryByModel[model].symptoms[symptom].ngPcs += ngInfo.pcs;
+                summaryByModel[model].symptoms[symptom].count += 1;
             });
 
             dailyCapacityKg = totalFgKg + totalNgKg;
             dailyCapacityPcs = totalFgPcs + totalNgPcs;
 
             let html = `
-                <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 col-span-full md:col-span-1 flex flex-col justify-center items-center text-center shadow-sm">
+                <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 col-span-full md:col-span-1 flex flex-col justify-center items-center text-center shadow-sm h-full">
                     <h4 class="font-bold text-blue-800 mb-3 text-sm">🌟 ยอดรวมช่วงเวลานี้</h4>
                     <div class="w-full flex justify-between px-2 text-base">
                         <div class="text-left"><span class="text-green-700 font-extrabold text-xl">FG:</span><br><span class="text-gray-800 font-bold">${totalFgKg.toFixed(2)} kg</span></div>
@@ -969,26 +1071,80 @@
                         <span class="text-green-600">(${totalFgPcs.toLocaleString()} ชิ้น)</span>
                         <span class="text-red-600">(${totalNgPcs.toLocaleString()} ชิ้น)</span>
                     </div>
+                    <div class="mt-4 bg-white px-4 py-2 rounded-lg border border-blue-100 shadow-sm w-full">
+                        <span class="text-gray-600 text-xs font-bold">รวมคัดทั้งหมด:</span><br>
+                        <span class="text-blue-700 font-bold text-lg">${dailyCapacityPcs.toLocaleString()} ชิ้น</span>
+                    </div>
                 </div>
             `;
 
-            const models = Object.keys(summaryByModel).sort();
+            const ampereOrder = ['10A', '16A', '20A', '25/32A', '25A', '32A'];
+            const models = Object.keys(summaryByModel).sort((a, b) => {
+                const getAmpIdx = (name) => {
+                    for (let i = 0; i < ampereOrder.length; i++) {
+                        if (name.includes(ampereOrder[i])) return i;
+                    }
+                    return ampereOrder.length;
+                };
+                const diff = getAmpIdx(a) - getAmpIdx(b);
+                return diff !== 0 ? diff : a.localeCompare(b);
+            });
             if (models.length > 0) {
-                let modelListHtml = '<div class="col-span-full md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-40 overflow-y-auto custom-scrollbar pr-2">';
+                let modelListHtml = '<div class="col-span-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 overflow-x-hidden custom-scrollbar">';
                 models.forEach(m => {
                     let d = summaryByModel[m];
+                    let modelTotalPcs = d.fgPcs + d.ngPcs;
+                    let modelNgRate = modelTotalPcs > 0 ? ((d.ngPcs / modelTotalPcs) * 100).toFixed(2) : "0.00";
+                    
+                    let sympHtml = '';
+                    const symps = Object.keys(d.symptoms).sort();
+                    
+                    // สร้างแถว Breakdown ตามอาการ (ในแต่ละรุ่น)
+                    symps.forEach(s => {
+                        let sd = d.symptoms[s];
+                        let sympTotalPcs = sd.fgPcs + sd.ngPcs;
+                        let sympNgRate = sympTotalPcs > 0 ? ((sd.ngPcs / sympTotalPcs) * 100).toFixed(2) : "0.00";
+                        
+                        sympHtml += `
+                            <div class="py-2 border-t border-purple-200 first:border-t-0 text-sm">
+                                <div class="w-full text-purple-800 font-semibold text-xs mb-1.5" title="${s}">
+                                    ⚠️ ${s} <span class="text-gray-500 font-normal">(${sd.count} รายการ)</span>
+                                </div>
+                                <div class="w-full flex gap-1 text-[11px] sm:text-xs">
+                                    <div class="flex-1 min-w-0 text-center bg-white rounded border border-gray-100 py-1 shadow-sm">
+                                        <span class="text-green-600 font-bold">ดี:</span> ${sd.fgPcs.toLocaleString()}<br>
+                                        <span class="text-gray-400">(${sd.fgKg.toFixed(2)}kg)</span>
+                                    </div>
+                                    <div class="flex-1 min-w-0 text-center bg-white rounded border border-gray-100 py-1 shadow-sm">
+                                        <span class="text-red-600 font-bold">เสีย:</span> ${sd.ngPcs.toLocaleString()}<br>
+                                        <span class="text-gray-400">(${sd.ngKg.toFixed(2)}kg)</span>
+                                    </div>
+                                    <div class="flex-none flex items-center justify-center">
+                                        <span class="bg-red-50 border border-red-200 text-red-800 px-1.5 py-1 rounded-md font-bold text-[10px] sm:text-xs whitespace-nowrap">%NG:<br>${sympNgRate}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    // สร้างกรอบใหญ่ของแต่ละรุ่น (Model Box)
                     modelListHtml += `
-                        <div class="bg-gray-50 p-3 rounded-lg border border-gray-200 shadow-sm hover:bg-white transition-colors">
-                            <div class="font-bold text-gray-800 text-sm border-b border-gray-200 pb-1 mb-2 truncate" title="${m}">🏷️ ${m}</div>
-                            <div class="flex justify-between text-sm">
-                                <div>
-                                    <span class="text-green-600 font-bold">FG: ${d.fgKg.toFixed(2)} kg</span><br>
-                                    <span class="text-xs text-gray-500">(${d.fgPcs.toLocaleString()} ชิ้น)</span>
+                        <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 shadow-sm hover:border-blue-300 transition-colors page-break-inside-avoid overflow-hidden">
+                            <div class="border-b border-gray-200 pb-2 mb-2">
+                                <div class="font-bold text-gray-800 text-sm mb-1.5" title="${m}">🏷️ ${m}</div>
+                                <div class="flex flex-wrap gap-x-2 gap-y-1 text-[11px] bg-white px-2 py-1.5 rounded-lg border border-gray-200 shadow-sm items-center">
+                                    <span class="text-green-600 font-bold whitespace-nowrap">FG: ${d.fgPcs.toLocaleString()}</span>
+                                    <span class="text-gray-300">|</span>
+                                    <span class="text-red-600 font-bold whitespace-nowrap">NG: ${d.ngPcs.toLocaleString()}</span>
+                                    <span class="text-gray-300">|</span>
+                                    <span class="text-blue-700 font-bold whitespace-nowrap">รวม: ${modelTotalPcs.toLocaleString()}</span>
+                                    <span class="text-gray-300">|</span>
+                                    <span class="text-red-800 font-bold whitespace-nowrap">%NG (รุ่น): ${modelNgRate}%</span>
                                 </div>
-                                <div class="text-right border-l pl-2">
-                                    <span class="text-red-600 font-bold">NG: ${d.ngKg.toFixed(2)} kg</span><br>
-                                    <span class="text-xs text-gray-500">(${d.ngPcs.toLocaleString()} ชิ้น)</span>
-                                </div>
+                            </div>
+                            <div class="bg-purple-50 p-2 rounded-lg border border-purple-200 shadow-inner">
+                                <div class="text-xs font-bold text-purple-700 mb-1 pl-1">🔍 แยกตามอาการ:</div>
+                                ${sympHtml}
                             </div>
                         </div>
                     `;
@@ -997,7 +1153,132 @@
                 html += modelListHtml;
             }
 
+            // กราฟเทรนด์ FG/NG รายวัน (Stacked Bar Chart)
+            let dailyData = {};
+            todaySortedData.forEach(job => {
+                let dateKey = job.sortDate || 'unknown';
+                if (dateKey === 'unknown') return;
+                let model = job.product.includes(" : ") ? job.product.split(" : ")[1].trim() : job.product;
+                let fgInfo = parseQuantity(job.fgQty, model);
+                let ngInfo = parseQuantity(job.ngQty, model);
+                if (!dailyData[dateKey]) dailyData[dateKey] = { fg: 0, ng: 0 };
+                dailyData[dateKey].fg += fgInfo.pcs;
+                dailyData[dateKey].ng += ngInfo.pcs;
+            });
+
+            let sortedDates = Object.keys(dailyData).sort();
+            if (sortedDates.length > 1) {
+                html += `
+                    <div class="col-span-full mt-3 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                        <h4 class="font-bold text-gray-800 text-sm mb-2">📊 เทรนด์การคัดรายวัน (FG vs NG)</h4>
+                        <div style="position:relative;height:250px;max-height:300px;">
+                            <canvas id="dailyTrendChart"></canvas>
+                        </div>
+                    </div>`;
+            }
+
             container.innerHTML = html;
+
+            // วาดกราฟหลัง DOM พร้อม
+            try {
+                if (sortedDates.length > 1 && typeof Chart !== 'undefined' && document.getElementById('dailyTrendChart')) {
+                    if (dailyTrendChartInstance) {
+                        dailyTrendChartInstance.destroy();
+                        dailyTrendChartInstance = null;
+                    }
+                    const ctx = document.getElementById('dailyTrendChart').getContext('2d');
+                    dailyTrendChartInstance = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: sortedDates.map(d => {
+                                let parts = d.split('-');
+                                return parts[2] + '/' + parts[1];
+                            }),
+                            datasets: [
+                                {
+                                    label: 'FG (ดี)',
+                                    data: sortedDates.map(d => dailyData[d].fg),
+                                    backgroundColor: 'rgba(134, 210, 190, 0.85)',
+                                    borderColor: 'rgba(104, 190, 168, 1)',
+                                    borderWidth: 1,
+                                    yAxisID: 'y',
+                                    order: 2
+                                },
+                                {
+                                    label: 'NG (เสีย)',
+                                    data: sortedDates.map(d => dailyData[d].ng),
+                                    backgroundColor: 'rgba(232, 160, 172, 0.85)',
+                                    borderColor: 'rgba(210, 130, 148, 1)',
+                                    borderWidth: 1,
+                                    yAxisID: 'y',
+                                    order: 2
+                                },
+                                {
+                                    label: '%NG Rate',
+                                    type: 'line',
+                                    data: sortedDates.map(d => {
+                                        let total = dailyData[d].fg + dailyData[d].ng;
+                                        return total > 0 ? parseFloat(((dailyData[d].ng / total) * 100).toFixed(2)) : 0;
+                                    }),
+                                    borderColor: 'rgba(220, 185, 140, 1)',
+                                    backgroundColor: 'rgba(235, 205, 165, 0.3)',
+                                    borderWidth: 2,
+                                    pointRadius: 4,
+                                    pointBackgroundColor: 'rgba(220, 185, 140, 1)',
+                                    fill: false,
+                                    yAxisID: 'yNgRate',
+                                    order: 1
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: { stacked: true },
+                                y: {
+                                    stacked: true,
+                                    beginAtZero: true,
+                                    position: 'left',
+                                    ticks: {
+                                        callback: function(value) {
+                                            return value.toLocaleString() + ' ชิ้น';
+                                        }
+                                    }
+                                },
+                                yNgRate: {
+                                    beginAtZero: true,
+                                    position: 'right',
+                                    grid: { drawOnChartArea: false },
+                                    ticks: {
+                                        callback: function(value) {
+                                            return value + '%';
+                                        }
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: '%NG Rate'
+                                    }
+                                }
+                            },
+                            plugins: {
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            if (context.dataset.yAxisID === 'yNgRate') {
+                                                return context.dataset.label + ': ' + context.parsed.y + '%';
+                                            }
+                                            return context.dataset.label + ': ' + context.parsed.y.toLocaleString() + ' ชิ้น';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (chartErr) {
+                console.warn("Chart rendering skipped:", chartErr);
+            }
         }
 
 
@@ -1092,6 +1373,15 @@
                         </div>`;
                 } else if (job.status === 'Rejected') {
                     statusBadge = `<span class="status-badge status-Rejected">ตีกลับ/แก้ไข</span>`;
+                    let rejInfo = '';
+                    if (job.rejectTarget) rejInfo += `<span class="text-red-700 font-bold">ตีกลับ: ${job.rejectTarget}</span><br>`;
+                    if (job.fgQty || job.ngQty) rejInfo += `<span class="text-green-700">FG: ${job.fgQty || '-'}</span> | <span class="text-red-700">NG: ${job.ngQty || '-'}</span>`;
+                    if (rejInfo) {
+                        fgNgDisplay = `
+                        <div class="mt-2 p-1.5 bg-red-50 text-xs rounded border border-red-200 text-left">
+                            <b class="text-gray-700">ยอดก่อนตีกลับ:</b><br>${rejInfo}
+                        </div>`;
+                    }
                 } else if (job.status === 'Completed') {
                     statusBadge = `<span class="status-badge status-Completed">เสร็จสิ้น</span>`;
                     fgNgDisplay = `
@@ -1101,7 +1391,7 @@
                             <span class="text-red-700 font-bold">NG: ${job.ngQty}</span>
                         </div>`;
                     actionButtons = `
-                        <div class="flex flex-col gap-1.5 w-full max-w-[140px] mx-auto">
+                        <div class="flex flex-col gap-1.5 w-full max-w-[140px] mx-auto no-print">
                             <div class="bg-green-100 text-green-700 py-2 rounded-lg text-[11px] font-bold border border-green-200 text-center w-full shadow-sm">
                                 ✔ จบงานแล้ว
                             </div>
@@ -1112,7 +1402,7 @@
                 if (activeTab === 'prod') {
                     if (currentUser.role === 'Production' || currentUser.role === 'Admin') {
                         actionButtons = `
-                            <div class="flex flex-col gap-1.5 w-full max-w-[140px] mx-auto">
+                            <div class="flex flex-col gap-1.5 w-full max-w-[140px] mx-auto no-print">
                                 <button onclick="openEditModal('${job.jobId}')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 rounded text-xs font-bold transition-colors border border-gray-300 shadow-sm w-full">
                                     ✏️ แก้ไขข้อมูล
                                 </button>
@@ -1123,7 +1413,7 @@
                         `;
                     } else {
                         actionButtons = `
-                            <div class="flex flex-col gap-1.5 w-full max-w-[140px] mx-auto">
+                            <div class="flex flex-col gap-1.5 w-full max-w-[140px] mx-auto no-print">
                                 <div class="bg-gray-100 text-gray-500 py-2 rounded-lg text-[11px] font-bold border border-gray-200 text-center w-full shadow-sm">
                                     ⏳ รอฝั่งผลิตคัดแยก
                                 </div>
@@ -1132,7 +1422,7 @@
                     }
                 } else if (activeTab === 'qc') {
                     actionButtons = `
-                        <div class="flex flex-col gap-1.5 w-full max-w-[140px] mx-auto">
+                        <div class="flex flex-col gap-1.5 w-full max-w-[140px] mx-auto no-print">
                             <button onclick="approveQC('${job.jobId}')" class="bg-green-500 hover:bg-green-600 text-white py-1.5 rounded text-xs font-bold transition-colors shadow-sm w-full">
                                 ✔ อนุมัติ (Pass)
                             </button>
@@ -1177,7 +1467,7 @@
                         <td class="p-3 text-xs align-top whitespace-nowrap">
                             ${recorderHtml}
                         </td>
-                        <td class="p-3 text-center align-top">
+                        <td class="p-3 text-center align-top no-print">
                             ${actionButtons}
                         </td>
                     </tr>
@@ -1194,11 +1484,12 @@
 
             // 🌟 1. สร้าง HTML สรุปและพยากรณ์วันที่คาดว่าจะเสร็จ (เฉพาะงานค้าง) 🌟
             let predictionHtml = '';
-            let daysFiltered = 1;
-            if (filterStartDate && filterEndDate) {
-                const diffTime = Math.abs(new Date(filterEndDate) - new Date(filterStartDate));
-                daysFiltered = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-            }
+            // นับจำนวนวันที่มียอดคัดจริง (distinct dates)
+            let activeDaysSet = new Set();
+            todaySortedData.forEach(job => {
+                if (job.sortDate) activeDaysSet.add(job.sortDate);
+            });
+            let daysFiltered = activeDaysSet.size || 1;
             let avgCapacityPerDay = dailyCapacityPcs / daysFiltered;
 
             if (avgCapacityPerDay > 0) {
@@ -1291,6 +1582,88 @@
         };
 
         // ==========================================
+        // 📊 ฟังก์ชันสำหรับ Export Excel และ พิมพ์รายงาน (Auto Report)
+        // ==========================================
+        function exportToExcel() {
+            if (allPendingJobs.length === 0) {
+                alert("ไม่มีข้อมูลสำหรับ Export กรุณารอโหลดข้อมูล หรือ รีเฟรช");
+                return;
+            }
+
+            const searchInput = document.getElementById('searchInput') ? document.getElementById('searchInput').value.trim().toLowerCase() : '';
+            const searchTerms = searchInput ? searchInput.split(/\s+/) : [];
+
+            // คัดกรองข้อมูลเฉพาะที่เห็นบนตาราง
+            let jobsToExport = allPendingJobs.filter(job => {
+                let showJob = false;
+                if (activeTab === 'prod') {
+                    showJob = (job.status === 'Pending' || job.status === 'Rejected');
+                } else if (activeTab === 'qc') {
+                    showJob = (job.status === 'Wait QC');
+                } else if (activeTab === 'history') {
+                    showJob = (job.status === 'Completed');
+                }
+                if (!showJob) return false;
+
+                if (searchTerms.length > 0) {
+                    let model = job.product;
+                    if (job.product.includes(" : ")) model = job.product.split(" : ")[1].trim();
+                    const searchString = `${job.jobId} ${job.date} ${job.product} ${job.symptom} ${job.remark || ''} ${job.recorder} ${job.sorter || ''} ${job.closedBy || ''} ${job.qty}`.toLowerCase();
+                    return searchTerms.every(t => searchString.includes(t));
+                }
+                return true;
+            });
+
+            if (jobsToExport.length === 0) {
+                 alert("ไม่มีข้อมูลที่ตรงกับเงื่อนไขสำหรับการ Export ในแท็บนี้");
+                 return;
+            }
+
+            // จัดรูปแบบ Data ให้เข้ากับ Excel
+            const excelData = jobsToExport.map(job => {
+                let model = job.product;
+                if (job.product.includes(" : ")) model = job.product.split(" : ")[1].trim();
+                const qtyInfo = parseQuantity(job.qty, model);
+                
+                return {
+                    "รหัสงาน (Job ID)": job.jobId,
+                    "วันที่แจ้ง": job.date,
+                    "รุ่นสินค้า (Product)": job.product,
+                    "อาการเสีย (Symptom)": job.symptom,
+                    "จำนวน (ชิ้น)": qtyInfo.pcs,
+                    "จำนวน (Kg)": parseFloat(qtyInfo.kg.toFixed(3)),
+                    "ยอดจัดคัด FG": job.fgQty || "-",
+                    "ยอดจัดคัด NG": job.ngQty || "-",
+                    "หมายเหตุ": job.remark ? job.remark.replace(/\[พบที่:(.*?)\]\s*/g, '') : "-",
+                    "ขั้นตอนที่พบ": job.remark && job.remark.includes("[พบที่:") ? job.remark.match(/\[พบที่:\s*(.+?)\]/)[1] : "-",
+                    "ผู้แจ้ง (Production)": job.recorder || "-",
+                    "ผู้คัด (Sorter)": job.sorter || "-",
+                    "ผู้ปิดงาน (QC)": job.closedBy || "-",
+                    "วันที่ปิดงาน (QC)": job.closedDate || "-",
+                    "สถานะปัจจุบัน": job.status
+                };
+            });
+
+            // สร้าง Workbook และ Worksheet ผ่าน SheetJS
+            const ws = XLSX.utils.json_to_sheet(excelData);
+            const wb = XLSX.utils.book_new();
+            
+            // ตั้งชื่อ Tab ใน Excel
+            const tabNameMap = { 'prod': 'งานรอ_Sort', 'qc': 'รอตรวจสอบ_QC', 'history': 'ประวัติงานเสร็จสิ้น' };
+            XLSX.utils.book_append_sheet(wb, ws, tabNameMap[activeTab] || "Data");
+            
+            // สร้างไฟล์
+            const dateStr = filterStartDate ? `${filterStartDate}_to_${filterEndDate}` : 'All_Dates';
+            const fileName = `Report_CWM_Sorting_${dateStr}.xlsx`;
+            
+            XLSX.writeFile(wb, fileName);
+        }
+
+        function printReport() {
+            window.print();
+        }
+
+        // ==========================================
         // Modal ปิดงาน / ส่งยอด (Production)
         // ==========================================
         function openCloseModal(jobId, productStr) {
@@ -1298,12 +1671,56 @@
             document.getElementById('modal-product-str').value = productStr;
             document.getElementById('modal-job-id-text').innerText = jobId;
             document.getElementById('modal-product-text').innerText = productStr;
-            
+
             document.getElementById('modal-fg-qty').value = '';
             document.getElementById('modal-ng-qty').value = '';
             document.getElementById('modal-fg-convert').innerText = '';
             document.getElementById('modal-ng-convert').innerText = '';
-            
+
+            // ตรวจสอบว่าเป็นงานตีกลับหรือไม่
+            const job = allPendingJobs.find(j => j.jobId === jobId);
+            const resubmitInfo = document.getElementById('modal-resubmit-info');
+            const fgInput = document.getElementById('modal-fg-qty');
+            const ngInput = document.getElementById('modal-ng-qty');
+
+            if (job && job.status === 'Rejected' && job.fgQty && job.ngQty) {
+                const target = job.rejectTarget || 'FG และ NG';
+                document.getElementById('modal-is-resubmit').value = 'true';
+                document.getElementById('modal-reject-target').value = target;
+                document.getElementById('modal-prev-fg').value = job.fgQty;
+                document.getElementById('modal-prev-ng').value = job.ngQty;
+
+                let detail = 'QC ตีกลับ: <b>' + target + '</b> — ระบบจะคำนวณรวมยอดเดิมให้อัตโนมัติ';
+                document.getElementById('modal-resubmit-detail').innerHTML = detail;
+                document.getElementById('modal-prev-values').innerHTML =
+                    'ยอดเดิม → FG: <b class="text-green-700">' + job.fgQty + '</b> | NG: <b class="text-red-700">' + job.ngQty + '</b>';
+                resubmitInfo.classList.remove('hidden');
+
+                // ถ้าตีกลับเฉพาะ NG → ไม่ต้องกรอก FG ใหม่ (ใส่ 0 ได้)
+                if (target === 'NG') {
+                    fgInput.required = false;
+                    fgInput.placeholder = 'FG ที่ได้จากการคัด NG ใหม่ (ถ้ามี)';
+                    ngInput.placeholder = 'ยอด NG ที่เหลือหลังคัดใหม่';
+                } else if (target === 'FG') {
+                    ngInput.required = false;
+                    ngInput.placeholder = 'NG ที่พบจากการคัด FG ใหม่ (ถ้ามี)';
+                    fgInput.placeholder = 'ยอด FG ที่ได้หลังคัดใหม่';
+                } else {
+                    fgInput.placeholder = 'ระบุจำนวน';
+                    ngInput.placeholder = 'ระบุจำนวน';
+                }
+            } else {
+                document.getElementById('modal-is-resubmit').value = '';
+                document.getElementById('modal-reject-target').value = '';
+                document.getElementById('modal-prev-fg').value = '';
+                document.getElementById('modal-prev-ng').value = '';
+                resubmitInfo.classList.add('hidden');
+                fgInput.required = true;
+                ngInput.required = true;
+                fgInput.placeholder = 'ระบุจำนวน';
+                ngInput.placeholder = 'ระบุจำนวน';
+            }
+
             document.getElementById('closeJobModal').classList.remove('hidden');
         }
 
@@ -1336,6 +1753,16 @@
             }
         }
 
+        // ดึงตัวเลขและหน่วยจาก string เช่น "10 kg" → { value: 10, unit: "kg" }
+        function extractQtyAndUnit(qtyStr) {
+            if (!qtyStr) return { value: 0, unit: 'kg' };
+            qtyStr = String(qtyStr).trim();
+            const num = parseFloat(qtyStr);
+            if (isNaN(num)) return { value: 0, unit: 'kg' };
+            const unit = qtyStr.toLowerCase().includes('kg') ? 'kg' : 'ชิ้น';
+            return { value: num, unit: unit };
+        }
+
         async function submitToQC(e) {
             e.preventDefault();
             const btn = document.getElementById('btn-submit-qc');
@@ -1345,11 +1772,54 @@
             const jobId = document.getElementById('modal-job-id').value;
             const fgQtyRaw = document.getElementById('modal-fg-qty').value;
             const fgUnit = document.getElementById('modal-fg-unit').value;
-            const fgQtyFinal = fgQtyRaw ? `${fgQtyRaw} ${fgUnit}` : `0 ${fgUnit}`;
-            
+            const newFg = fgQtyRaw ? parseFloat(fgQtyRaw) : 0;
+
             const ngQtyRaw = document.getElementById('modal-ng-qty').value;
             const ngUnit = document.getElementById('modal-ng-unit').value;
-            const ngQtyFinal = ngQtyRaw ? `${ngQtyRaw} ${ngUnit}` : `0 ${ngUnit}`;
+            const newNg = ngQtyRaw ? parseFloat(ngQtyRaw) : 0;
+
+            let fgQtyFinal, ngQtyFinal;
+
+            // ตรวจสอบว่าเป็นงานตีกลับ → คำนวณรวมยอดเดิม
+            const isResubmit = document.getElementById('modal-is-resubmit').value === 'true';
+            const rejectTarget = document.getElementById('modal-reject-target').value;
+            const prevFgStr = document.getElementById('modal-prev-fg').value;
+            const prevNgStr = document.getElementById('modal-prev-ng').value;
+
+            if (isResubmit && (prevFgStr || prevNgStr)) {
+                const prevFg = extractQtyAndUnit(prevFgStr);
+                const prevNg = extractQtyAndUnit(prevNgStr);
+
+                if (rejectTarget === 'NG') {
+                    // ตีกลับเฉพาะ NG → FG เดิม + FG ใหม่ (ที่คัดได้จาก NG), NG = ยอดใหม่
+                    const combinedFgValue = prevFg.value + (fgUnit === prevFg.unit ? newFg : convertQty(newFg, fgUnit, prevFg.unit, document.getElementById('modal-product-str').value));
+                    fgQtyFinal = `${combinedFgValue} ${prevFg.unit}`;
+                    ngQtyFinal = `${newNg} ${ngUnit}`;
+                } else if (rejectTarget === 'FG') {
+                    // ตีกลับเฉพาะ FG → FG = ยอดใหม่, NG เดิม + NG ใหม่ (ที่พบจากการคัด FG)
+                    fgQtyFinal = `${newFg} ${fgUnit}`;
+                    const combinedNgValue = prevNg.value + (ngUnit === prevNg.unit ? newNg : convertQty(newNg, ngUnit, prevNg.unit, document.getElementById('modal-product-str').value));
+                    ngQtyFinal = `${combinedNgValue} ${prevNg.unit}`;
+                } else {
+                    // ตีกลับทั้ง FG และ NG → ใช้ยอดใหม่ทั้งหมด
+                    fgQtyFinal = `${newFg} ${fgUnit}`;
+                    ngQtyFinal = `${newNg} ${ngUnit}`;
+                }
+
+                // แสดงสรุปยอดรวมก่อนยืนยัน
+                if (rejectTarget !== 'FG และ NG') {
+                    const confirmMsg = `สรุปยอดที่จะส่ง QC:\n\nFG: ${fgQtyFinal}\nNG: ${ngQtyFinal}\n\n(รวมยอดเดิม + ยอดคัดใหม่แล้ว)\n\nยืนยันส่ง?`;
+                    if (!confirm(confirmMsg)) {
+                        btn.disabled = false;
+                        btn.innerHTML = "📤 ส่งให้ QC ตรวจ";
+                        return;
+                    }
+                }
+            } else {
+                // งานปกติ (ไม่ใช่งานตีกลับ) → ใช้ยอดตามที่กรอก
+                fgQtyFinal = fgQtyRaw ? `${fgQtyRaw} ${fgUnit}` : `0 ${fgUnit}`;
+                ngQtyFinal = ngQtyRaw ? `${ngQtyRaw} ${ngUnit}` : `0 ${ngUnit}`;
+            }
 
             try {
                 const res = await fetch(SCRIPT_URL, {
@@ -1359,16 +1829,16 @@
                         jobId: jobId,
                         status: 'Wait QC',
                         closedBy: currentUser.name || currentUser.username,
-                        fgQty: fgQtyFinal, 
-                        ngQty: ngQtyFinal  
+                        fgQty: fgQtyFinal,
+                        ngQty: ngQtyFinal
                     })
                 });
                 const result = await res.json();
-                
+
                 if (result.status === 'success') {
                     alert("ส่งยอดให้ QC ตรวจสอบเรียบร้อยแล้ว");
                     closeModal();
-                    loadSortJobs(); 
+                    loadSortJobs();
                 } else {
                     alert("❌ เกิดข้อผิดพลาด: " + result.message);
                 }
@@ -1378,6 +1848,15 @@
                 btn.disabled = false;
                 btn.innerHTML = "📤 ส่งให้ QC ตรวจ";
             }
+        }
+
+        // แปลงหน่วยระหว่าง kg กับ ชิ้น
+        function convertQty(value, fromUnit, toUnit, productStr) {
+            if (fromUnit === toUnit) return value;
+            const wpp = getWeightPerPc(productStr);
+            if (fromUnit === 'kg' && toUnit === 'ชิ้น') return Math.round(value / wpp);
+            if (fromUnit === 'ชิ้น' && toUnit === 'kg') return value * wpp;
+            return value;
         }
 
         // ==========================================
@@ -1495,14 +1974,23 @@
                 timePickerEditInstance.setDate(dTime);
             }
 
-            // เครื่องและรุ่น
-            let machine = "", product = job.product; 
-            if (job.product && job.product.includes(" : ")) { 
+            // เครื่องและรุ่น + Line A/B
+            let machine = "", line = "", product = job.product;
+            if (job.product && job.product.includes(" : ")) {
                 const pParts = job.product.split(" : ");
-                machine = pParts[0].trim(); 
-                product = pParts[1].trim(); 
+                let machinePart = pParts[0].trim();
+                product = pParts[1].trim();
+                // parse line A/B จาก "CWM-01(A)" format
+                const lineMatch = machinePart.match(/^(.+?)\(([AB])\)$/);
+                if (lineMatch) {
+                    machine = lineMatch[1];
+                    line = lineMatch[2];
+                } else {
+                    machine = machinePart;
+                }
             }
-            document.getElementById('edit-sort-machine').value = machine; 
+            document.getElementById('edit-sort-machine').value = machine;
+            document.getElementById('edit-sort-line').value = line;
             document.getElementById('edit-sort-product').value = product;
 
             // ขั้นตอนและหมายเหตุ
@@ -1561,6 +2049,7 @@
             const dateVal = document.getElementById('edit-sort-date').value;
             const timeVal = document.getElementById('edit-sort-time').value;
             const machineVal = document.getElementById('edit-sort-machine').value;
+            const lineVal = document.getElementById('edit-sort-line').value;
             const productVal = document.getElementById('edit-sort-product').value;
             const stageVal = document.getElementById('edit-sort-stage').value;
             const symptomVal = document.getElementById('edit-sort-symptom').value;
@@ -1568,7 +2057,8 @@
             const unitVal = document.getElementById('edit-sort-unit').value;
             let remarkVal = document.getElementById('edit-sort-remark').value;
 
-            const finalProduct = machineVal ? `${machineVal} : ${productVal}` : productVal;
+            const machineWithLine = lineVal ? `${machineVal}(${lineVal})` : machineVal;
+            const finalProduct = machineWithLine ? `${machineWithLine} : ${productVal}` : productVal;
             const finalQty = `${qtyVal} ${unitVal}`; 
             const finalDate = `${dateVal} ${timeVal}`; 
             const finalRemark = stageVal ? `[พบที่: ${stageVal}] ${remarkVal.trim()}`.trim() : remarkVal.trim();
