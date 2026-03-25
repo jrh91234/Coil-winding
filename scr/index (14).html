@@ -614,6 +614,7 @@
         let filterStartDate = "";
         let filterEndDate = "";
         let filterTypeStr = "reported"; // ประเภทการกรองเริ่มต้น
+        let pendingSwitchToHistory = false; // flag สลับไป history เฉพาะตอนกดค้นหา
         
         let dailyCapacityPcs = 0;
         let dailyCapacityKg = 0;
@@ -711,14 +712,16 @@
             filterStartDate = s;
             filterEndDate = e;
             filterTypeStr = document.getElementById('filter-type').value;
-            
+
             const summaryTitle = document.getElementById('summary-title');
             if (filterStartDate && filterEndDate) {
                 summaryTitle.innerHTML = `🎯 สรุปยอดผลงาน Sort (${filterStartDate} ถึง ${filterEndDate})`;
             } else {
                 summaryTitle.innerHTML = `🎯 สรุปยอดผลงาน Sort วันนี้`;
             }
-            
+
+            // ตั้ง flag ว่าเป็นการค้นหาจากปุ่ม → ให้สลับไป history หลัง load เสร็จ
+            pendingSwitchToHistory = true;
             loadSortJobs();
         }
 
@@ -1016,8 +1019,9 @@
                     updateQCBadge();
                     renderTodaySummary(); 
                     
-                    // สลับไปแท็บ History อัตโนมัติถ้ามีการค้นหาเพื่อดูข้อมูลอดีต
-                    if (filterStartDate && filterEndDate && activeTab === 'prod') {
+                    // สลับไปแท็บ History เฉพาะตอนกดค้นหา (ไม่ใช่ทุกครั้งที่ reload)
+                    if (pendingSwitchToHistory && activeTab === 'prod') {
+                        pendingSwitchToHistory = false;
                         switchTab('history');
                     } else {
                         renderTable();
