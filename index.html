@@ -256,6 +256,11 @@
                     </select>
                 </div>
 
+                <div>
+                    <label class="block text-sm font-bold text-teal-800 mb-1">เอกสารอ้างอิงลูกค้า (Customer Ref.)</label>
+                    <input type="text" id="rtvCustomerRef" placeholder="เช่น เลขที่ใบเคลม, PO, Invoice..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500">
+                </div>
+
                 <button type="submit" id="btn-save-rtv" class="w-full bg-teal-600 text-white font-bold py-3.5 rounded-lg shadow-md hover:bg-teal-700 transition-all text-lg">
                     💾 บันทึกข้อมูล RTV
                 </button>
@@ -1159,10 +1164,11 @@
                         action: 'SAVE_RTV',
                         date: document.getElementById('rtvDate').value,
                         recorder: document.getElementById('rtvRecorder').value,
-                        source: '-', 
+                        source: '-',
                         product: document.getElementById('rtvProduct').value,
                         qty: document.getElementById('rtvQty').value,
-                        remark: document.getElementById('rtvRemark').value
+                        remark: document.getElementById('rtvRemark').value,
+                        customerRef: document.getElementById('rtvCustomerRef').value.trim()
                     };
 
                     try {
@@ -1648,6 +1654,7 @@
                             <span class="text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded">${log.qty} ชิ้น</span>
                             <span class="text-gray-500 text-xs">📝 ${log.remark}</span>
                         </div>
+                        ${log.customerRef ? `<div class="text-xs text-teal-700 mt-1 bg-teal-50 px-2 py-0.5 rounded">📄 Ref: ${log.customerRef}</div>` : ''}
                     </div>`;
                 });
                 html += `</div>`;
