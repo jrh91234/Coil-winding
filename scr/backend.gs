@@ -803,10 +803,13 @@ function doPost(e) {
                       }
 
                       // แปลง FG_Qty เป็นชิ้น (สำหรับ FG ใน Production_Data)
-                      // ถ้าพบที่ FG หรือ RTV → ไม่ดึงยอด FG มา (เพราะ FG ถูกนับไปแล้วในระบบผลิต)
+                      // ถ้าพบที่ FG หรือ RTV → NG มาจากของที่เคยนับเป็น FG แล้ว → ต้องหัก FG ออกเท่ากับ NG ที่พบ
                       let fgPcs = 0;
                       const isFoundAtFGorRTV = /พบที่:\s*(FG|RTV)/i.test(remarkStr);
-                      if (!isFoundAtFGorRTV) {
+                      if (isFoundAtFGorRTV) {
+                          // หัก FG ออก = จำนวน NG (ชิ้น) ที่พบจาก FG เดิม
+                          fgPcs = -getPcsFromKg(sortProduct, ngKg);
+                      } else {
                           const fgVal = parseFloat(fgQtyRaw) || 0;
                           if (fgVal > 0) {
                               if (String(fgQtyRaw).includes("kg")) {
