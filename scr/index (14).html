@@ -711,14 +711,14 @@
             filterStartDate = s;
             filterEndDate = e;
             filterTypeStr = document.getElementById('filter-type').value;
-            
+
             const summaryTitle = document.getElementById('summary-title');
             if (filterStartDate && filterEndDate) {
                 summaryTitle.innerHTML = `🎯 สรุปยอดผลงาน Sort (${filterStartDate} ถึง ${filterEndDate})`;
             } else {
                 summaryTitle.innerHTML = `🎯 สรุปยอดผลงาน Sort วันนี้`;
             }
-            
+
             loadSortJobs();
         }
 
@@ -1016,12 +1016,7 @@
                     updateQCBadge();
                     renderTodaySummary(); 
                     
-                    // สลับไปแท็บ History อัตโนมัติถ้ามีการค้นหาเพื่อดูข้อมูลอดีต
-                    if (filterStartDate && filterEndDate && activeTab === 'prod') {
-                        switchTab('history');
-                    } else {
-                        renderTable();
-                    }
+                    renderTable();
                 }
             } catch (err) {
                 console.error("loadSortJobs error:", err);
