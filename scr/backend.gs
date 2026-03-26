@@ -585,7 +585,13 @@ function doPost(e) {
     let sheet = ss.getSheetByName("RTV_Data");
     if (!sheet) {
         sheet = ss.insertSheet("RTV_Data");
-        sheet.appendRow(["Timestamp", "Date", "Product", "Qty", "Remark", "Recorder"]);
+        sheet.appendRow(["Timestamp", "Date", "Product", "Qty", "Remark", "Recorder", "Customer_Ref"]);
+    }
+
+    // เพิ่มคอลัมน์ Customer_Ref ถ้ายังไม่มี
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (!headers.some(h => h.toString().trim() === "Customer_Ref")) {
+        sheet.getRange(1, headers.length + 1).setValue("Customer_Ref");
     }
 
     const now = new Date();
@@ -595,7 +601,8 @@ function doPost(e) {
         data.product,
         data.qty,
         data.remark,
-        data.recorder
+        data.recorder,
+        data.customerRef || ""
     ]);
     
     SpreadsheetApp.flush();
@@ -1516,7 +1523,8 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
              product: rRow[rCol["product"]],
              qty: rRow[rCol["qty"]],
              remark: rRow[rCol["remark"]],
-             recorder: rRow[rCol["recorder"]]
+             recorder: rRow[rCol["recorder"]],
+             customerRef: rCol["customer_ref"] !== undefined ? (rRow[rCol["customer_ref"]] || "") : ""
            });
         }
       }
