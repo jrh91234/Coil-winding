@@ -111,6 +111,8 @@ window.addBatchRow = function() {
     const fgInput = div.querySelector('input[name="fgAmount"]');
     
     const checkProductForFg = () => {
+        // ถ้า FG ถูกล็อค (มี NG อยู่) → ไม่ต้องเปลี่ยนค่า FG
+        if (fgInput.readOnly) return;
         if(pSelect.value === "51207080HC-JR (25/32A)") {
             fgInput.value = "800";
         } else {
@@ -190,18 +192,34 @@ window.saveCurrentNgInputs = function() {
     const newData = [];
     let total = 0;
 
+    // ตรวจสอบว่าทุก NG ที่กรอกต้องมีจุดทศนิยม
+    let hasDecimalError = false;
+    rows.forEach(row => {
+        const rawVal = row.querySelector('.ng-input-qty').value.trim();
+        if (rawVal && parseFloat(rawVal) > 0 && !rawVal.includes('.')) {
+            hasDecimalError = true;
+            row.querySelector('.ng-input-qty').style.borderColor = 'red';
+        } else {
+            row.querySelector('.ng-input-qty').style.borderColor = '';
+        }
+    });
+    if (hasDecimalError) {
+        alert("กรุณากรอก NG เป็นทศนิยม (Kg) เช่น 0.15 ไม่ใช่ 15\nตรวจสอบช่องที่ขอบแดง");
+        return false;
+    }
+
     rows.forEach(row => {
         let type = "";
         const labelSpan = row.querySelector('.ng-type-label');
         const nameInput = row.querySelector('.ng-type-name');
-        if (labelSpan) type = labelSpan.dataset.label; 
+        if (labelSpan) type = labelSpan.dataset.label;
         else if (nameInput) type = nameInput.value.trim();
-        
+
         const qty = parseFloat(row.querySelector('.ng-input-qty').value);
         const remark = row.querySelector('.ng-input-remark').value;
-        if (type && qty > 0) { 
-            newData.push({ type: capitalizeFirst(type), qty, remark }); 
-            total += qty; 
+        if (type && qty > 0) {
+            newData.push({ type: capitalizeFirst(type), qty, remark });
+            total += qty;
         }
     });
 
@@ -231,7 +249,10 @@ window.saveCurrentNgInputs = function() {
 };
 
 window.closeNgModal = function(save) {
-    if(save) window.saveCurrentNgInputs();
+    if(save) {
+        const result = window.saveCurrentNgInputs();
+        if (result === false) return; // validate ไม่ผ่าน → ไม่ปิด modal
+    }
     document.getElementById('modal-ng').classList.add('hidden');
     currentRowIdForNg = null;
 };
