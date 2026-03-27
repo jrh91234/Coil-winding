@@ -1709,21 +1709,20 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
     const total = d.fg + d.ng;
     const rate = total > 0 ? ((d.ng / total) * 100).toFixed(2) : 0;
     const pending = pendingSortByDate[date] || null;
-    // คำนวณ projected: ถ้างาน sorting คัดออกมา สมมติ pending qty ทั้งหมดเป็น NG เพิ่ม
-    let projectedNgRate = null;
-    let projectedFgRate = null;
+    let worstNgRate = null;  // NG 100%: pending ทั้งหมดเป็น NG
+    let bestNgRate = null;   // FG 100%: pending ทั้งหมดเป็น FG
     if (pending && pending.qty > 0) {
       const projTotal = total + pending.qty;
-      const projNg = d.ng + pending.qty;
-      const projFg = d.fg;
-      projectedNgRate = parseFloat(((projNg / projTotal) * 100).toFixed(2));
-      projectedFgRate = parseFloat(((projFg / projTotal) * 100).toFixed(2));
+      // กรณี NG 100%: NG เพิ่ม, FG เท่าเดิม
+      worstNgRate = parseFloat(((( d.ng + pending.qty) / projTotal) * 100).toFixed(2));
+      // กรณี FG 100%: FG เพิ่ม, NG เท่าเดิม
+      bestNgRate = parseFloat(((d.ng / projTotal) * 100).toFixed(2));
     }
     return {
       date: date, fg: d.fg, ng: d.ng, ngRate: parseFloat(rate), ngBreakdown: d.ngBreakdown,
       pendingSortQty: pending ? pending.qty : 0,
-      projectedNgRate: projectedNgRate,
-      projectedFgRate: projectedFgRate
+      worstNgRate: worstNgRate,
+      bestNgRate: bestNgRate
     };
   });
 

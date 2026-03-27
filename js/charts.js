@@ -946,12 +946,14 @@ window.renderCharts = function(data) {
                  {label:'% NG Rate', data:trendData.map(d=>d.ngRate), borderColor:'#f97316', borderWidth: 2, pointRadius: 3}
              ];
 
-             // เส้นจาง: projected NG% หากงาน sorting คัดออกมาแล้ว
+             // เส้นจาง: projected NG% หากงาน sorting คัดออกมาแล้ว (2 สถานการณ์)
              if (hasPendingSort) {
+                 // กรณี NG 100%: งานรอ sort ทั้งหมดเป็น NG (worst case)
                  datasets.push({
-                     label:'% NG (รวมรอ Sort)',
-                     data: trendData.map(d => d.projectedNgRate),
+                     label:'NG 100% (รอ Sort ทั้งหมดเป็น NG)',
+                     data: trendData.map(d => d.worstNgRate),
                      borderColor: 'rgba(239, 68, 68, 0.35)',
+                     backgroundColor: 'rgba(239, 68, 68, 0.05)',
                      borderWidth: 2,
                      borderDash: [6, 4],
                      pointRadius: 2,
@@ -959,10 +961,12 @@ window.renderCharts = function(data) {
                      fill: false,
                      spanGaps: true
                  });
+                 // กรณี FG 100%: งานรอ sort ทั้งหมดเป็น FG (best case)
                  datasets.push({
-                     label:'% FG (รวมรอ Sort)',
-                     data: trendData.map(d => d.projectedFgRate),
+                     label:'FG 100% (รอ Sort ทั้งหมดเป็น FG)',
+                     data: trendData.map(d => d.bestNgRate),
                      borderColor: 'rgba(34, 197, 94, 0.35)',
+                     backgroundColor: 'rgba(34, 197, 94, 0.05)',
                      borderWidth: 2,
                      borderDash: [6, 4],
                      pointRadius: 2,
