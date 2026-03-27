@@ -1655,12 +1655,76 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
   result.ngValuesPcs = Object.values(ngTempMapPcs);
   result.ngValuesKg = result.ngLabels.map(label => ngTempMapKg[label]);
 
+  // === อ่านยอดงานรอ Sorting (Pending/Rejected) แยกตามวันที่ ===
+  const pendingSortByDate = {};
+  try {
+    const sortSheet = ss.getSheetByName("Sorting_Data");
+    if (sortSheet && sortSheet.getLastRow() > 1) {
+      const sortData = sortSheet.getDataRange().getValues();
+      const sHeaders = sortData[0];
+      const sCol = {};
+      sHeaders.forEach((name, idx) => sCol[name.toString().trim().toLowerCase()] = idx);
+
+      for (let i = 1; i < sortData.length; i++) {
+        const sRow = sortData[i];
+        const sStatus = String(sRow[sCol["status"]] || "").trim();
+        if (sStatus !== "Pending" && sStatus !== "Rejected") continue;
+
+        const sDateRaw = sRow[sCol["date"]];
+        if (!sDateRaw) continue;
+        let sDateStr = "";
+        if (sDateRaw instanceof Date && !isNaN(sDateRaw.getTime())) {
+          let yyyy = sDateRaw.getFullYear();
+          if (yyyy > 2500) yyyy -= 543;
+          sDateStr = yyyy + "-" + String(sDateRaw.getMonth() + 1).padStart(2, '0') + "-" + String(sDateRaw.getDate()).padStart(2, '0');
+        } else {
+          sDateStr = String(sDateRaw).trim().substring(0, 10);
+        }
+
+        if (sDateStr < startDate || sDateStr > endDate) continue;
+
+        const sQtyRaw = sRow[sCol["qty"]];
+        const sQty = parseInt(sQtyRaw) || 0;
+        const sProduct = String(sRow[sCol["product"]] || "").trim();
+        // แยก product จาก "CWM-01 : S1B29288-JR (10A)" → "S1B29288-JR (10A)"
+        const pParts = sProduct.split(" : ");
+        const prodName = pParts[1] ? pParts[1].trim() : sProduct;
+
+        if (!pendingSortByDate[sDateStr]) pendingSortByDate[sDateStr] = { qty: 0 };
+        pendingSortByDate[sDateStr].qty += sQty;
+      }
+    }
+  } catch (sortErr) {
+    console.error("Error reading pending sorting for trend: " + sortErr.toString());
+  }
+
   const sortedDates = Object.keys(dailyStats).sort();
-  result.dailyTrend = sortedDates.map(date => {
-    const d = dailyStats[date];
+  // รวมวันที่จาก pendingSortByDate ที่อาจไม่มีใน dailyStats
+  Object.keys(pendingSortByDate).forEach(d => { if (!dailyStats[d]) sortedDates.push(d); });
+  sortedDates.sort();
+  const uniqueDates = [...new Set(sortedDates)];
+
+  result.dailyTrend = uniqueDates.map(date => {
+    const d = dailyStats[date] || { fg: 0, ng: 0, ngBreakdown: {} };
     const total = d.fg + d.ng;
     const rate = total > 0 ? ((d.ng / total) * 100).toFixed(2) : 0;
-    return { date: date, fg: d.fg, ng: d.ng, ngRate: parseFloat(rate), ngBreakdown: d.ngBreakdown };
+    const pending = pendingSortByDate[date] || null;
+    // คำนวณ projected: ถ้างาน sorting คัดออกมา สมมติ pending qty ทั้งหมดเป็น NG เพิ่ม
+    let projectedNgRate = null;
+    let projectedFgRate = null;
+    if (pending && pending.qty > 0) {
+      const projTotal = total + pending.qty;
+      const projNg = d.ng + pending.qty;
+      const projFg = d.fg;
+      projectedNgRate = parseFloat(((projNg / projTotal) * 100).toFixed(2));
+      projectedFgRate = parseFloat(((projFg / projTotal) * 100).toFixed(2));
+    }
+    return {
+      date: date, fg: d.fg, ng: d.ng, ngRate: parseFloat(rate), ngBreakdown: d.ngBreakdown,
+      pendingSortQty: pending ? pending.qty : 0,
+      projectedNgRate: projectedNgRate,
+      projectedFgRate: projectedFgRate
+    };
   });
 
   return result;

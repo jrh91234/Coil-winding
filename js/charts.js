@@ -940,20 +940,69 @@ window.renderCharts = function(data) {
          if(ctxQC) {
             if(charts.qcTrend) charts.qcTrend.destroy();
              const trendData = data.dailyTrend || [];
-             charts.qcTrend = new Chart(ctxQC, { 
-                 type: 'line', 
-                 data: { 
-                     labels: trendData.map(d=>d.date), 
-                     datasets: [{label:'% NG Rate', data:trendData.map(d=>d.ngRate), borderColor:'#f97316'}] 
-                 }, 
-                 options: { 
-                     ...commonOpts, 
+             const hasPendingSort = trendData.some(d => d.pendingSortQty > 0);
+
+             const datasets = [
+                 {label:'% NG Rate', data:trendData.map(d=>d.ngRate), borderColor:'#f97316', borderWidth: 2, pointRadius: 3}
+             ];
+
+             // เส้นจาง: projected NG% หากงาน sorting คัดออกมาแล้ว
+             if (hasPendingSort) {
+                 datasets.push({
+                     label:'% NG (รวมรอ Sort)',
+                     data: trendData.map(d => d.projectedNgRate),
+                     borderColor: 'rgba(239, 68, 68, 0.35)',
+                     borderWidth: 2,
+                     borderDash: [6, 4],
+                     pointRadius: 2,
+                     pointBackgroundColor: 'rgba(239, 68, 68, 0.35)',
+                     fill: false,
+                     spanGaps: true
+                 });
+                 datasets.push({
+                     label:'% FG (รวมรอ Sort)',
+                     data: trendData.map(d => d.projectedFgRate),
+                     borderColor: 'rgba(34, 197, 94, 0.35)',
+                     borderWidth: 2,
+                     borderDash: [6, 4],
+                     pointRadius: 2,
+                     pointBackgroundColor: 'rgba(34, 197, 94, 0.35)',
+                     fill: false,
+                     spanGaps: true
+                 });
+             }
+
+             charts.qcTrend = new Chart(ctxQC, {
+                 type: 'line',
+                 data: {
+                     labels: trendData.map(d=>d.date),
+                     datasets: datasets
+                 },
+                 options: {
+                     ...commonOpts,
                      scales: { x: { offset: true } },
                      layout: { padding: { top: 20 } },
                      plugins: {
                          ...commonOpts.plugins,
+                         tooltip: {
+                             callbacks: {
+                                 afterBody: function(tooltipItems) {
+                                     const idx = tooltipItems[0].dataIndex;
+                                     const d = trendData[idx];
+                                     if (d && d.pendingSortQty > 0) {
+                                         return `รองาน Sort: ${d.pendingSortQty.toLocaleString()} ชิ้น`;
+                                     }
+                                     return '';
+                                 }
+                             }
+                         },
                          datalabels: {
-                             display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
+                             display: function(ctx) {
+                                 // แสดง label เฉพาะ dataset แรก (NG Rate จริง) เมื่อขยายเต็มจอ
+                                 if (ctx.datasetIndex !== 0) return false;
+                                 const c = ctx.chart.canvas.closest('.widget-card');
+                                 return c ? c.classList.contains('maximized-card') : true;
+                             },
                              color: '#c2410c',
                              align: 'top',
                              anchor: 'end',
@@ -961,7 +1010,7 @@ window.renderCharts = function(data) {
                              formatter: (value) => value > 0 ? value + '%' : null
                          }
                      }
-                 } 
+                 }
              });
          }
 
