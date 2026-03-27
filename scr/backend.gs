@@ -1678,20 +1678,32 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
           if (yyyy > 2500) yyyy -= 543;
           sDateStr = yyyy + "-" + String(sDateRaw.getMonth() + 1).padStart(2, '0') + "-" + String(sDateRaw.getDate()).padStart(2, '0');
         } else {
+          // รองรับ "2026-03-20 14:30" → ตัดเอาแค่วันที่
           sDateStr = String(sDateRaw).trim().substring(0, 10);
         }
 
         if (sDateStr < startDate || sDateStr > endDate) continue;
 
-        const sQtyRaw = sRow[sCol["qty"]];
-        const sQty = parseInt(sQtyRaw) || 0;
+        const sQtyRaw = String(sRow[sCol["qty"]] || "").trim();
         const sProduct = String(sRow[sCol["product"]] || "").trim();
         // แยก product จาก "CWM-01 : S1B29288-JR (10A)" → "S1B29288-JR (10A)"
         const pParts = sProduct.split(" : ");
         const prodName = pParts[1] ? pParts[1].trim() : sProduct;
 
+        // แปลง qty เป็นชิ้น (qty อาจเป็น "5.5 kg" หรือ "500 ชิ้น")
+        const numVal = parseFloat(sQtyRaw) || 0;
+        let pcs = 0;
+        if (numVal > 0) {
+          if (sQtyRaw.toLowerCase().includes("kg")) {
+            pcs = getPcsFromKg(prodName, numVal);
+          } else {
+            pcs = Math.round(numVal);
+          }
+        }
+
+        if (pcs <= 0) continue;
         if (!pendingSortByDate[sDateStr]) pendingSortByDate[sDateStr] = { qty: 0 };
-        pendingSortByDate[sDateStr].qty += sQty;
+        pendingSortByDate[sDateStr].qty += pcs;
       }
     }
   } catch (sortErr) {
