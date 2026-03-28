@@ -987,10 +987,13 @@ window.renderCharts = function(data) {
                      scales: {
                          x: { offset: true },
                          y: {
-                             beginAtZero: true,
-                             // cap Y-axis ไม่ให้ค่าสูงผิดปกติดึงกราฟ: ใช้ค่าสูงสุดของ NG Rate จริง + buffer
-                             suggestedMax: Math.max(...trendData.map(d => d.ngRate || 0)) * 1.5,
-                             ticks: { callback: v => v + '%' }
+                             type: 'logarithmic',
+                             min: 0.5,
+                             ticks: {
+                                 callback: v => v + '%',
+                                 autoSkip: true,
+                                 maxTicksLimit: 10
+                             }
                          }
                      },
                      layout: { padding: { top: 20 } },
