@@ -412,7 +412,9 @@ window.renderNgTrendChart = function() {
                 const rawPcs = (d.ngBreakdown && d.ngBreakdown[type]) ? d.ngBreakdown[type] : 0;
                 if (mode === 'percent') {
                     const total = (d.fg || 0) + (d.ng || 0);
-                    return total > 0 ? parseFloat(((rawPcs / total) * 100).toFixed(2)) : 0;
+                    if (total <= 0) return 0;
+                    const pct = parseFloat(((rawPcs / total) * 100).toFixed(2));
+                    return Math.min(pct, 100);
                 }
                 return rawPcs;
             }),
@@ -548,6 +550,7 @@ window.renderNgTrendChart = function() {
                 y: mode === 'percent' ? {
                     type: 'logarithmic',
                     min: 0.1,
+                    max: 100,
                     title: { display: true, text: '% เทียบยอดผลิต' },
                     ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 }
                 } : {
