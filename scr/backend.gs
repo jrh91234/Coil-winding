@@ -1723,7 +1723,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
     const pending = pendingSortByDate[date] || null;
     let worstNgRate = null;  // NG 100%: pending ทั้งหมดเป็น NG
     let bestNgRate = null;   // FG 100%: pending ทั้งหมดเป็น FG
-    if (pending && pending.qty > 0) {
+    if (pending && pending.qty > 0 && total > 0) {
       const projTotal = total + pending.qty;
       // กรณี NG 100%: NG เพิ่ม, FG เท่าเดิม
       worstNgRate = parseFloat(((( d.ng + pending.qty) / projTotal) * 100).toFixed(2));
