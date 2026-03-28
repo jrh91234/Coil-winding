@@ -984,7 +984,15 @@ window.renderCharts = function(data) {
                  },
                  options: {
                      ...commonOpts,
-                     scales: { x: { offset: true } },
+                     scales: {
+                         x: { offset: true },
+                         y: {
+                             beginAtZero: true,
+                             // cap Y-axis ไม่ให้ค่าสูงผิดปกติดึงกราฟ: ใช้ค่าสูงสุดของ NG Rate จริง + buffer
+                             suggestedMax: Math.max(...trendData.map(d => d.ngRate || 0)) * 1.5,
+                             ticks: { callback: v => v + '%' }
+                         }
+                     },
                      layout: { padding: { top: 20 } },
                      plugins: {
                          ...commonOpts.plugins,
