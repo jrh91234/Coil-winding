@@ -1178,6 +1178,68 @@
                 html += modelListHtml;
             }
 
+            // 🌟 สรุปยอดแยกตามผู้คัด (Sorter)
+            let summaryBySorter = {};
+            todaySortedData.forEach(job => {
+                const sorter = job.sorter ? String(job.sorter).trim() : '';
+                if (!sorter) return;
+                let model = job.product ? (job.product.includes(" : ") ? job.product.split(" : ")[1].trim() : String(job.product)) : '';
+                let fgInfo = parseQuantity(job.fgQty, model);
+                let ngInfo = parseQuantity(job.ngQty, model);
+                if (!summaryBySorter[sorter]) {
+                    summaryBySorter[sorter] = { fgKg: 0, fgPcs: 0, ngKg: 0, ngPcs: 0, jobs: 0 };
+                }
+                summaryBySorter[sorter].fgKg += fgInfo.kg;
+                summaryBySorter[sorter].fgPcs += fgInfo.pcs;
+                summaryBySorter[sorter].ngKg += ngInfo.kg;
+                summaryBySorter[sorter].ngPcs += ngInfo.pcs;
+                summaryBySorter[sorter].jobs += 1;
+            });
+
+            const sorterNames = Object.keys(summaryBySorter).sort((a, b) => {
+                const totalA = summaryBySorter[a].fgPcs + summaryBySorter[a].ngPcs;
+                const totalB = summaryBySorter[b].fgPcs + summaryBySorter[b].ngPcs;
+                return totalB - totalA;
+            });
+
+            if (sorterNames.length > 0) {
+                html += `
+                    <div class="col-span-full mt-3 bg-indigo-50 p-4 rounded-xl border border-indigo-200 shadow-sm">
+                        <h4 class="font-bold text-indigo-800 text-sm mb-3 flex items-center gap-2">👷 สรุปยอดแยกตามผู้คัด</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">`;
+                sorterNames.forEach((name, idx) => {
+                    const s = summaryBySorter[name];
+                    const totalPcs = s.fgPcs + s.ngPcs;
+                    const totalKg = s.fgKg + s.ngKg;
+                    const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '👤';
+                    html += `
+                        <div class="bg-white p-3 rounded-lg border border-indigo-100 shadow-sm hover:border-indigo-300 transition-colors">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="font-bold text-indigo-900 text-sm">${medal} ${name}</span>
+                                <span class="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">${s.jobs} รายการ</span>
+                            </div>
+                            <div class="flex gap-2 text-xs">
+                                <div class="flex-1 text-center bg-green-50 rounded p-1.5 border border-green-100">
+                                    <div class="text-green-700 font-bold">FG</div>
+                                    <div class="text-green-800 font-extrabold text-sm">${s.fgPcs.toLocaleString()}</div>
+                                    <div class="text-gray-400 text-[10px]">${s.fgKg.toFixed(2)} kg</div>
+                                </div>
+                                <div class="flex-1 text-center bg-red-50 rounded p-1.5 border border-red-100">
+                                    <div class="text-red-700 font-bold">NG</div>
+                                    <div class="text-red-800 font-extrabold text-sm">${s.ngPcs.toLocaleString()}</div>
+                                    <div class="text-gray-400 text-[10px]">${s.ngKg.toFixed(2)} kg</div>
+                                </div>
+                                <div class="flex-1 text-center bg-blue-50 rounded p-1.5 border border-blue-100">
+                                    <div class="text-blue-700 font-bold">รวม</div>
+                                    <div class="text-blue-800 font-extrabold text-sm">${totalPcs.toLocaleString()}</div>
+                                    <div class="text-gray-400 text-[10px]">${totalKg.toFixed(2)} kg</div>
+                                </div>
+                            </div>
+                        </div>`;
+                });
+                html += `</div></div>`;
+            }
+
             // กราฟเทรนด์ FG/NG รายวัน (Stacked Bar Chart)
             let dailyData = {};
             todaySortedData.forEach(job => {
