@@ -1013,7 +1013,7 @@ window.renderCharts = function(data) {
              const hasPendingSort = trendData.some(d => d.pendingSortQty > 0);
 
              const datasets = [
-                 {label:'% NG Rate', data:trendData.map(d=>d.ngRate), borderColor:'#f97316', borderWidth: 2, pointRadius: 3}
+                 {label:'% NG Rate', data:trendData.map(d=> Math.min(d.ngRate, 100)), borderColor:'#f97316', borderWidth: 2, pointRadius: 3}
              ];
 
              // เส้นจาง: projected NG% หากงาน sorting คัดออกมาแล้ว (2 สถานการณ์)
@@ -1021,7 +1021,7 @@ window.renderCharts = function(data) {
                  // กรณี NG 100%: งานรอ sort ทั้งหมดเป็น NG (worst case)
                  datasets.push({
                      label:'NG 100% (รอ Sort ทั้งหมดเป็น NG)',
-                     data: trendData.map(d => d.worstNgRate),
+                     data: trendData.map(d => d.worstNgRate != null ? Math.min(d.worstNgRate, 100) : null),
                      borderColor: 'rgba(239, 68, 68, 0.35)',
                      backgroundColor: 'rgba(239, 68, 68, 0.05)',
                      borderWidth: 2,
@@ -1034,7 +1034,7 @@ window.renderCharts = function(data) {
                  // กรณี FG 100%: งานรอ sort ทั้งหมดเป็น FG (best case)
                  datasets.push({
                      label:'FG 100% (รอ Sort ทั้งหมดเป็น FG)',
-                     data: trendData.map(d => d.bestNgRate),
+                     data: trendData.map(d => d.bestNgRate != null ? Math.min(d.bestNgRate, 100) : null),
                      borderColor: 'rgba(34, 197, 94, 0.35)',
                      backgroundColor: 'rgba(34, 197, 94, 0.05)',
                      borderWidth: 2,
@@ -1059,6 +1059,7 @@ window.renderCharts = function(data) {
                          y: {
                              type: 'logarithmic',
                              min: 0.5,
+                             max: 100,
                              ticks: {
                                  callback: v => v + '%',
                                  autoSkip: true,
