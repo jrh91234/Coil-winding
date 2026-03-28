@@ -437,6 +437,9 @@ window.renderNgTrendChart = function() {
     const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
     const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
 
+    // 🌟 ตัวแปร state สำหรับ label toggle และ isolate
+    window._ngTrendLabelsOn = window._ngTrendLabelsOn || false;
+
     // 🌟 ตัวแปรสำหรับตั้งเวลาเพื่อแยกการคลิก 1 ครั้ง / 2 ครั้ง 🌟
     let ngTrendClickTimer = null;
 
@@ -555,10 +558,32 @@ window.renderNgTrendChart = function() {
             layout: { padding: { top: 20, right: 20 } },
             plugins: {
                 ...commonOpts.plugins,
-                legend: { 
-                    display: true, 
-                    position: 'bottom', 
-                    labels: { boxWidth: 12, font: {size: 10} } 
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                    labels: { boxWidth: 12, font: {size: 10} },
+                    onClick: function(e, legendItem, legend) {
+                        const chart = legend.chart;
+                        const ci = legendItem.datasetIndex;
+                        const allHidden = chart.data.datasets.every((ds, i) => i === ci ? false : !chart.isDatasetVisible(i));
+
+                        if (allHidden) {
+                            // ถ้ากดเส้นที่แสดงอยู่ตัวเดียว → แสดงทั้งหมด
+                            chart.data.datasets.forEach((ds, i) => {
+                                chart.setDatasetVisibility(i, true);
+                            });
+                            const showAllBtn = document.getElementById('ngTrendShowAll');
+                            if (showAllBtn) showAllBtn.classList.add('hidden');
+                        } else {
+                            // ซ่อนทุกเส้น แสดงเฉพาะเส้นที่คลิก
+                            chart.data.datasets.forEach((ds, i) => {
+                                chart.setDatasetVisibility(i, i === ci);
+                            });
+                            const showAllBtn = document.getElementById('ngTrendShowAll');
+                            if (showAllBtn) showAllBtn.classList.remove('hidden');
+                        }
+                        chart.update();
+                    }
                 },
                 tooltip: {
                     mode: 'index',
@@ -576,10 +601,9 @@ window.renderNgTrendChart = function() {
                     }
                 },
                 datalabels: {
-                    display: function(ctx) { 
-                        const c = ctx.chart.canvas.closest('.widget-card'); 
-                        const isMax = c ? c.classList.contains('maximized-card') : false;
-                        return isMax && ctx.dataset.data[ctx.dataIndex] > 0; 
+                    display: function(ctx) {
+                        if (!window._ngTrendLabelsOn) return false;
+                        return ctx.dataset.data[ctx.dataIndex] > 0;
                     },
                     align: 'top',
                     color: function(context) {
@@ -591,6 +615,36 @@ window.renderNgTrendChart = function() {
             }
         }
     });
+
+    // อัพเดทสถานะปุ่ม toggle label
+    const lblBtn = document.getElementById('ngTrendLabelToggle');
+    if (lblBtn) {
+        lblBtn.style.backgroundColor = window._ngTrendLabelsOn ? '#dbeafe' : '';
+        lblBtn.style.fontWeight = window._ngTrendLabelsOn ? 'bold' : '';
+    }
+};
+
+// 🌟 Toggle แสดง/ซ่อนตัวเลขบนกราฟ NG Symptom Trend
+window.toggleNgTrendLabels = function() {
+    window._ngTrendLabelsOn = !window._ngTrendLabelsOn;
+    const lblBtn = document.getElementById('ngTrendLabelToggle');
+    if (lblBtn) {
+        lblBtn.style.backgroundColor = window._ngTrendLabelsOn ? '#dbeafe' : '';
+        lblBtn.style.fontWeight = window._ngTrendLabelsOn ? 'bold' : '';
+    }
+    if (charts.ngSymptomTrend) charts.ngSymptomTrend.update();
+};
+
+// 🌟 แสดงทุกเส้นกลับมา
+window.ngTrendShowAll = function() {
+    if (charts.ngSymptomTrend) {
+        charts.ngSymptomTrend.data.datasets.forEach((ds, i) => {
+            charts.ngSymptomTrend.setDatasetVisibility(i, true);
+        });
+        charts.ngSymptomTrend.update();
+    }
+    const showAllBtn = document.getElementById('ngTrendShowAll');
+    if (showAllBtn) showAllBtn.classList.add('hidden');
 };
 
 window.renderCharts = function(data) {
