@@ -568,22 +568,30 @@ window.renderNgTrendChart = function() {
                     onClick: function(e, legendItem, legend) {
                         const chart = legend.chart;
                         const ci = legendItem.datasetIndex;
-                        const allHidden = chart.data.datasets.every((ds, i) => i === ci ? false : !chart.isDatasetVisible(i));
+                        const showAllBtn = document.getElementById('ngTrendShowAll');
 
-                        if (allHidden) {
-                            // ถ้ากดเส้นที่แสดงอยู่ตัวเดียว → แสดงทั้งหมด
-                            chart.data.datasets.forEach((ds, i) => {
-                                chart.setDatasetVisibility(i, true);
-                            });
-                            const showAllBtn = document.getElementById('ngTrendShowAll');
-                            if (showAllBtn) showAllBtn.classList.add('hidden');
+                        if (e.native.ctrlKey || e.native.shiftKey || e.native.metaKey) {
+                            // Ctrl/Shift/Cmd+คลิก = toggle เส้นนั้นเพิ่ม/ลด
+                            const isVisible = chart.isDatasetVisible(ci);
+                            chart.setDatasetVisibility(ci, !isVisible);
+                            // เช็คว่ายังมีเส้นซ่อนอยู่หรือไม่
+                            const anyHidden = chart.data.datasets.some((ds, i) => !chart.isDatasetVisible(i));
+                            if (showAllBtn) showAllBtn.classList.toggle('hidden', !anyHidden);
                         } else {
-                            // ซ่อนทุกเส้น แสดงเฉพาะเส้นที่คลิก
-                            chart.data.datasets.forEach((ds, i) => {
-                                chart.setDatasetVisibility(i, i === ci);
-                            });
-                            const showAllBtn = document.getElementById('ngTrendShowAll');
-                            if (showAllBtn) showAllBtn.classList.remove('hidden');
+                            // คลิกปกติ = isolate / show all
+                            const allHidden = chart.data.datasets.every((ds, i) => i === ci ? false : !chart.isDatasetVisible(i));
+
+                            if (allHidden) {
+                                chart.data.datasets.forEach((ds, i) => {
+                                    chart.setDatasetVisibility(i, true);
+                                });
+                                if (showAllBtn) showAllBtn.classList.add('hidden');
+                            } else {
+                                chart.data.datasets.forEach((ds, i) => {
+                                    chart.setDatasetVisibility(i, i === ci);
+                                });
+                                if (showAllBtn) showAllBtn.classList.remove('hidden');
+                            }
                         }
                         chart.update();
                     }
