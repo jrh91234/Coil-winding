@@ -959,7 +959,7 @@ window.renderCharts = function(data) {
                      pointRadius: 2,
                      pointBackgroundColor: 'rgba(239, 68, 68, 0.35)',
                      fill: false,
-                     spanGaps: true
+                     spanGaps: false
                  });
                  // กรณี FG 100%: งานรอ sort ทั้งหมดเป็น FG (best case)
                  datasets.push({
@@ -972,7 +972,7 @@ window.renderCharts = function(data) {
                      pointRadius: 2,
                      pointBackgroundColor: 'rgba(34, 197, 94, 0.35)',
                      fill: false,
-                     spanGaps: true
+                     spanGaps: false
                  });
              }
 
