@@ -222,7 +222,7 @@ function doGet(e) {
              if (summaryTargetISO === todayISO) isSummaryDateMatch = true; // ค่าเริ่มต้นคือวันนี้
         }
 
-        if ((currentStatus === "Wait QC" || currentStatus === "Completed" || currentStatus === "Rejected") && isSummaryDateMatch) {
+       if ((currentStatus === "Wait QC" || currentStatus === "Completed" || currentStatus === "Rejected") && isSummaryDateMatch) {
             summaryJobs.push({
                 jobId: r[jobCol],
                 product: r[prodCol],
@@ -230,7 +230,8 @@ function doGet(e) {
                 fgQty: fgCol > -1 ? r[fgCol] : "",
                 ngQty: ngCol > -1 ? r[ngCol] : "",
                 status: currentStatus,
-                sortDate: summaryTargetISO
+                sortDate: summaryTargetISO,
+                sorter: sorterCol > -1 ? r[sorterCol] : "" // <--- เพิ่มบรรทัดนี้ครับ
             });
         }
       }
