@@ -540,12 +540,17 @@ window.renderNgTrendChart = function() {
                     }, 250); // รอ 250 มิลลิวินาที
                 }
             },
-            scales: { 
-                x: { offset: true }, 
-                y: { 
-                    beginAtZero: true, 
-                    title: { display: true, text: mode === 'percent' ? '% เทียบยอดผลิต' : 'จำนวน (ชิ้น)' }
-                } 
+            scales: {
+                x: { offset: true },
+                y: mode === 'percent' ? {
+                    type: 'logarithmic',
+                    min: 0.1,
+                    title: { display: true, text: '% เทียบยอดผลิต' },
+                    ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 }
+                } : {
+                    beginAtZero: true,
+                    title: { display: true, text: 'จำนวน (ชิ้น)' }
+                }
             },
             layout: { padding: { top: 20, right: 20 } },
             plugins: {
