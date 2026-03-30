@@ -231,7 +231,7 @@ function doGet(e) {
                 ngQty: ngCol > -1 ? r[ngCol] : "",
                 status: currentStatus,
                 sortDate: summaryTargetISO,
-                sorter: sorterCol > -1 ? r[sorterCol] : "" // <--- เพิ่มบรรทัดนี้ครับ
+                sorter: sorterCol > -1 ? r[sorterCol] : ""
             });
         }
       }

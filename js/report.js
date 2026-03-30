@@ -466,7 +466,7 @@ window.renderAutoReportContent = async function() {
             label: 'Overall NG Rate (%) - ภาพรวม',
             data: data.dailyTrend.map(d => {
                 const totalProd = d.fg + d.ng;
-                return totalProd > 0 ? parseFloat(((d.ng / totalProd) * 100).toFixed(2)) : 0;
+                return totalProd > 0 ? Math.min(parseFloat(((d.ng / totalProd) * 100).toFixed(2)), 100) : 0;
             }),
             borderColor: '#0f172a', // สีดำ/กรมท่าเข้ม
             backgroundColor: '#0f172a',
@@ -483,12 +483,12 @@ window.renderAutoReportContent = async function() {
                 data: data.dailyTrend.map(d => {
                     const totalProd = d.fg + d.ng;
                     const symPcs = (d.ngBreakdown && d.ngBreakdown[sym]) ? d.ngBreakdown[sym] : 0;
-                    return totalProd > 0 ? parseFloat(((symPcs / totalProd) * 100).toFixed(2)) : 0;
+                    return totalProd > 0 ? Math.min(parseFloat(((symPcs / totalProd) * 100).toFixed(2)), 100) : 0;
                 }),
-                borderColor: color, 
-                backgroundColor: color, 
-                borderWidth: 2, 
-                tension: 0.3, 
+                borderColor: color,
+                backgroundColor: color,
+                borderWidth: 2,
+                tension: 0.3,
                 fill: false
             });
         });
@@ -1068,7 +1068,7 @@ window.renderAutoReportContent = async function() {
                     options: {
                         animation: false, responsive: true, maintainAspectRatio: false,
                         plugins: { legend: { display: true, position: 'top' }, datalabels: { display: false } },
-                        scales: { y: { type: 'linear', beginAtZero: true, title: { display: true, text: '% (Yield %)' } } }
+                        scales: { y: { type: 'logarithmic', min: 0.1, max: 100, title: { display: true, text: '% (Yield %)' }, ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 } } }
                     }
                 }));
             }
