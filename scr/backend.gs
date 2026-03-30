@@ -290,53 +290,86 @@ function doGet(e) {
       return ContentService.createTextOutput(JSON.stringify(debugSheetData())).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 🌟 ดึงรายการ NG + งานรอ sorting สำหรับระบบนับ Stock 🌟
+    // 🌟 ดึงรายการ NG จาก Production_Data สำหรับระบบนับ Stock 🌟
     if (action === "GET_STOCK_ITEMS") {
       const ss = SpreadsheetApp.getActiveSpreadsheet();
       const items = [];
 
-      // 1. ดึงจาก Sorting_Data (งานที่ยังค้าง Pending/Rejected + Wait QC + Completed ที่มี NG)
-      const sortSheet = ss.getSheetByName("Sorting_Data");
-      if (sortSheet && sortSheet.getLastRow() > 1) {
-        const sRows = sortSheet.getDataRange().getValues();
-        const sH = sRows[0];
-        const sCol = (name) => sH.findIndex(h => String(h).trim().toLowerCase() === name.toLowerCase());
-        const sJobCol = sCol("Job_ID"), sProdCol = sCol("Product"), sSympCol = sCol("Symptom");
-        const sQtyCol = sCol("Qty"), sStatCol = sCol("Status"), sRemCol = sCol("Remark");
-        const sFgCol = sCol("FG_Qty"), sNgCol = sCol("NG_Qty"), sSorterCol = sCol("Sorter");
-        const sDateCol = sCol("Date");
+      // ดึงจาก Production_Data (เฉพาะแถวที่มี NG > 0)
+      const prodSheet = ss.getSheetByName("Production_Data");
+      if (prodSheet && prodSheet.getLastRow() > 1) {
+        const pRows = prodSheet.getDataRange().getValues();
+        const pH = pRows[0];
+        const pCol = (name) => pH.findIndex(h => String(h).trim().toLowerCase() === name.toLowerCase());
+        const cDate = pCol("Date"), cMachine = pCol("Machine"), cProduct = pCol("Product");
+        const cFG = pCol("FG"), cNG = pCol("NG_Total"), cNGJson = pCol("NG_Details_JSON");
+        const cRecorder = pCol("Recorder"), cShift = pCol("Shift"), cBatchId = pCol("Batch_ID");
+        const cTimestamp = pCol("Timestamp");
 
-        for (let i = 1; i < sRows.length; i++) {
-          const r = sRows[i];
-          const status = String(r[sStatCol] || "").trim();
-          if (!status) continue;
+        for (let i = 1; i < pRows.length; i++) {
+          const r = pRows[i];
+          const ngTotal = parseFloat(r[cNG]) || 0;
+          if (ngTotal <= 0) continue;
 
           let dateStr = "";
-          if (sDateCol > -1) {
-            const d = r[sDateCol];
+          if (cDate > -1) {
+            const d = r[cDate];
             if (d instanceof Date) {
               let y = d.getFullYear(); if (y > 2500) y -= 543;
               dateStr = y + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
             } else { dateStr = String(d).split(" ")[0]; }
           }
 
-          items.push({
-            source: "Sorting_Data",
-            refId: sJobCol > -1 ? String(r[sJobCol]) : "",
-            date: dateStr,
-            product: sProdCol > -1 ? String(r[sProdCol]) : "",
-            symptom: sSympCol > -1 ? String(r[sSympCol]) : "",
-            qty: sQtyCol > -1 ? String(r[sQtyCol]) : "",
-            status: status,
-            remark: sRemCol > -1 ? String(r[sRemCol]) : "",
-            fgQty: sFgCol > -1 ? String(r[sFgCol]) : "",
-            ngQty: sNgCol > -1 ? String(r[sNgCol]) : "",
-            sorter: sSorterCol > -1 ? String(r[sSorterCol]) : ""
-          });
+          // parse NG breakdown
+          let ngDetails = [];
+          if (cNGJson > -1 && r[cNGJson]) {
+            try {
+              const parsed = JSON.parse(r[cNGJson]);
+              if (Array.isArray(parsed)) {
+                ngDetails = parsed.filter(d => parseFloat(d.qty) > 0);
+              }
+            } catch(e) {}
+          }
+
+          // ถ้ามี breakdown ให้สร้างรายการแยกตามอาการ
+          if (ngDetails.length > 0) {
+            ngDetails.forEach(detail => {
+              items.push({
+                source: "Production_Data",
+                refId: cBatchId > -1 ? String(r[cBatchId] || "") : ("ROW-" + (i+1)),
+                rowNum: i + 1,
+                date: dateStr,
+                machine: cMachine > -1 ? String(r[cMachine]) : "",
+                product: cProduct > -1 ? String(r[cProduct]) : "",
+                symptom: detail.type || "",
+                qty: String(detail.qty) + " kg",
+                fg: cFG > -1 ? String(r[cFG]) : "0",
+                ngTotal: String(ngTotal),
+                recorder: cRecorder > -1 ? String(r[cRecorder]) : "",
+                shift: cShift > -1 ? String(r[cShift]) : ""
+              });
+            });
+          } else {
+            // ไม่มี breakdown ให้แสดงยอดรวม
+            items.push({
+              source: "Production_Data",
+              refId: cBatchId > -1 ? String(r[cBatchId] || "") : ("ROW-" + (i+1)),
+              rowNum: i + 1,
+              date: dateStr,
+              machine: cMachine > -1 ? String(r[cMachine]) : "",
+              product: cProduct > -1 ? String(r[cProduct]) : "",
+              symptom: "รวม NG",
+              qty: String(ngTotal) + " kg",
+              fg: cFG > -1 ? String(r[cFG]) : "0",
+              ngTotal: String(ngTotal),
+              recorder: cRecorder > -1 ? String(r[cRecorder]) : "",
+              shift: cShift > -1 ? String(r[cShift]) : ""
+            });
+          }
         }
       }
 
-      // 2. ดึงประวัติ Stock Count ล่าสุด
+      // ดึงประวัติ Stock Count ล่าสุด
       let history = [];
       const scSheet = ss.getSheetByName("Stock_Count");
       if (scSheet && scSheet.getLastRow() > 1) {
