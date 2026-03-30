@@ -289,7 +289,84 @@ function doGet(e) {
     if (action === "DEBUG") {
       return ContentService.createTextOutput(JSON.stringify(debugSheetData())).setMimeType(ContentService.MimeType.JSON);
     }
-    
+
+    // 🌟 ดึงรายการ NG + งานรอ sorting สำหรับระบบนับ Stock 🌟
+    if (action === "GET_STOCK_ITEMS") {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const items = [];
+
+      // 1. ดึงจาก Sorting_Data (งานที่ยังค้าง Pending/Rejected + Wait QC + Completed ที่มี NG)
+      const sortSheet = ss.getSheetByName("Sorting_Data");
+      if (sortSheet && sortSheet.getLastRow() > 1) {
+        const sRows = sortSheet.getDataRange().getValues();
+        const sH = sRows[0];
+        const sCol = (name) => sH.findIndex(h => String(h).trim().toLowerCase() === name.toLowerCase());
+        const sJobCol = sCol("Job_ID"), sProdCol = sCol("Product"), sSympCol = sCol("Symptom");
+        const sQtyCol = sCol("Qty"), sStatCol = sCol("Status"), sRemCol = sCol("Remark");
+        const sFgCol = sCol("FG_Qty"), sNgCol = sCol("NG_Qty"), sSorterCol = sCol("Sorter");
+        const sDateCol = sCol("Date");
+
+        for (let i = 1; i < sRows.length; i++) {
+          const r = sRows[i];
+          const status = String(r[sStatCol] || "").trim();
+          if (!status) continue;
+
+          let dateStr = "";
+          if (sDateCol > -1) {
+            const d = r[sDateCol];
+            if (d instanceof Date) {
+              let y = d.getFullYear(); if (y > 2500) y -= 543;
+              dateStr = y + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+            } else { dateStr = String(d).split(" ")[0]; }
+          }
+
+          items.push({
+            source: "Sorting_Data",
+            refId: sJobCol > -1 ? String(r[sJobCol]) : "",
+            date: dateStr,
+            product: sProdCol > -1 ? String(r[sProdCol]) : "",
+            symptom: sSympCol > -1 ? String(r[sSympCol]) : "",
+            qty: sQtyCol > -1 ? String(r[sQtyCol]) : "",
+            status: status,
+            remark: sRemCol > -1 ? String(r[sRemCol]) : "",
+            fgQty: sFgCol > -1 ? String(r[sFgCol]) : "",
+            ngQty: sNgCol > -1 ? String(r[sNgCol]) : "",
+            sorter: sSorterCol > -1 ? String(r[sSorterCol]) : ""
+          });
+        }
+      }
+
+      // 2. ดึงประวัติ Stock Count ล่าสุด
+      let history = [];
+      const scSheet = ss.getSheetByName("Stock_Count");
+      if (scSheet && scSheet.getLastRow() > 1) {
+        const scRows = scSheet.getDataRange().getValues();
+        const scH = scRows[0];
+        const scCol = (name) => scH.findIndex(h => String(h).trim().toLowerCase() === name.toLowerCase());
+        for (let i = 1; i < scRows.length; i++) {
+          const r = scRows[i];
+          history.push({
+            countId: scCol("Count_ID") > -1 ? String(r[scCol("Count_ID")]) : "",
+            timestamp: scCol("Timestamp") > -1 ? String(r[scCol("Timestamp")]) : "",
+            refId: scCol("Ref_ID") > -1 ? String(r[scCol("Ref_ID")]) : "",
+            product: scCol("Product") > -1 ? String(r[scCol("Product")]) : "",
+            symptom: scCol("Symptom") > -1 ? String(r[scCol("Symptom")]) : "",
+            expectedQty: scCol("Expected_Qty") > -1 ? String(r[scCol("Expected_Qty")]) : "",
+            actualQty: scCol("Actual_Qty") > -1 ? String(r[scCol("Actual_Qty")]) : "",
+            diff: scCol("Diff") > -1 ? String(r[scCol("Diff")]) : "",
+            status: scCol("Status") > -1 ? String(r[scCol("Status")]) : "",
+            pallet: scCol("Pallet") > -1 ? String(r[scCol("Pallet")]) : "",
+            counter: scCol("Counter") > -1 ? String(r[scCol("Counter")]) : "",
+            remark: scCol("Remark") > -1 ? String(r[scCol("Remark")]) : ""
+          });
+        }
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success", items: items, history: history
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     const url = ScriptApp.getService().getUrl();
     const html = `<div style="font-family:sans-serif;text-align:center;padding:50px;"><h1>🚀 System v3.55 (Auth + QC Inbox) Online</h1><a href="${url}?action=DEBUG" target="_blank" style="background:#007bff;color:white;padding:15px 30px;text-decoration:none;border-radius:5px;font-weight:bold;">🔍 กดปุ่มนี้เพื่อดูข้อมูล Debug</a></div>`;
     return HtmlService.createHtmlOutput(html);
@@ -1282,6 +1359,44 @@ function doPost(e) {
      SpreadsheetApp.flush();
 
      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Cloud settings updated" })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // 🌟 บันทึกผลนับ Stock 🌟
+  if (action === "SAVE_STOCK_COUNT") {
+    const items = data.items || [];
+    if (items.length === 0) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "No items"})).setMimeType(ContentService.MimeType.JSON);
+
+    let scSheet = ss.getSheetByName("Stock_Count");
+    if (!scSheet) {
+      scSheet = ss.insertSheet("Stock_Count");
+      scSheet.appendRow(["Count_ID", "Timestamp", "Source", "Ref_ID", "Product", "Symptom", "Expected_Qty", "Actual_Qty", "Diff", "Status", "Pallet", "Counter", "Remark"]);
+    }
+
+    const now = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss");
+    const countId = data.countId || ("SC-" + Utilities.formatDate(new Date(), "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substring(2, 6).toUpperCase());
+
+    const newRows = items.map(item => [
+      countId,
+      now,
+      item.source || "",
+      item.refId || "",
+      item.product || "",
+      item.symptom || "",
+      item.expectedQty || "",
+      item.actualQty || "",
+      item.diff || "",
+      item.status || "",
+      item.pallet || "",
+      item.counter || "",
+      item.remark || ""
+    ]);
+
+    if (newRows.length > 0) {
+      scSheet.getRange(scSheet.getLastRow() + 1, 1, newRows.length, 13).setValues(newRows);
+      SpreadsheetApp.flush();
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({status: "success", countId: countId, saved: newRows.length})).setMimeType(ContentService.MimeType.JSON);
   }
 
   return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Unknown Action"})).setMimeType(ContentService.MimeType.JSON);
