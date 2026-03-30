@@ -230,7 +230,8 @@ function doGet(e) {
                 fgQty: fgCol > -1 ? r[fgCol] : "",
                 ngQty: ngCol > -1 ? r[ngCol] : "",
                 status: currentStatus,
-                sortDate: summaryTargetISO
+                sortDate: summaryTargetISO,
+                sorter: sorterCol > -1 ? r[sorterCol] : ""
             });
         }
       }
