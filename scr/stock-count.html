@@ -51,13 +51,13 @@
             <div class="flex flex-col md:flex-row gap-3 items-start md:items-end justify-between">
                 <div class="flex flex-col md:flex-row gap-3 items-start md:items-end">
                     <div>
-                        <label class="block text-xs font-bold text-gray-600 mb-1">กรองสถานะ Sorting</label>
-                        <select id="filter-status" onchange="renderStockTable()" class="p-2 border rounded-lg text-sm bg-white">
-                            <option value="all">ทั้งหมด</option>
-                            <option value="Pending" selected>Pending (รอ Sort)</option>
-                            <option value="Rejected">Rejected (ตีกลับ)</option>
-                            <option value="Wait QC">Wait QC</option>
-                            <option value="Completed">Completed</option>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">กรองวันที่</label>
+                        <input type="date" id="filter-date" onchange="renderStockTable()" class="p-2 border rounded-lg text-sm bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">กรองเครื่อง</label>
+                        <select id="filter-machine" onchange="renderStockTable()" class="p-2 border rounded-lg text-sm bg-white">
+                            <option value="all">ทุกเครื่อง</option>
                         </select>
                     </div>
                     <div>
@@ -123,8 +123,9 @@
                         <thead>
                             <tr class="bg-emerald-50 text-xs text-gray-600 uppercase">
                                 <th class="p-3 w-10">#</th>
-                                <th class="p-3">Job ID</th>
+                                <th class="p-3">Ref ID</th>
                                 <th class="p-3">วันที่</th>
+                                <th class="p-3">เครื่อง</th>
                                 <th class="p-3">รุ่น</th>
                                 <th class="p-3">อาการ</th>
                                 <th class="p-3 text-right">ยอดในระบบ</th>
@@ -136,7 +137,7 @@
                             </tr>
                         </thead>
                         <tbody id="stock-table-body">
-                            <tr><td colspan="11" class="p-8 text-center text-gray-400">กด "🔄 ดึงข้อมูลใหม่" เพื่อเริ่มนับ Stock</td></tr>
+                            <tr><td colspan="12" class="p-8 text-center text-gray-400">กด "🔄 ดึงข้อมูลใหม่" เพื่อเริ่มนับ Stock</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -162,7 +163,7 @@
                             </tr>
                         </thead>
                         <tbody id="history-table-body">
-                            <tr><td colspan="11" class="p-8 text-center text-gray-400">กำลังโหลด...</td></tr>
+                            <tr><td colspan="12" class="p-8 text-center text-gray-400">กำลังโหลด...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -255,7 +256,7 @@
 
         async function loadStockItems() {
             const tbody = document.getElementById('stock-table-body');
-            tbody.innerHTML = '<tr><td colspan="11" class="p-8 text-center text-gray-400"><div class="inline-block w-6 h-6 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mr-2"></div>กำลังโหลดข้อมูล...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" class="p-8 text-center text-gray-400"><div class="inline-block w-6 h-6 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mr-2"></div>กำลังโหลดข้อมูล...</td></tr>';
 
             try {
                 const res = await fetch(SCRIPT_URL + "?action=GET_STOCK_ITEMS");
@@ -265,36 +266,33 @@
                     historyData = result.history || [];
                     countResults = {};
 
-                    // populate product filter
-                    const products = [...new Set(stockItems.map(i => {
-                        let p = i.product || '';
-                        return p.includes(' : ') ? p.split(' : ')[1].trim() : p;
-                    }))].filter(Boolean).sort();
-                    const sel = document.getElementById('filter-product');
-                    sel.innerHTML = '<option value="all">ทุกรุ่น</option>' + products.map(p => `<option value="${p}">${p}</option>`).join('');
+                    // populate filters
+                    const products = [...new Set(stockItems.map(i => i.product || ''))].filter(Boolean).sort();
+                    const machines = [...new Set(stockItems.map(i => i.machine || ''))].filter(Boolean).sort();
+                    document.getElementById('filter-product').innerHTML = '<option value="all">ทุกรุ่น</option>' + products.map(p => `<option value="${p}">${p}</option>`).join('');
+                    document.getElementById('filter-machine').innerHTML = '<option value="all">ทุกเครื่อง</option>' + machines.map(m => `<option value="${m}">${m}</option>`).join('');
 
                     renderStockTable();
                     renderHistoryTable();
                 }
             } catch(err) {
-                tbody.innerHTML = `<tr><td colspan="11" class="p-8 text-center text-red-500">❌ โหลดข้อมูลล้มเหลว: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" class="p-8 text-center text-red-500">❌ โหลดข้อมูลล้มเหลว: ${err.message}</td></tr>`;
             }
         }
 
         function getFilteredItems() {
-            const statusFilter = document.getElementById('filter-status').value;
+            const dateFilter = document.getElementById('filter-date').value;
+            const machineFilter = document.getElementById('filter-machine').value;
             const productFilter = document.getElementById('filter-product').value;
             const search = (document.getElementById('search-input').value || '').toLowerCase().trim();
             const searchTerms = search ? search.split(/\s+/) : [];
 
             return stockItems.filter(item => {
-                if (statusFilter !== 'all' && item.status !== statusFilter) return false;
-                if (productFilter !== 'all') {
-                    let model = item.product.includes(' : ') ? item.product.split(' : ')[1].trim() : item.product;
-                    if (model !== productFilter) return false;
-                }
+                if (dateFilter && item.date !== dateFilter) return false;
+                if (machineFilter !== 'all' && item.machine !== machineFilter) return false;
+                if (productFilter !== 'all' && item.product !== productFilter) return false;
                 if (searchTerms.length > 0) {
-                    const hay = `${item.refId} ${item.product} ${item.symptom} ${item.remark} ${item.qty}`.toLowerCase();
+                    const hay = `${item.refId} ${item.product} ${item.symptom} ${item.machine} ${item.qty} ${item.recorder}`.toLowerCase();
                     if (!searchTerms.every(t => hay.includes(t))) return false;
                 }
                 return true;
@@ -306,7 +304,7 @@
             const filtered = getFilteredItems();
 
             if (filtered.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" class="p-8 text-center text-gray-400">ไม่พบรายการตามเงื่อนไข</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" class="p-8 text-center text-gray-400">ไม่พบรายการตามเงื่อนไข</td></tr>';
                 updateStats(filtered);
                 return;
             }
@@ -338,17 +336,12 @@
                     }
                 }
 
-                let statusBadge = '';
-                if (item.status === 'Pending') statusBadge = '<span class="status-badge bg-gray-100 text-gray-600 border border-gray-300">Pending</span>';
-                else if (item.status === 'Wait QC') statusBadge = '<span class="status-badge bg-yellow-100 text-yellow-800 border border-yellow-300">Wait QC</span>';
-                else if (item.status === 'Completed') statusBadge = '<span class="status-badge bg-green-100 text-green-800 border border-green-300">Completed</span>';
-                else if (item.status === 'Rejected') statusBadge = '<span class="status-badge bg-red-100 text-red-800 border border-red-300">Rejected</span>';
-
                 html += `
                     <tr class="${rowClass} hover:bg-gray-50 border-b cursor-pointer" ondblclick="openCountModal(${globalIdx})">
                         <td class="p-3 text-xs text-gray-400">${statusIcon}</td>
-                        <td class="p-3 text-xs font-mono text-gray-600">${item.refId}<br>${statusBadge}</td>
+                        <td class="p-3 text-xs font-mono text-gray-600">${item.refId || 'ROW-' + item.rowNum}</td>
                         <td class="p-3 text-sm text-gray-700 whitespace-nowrap">${item.date || '-'}</td>
+                        <td class="p-3 text-sm text-gray-700 font-bold">${item.machine || '-'}</td>
                         <td class="p-3 text-sm font-bold text-blue-800">${item.product}</td>
                         <td class="p-3 text-sm text-red-600">${item.symptom}</td>
                         <td class="p-3 text-sm text-right font-bold">${item.qty}</td>
@@ -405,7 +398,7 @@
             if (!item) return;
 
             document.getElementById('modal-title').textContent = '📦 นับ Stock: ' + item.refId;
-            document.getElementById('modal-subtitle').textContent = item.product + ' | ' + item.symptom;
+            document.getElementById('modal-subtitle').textContent = (item.machine ? item.machine + ' | ' : '') + item.product + ' | ' + item.symptom;
             document.getElementById('modal-expected').textContent = item.qty;
 
             const cr = countResults[globalIdx];
@@ -485,7 +478,7 @@
                 const cr = countResults[idx];
                 return {
                     source: item.source,
-                    refId: item.refId,
+                    refId: item.refId || ('ROW-' + item.rowNum),
                     product: item.product,
                     symptom: item.symptom,
                     expectedQty: item.qty,
@@ -494,7 +487,7 @@
                     status: cr.status,
                     pallet: cr.pallet,
                     counter: currentUser.name,
-                    remark: cr.remark
+                    remark: cr.remark + (item.machine ? ' [' + item.machine + ']' : '')
                 };
             });
 
@@ -520,7 +513,7 @@
         function renderHistoryTable() {
             const tbody = document.getElementById('history-table-body');
             if (!historyData || historyData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" class="p-8 text-center text-gray-400">ยังไม่มีประวัติการนับ</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" class="p-8 text-center text-gray-400">ยังไม่มีประวัติการนับ</td></tr>';
                 return;
             }
 
@@ -565,8 +558,9 @@
                 const globalIdx = stockItems.indexOf(item);
                 const cr = countResults[globalIdx];
                 return {
-                    "Job ID": item.refId,
+                    "Ref ID": item.refId,
                     "วันที่": item.date,
+                    "เครื่อง": item.machine,
                     "รุ่น": item.product,
                     "อาการ": item.symptom,
                     "ยอดระบบ": item.qty,
@@ -575,7 +569,7 @@
                     "สถานะนับ": cr ? cr.status : "ยังไม่นับ",
                     "พาเลท/กระบะ": cr ? cr.pallet : "",
                     "หมายเหตุ": cr ? cr.remark : "",
-                    "สถานะ Sorting": item.status
+                    "ผู้บันทึก": item.recorder
                 };
             });
 
