@@ -1256,26 +1256,29 @@ window.switchMachineChart = function() {
     const hint = document.getElementById('daily-chart-hint');
     
     if(val === 'hourly') {
-        // แสดงกราฟรายชั่วโมง ซ่อนกราฟรายวัน
         document.getElementById('machine-hourly-wrapper').classList.remove('hidden');
         document.getElementById('machine-daily-wrapper').classList.add('hidden');
         if(hint) hint.classList.add('hidden');
         
-        // บังคับให้กราฟรายชั่วโมงคำนวณขนาดตัวเองใหม่ (แก้บั๊กกราฟไม่ขึ้น)
-        if (typeof machineDetailChart !== 'undefined' && machineDetailChart) {
-            machineDetailChart.resize();
-        }
+        // ใช้ setTimeout หน่วงเวลา 100ms เพื่อให้ CSS แสดงผลเสร็จก่อนค่อย resize กราฟ
+        setTimeout(() => {
+            if (typeof machineDetailChart !== 'undefined' && machineDetailChart) {
+                machineDetailChart.resize();
+                machineDetailChart.update();
+            }
+        }, 100);
         
     } else {
-        // แสดงกราฟรายวัน ซ่อนกราฟรายชั่วโมง
         document.getElementById('machine-hourly-wrapper').classList.add('hidden');
         document.getElementById('machine-daily-wrapper').classList.remove('hidden');
         if(hint) hint.classList.remove('hidden');
         
-        // บังคับให้กราฟรายวันคำนวณขนาดตัวเองใหม่ (แก้บั๊กกราฟไม่ขึ้น)
-        if (typeof machineDailyChartInst !== 'undefined' && machineDailyChartInst) {
-            machineDailyChartInst.resize();
-        }
+        setTimeout(() => {
+            if (typeof machineDailyChartInst !== 'undefined' && machineDailyChartInst) {
+                machineDailyChartInst.resize();
+                machineDailyChartInst.update();
+            }
+        }, 100);
     }
 };
 
@@ -1530,16 +1533,21 @@ window.showMachineDetail = function(machineName) {
             scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } 
         } 
     });
-
-    const dailyData = mData.daily || {};
+const dailyData = mData.daily || {};
     const dailyKeys = Object.keys(dailyData).sort();
 
     const sortData = mData.sortData || {};
-    const globalSortNgRatio = (data.globalSortNgRatio || 50) / 100;
+    // 🔴 แก้ไข data.globalSortNgRatio เป็น currentDashboardData
+    const globalSortNgRatio = ((typeof currentDashboardData !== 'undefined' && currentDashboardData.globalSortNgRatio) ? currentDashboardData.globalSortNgRatio : 50) / 100;
+
+    // 🟢 สร้างฟังก์ชันดักค่า undefined ป้องกันกราฟพังเป็น NaN
+    const getFg = (d) => d ? (d.fg || 0) : 0;
+    const getNg = (d) => d ? (d.ngPcs !== undefined ? d.ngPcs : (d.ng || 0)) : 0;
 
     const dailyYields = dailyKeys.map(k => {
-        const t = dailyData[k].fg + dailyData[k].ngPcs;
-        return t > 0 ? parseFloat(((dailyData[k].fg / t) * 100).toFixed(1)) : 0;
+        const d = dailyData[k];
+        const t = getFg(d) + getNg(d);
+        return t > 0 ? parseFloat(((getFg(d) / t) * 100).toFixed(1)) : 0;
     });
 
     // เส้นประ projection: NG Rate (inverse of yield)
@@ -1548,9 +1556,9 @@ window.showMachineDetail = function(machineName) {
         const pending = sd ? (sd.pendingPcs || 0) : 0;
         if (pending <= 0) return null;
         const d = dailyData[k];
-        const total = d.fg + d.ngPcs + pending;
+        const total = getFg(d) + getNg(d) + pending;
         // NG 100%: pending ทั้งหมดเป็น NG → yield ลดลง
-        return total > 0 ? parseFloat(((d.fg / total) * 100).toFixed(1)) : null;
+        return total > 0 ? parseFloat(((getFg(d) / total) * 100).toFixed(1)) : null;
     });
 
     const bestYield = dailyKeys.map(k => {
@@ -1558,9 +1566,9 @@ window.showMachineDetail = function(machineName) {
         const pending = sd ? (sd.pendingPcs || 0) : 0;
         if (pending <= 0) return null;
         const d = dailyData[k];
-        const total = d.fg + d.ngPcs + pending;
+        const total = getFg(d) + getNg(d) + pending;
         // FG 100%: pending ทั้งหมดเป็น FG → yield เพิ่ม
-        return total > 0 ? parseFloat((((d.fg + pending) / total) * 100).toFixed(1)) : null;
+        return total > 0 ? parseFloat((((getFg(d) + pending) / total) * 100).toFixed(1)) : null;
     });
 
     const forecastYield = dailyKeys.map(k => {
@@ -1568,13 +1576,13 @@ window.showMachineDetail = function(machineName) {
         const pending = sd ? (sd.pendingPcs || 0) : 0;
         if (pending <= 0) return null;
         const d = dailyData[k];
-        const total = d.fg + d.ngPcs + pending;
+        const total = getFg(d) + getNg(d) + pending;
         // Forecast: ใช้อัตรา sort จริง
         let ngRatio = globalSortNgRatio;
         if (sd && (sd.fgPcs + sd.ngPcs) > 0) {
             ngRatio = sd.ngPcs / (sd.fgPcs + sd.ngPcs);
         }
-        const projFg = d.fg + Math.round(pending * (1 - ngRatio));
+        const projFg = getFg(d) + Math.round(pending * (1 - ngRatio));
         return total > 0 ? parseFloat(((projFg / total) * 100).toFixed(1)) : null;
     });
 
@@ -1606,8 +1614,8 @@ window.showMachineDetail = function(machineName) {
     }
 
     dailyDatasets.push(
-        { label: 'FG (งานดี)', data: dailyKeys.map(k => dailyData[k].fg), backgroundColor: '#3b82f6', yAxisID: 'y', stack: 'Stack 0' },
-        { label: 'NG (เสียเป็นชิ้น)', data: dailyKeys.map(k => dailyData[k].ngPcs), backgroundColor: '#ef4444', yAxisID: 'y', stack: 'Stack 0' }
+        { label: 'FG (งานดี)', data: dailyKeys.map(k => getFg(dailyData[k])), backgroundColor: '#3b82f6', yAxisID: 'y', stack: 'Stack 0' },
+        { label: 'NG (เสียเป็นชิ้น)', data: dailyKeys.map(k => getNg(dailyData[k])), backgroundColor: '#ef4444', yAxisID: 'y', stack: 'Stack 0' }
     );
 
     machineDailyChartInst = new Chart(document.getElementById('machineDailyTrendChart').getContext('2d'), {
