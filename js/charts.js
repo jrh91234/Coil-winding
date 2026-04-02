@@ -152,7 +152,18 @@ window.renderModelChart = function() {
             backgroundColor: '#10b981' 
         }];
         scales.x = { max: 100, beginAtZero: true };
-    } else if (type === 'ng_pcs') {
+    } else if (type === 'ng_rate') {
+        datasets = [{ 
+            label: '% NG Rate', 
+            data: Object.values(pData).map(d => {
+                const ngCount = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
+                const t = d.fg + ngCount; 
+                return t > 0 ? parseFloat(((ngCount/t)*100).toFixed(2)) : 0;
+            }), 
+            backgroundColor: '#f43f5e' 
+        }];
+        scales.x = { max: 100, beginAtZero: true, title: {display: true, text: '% NG Rate'} };
+    }  else if (type === 'ng_pcs') {
         datasets = [{ 
             label: 'NG (ชิ้น)', 
             data: Object.entries(pData).map(([prod, d]) => d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0)), 
@@ -211,7 +222,7 @@ window.renderModelChart = function() {
     };
 
     let dlFormatter = (value) => value > 0 ? value : null;
-    if (type === 'yield') dlFormatter = (value) => value > 0 ? value + '%' : null;
+    if (type === 'yield' || type === 'ng_rate') dlFormatter = (value) => value > 0 ? value + '%' : null; // <--- แก้บรรทัดนี้
     else if (type === 'ng_pcs') dlFormatter = (value) => value > 0 ? value + ' ชิ้น' : null;
     else if (type === 'ng_kg') dlFormatter = (value) => value > 0 ? value + ' Kg' : null;
     else if (type === 'ng_both') dlFormatter = (value, ctx) => value > 0 ? value + (ctx.datasetIndex === 0 ? ' ชิ้น' : ' Kg') : null;
@@ -1011,83 +1022,98 @@ window.renderCharts = function(data) {
             });
          }
 
-         const ctxQC = document.getElementById('qcTrendChart');
+const ctxQC = document.getElementById('qcTrendChart');
          if(ctxQC) {
             if(charts.qcTrend) charts.qcTrend.destroy();
-             const trendData = data.dailyTrend || [];
-             const hasPendingSort = trendData.some(d => d.pendingSortQty > 0);
+            
+            // 🌟 อ่านค่า Model ที่ต้องการกรอง
+            const qcSelector = document.getElementById('qcModelSelector');
+            const selectedModel = qcSelector ? qcSelector.value : 'all';
+
+            const trendData = data.dailyTrend || [];
+            let displayTrendData = [];
+
+            if (selectedModel === 'all') {
+                displayTrendData = trendData;
+            } else {
+                // 🌟 คำนวณข้อมูลใหม่แยกตามรุ่นแบบ On-the-fly (ดึงจากเครื่องจักรที่รันรุ่นนั้น)
+                displayTrendData = trendData.map(originalDay => {
+                    const dateStr = originalDay.date;
+                    let mFg = 0; let mNg = 0; let mPending = 0;
+                    let modelSortFg = 0; let modelSortNg = 0;
+                    let modelNgBreakdown = {};
+
+                    Object.entries(data.machineData || {}).forEach(([mac, mData]) => {
+                        const assignedModel = (data.machineMapping && data.machineMapping[mac]) ? data.machineMapping[mac] : '';
+                        if (assignedModel === selectedModel || assignedModel.includes(selectedModel)) {
+                            if (mData.daily && mData.daily[dateStr]) {
+                                mFg += mData.daily[dateStr].fg || 0;
+                                mNg += (mData.daily[dateStr].ngPcs !== undefined ? mData.daily[dateStr].ngPcs : (mData.daily[dateStr].ng || 0));
+                                if (mData.daily[dateStr].ngBreakdown) {
+                                    for (const [symp, pcs] of Object.entries(mData.daily[dateStr].ngBreakdown)) {
+                                        modelNgBreakdown[symp] = (modelNgBreakdown[symp] || 0) + pcs;
+                                    }
+                                }
+                            }
+                            if (mData.sortData && mData.sortData[dateStr]) {
+                                mPending += mData.sortData[dateStr].pendingPcs || 0;
+                                modelSortFg += mData.sortData[dateStr].fgPcs || 0;
+                                modelSortNg += mData.sortData[dateStr].ngPcs || 0;
+                            }
+                        }
+                    });
+
+                    const total = mFg + mNg;
+                    const ngRate = total > 0 ? (mNg / total) * 100 : 0;
+                    let worstNgRate = null; let bestNgRate = null; let forecastNgRate = null;
+
+                    if (mPending > 0 && total > 0) {
+                        const projTotal = total + mPending;
+                        worstNgRate = ((mNg + mPending) / projTotal) * 100;
+                        bestNgRate = (mNg / projTotal) * 100;
+                        
+                        const dynamicWeights = data.dynamicSymptomWeights || {};
+                        let totalWeightedNgRatio = 0;
+                        if (Object.keys(modelNgBreakdown).length > 0 && mNg > 0) {
+                            for (const [symp, pcs] of Object.entries(modelNgBreakdown)) {
+                                const fgRate = dynamicWeights[symp] !== undefined ? dynamicWeights[symp] : (1 - ((data.globalSortNgRatio || 50)/100));
+                                totalWeightedNgRatio += ((pcs / mNg) * (1 - fgRate));
+                            }
+                            forecastNgRate = ((mNg + Math.round(mPending * totalWeightedNgRatio)) / projTotal) * 100;
+                        } else {
+                            let avgNgRatio = (data.globalSortNgRatio || 50) / 100;
+                            if ((modelSortFg + modelSortNg) > 0) avgNgRatio = modelSortNg / (modelSortFg + modelSortNg);
+                            forecastNgRate = ((mNg + Math.round(mPending * avgNgRatio)) / projTotal) * 100;
+                        }
+                    }
+
+                    return { date: dateStr, fg: mFg, ng: mNg, ngRate: ngRate, pendingSortQty: mPending, worstNgRate: worstNgRate, bestNgRate: bestNgRate, forecastNgRate: forecastNgRate };
+                });
+            }
+
+             const hasPendingSort = displayTrendData.some(d => d.pendingSortQty > 0);
+             const validNgRates = displayTrendData.map(d => Math.min(d.ngRate || 0, 100));
+             const avgNgRate = validNgRates.length > 0 ? validNgRates.reduce((a, b) => a + b, 0) / validNgRates.length : 0;
 
              const datasets = [
-                 {label:'% NG Rate', data:trendData.map(d=> Math.min(d.ngRate, 100)), borderColor:'#f97316', borderWidth: 2, pointRadius: 3}
+                 {label:'% NG Rate', data:displayTrendData.map(d=> Math.min(d.ngRate, 100)), borderColor:'#f97316', borderWidth: 2, pointRadius: 3},
+                 {label: `Avg NG (${avgNgRate.toFixed(2)}%)`, data: displayTrendData.map(() => parseFloat(avgNgRate.toFixed(2))), borderColor: '#6b7280', borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false, tension: 0}
              ];
 
-             // เส้นจาง: projected NG% หากงาน sorting คัดออกมาแล้ว (2 สถานการณ์)
              if (hasPendingSort) {
-                 // กรณี NG 100%: งานรอ sort ทั้งหมดเป็น NG (worst case)
-                 datasets.push({
-                     label:'NG 100% (รอ Sort ทั้งหมดเป็น NG)',
-                     data: trendData.map(d => d.worstNgRate != null ? Math.min(d.worstNgRate, 100) : null),
-                     borderColor: 'rgba(239, 68, 68, 0.35)',
-                     backgroundColor: 'rgba(239, 68, 68, 0.05)',
-                     borderWidth: 2,
-                     borderDash: [6, 4],
-                     pointRadius: 2,
-                     pointBackgroundColor: 'rgba(239, 68, 68, 0.35)',
-                     fill: false,
-                     spanGaps: false
-                 });
-                 // กรณี FG 100%: งานรอ sort ทั้งหมดเป็น FG (best case)
-                 datasets.push({
-                     label:'FG 100% (รอ Sort ทั้งหมดเป็น FG)',
-                     data: trendData.map(d => d.bestNgRate != null ? Math.min(d.bestNgRate, 100) : null),
-                     borderColor: 'rgba(34, 197, 94, 0.35)',
-                     backgroundColor: 'rgba(34, 197, 94, 0.05)',
-                     borderWidth: 2,
-                     borderDash: [6, 4],
-                     pointRadius: 2,
-                     pointBackgroundColor: 'rgba(34, 197, 94, 0.35)',
-                     fill: false,
-                     spanGaps: false
-                 });
-                 // Forecast: ทำนายจากอัตรา Sort จริง
-                 const hasForecast = trendData.some(d => d.forecastNgRate != null);
-                 if (hasForecast) {
-                     datasets.push({
-                         label:'📊 Forecast (จากผล Sort จริง)',
-                         data: trendData.map(d => d.forecastNgRate != null ? Math.min(d.forecastNgRate, 100) : null),
-                         borderColor: 'rgba(139, 92, 246, 0.7)',
-                         backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                         borderWidth: 2.5,
-                         borderDash: [8, 3],
-                         pointRadius: 3,
-                         pointBackgroundColor: 'rgba(139, 92, 246, 0.7)',
-                         pointStyle: 'triangle',
-                         fill: false,
-                         spanGaps: false
-                     });
-                 }
+                 datasets.push({label:'NG 100% (Worst)', data: displayTrendData.map(d => d.worstNgRate != null ? Math.min(d.worstNgRate, 100) : null), borderColor: 'rgba(239, 68, 68, 0.35)', backgroundColor: 'rgba(239, 68, 68, 0.05)', borderWidth: 2, borderDash: [6, 4], pointRadius: 2, fill: false, spanGaps: false});
+                 datasets.push({label:'FG 100% (Best)', data: displayTrendData.map(d => d.bestNgRate != null ? Math.min(d.bestNgRate, 100) : null), borderColor: 'rgba(34, 197, 94, 0.35)', backgroundColor: 'rgba(34, 197, 94, 0.05)', borderWidth: 2, borderDash: [6, 4], pointRadius: 2, fill: false, spanGaps: false});
+                 datasets.push({label:'📊 Forecast', data: displayTrendData.map(d => d.forecastNgRate != null ? Math.min(d.forecastNgRate, 100) : null), borderColor: 'rgba(139, 92, 246, 0.8)', borderWidth: 2.5, borderDash: [8, 3], pointRadius: 3, pointStyle: 'triangle', fill: false, spanGaps: false});
              }
 
              charts.qcTrend = new Chart(ctxQC, {
                  type: 'line',
-                 data: {
-                     labels: trendData.map(d=>d.date),
-                     datasets: datasets
-                 },
+                 data: { labels: displayTrendData.map(d=>d.date), datasets: datasets },
                  options: {
                      ...commonOpts,
                      scales: {
                          x: { offset: true },
-                         y: {
-                             type: 'logarithmic',
-                             min: 0.5,
-                             max: 100,
-                             ticks: {
-                                 callback: v => v + '%',
-                                 autoSkip: true,
-                                 maxTicksLimit: 10
-                             }
-                         }
+                         y: { type: 'logarithmic', min: 0.1, max: 100, ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 } }
                      },
                      layout: { padding: { top: 20 } },
                      plugins: {
@@ -1096,26 +1122,20 @@ window.renderCharts = function(data) {
                              callbacks: {
                                  afterBody: function(tooltipItems) {
                                      const idx = tooltipItems[0].dataIndex;
-                                     const d = trendData[idx];
-                                     if (d && d.pendingSortQty > 0) {
-                                         return `รองาน Sort: ${d.pendingSortQty.toLocaleString()} ชิ้น`;
-                                     }
+                                     const d = displayTrendData[idx];
+                                     if (d && d.pendingSortQty > 0) return `รองาน Sort: ${d.pendingSortQty.toLocaleString()} ชิ้น`;
                                      return '';
                                  }
                              }
                          },
                          datalabels: {
                              display: function(ctx) {
-                                 // แสดง label เฉพาะ dataset แรก (NG Rate จริง) เมื่อขยายเต็มจอ
                                  if (ctx.datasetIndex !== 0) return false;
                                  const c = ctx.chart.canvas.closest('.widget-card');
                                  return c ? c.classList.contains('maximized-card') : true;
                              },
-                             color: '#c2410c',
-                             align: 'top',
-                             anchor: 'end',
-                             font: { weight: 'bold' },
-                             formatter: (value) => value > 0 ? value + '%' : null
+                             color: '#c2410c', align: 'top', anchor: 'end', font: { weight: 'bold' },
+                             formatter: (value) => value > 0 ? value.toFixed(1) + '%' : null
                          }
                      }
                  }
