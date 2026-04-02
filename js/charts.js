@@ -1254,17 +1254,27 @@ window.renderTable = function(data) {
 window.switchMachineChart = function() {
     const val = document.getElementById('machineChartToggle').value;
     const hint = document.getElementById('daily-chart-hint');
+    
     if(val === 'hourly') {
+        // แสดงกราฟรายชั่วโมง ซ่อนกราฟรายวัน
         document.getElementById('machine-hourly-wrapper').classList.remove('hidden');
         document.getElementById('machine-daily-wrapper').classList.add('hidden');
         if(hint) hint.classList.add('hidden');
+        
+        // บังคับให้กราฟรายชั่วโมงคำนวณขนาดตัวเองใหม่ (แก้บั๊กกราฟไม่ขึ้น)
+        if (typeof machineDetailChart !== 'undefined' && machineDetailChart) {
+            machineDetailChart.resize();
+        }
+        
     } else {
+        // แสดงกราฟรายวัน ซ่อนกราฟรายชั่วโมง
         document.getElementById('machine-hourly-wrapper').classList.add('hidden');
         document.getElementById('machine-daily-wrapper').classList.remove('hidden');
         if(hint) hint.classList.remove('hidden');
-        // force resize เมื่อ canvas กลับมา visible
+        
+        // บังคับให้กราฟรายวันคำนวณขนาดตัวเองใหม่ (แก้บั๊กกราฟไม่ขึ้น)
         if (typeof machineDailyChartInst !== 'undefined' && machineDailyChartInst) {
-            setTimeout(() => machineDailyChartInst.resize(), 50);
+            machineDailyChartInst.resize();
         }
     }
 };
