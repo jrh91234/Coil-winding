@@ -402,7 +402,7 @@
                 <!-- กราฟและตาราง -->
                 <div id="card-fg-model" class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
-                        <h3 class="font-bold text-gray-700 text-sm">📦 FG & ACH by Model</h3>
+                        <h3 class="font-bold text-gray-700 text-sm">📦 FG breakdown</h3>
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide">↕</button>
                             <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide">↔</button>
@@ -460,6 +460,7 @@
                                 </select>
                                 <select id="modelChartSelector" onchange="window.renderModelChart()" class="text-[10px] border rounded p-1 text-gray-600 bg-white print-hide">
                                     <option value="yield">% Yield</option>
+                                    <option value="ng_rate">% NG Rate</option>
                                     <option value="ng_pcs">NG (ชิ้น)</option>
                                     <option value="ng_kg">NG (Kg)</option>
                                     <option value="ng_both">NG (ชิ้น & Kg)</option>
@@ -516,7 +517,16 @@
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide">⛶</button>
                         </div>
                     </div>
-                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
+                   <div class="w-full flex justify-end mb-1 print-hide">
+                            <select id="qcModelSelector" onchange="if(typeof window.renderCharts === 'function') window.renderCharts(currentDashboardData);" class="text-[10px] border rounded p-1 text-gray-600 bg-white hover:bg-blue-50">
+                                <option value="all">รวมทุกรุ่น (All)</option>
+                                <option value="S1B29288-JR (10A)">S1B29288-JR (10A)</option>
+                                <option value="S1B71819-JR (16A)">S1B71819-JR (16A)</option>
+                                <option value="S1B29292-JR (20A)">S1B29292-JR (20A)</option>
+                                <option value="51207080HC-JR (25/32A)">51207080HC-JR (25/32A)</option>
+                            </select>
+                        </div>
+                        <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
                 </div>
 
                 <div id="card-ng-trend" class="widget-card p-4 h-[350px]">
@@ -817,10 +827,14 @@
         </div>
     </div>
     
-    <div id="modal-machine-detail" class="fixed inset-0 bg-black bg-opacity-60 z-40 flex items-center justify-center hidden backdrop-blur-sm p-2 print-hide">
-        <div class="bg-white w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
+  <div id="modal-machine-detail" class="fixed inset-0 bg-black bg-opacity-60 z-40 flex items-center justify-center hidden backdrop-blur-sm p-2 print-hide">
+        <div id="modal-machine-detail-content" class="bg-white w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh] transition-all duration-300">
             <div class="bg-blue-600 p-4 border-b flex justify-between items-center text-white">
-                <h3 id="machine-detail-title" class="font-bold text-lg">Machine Detail</h3><button onclick="document.getElementById('modal-machine-detail').classList.add('hidden')" class="text-white hover:text-gray-200 text-2xl font-bold">&times;</button>
+                <h3 id="machine-detail-title" class="font-bold text-lg">Machine Detail</h3>
+                <div class="flex items-center gap-4">
+                    <button onclick="window.toggleModalFullscreen('modal-machine-detail-content', this)" class="text-white hover:text-gray-300 text-xl font-bold leading-none" title="ขยายเต็มจอ">⛶</button>
+                    <button onclick="document.getElementById('modal-machine-detail').classList.add('hidden')" class="text-white hover:text-gray-300 text-3xl font-bold leading-none">&times;</button>
+                </div>
             </div>
             <div class="p-4 overflow-y-auto flex-1 flex flex-col">
                 <div id="machine-detail-stats" class="mb-4 grid grid-cols-2 gap-4 text-center"></div>
