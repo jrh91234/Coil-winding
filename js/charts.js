@@ -1044,6 +1044,23 @@ window.renderCharts = function(data) {
                      fill: false,
                      spanGaps: false
                  });
+                 // Forecast: ทำนายจากอัตรา Sort จริง
+                 const hasForecast = trendData.some(d => d.forecastNgRate != null);
+                 if (hasForecast) {
+                     datasets.push({
+                         label:'📊 Forecast (จากผล Sort จริง)',
+                         data: trendData.map(d => d.forecastNgRate != null ? Math.min(d.forecastNgRate, 100) : null),
+                         borderColor: 'rgba(139, 92, 246, 0.7)',
+                         backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                         borderWidth: 2.5,
+                         borderDash: [8, 3],
+                         pointRadius: 3,
+                         pointBackgroundColor: 'rgba(139, 92, 246, 0.7)',
+                         pointStyle: 'triangle',
+                         fill: false,
+                         spanGaps: false
+                     });
+                 }
              }
 
              charts.qcTrend = new Chart(ctxQC, {
@@ -1481,29 +1498,87 @@ window.showMachineDetail = function(machineName) {
     const dailyData = mData.daily || {};
     const dailyKeys = Object.keys(dailyData).sort();
 
+    const sortData = mData.sortData || {};
+    const globalSortNgRatio = (data.globalSortNgRatio || 50) / 100;
+
     const dailyYields = dailyKeys.map(k => {
         const t = dailyData[k].fg + dailyData[k].ngPcs;
         return t > 0 ? parseFloat(((dailyData[k].fg / t) * 100).toFixed(1)) : 0;
     });
 
+    // เส้นประ projection: NG Rate (inverse of yield)
+    const worstYield = dailyKeys.map(k => {
+        const sd = sortData[k];
+        const pending = sd ? (sd.pendingPcs || 0) : 0;
+        if (pending <= 0) return null;
+        const d = dailyData[k];
+        const total = d.fg + d.ngPcs + pending;
+        // NG 100%: pending ทั้งหมดเป็น NG → yield ลดลง
+        return total > 0 ? parseFloat(((d.fg / total) * 100).toFixed(1)) : null;
+    });
+
+    const bestYield = dailyKeys.map(k => {
+        const sd = sortData[k];
+        const pending = sd ? (sd.pendingPcs || 0) : 0;
+        if (pending <= 0) return null;
+        const d = dailyData[k];
+        const total = d.fg + d.ngPcs + pending;
+        // FG 100%: pending ทั้งหมดเป็น FG → yield เพิ่ม
+        return total > 0 ? parseFloat((((d.fg + pending) / total) * 100).toFixed(1)) : null;
+    });
+
+    const forecastYield = dailyKeys.map(k => {
+        const sd = sortData[k];
+        const pending = sd ? (sd.pendingPcs || 0) : 0;
+        if (pending <= 0) return null;
+        const d = dailyData[k];
+        const total = d.fg + d.ngPcs + pending;
+        // Forecast: ใช้อัตรา sort จริง
+        let ngRatio = globalSortNgRatio;
+        if (sd && (sd.fgPcs + sd.ngPcs) > 0) {
+            ngRatio = sd.ngPcs / (sd.fgPcs + sd.ngPcs);
+        }
+        const projFg = d.fg + Math.round(pending * (1 - ngRatio));
+        return total > 0 ? parseFloat(((projFg / total) * 100).toFixed(1)) : null;
+    });
+
+    const hasPending = worstYield.some(v => v !== null);
+
+    const dailyDatasets = [
+        {
+            type: 'line', label: '% Yield รายวัน', data: dailyYields,
+            borderColor: '#10b981', backgroundColor: '#10b981', yAxisID: 'y1', tension: 0.3, borderWidth: 2
+        }
+    ];
+
+    if (hasPending) {
+        dailyDatasets.push({
+            type: 'line', label: 'NG100% (Worst)', data: worstYield,
+            borderColor: 'rgba(239, 68, 68, 0.4)', yAxisID: 'y1', tension: 0.3,
+            borderWidth: 2, borderDash: [6, 4], pointRadius: 2, fill: false, spanGaps: false
+        });
+        dailyDatasets.push({
+            type: 'line', label: 'FG100% (Best)', data: bestYield,
+            borderColor: 'rgba(34, 197, 94, 0.4)', yAxisID: 'y1', tension: 0.3,
+            borderWidth: 2, borderDash: [6, 4], pointRadius: 2, fill: false, spanGaps: false
+        });
+        dailyDatasets.push({
+            type: 'line', label: '📊 Forecast', data: forecastYield,
+            borderColor: 'rgba(139, 92, 246, 0.7)', yAxisID: 'y1', tension: 0.3,
+            borderWidth: 2.5, borderDash: [8, 3], pointRadius: 3, pointStyle: 'triangle', fill: false, spanGaps: false
+        });
+    }
+
+    dailyDatasets.push(
+        { label: 'FG (งานดี)', data: dailyKeys.map(k => dailyData[k].fg), backgroundColor: '#3b82f6', yAxisID: 'y', stack: 'Stack 0' },
+        { label: 'NG (เสียเป็นชิ้น)', data: dailyKeys.map(k => dailyData[k].ngPcs), backgroundColor: '#ef4444', yAxisID: 'y', stack: 'Stack 0' }
+    );
+
     machineDailyChartInst = new Chart(document.getElementById('machineDailyTrendChart').getContext('2d'), {
         type: 'bar',
         data: {
             labels: dailyKeys,
-            datasets: [
-                {
-                    type: 'line',
-                    label: '% Yield รายวัน',
-                    data: dailyYields,
-                    borderColor: '#10b981',
-                    backgroundColor: '#10b981',
-                    yAxisID: 'y1',
-                    tension: 0.3,
-                    borderWidth: 2
-                },
-                { label: 'FG (งานดี)', data: dailyKeys.map(k => dailyData[k].fg), backgroundColor: '#3b82f6', yAxisID: 'y', stack: 'Stack 0' },
-                { label: 'NG (เสียเป็นชิ้น)', data: dailyKeys.map(k => dailyData[k].ngPcs), backgroundColor: '#ef4444', yAxisID: 'y', stack: 'Stack 0' }
-            ]
+            datasets: dailyDatasets
         },
         options: {
             responsive: true,

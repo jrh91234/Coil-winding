@@ -1808,8 +1808,11 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
   result.ngValuesPcs = Object.values(ngTempMapPcs);
   result.ngValuesKg = result.ngLabels.map(label => ngTempMapKg[label]);
 
-  // === อ่านยอดงานรอ Sorting (Pending/Rejected) แยกตามวันที่ ===
+  // === อ่านยอดงานรอ Sorting (Pending/Rejected) + ผลการ Sort จริง (Completed/Wait QC) แยกตามวันที่ ===
   const pendingSortByDate = {};
+  const sortResultByDate = {};   // เก็บผล sort จริง: { fgPcs, ngPcs }
+  const sortResultByMachine = {}; // แยกตามเครื่อง+วัน
+  let globalSortFg = 0, globalSortNg = 0; // ผลรวม sort ทั้งหมด
   try {
     const sortSheet = ss.getSheetByName("Sorting_Data");
     if (sortSheet && sortSheet.getLastRow() > 1) {
@@ -1821,7 +1824,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
       for (let i = 1; i < sortData.length; i++) {
         const sRow = sortData[i];
         const sStatus = String(sRow[sCol["status"]] || "").trim();
-        if (sStatus !== "Pending" && sStatus !== "Rejected") continue;
+        if (!sStatus) continue;
 
         const sDateRaw = sRow[sCol["date"]];
         if (!sDateRaw) continue;
@@ -1831,7 +1834,6 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
           if (yyyy > 2500) yyyy -= 543;
           sDateStr = yyyy + "-" + String(sDateRaw.getMonth() + 1).padStart(2, '0') + "-" + String(sDateRaw.getDate()).padStart(2, '0');
         } else {
-          // รองรับ "2026-03-20 14:30" → ตัดเอาแค่วันที่
           sDateStr = String(sDateRaw).trim().substring(0, 10);
         }
 
@@ -1839,29 +1841,70 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
 
         const sQtyRaw = String(sRow[sCol["qty"]] || "").trim();
         const sProduct = String(sRow[sCol["product"]] || "").trim();
-        // แยก product จาก "CWM-01 : S1B29288-JR (10A)" → "S1B29288-JR (10A)"
         const pParts = sProduct.split(" : ");
+        const machineName = pParts[0] ? pParts[0].trim() : "";
         const prodName = pParts[1] ? pParts[1].trim() : sProduct;
 
-        // แปลง qty เป็นชิ้น (qty อาจเป็น "5.5 kg" หรือ "500 ชิ้น")
-        const numVal = parseFloat(sQtyRaw) || 0;
-        let pcs = 0;
-        if (numVal > 0) {
-          if (sQtyRaw.toLowerCase().includes("kg")) {
-            pcs = getPcsFromKg(prodName, numVal);
-          } else {
-            pcs = Math.round(numVal);
+        // งาน Pending/Rejected → ยอดรอ sort
+        if (sStatus === "Pending" || sStatus === "Rejected") {
+          const numVal = parseFloat(sQtyRaw) || 0;
+          let pcs = 0;
+          if (numVal > 0) {
+            if (sQtyRaw.toLowerCase().includes("kg")) {
+              pcs = getPcsFromKg(prodName, numVal);
+            } else {
+              pcs = Math.round(numVal);
+            }
+          }
+          if (pcs > 0) {
+            if (!pendingSortByDate[sDateStr]) pendingSortByDate[sDateStr] = { qty: 0 };
+            pendingSortByDate[sDateStr].qty += pcs;
+            // pending per machine
+            if (machineName) {
+              const pmKey = machineName + "|" + sDateStr;
+              if (!sortResultByMachine[pmKey]) sortResultByMachine[pmKey] = { fgPcs: 0, ngPcs: 0 };
+              if (!sortResultByMachine[pmKey].pendingPcs) sortResultByMachine[pmKey].pendingPcs = 0;
+              sortResultByMachine[pmKey].pendingPcs += pcs;
+            }
           }
         }
 
-        if (pcs <= 0) continue;
-        if (!pendingSortByDate[sDateStr]) pendingSortByDate[sDateStr] = { qty: 0 };
-        pendingSortByDate[sDateStr].qty += pcs;
+        // งาน Completed/Wait QC → ผลการ Sort จริง (มี FG/NG)
+        if (sStatus === "Completed" || sStatus === "Wait QC") {
+          const fgRaw = String(sRow[sCol["fg_qty"]] || "").trim();
+          const ngRaw = String(sRow[sCol["ng_qty"]] || "").trim();
+
+          const fgVal = parseFloat(fgRaw) || 0;
+          const ngVal = parseFloat(ngRaw) || 0;
+          let fgPcs = 0, ngPcs = 0;
+          if (fgVal > 0) { fgPcs = fgRaw.toLowerCase().includes("kg") ? getPcsFromKg(prodName, fgVal) : Math.round(fgVal); }
+          if (ngVal > 0) { ngPcs = ngRaw.toLowerCase().includes("kg") ? getPcsFromKg(prodName, ngVal) : Math.round(ngVal); }
+
+          if (fgPcs > 0 || ngPcs > 0) {
+            if (!sortResultByDate[sDateStr]) sortResultByDate[sDateStr] = { fgPcs: 0, ngPcs: 0 };
+            sortResultByDate[sDateStr].fgPcs += fgPcs;
+            sortResultByDate[sDateStr].ngPcs += ngPcs;
+            globalSortFg += fgPcs;
+            globalSortNg += ngPcs;
+
+            // แยกตามเครื่อง
+            if (machineName) {
+              const mKey = machineName + "|" + sDateStr;
+              if (!sortResultByMachine[mKey]) sortResultByMachine[mKey] = { fgPcs: 0, ngPcs: 0 };
+              sortResultByMachine[mKey].fgPcs += fgPcs;
+              sortResultByMachine[mKey].ngPcs += ngPcs;
+            }
+          }
+        }
       }
     }
   } catch (sortErr) {
-    console.error("Error reading pending sorting for trend: " + sortErr.toString());
+    console.error("Error reading sorting data for trend: " + sortErr.toString());
   }
+
+  // คำนวณ global sorting yield rate
+  const globalSortTotal = globalSortFg + globalSortNg;
+  const globalSortNgRatio = globalSortTotal > 0 ? (globalSortNg / globalSortTotal) : 0.5; // default 50% ถ้าไม่มีข้อมูล
 
   const sortedDates = Object.keys(dailyStats).sort();
   // รวมวันที่จาก pendingSortByDate ที่อาจไม่มีใน dailyStats
@@ -1874,22 +1917,44 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
     const total = d.fg + d.ng;
     const rate = total > 0 ? ((d.ng / total) * 100).toFixed(2) : 0;
     const pending = pendingSortByDate[date] || null;
+    const sortResult = sortResultByDate[date] || null;
     let worstNgRate = null;  // NG 100%: pending ทั้งหมดเป็น NG
     let bestNgRate = null;   // FG 100%: pending ทั้งหมดเป็น FG
+    let forecastNgRate = null; // Forecast: ใช้อัตรา sort จริง
     if (pending && pending.qty > 0 && total > 0) {
       const projTotal = total + pending.qty;
-      // กรณี NG 100%: NG เพิ่ม, FG เท่าเดิม
       worstNgRate = parseFloat(((( d.ng + pending.qty) / projTotal) * 100).toFixed(2));
-      // กรณี FG 100%: FG เพิ่ม, NG เท่าเดิม
       bestNgRate = parseFloat(((d.ng / projTotal) * 100).toFixed(2));
+      // Forecast: ใช้อัตรา NG จากผล sort จริง (วันนั้นๆ ถ้ามี, ไม่งั้นใช้ค่ารวม)
+      let ngRatio = globalSortNgRatio;
+      if (sortResult && (sortResult.fgPcs + sortResult.ngPcs) > 0) {
+        ngRatio = sortResult.ngPcs / (sortResult.fgPcs + sortResult.ngPcs);
+      }
+      const projNg = d.ng + Math.round(pending.qty * ngRatio);
+      forecastNgRate = parseFloat(((projNg / projTotal) * 100).toFixed(2));
     }
     return {
       date: date, fg: d.fg, ng: d.ng, ngRate: parseFloat(rate), ngBreakdown: d.ngBreakdown,
       pendingSortQty: pending ? pending.qty : 0,
       worstNgRate: worstNgRate,
-      bestNgRate: bestNgRate
+      bestNgRate: bestNgRate,
+      forecastNgRate: forecastNgRate,
+      sortYield: sortResult ? { fg: sortResult.fgPcs, ng: sortResult.ngPcs } : null
     };
   });
+
+  // === Inject sorting data เข้า machineData แต่ละเครื่อง ===
+  result.globalSortNgRatio = parseFloat((globalSortNgRatio * 100).toFixed(2));
+  for (const machine in result.machineData) {
+    const mData = result.machineData[machine];
+    mData.sortData = {};
+    for (const mKey in sortResultByMachine) {
+      const parts = mKey.split("|");
+      if (parts[0] === machine) {
+        mData.sortData[parts[1]] = sortResultByMachine[mKey];
+      }
+    }
+  }
 
   return result;
 }
