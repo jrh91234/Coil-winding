@@ -1023,104 +1023,132 @@ window.renderCharts = function(data) {
          }
 
 const ctxQC = document.getElementById('qcTrendChart');
-            if(ctxQC) {
-                if(charts.qcTrend) charts.qcTrend.destroy();
+         if(ctxQC) {
+            if(charts.qcTrend) charts.qcTrend.destroy();
+            
+            // 🌟 อ่านค่า Model ที่ต้องการกรอง
+            const qcSelector = document.getElementById('qcModelSelector');
+            const selectedModel = qcSelector ? qcSelector.value : 'all';
+
+            const trendData = data.dailyTrend || [];
+            
+            // 🌟 ฟังก์ชันแปลงชิ้นเป็นกิโลกรัม (น้ำหนักตามรุ่น)
+            const getKgFromPcs = (prod, pcs) => {
+                if (!pcs || pcs <= 0) return 0;
+                let w = 0.003; // ค่าเริ่มต้น
+                if(prod && prod.includes("10A")) w = 0.00228;
+                else if(prod && prod.includes("16A")) w = 0.00279;
+                else if(prod && prod.includes("20A")) w = 0.00357;
+                else if(prod && prod.includes("25/32A")) w = 0.005335;
+                return pcs * w;
+            };
+
+            // 🌟 คำนวณข้อมูลใหม่แยกตามรุ่นและแปลงเป็น Kg แบบ On-the-fly
+            let displayTrendData = trendData.map(originalDay => {
+                const dateStr = originalDay.date;
                 
-                // 🌟 อ่านค่า Model ที่ต้องการกรอง
-                const qcSelector = document.getElementById('qcModelSelector');
-                const selectedModel = qcSelector ? qcSelector.value : 'all';
+                let mFgKg = 0; let mNgKg = 0; let mPendingKg = 0;
+                let mFgPcs = 0; let mNgPcs = 0; let mPendingPcs = 0; // เก็บจำนวนชิ้นไว้แสดงใน Tooltip
+                let modelNgBreakdownKg = {};
+                let modelSortFgPcs = 0; let modelSortNgPcs = 0;
 
-                const trendData = data.dailyTrend || [];
-                let displayTrendData = [];
+                Object.entries(data.machineData || {}).forEach(([mac, mData]) => {
+                    let assignedModel = '';
+                    if (typeof machineMapping !== 'undefined' && machineMapping[mac]) {
+                        assignedModel = machineMapping[mac];
+                    } else if (typeof globalMachineMapping !== 'undefined' && globalMachineMapping[mac]) {
+                        assignedModel = globalMachineMapping[mac];
+                    } else if (data.machineMapping && data.machineMapping[mac]) {
+                        assignedModel = data.machineMapping[mac];
+                    }
 
-                if (selectedModel === 'all') {
-                    displayTrendData = trendData;
-                } else {
-                    // 🌟 คำนวณข้อมูลใหม่แยกตามรุ่นแบบ On-the-fly (ดึงจากเครื่องจักรที่รันรุ่นนั้น)
-                    displayTrendData = trendData.map(originalDay => {
-                        const dateStr = originalDay.date;
-                        let mFg = 0; let mNg = 0; let mPending = 0;
-                        let modelSortFg = 0; let modelSortNg = 0;
-                        let modelNgBreakdown = {};
-
-                        Object.entries(data.machineData || {}).forEach(([mac, mData]) => {
-                            // ✅ 1. แก้ไขการดึงชื่อรุ่น ให้ดึงจากตัวแปร Global ที่มีอยู่จริงในระบบ
-                            let assignedModel = '';
-                            if (typeof machineMapping !== 'undefined' && machineMapping[mac]) {
-                                assignedModel = machineMapping[mac];
-                            } else if (typeof globalMachineMapping !== 'undefined' && globalMachineMapping[mac]) {
-                                assignedModel = globalMachineMapping[mac];
-                            } else if (data.machineMapping && data.machineMapping[mac]) {
-                                assignedModel = data.machineMapping[mac];
-                            }
-
-                            if (assignedModel === selectedModel || assignedModel.includes(selectedModel)) {
-                                if (mData.daily && mData.daily[dateStr]) {
-                                    mFg += mData.daily[dateStr].fg || 0;
-                                    mNg += (mData.daily[dateStr].ngPcs !== undefined ? mData.daily[dateStr].ngPcs : (mData.daily[dateStr].ng || 0));
-                                    if (mData.daily[dateStr].ngBreakdown) {
-                                        for (const [symp, pcs] of Object.entries(mData.daily[dateStr].ngBreakdown)) {
-                                            modelNgBreakdown[symp] = (modelNgBreakdown[symp] || 0) + pcs;
-                                        }
-                                    }
-                                }
-                                if (mData.sortData && mData.sortData[dateStr]) {
-                                    mPending += mData.sortData[dateStr].pendingPcs || 0;
-                                    modelSortFg += mData.sortData[dateStr].fgPcs || 0;
-                                    modelSortNg += mData.sortData[dateStr].ngPcs || 0;
-                                }
-                            }
-                        });
-
-                        const total = mFg + mNg;
-                        const ngRate = total > 0 ? (mNg / total) * 100 : 0;
-                        let worstNgRate = null; let bestNgRate = null; let forecastNgRate = null;
-
-                        if (mPending > 0 && total > 0) {
-                            const projTotal = total + mPending;
-                            worstNgRate = ((mNg + mPending) / projTotal) * 100;
-                            bestNgRate = (mNg / projTotal) * 100;
+                    // ถ้ารุ่นตรงกับที่เลือก หรือผู้ใช้เลือก 'รวมทุกรุ่น (all)' ให้รันคำนวณทั้งหมด
+                    if (selectedModel === 'all' || assignedModel === selectedModel || assignedModel.includes(selectedModel)) {
+                        if (mData.daily && mData.daily[dateStr]) {
+                            const dailyFgPcs = mData.daily[dateStr].fg || 0;
+                            const dailyNgPcs = mData.daily[dateStr].ngPcs !== undefined ? mData.daily[dateStr].ngPcs : (mData.daily[dateStr].ng || 0);
                             
-                            const dynamicWeights = data.dynamicSymptomWeights || {};
-                            let totalWeightedNgRatio = 0;
-                            if (Object.keys(modelNgBreakdown).length > 0 && mNg > 0) {
-                                for (const [symp, pcs] of Object.entries(modelNgBreakdown)) {
-                                    const fgRate = dynamicWeights[symp] !== undefined ? dynamicWeights[symp] : (1 - ((data.globalSortNgRatio || 50)/100));
-                                    totalWeightedNgRatio += ((pcs / mNg) * (1 - fgRate));
+                            mFgPcs += dailyFgPcs;
+                            mNgPcs += dailyNgPcs;
+                            
+                            // แปลงเป็น Kg ตามน้ำหนักรุ่นทันที
+                            mFgKg += getKgFromPcs(assignedModel, dailyFgPcs);
+                            mNgKg += getKgFromPcs(assignedModel, dailyNgPcs);
+
+                            if (mData.daily[dateStr].ngBreakdown) {
+                                for (const [symp, pcs] of Object.entries(mData.daily[dateStr].ngBreakdown)) {
+                                    const sympKg = getKgFromPcs(assignedModel, pcs);
+                                    modelNgBreakdownKg[symp] = (modelNgBreakdownKg[symp] || 0) + sympKg;
                                 }
-                                forecastNgRate = ((mNg + Math.round(mPending * totalWeightedNgRatio)) / projTotal) * 100;
-                            } else {
-                                let avgNgRatio = (data.globalSortNgRatio || 50) / 100;
-                                if ((modelSortFg + modelSortNg) > 0) avgNgRatio = modelSortNg / (modelSortFg + modelSortNg);
-                                forecastNgRate = ((mNg + Math.round(mPending * avgNgRatio)) / projTotal) * 100;
                             }
                         }
+                        if (mData.sortData && mData.sortData[dateStr]) {
+                            const pendingPcs = mData.sortData[dateStr].pendingPcs || 0;
+                            mPendingPcs += pendingPcs;
+                            mPendingKg += getKgFromPcs(assignedModel, pendingPcs);
+                            
+                            modelSortFgPcs += mData.sortData[dateStr].fgPcs || 0;
+                            modelSortNgPcs += mData.sortData[dateStr].ngPcs || 0;
+                        }
+                    }
+                });
 
-                        return { date: dateStr, fg: mFg, ng: mNg, ngRate: ngRate, pendingSortQty: mPending, worstNgRate: worstNgRate, bestNgRate: bestNgRate, forecastNgRate: forecastNgRate };
-                    });
+                // คำนวณ %NG Rate รายวัน โดยใช้ฐานน้ำหนัก (Kg)
+                const totalKg = mFgKg + mNgKg;
+                const ngRate = totalKg > 0 ? (mNgKg / totalKg) * 100 : 0;
+                let worstNgRate = null; let bestNgRate = null; let forecastNgRate = null;
+
+                if (mPendingKg > 0 && totalKg > 0) {
+                    const projTotalKg = totalKg + mPendingKg;
+                    worstNgRate = ((mNgKg + mPendingKg) / projTotalKg) * 100;
+                    bestNgRate = (mNgKg / projTotalKg) * 100;
+                    
+                    const dynamicWeights = data.dynamicSymptomWeights || {};
+                    let totalWeightedNgRatio = 0;
+                    
+                    // ถ่วงน้ำหนัก Forecast ตามอาการ และ ตาม Kg
+                    if (Object.keys(modelNgBreakdownKg).length > 0 && mNgKg > 0) {
+                        for (const [symp, sympKg] of Object.entries(modelNgBreakdownKg)) {
+                            const fgRate = dynamicWeights[symp] !== undefined ? dynamicWeights[symp] : (1 - ((data.globalSortNgRatio || 50)/100));
+                            totalWeightedNgRatio += ((sympKg / mNgKg) * (1 - fgRate));
+                        }
+                        forecastNgRate = ((mNgKg + (mPendingKg * totalWeightedNgRatio)) / projTotalKg) * 100;
+                    } else {
+                        let avgNgRatio = (data.globalSortNgRatio || 50) / 100;
+                        if ((modelSortFgPcs + modelSortNgPcs) > 0) avgNgRatio = modelSortNgPcs / (modelSortFgPcs + modelSortNgPcs);
+                        forecastNgRate = ((mNgKg + (mPendingKg * avgNgRatio)) / projTotalKg) * 100;
+                    }
                 }
 
-                const hasPendingSort = displayTrendData.some(d => d.pendingSortQty > 0);
-                
-                // ✅ 2. เปลี่ยนสูตรการคิดค่าเฉลี่ยเป็นแบบ True Average (ถ่วงน้ำหนักยอดรวมการผลิต)
-                let sumTotalProd = 0;
-                let sumTotalNg = 0;
-                displayTrendData.forEach(d => {
-                    sumTotalProd += (d.fg + d.ng);
-                    sumTotalNg += d.ng;
-                });
-                const avgNgRate = sumTotalProd > 0 ? (sumTotalNg / sumTotalProd) * 100 : 0;
+                // ส่งค่ากลับไปวาดกราฟ (รวมถึง pendingSortQty เพื่อให้ Tooltip แสดงเป็นจำนวนชิ้นให้คนอ่านง่าย)
+                return { 
+                    date: dateStr, 
+                    fgKg: mFgKg, ngKg: mNgKg, pendingSortQty: mPendingPcs, 
+                    ngRate: ngRate, worstNgRate: worstNgRate, bestNgRate: bestNgRate, forecastNgRate: forecastNgRate 
+                };
+            });
 
-             const datasets = [
-                 {label:'% NG Rate', data:displayTrendData.map(d=> Math.min(d.ngRate, 100)), borderColor:'#f97316', borderWidth: 2, pointRadius: 3},
-                 {label: `Avg NG (${avgNgRate.toFixed(2)}%)`, data: displayTrendData.map(() => parseFloat(avgNgRate.toFixed(2))), borderColor: '#6b7280', borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false, tension: 0}
-             ];
+            const hasPendingSort = displayTrendData.some(d => d.pendingSortQty > 0);
+            
+            // 🌟 คิดค่าเฉลี่ยเส้นประ (True Average) โดยใช้ฐาน "น้ำหนัก (Kg)" ของทุกรุ่นรวมกัน 🌟
+            let sumTotalProdKg = 0;
+            let sumTotalNgKg = 0;
+            displayTrendData.forEach(d => {
+                sumTotalProdKg += (d.fgKg + d.ngKg);
+                sumTotalNgKg += d.ngKg;
+            });
+            const avgNgRate = sumTotalProdKg > 0 ? (sumTotalNgKg / sumTotalProdKg) * 100 : 0;
 
-             if (hasPendingSort) {
-                 datasets.push({label:'NG 100% (Worst)', data: displayTrendData.map(d => d.worstNgRate != null ? Math.min(d.worstNgRate, 100) : null), borderColor: 'rgba(239, 68, 68, 0.35)', backgroundColor: 'rgba(239, 68, 68, 0.05)', borderWidth: 2, borderDash: [6, 4], pointRadius: 2, fill: false, spanGaps: false});
-                 datasets.push({label:'FG 100% (Best)', data: displayTrendData.map(d => d.bestNgRate != null ? Math.min(d.bestNgRate, 100) : null), borderColor: 'rgba(34, 197, 94, 0.35)', backgroundColor: 'rgba(34, 197, 94, 0.05)', borderWidth: 2, borderDash: [6, 4], pointRadius: 2, fill: false, spanGaps: false});
-                 datasets.push({label:'📊 Forecast', data: displayTrendData.map(d => d.forecastNgRate != null ? Math.min(d.forecastNgRate, 100) : null), borderColor: 'rgba(139, 92, 246, 0.8)', borderWidth: 2.5, borderDash: [8, 3], pointRadius: 3, pointStyle: 'triangle', fill: false, spanGaps: false});
-             }
+            const datasets = [
+                {label:'% NG Rate (ถ่วงน้ำหนัก Kg)', data:displayTrendData.map(d=> Math.min(d.ngRate, 100)), borderColor:'#f97316', borderWidth: 2, pointRadius: 3},
+                {label: `Avg NG (${avgNgRate.toFixed(2)}%)`, data: displayTrendData.map(() => parseFloat(avgNgRate.toFixed(2))), borderColor: '#6b7280', borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false, tension: 0}
+            ];
+
+            if (hasPendingSort) {
+                datasets.push({label:'NG 100% (Worst)', data: displayTrendData.map(d => d.worstNgRate != null ? Math.min(d.worstNgRate, 100) : null), borderColor: 'rgba(239, 68, 68, 0.35)', backgroundColor: 'rgba(239, 68, 68, 0.05)', borderWidth: 2, borderDash: [6, 4], pointRadius: 2, fill: false, spanGaps: false});
+                datasets.push({label:'FG 100% (Best)', data: displayTrendData.map(d => d.bestNgRate != null ? Math.min(d.bestNgRate, 100) : null), borderColor: 'rgba(34, 197, 94, 0.35)', backgroundColor: 'rgba(34, 197, 94, 0.05)', borderWidth: 2, borderDash: [6, 4], pointRadius: 2, fill: false, spanGaps: false});
+                datasets.push({label:'📊 Forecast', data: displayTrendData.map(d => d.forecastNgRate != null ? Math.min(d.forecastNgRate, 100) : null), borderColor: 'rgba(139, 92, 246, 0.8)', borderWidth: 2.5, borderDash: [8, 3], pointRadius: 3, pointStyle: 'triangle', fill: false, spanGaps: false});
+            }
 
              charts.qcTrend = new Chart(ctxQC, {
                  type: 'line',
