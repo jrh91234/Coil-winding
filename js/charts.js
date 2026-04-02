@@ -1571,19 +1571,47 @@ const dailyData = mData.daily || {};
         return total > 0 ? parseFloat((((getFg(d) + pending) / total) * 100).toFixed(1)) : null;
     });
 
+   // 🌟 1. ดึง "ค่าน้ำหนัก" ที่วิเคราะห์จากประวัติงาน Sort จริงจาก Backend
+    const dynamicSymptomWeights = (typeof currentDashboardData !== 'undefined' && currentDashboardData.dynamicSymptomWeights) ? currentDashboardData.dynamicSymptomWeights : {};
+
     const forecastYield = dailyKeys.map(k => {
         const sd = sortData[k];
         const pending = sd ? (sd.pendingPcs || 0) : 0;
         if (pending <= 0) return null;
+        
         const d = dailyData[k];
         const total = getFg(d) + getNg(d) + pending;
-        // Forecast: ใช้อัตรา sort จริง
-        let ngRatio = globalSortNgRatio;
-        if (sd && (sd.fgPcs + sd.ngPcs) > 0) {
-            ngRatio = sd.ngPcs / (sd.fgPcs + sd.ngPcs);
+        if (total <= 0) return null;
+
+        let projectedFgFromSort = 0;
+
+        // 🌟 2. คำนวณ Forecast ด้วยข้อมูลจริงแยกตามสัดส่วนอาการ (Data-driven forecasting)
+        if (d.ngBreakdown && Object.keys(d.ngBreakdown).length > 0 && getNg(d) > 0) {
+            let totalWeightedFgRatio = 0;
+            const dailyNg = getNg(d);
+            
+            for (const [symptom, pcs] of Object.entries(d.ngBreakdown)) {
+                // ถ้าประวัติเคยบันทึกอาการนี้ไว้ จะใช้อัตราการได้งานดี(FG) จริง แต่ถ้าไม่เคยเจออาการนี้ให้ใช้ค่าเฉลี่ยรวม
+                const fgRate = dynamicSymptomWeights[symptom] !== undefined ? dynamicSymptomWeights[symptom] : (1 - globalSortNgRatio);
+                
+                // หาว่าอาการนี้คิดเป็นสัดส่วนกี่ % ของของเสียในวันนั้น
+                const proportion = pcs / dailyNg; 
+                totalWeightedFgRatio += (proportion * fgRate); 
+            }
+            
+            projectedFgFromSort = Math.round(pending * totalWeightedFgRatio);
+            
+        } else {
+            // กรณีไม่มีข้อมูล Breakdown ให้ใช้อัตราส่วนเฉลี่ยรวมเหมือนเดิม
+            let ngRatio = globalSortNgRatio;
+            if (sd && (sd.fgPcs + sd.ngPcs) > 0) {
+                ngRatio = sd.ngPcs / (sd.fgPcs + sd.ngPcs);
+            }
+            projectedFgFromSort = Math.round(pending * (1 - ngRatio));
         }
-        const projFg = getFg(d) + Math.round(pending * (1 - ngRatio));
-        return total > 0 ? parseFloat(((projFg / total) * 100).toFixed(1)) : null;
+
+        const projFg = getFg(d) + projectedFgFromSort;
+        return parseFloat(((projFg / total) * 100).toFixed(1));
     });
 
     const hasPending = worstYield.some(v => v !== null);
