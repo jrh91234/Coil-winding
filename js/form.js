@@ -143,30 +143,64 @@ window.openNgModal = function(rowId) {
     const modal = document.getElementById('modal-ng');
     const list = document.getElementById('modal-ng-list');
     list.innerHTML = '';
-    
+
     ngSymptoms.forEach(s => {
-        const existing = batchNgData[rowId].find(x => x.type === s);
-        const val = existing ? existing.qty : '';
-        const remark = existing ? existing.remark : '';
-        window.renderNgItem(list, s, val, remark);
+        const isSetup = s.trim().toLowerCase() === 'setup';
+        if (isSetup) {
+            // สำหรับ Setup: หา existing data ที่เป็น "Setup - xxx" ทั้งหมด
+            const setupItems = batchNgData[rowId].filter(x => x.type.toLowerCase().startsWith('setup - ') || x.type.toLowerCase() === 'setup');
+            const setupQty = setupItems.reduce((sum, x) => sum + (x.qty || 0), 0);
+            const setupRemark = setupItems.map(x => x.remark).filter(Boolean).join(', ');
+            // หา sub-symptom ที่เคยเลือก (เอาตัวแรกที่เจอ)
+            const existingSetupSub = setupItems.find(x => x.type.toLowerCase().startsWith('setup - '));
+            const subSymptom = existingSetupSub ? existingSetupSub.type.replace(/^setup\s*-\s*/i, '') : '';
+            window.renderNgItem(list, s, setupQty || '', setupRemark, false, subSymptom);
+        } else {
+            const existing = batchNgData[rowId].find(x => x.type === s);
+            const val = existing ? existing.qty : '';
+            const remark = existing ? existing.remark : '';
+            window.renderNgItem(list, s, val, remark);
+        }
     });
 
-    const customItems = batchNgData[rowId].filter(x => !ngSymptoms.some(s => s.toLowerCase() === x.type.toLowerCase()));
-    customItems.forEach(item => { 
-        window.renderNgItem(list, item.type, item.qty, item.remark, true); 
+    const customItems = batchNgData[rowId].filter(x => {
+        // ไม่แสดง "Setup - xxx" ซ้ำเพราะรวมไว้ใน Setup row แล้ว
+        if (x.type.toLowerCase().startsWith('setup')) return false;
+        return !ngSymptoms.some(s => s.toLowerCase() === x.type.toLowerCase());
+    });
+    customItems.forEach(item => {
+        window.renderNgItem(list, item.type, item.qty, item.remark, true);
     });
 
     modal.classList.remove('hidden');
 };
 
-window.renderNgItem = function(container, label, qty, remark, isCustom=false) {
-    const div = document.createElement('div'); 
+window.renderNgItem = function(container, label, qty, remark, isCustom=false, setupSubSymptom='') {
+    const div = document.createElement('div');
     div.className = "border-b pb-2 mb-2 ng-item-row";
-    
-    const typeInput = isCustom 
-        ? `<input type="text" class="ng-type-name w-full p-1 border rounded text-sm font-bold text-red-700 mb-1" value="${label}" placeholder="ระบุชื่ออาการ...">` 
+    const isSetup = label.trim().toLowerCase() === 'setup';
+
+    const typeInput = isCustom
+        ? `<input type="text" class="ng-type-name w-full p-1 border rounded text-sm font-bold text-red-700 mb-1" value="${label}" placeholder="ระบุชื่ออาการ...">`
         : `<span class="text-sm font-medium text-gray-700 ng-type-label" data-label="${label}">${label}</span>`;
-    
+
+    // สร้าง dropdown เลือกอาการย่อยสำหรับ Setup
+    let setupDropdownHtml = '';
+    if (isSetup) {
+        const otherSymptoms = ngSymptoms.filter(s => s.trim().toLowerCase() !== 'setup' && s.trim().toLowerCase() !== 'อื่นๆ (others)');
+        const options = otherSymptoms.map(s => {
+            const selected = setupSubSymptom && s.toLowerCase() === setupSubSymptom.toLowerCase() ? 'selected' : '';
+            return `<option value="${s}" ${selected}>${s}</option>`;
+        }).join('');
+        setupDropdownHtml = `
+        <div class="mt-1">
+            <select class="ng-setup-symptom w-full p-1 border border-orange-300 rounded text-xs bg-orange-50 text-orange-800 font-medium">
+                <option value="">-- เลือกอาการ Setup --</option>
+                ${options}
+            </select>
+        </div>`;
+    }
+
     div.innerHTML = `
         <div class="flex justify-between items-center mb-1">
             <div class="flex-1">${typeInput}</div>
@@ -174,7 +208,7 @@ window.renderNgItem = function(container, label, qty, remark, isCustom=false) {
                 <input type="number" class="ng-input-qty w-20 p-1 border rounded text-right" value="${qty}" placeholder="0.00" min="0" step="0.01">
                 <span class="text-xs text-gray-500 ml-1">Kg</span>
             </div>
-        </div>
+        </div>${setupDropdownHtml}
         <input type="text" class="ng-input-remark w-full p-1 border rounded text-xs bg-gray-50" value="${remark}" placeholder="หมายเหตุ...">
     `;
     container.appendChild(div);
@@ -215,9 +249,27 @@ window.saveCurrentNgInputs = function() {
         if (labelSpan) type = labelSpan.dataset.label;
         else if (nameInput) type = nameInput.value.trim();
 
+        // ถ้าเป็น Setup → ต่อท้ายด้วยอาการที่เลือก
+        const setupSelect = row.querySelector('.ng-setup-symptom');
+        if (setupSelect && type.trim().toLowerCase() === 'setup') {
+            const subSymptom = setupSelect.value;
+            if (subSymptom) {
+                type = 'Setup - ' + subSymptom;
+            }
+            // ถ้าไม่เลือกอาการย่อย → ยังคง validate
+        }
+
         const qty = parseFloat(row.querySelector('.ng-input-qty').value);
         const remark = row.querySelector('.ng-input-remark').value;
         if (type && qty > 0) {
+            // validate: Setup ต้องเลือกอาการย่อย
+            if (type.trim().toLowerCase() === 'setup') {
+                if (setupSelect) {
+                    setupSelect.style.borderColor = 'red';
+                    alert('กรุณาเลือกอาการ Setup ว่าเป็นอาการอะไร');
+                    return false;
+                }
+            }
             newData.push({ type: capitalizeFirst(type), qty, remark });
             total += qty;
         }
