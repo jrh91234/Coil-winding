@@ -1814,6 +1814,8 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
   const pendingSortByDate = {};
   const sortResultByDate = {};   // เก็บผล sort จริง: { fgPcs, ngPcs }
   const sortResultByMachine = {}; // แยกตามเครื่อง+วัน
+  const sortYieldBySymptom = {};  // อัตรา sort แยกตามอาการ: symptom → { fgPcs, ngPcs }
+  const pendingByDateSymptom = {}; // pending แยกตามวัน+อาการ: date → [ { symptom, pcs } ]
   let globalSortFg = 0, globalSortNg = 0;
 
   const symptomRawStats = {}; // เก็บค่าดิบของงานคัดแยกตามอาการ
@@ -1847,10 +1849,10 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
 
         const sQtyRaw = String(sRow[sCol["qty"]] || "").trim();
         const sProduct = String(sRow[sCol["product"]] || "").trim();
+        const sSymptom = String(sRow[sCol["symptom"]] || "").trim();
         const pParts = sProduct.split(" : ");
         const machineName = pParts[0] ? pParts[0].trim() : "";
         const prodName = pParts[1] ? pParts[1].trim() : sProduct;
-        const symp = String(sRow[sCol["symptom"]] || "").trim();
 
         // 🌟 งาน Pending/Rejected → ยอดรอ sort
         if (sStatus === "Pending" || sStatus === "Rejected") {
@@ -1866,6 +1868,10 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
           if (pcs > 0) {
             if (!pendingSortByDate[sDateStr]) pendingSortByDate[sDateStr] = { qty: 0 };
             pendingSortByDate[sDateStr].qty += pcs;
+            // pending per symptom per date
+            if (!pendingByDateSymptom[sDateStr]) pendingByDateSymptom[sDateStr] = [];
+            pendingByDateSymptom[sDateStr].push({ symptom: sSymptom, pcs: pcs });
+            // pending per machine
             if (machineName) {
               const pmKey = machineName + "|" + sDateStr;
               if (!sortResultByMachine[pmKey]) sortResultByMachine[pmKey] = { fgPcs: 0, ngPcs: 0 };
@@ -1893,6 +1899,14 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
             globalSortFg += fgPcs;
             globalSortNg += ngPcs;
 
+            // อัตรา sort แยกตามอาการ
+            if (sSymptom) {
+              if (!sortYieldBySymptom[sSymptom]) sortYieldBySymptom[sSymptom] = { fgPcs: 0, ngPcs: 0 };
+              sortYieldBySymptom[sSymptom].fgPcs += fgPcs;
+              sortYieldBySymptom[sSymptom].ngPcs += ngPcs;
+            }
+
+            // แยกตามเครื่อง
             if (machineName) {
               const mKey = machineName + "|" + sDateStr;
               if (!sortResultByMachine[mKey]) sortResultByMachine[mKey] = { fgPcs: 0, ngPcs: 0 };
@@ -1901,10 +1915,10 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
             }
 
             // เก็บสถิติแยกตามอาการ
-            if (symp) {
-                if (!symptomRawStats[symp]) symptomRawStats[symp] = { fg: 0, total: 0 };
-                symptomRawStats[symp].fg += fgPcs;
-                symptomRawStats[symp].total += (fgPcs + ngPcs);
+            if (sSymptom) {
+                if (!symptomRawStats[sSymptom]) symptomRawStats[sSymptom] = { fg: 0, total: 0 };
+                symptomRawStats[sSymptom].fg += fgPcs;
+                symptomRawStats[sSymptom].total += (fgPcs + ngPcs);
             }
           }
         }

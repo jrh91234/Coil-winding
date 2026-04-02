@@ -376,7 +376,11 @@ window.renderAutoReportContent = async function() {
     // 🌟 ส่วนที่ 3: สาเหตุของเสียเชิงลึกและ Pareto 🌟
     const labels = data.ngLabels || [];
     const vals = data.ngValuesPcs || data.ngValues || [];
-    const ngItems = labels.map((l, i) => ({ label: l, pcs: vals[i] || 0 })).filter(i => i.pcs > 0).sort((a,b)=>b.pcs-a.pcs);
+    // รวม Setup เข้ากับอาการหลัก
+    const rawNgMap = {};
+    labels.forEach((l, i) => { rawNgMap[l] = (rawNgMap[l] || 0) + (vals[i] || 0); });
+    const reportSep = window.separateSetupData(rawNgMap);
+    const ngItems = reportSep.labels.map((l, i) => ({ label: l, pcs: reportSep.total[i] || 0 })).filter(i => i.pcs > 0).sort((a,b)=>b.pcs-a.pcs);
     
     let topNgSymptomName = '-', topNgSymptomRatio = 0, topNgHtml = '';
     if(ngItems.length > 0) {
@@ -455,8 +459,15 @@ window.renderAutoReportContent = async function() {
         </div>
         `;
 
+        // รวม Setup เข้ากับอาการหลัก
         const symptomTotals = {};
-        data.dailyTrend.forEach(d => { if(d.ngBreakdown) Object.keys(d.ngBreakdown).forEach(k => { symptomTotals[k] = (symptomTotals[k] || 0) + d.ngBreakdown[k]; }); });
+        data.dailyTrend.forEach(d => {
+            if(d.ngBreakdown) Object.keys(d.ngBreakdown).forEach(k => {
+                const parsed = window.parseSetupType(k);
+                const baseKey = parsed.base;
+                symptomTotals[baseKey] = (symptomTotals[baseKey] || 0) + d.ngBreakdown[k];
+            });
+        });
         const topSymptoms = Object.entries(symptomTotals).sort((a,b)=>b[1]-a[1]).slice(0,5).map(x=>x[0]);
         
         // --- 🌟 ดึงข้อมูล Overall Daily Trend เข้ามาโชว์ในกราฟด้วย ---
@@ -483,7 +494,14 @@ window.renderAutoReportContent = async function() {
                 label: sym + ' (%)',
                 data: data.dailyTrend.map(d => {
                     const totalProd = d.fg + d.ng;
-                    const symPcs = (d.ngBreakdown && d.ngBreakdown[sym]) ? d.ngBreakdown[sym] : 0;
+                    // รวม base + Setup ของอาการนี้
+                    let symPcs = 0;
+                    if (d.ngBreakdown) {
+                        Object.keys(d.ngBreakdown).forEach(k => {
+                            const parsed = window.parseSetupType(k);
+                            if (parsed.base === sym) symPcs += d.ngBreakdown[k];
+                        });
+                    }
                     return totalProd > 0 ? Math.min(parseFloat(((symPcs / totalProd) * 100).toFixed(2)), 100) : 0;
                 }),
                 borderColor: color,
@@ -675,24 +693,40 @@ window.renderAutoReportContent = async function() {
             let ngChartId = null;
             if (totalMNg > 0 && mData.ngBreakdownPcs && Object.keys(mData.ngBreakdownPcs).length > 0) {
                 ngChartId = `mchart_ng_${m.replace(/\W/g, '')}`;
-                
-                let sortedBreakdown = Object.entries(mData.ngBreakdownPcs).sort((a,b) => b[1] - a[1]);
-                let topSyms = sortedBreakdown.slice(0, 5).map(item => item[0]); // เอาเฉพาะ 5 อาการแรกสุด
-                
+
+                // รวม Setup เข้ากับอาการหลักสำหรับ breakdown
+                const macSepReport = window.separateSetupData(mData.ngBreakdownPcs);
+                const mergedBreakdown = {};
+                macSepReport.labels.forEach((l, i) => { mergedBreakdown[l] = macSepReport.total[i]; });
+                let sortedBreakdown = Object.entries(mergedBreakdown).sort((a,b) => b[1] - a[1]);
+                let topSyms = sortedBreakdown.slice(0, 5).map(item => item[0]);
+
                 let sDatasets = topSyms.map((sym) => {
                     let color = getSymptomColor(sym); // 🌟 ใช้สีคงที่
                     let sData = [];
-                    
+
                     if (isSingleDay) {
                         sData = chartLabels.map((_, hIdx) => {
                             let bd = (mData.hourlyNgBreakdown && mData.hourlyNgBreakdown[hIdx]) ? mData.hourlyNgBreakdown[hIdx] : {};
-                            return bd[sym] || bd[sym.toLowerCase()] || 0;
+                            // รวม Setup ของอาการนี้
+                            let total = 0;
+                            Object.keys(bd).forEach(k => {
+                                const parsed = window.parseSetupType(k);
+                                if (parsed.base.toLowerCase() === sym.toLowerCase()) total += bd[k];
+                            });
+                            return total;
                         });
                     } else {
                         sData = chartLabels.map(d => {
                             let dData = mDaily[d] || {};
                             let bd = dData.ngBreakdownPcs || dData.ngBreakdown || {};
-                            return bd[sym] || bd[sym.toLowerCase()] || 0;
+                            // รวม Setup ของอาการนี้
+                            let total = 0;
+                            Object.keys(bd).forEach(k => {
+                                const parsed = window.parseSetupType(k);
+                                if (parsed.base.toLowerCase() === sym.toLowerCase()) total += bd[k];
+                            });
+                            return total;
                         });
                     }
                     
@@ -761,10 +795,13 @@ window.renderAutoReportContent = async function() {
             
             let ngModelSymptomHtml = `<li><span class="font-medium text-gray-600">รุ่น (Model):</span> <b>${assignedProduct}</b></li>`;
             if (mData.ngBreakdownPcs && Object.keys(mData.ngBreakdownPcs).length > 0) {
-                let ngItems = Object.entries(mData.ngBreakdownPcs).sort((a,b)=>b[1]-a[1]);
-                ngItems.forEach(item => {
+                // รวม Setup เข้ากับอาการหลัก
+                const rptMacSep = window.separateSetupData(mData.ngBreakdownPcs);
+                const mergedNgItems = rptMacSep.labels.map((l, idx) => [l, rptMacSep.total[idx], rptMacSep.setup[idx]]).sort((a,b) => b[1] - a[1]);
+                mergedNgItems.forEach(item => {
                     let c = getSymptomColor(item[0]);
-                    ngModelSymptomHtml += `<li class="ml-4 text-[10px] flex items-center gap-1"><span class="w-2 h-2 inline-block rounded-full" style="background-color:${c}"></span><span class="text-gray-700">${item[0]}: <b class="text-red-600">${item[1].toLocaleString()}</b> ชิ้น</span></li>`;
+                    let setupNote = item[2] > 0 ? ` <span class="text-orange-500">(Setup: ${item[2].toLocaleString()})</span>` : '';
+                    ngModelSymptomHtml += `<li class="ml-4 text-[10px] flex items-center gap-1"><span class="w-2 h-2 inline-block rounded-full" style="background-color:${c}"></span><span class="text-gray-700">${item[0]}: <b class="text-red-600">${item[1].toLocaleString()}</b> ชิ้น${setupNote}</span></li>`;
                 });
             } else if (totalMNg > 0) {
                 ngModelSymptomHtml += `<li class="ml-4 text-[10px] text-red-600">- ไม่ระบุรายละเอียดอาการ: ${totalMNg.toLocaleString()} ชิ้น</li>`;

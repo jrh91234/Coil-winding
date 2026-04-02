@@ -1,5 +1,49 @@
 try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
 
+// ==========================================
+// Helper: แยก Setup vs Production จาก NG data
+// "Setup - ลวดถลอก (Scratched)" → base = "ลวดถลอก (Scratched)", isSetup = true
+// ==========================================
+window.parseSetupType = function(typeName) {
+    const t = (typeName || '').trim();
+    const match = t.match(/^setup\s*-\s*(.+)$/i);
+    if (match) return { base: capitalizeFirst(match[1].trim()), isSetup: true };
+    if (t.toLowerCase() === 'setup') return { base: 'Setup', isSetup: true };
+    return { base: capitalizeFirst(t), isSetup: false };
+};
+
+// รวม NG data โดยแยกชั้น Production vs Setup
+// input: { "ลวดถลอก (Scratched)": 100, "Setup - ลวดถลอก (Scratched)": 30, "พันหลวม (Loose)": 50 }
+// output: { labels: [...], production: [...], setup: [...] }
+window.separateSetupData = function(breakdownMap) {
+    const prodMap = {};
+    const setupMap = {};
+
+    Object.entries(breakdownMap || {}).forEach(([type, val]) => {
+        const parsed = window.parseSetupType(type);
+        if (parsed.base.toLowerCase() === 'setup') {
+            // "Setup" ที่ไม่มี sub-symptom → ไม่รวมเข้ากับอาการอื่น
+            prodMap[parsed.base] = (prodMap[parsed.base] || 0) + val;
+        } else if (parsed.isSetup) {
+            setupMap[parsed.base] = (setupMap[parsed.base] || 0) + val;
+        } else {
+            prodMap[parsed.base] = (prodMap[parsed.base] || 0) + val;
+        }
+    });
+
+    // รวม labels ทั้งหมด (unique)
+    const allLabels = [...new Set([...Object.keys(prodMap), ...Object.keys(setupMap)])];
+    // sort by total descending
+    allLabels.sort((a, b) => ((prodMap[b] || 0) + (setupMap[b] || 0)) - ((prodMap[a] || 0) + (setupMap[a] || 0)));
+
+    return {
+        labels: allLabels,
+        production: allLabels.map(l => prodMap[l] || 0),
+        setup: allLabels.map(l => setupMap[l] || 0),
+        total: allLabels.map(l => (prodMap[l] || 0) + (setupMap[l] || 0))
+    };
+};
+
 window.renderFgByModel = function(data) {
     const container = document.getElementById('fgModelList');
     if(!container) return;
@@ -274,14 +318,17 @@ window.renderModelChart = function() {
                             ];
                             
                             if(prData.ngBreakdownPcs && Object.keys(prData.ngBreakdownPcs).length > 0) {
-                                const sortedNg = Object.entries(prData.ngBreakdownPcs)
-                                    .filter(([k, v]) => v > 0)
+                                const prSep = window.separateSetupData(prData.ngBreakdownPcs);
+                                const sortedNg = prSep.labels
+                                    .map((l, idx) => [l, prSep.total[idx], prSep.setup[idx]])
+                                    .filter(x => x[1] > 0)
                                     .sort((a, b) => b[1] - a[1]);
-                                
+
                                 if(sortedNg.length > 0) {
                                     lines.push(`-- รายละเอียด NG --`);
-                                    sortedNg.forEach(([k, v]) => {
-                                        lines.push(`   • ${k}: ${v.toLocaleString()} ชิ้น`);
+                                    sortedNg.forEach(([k, total, setup]) => {
+                                        let setupNote = setup > 0 ? ` (Setup: ${setup.toLocaleString()})` : '';
+                                        lines.push(`   • ${k}: ${total.toLocaleString()} ชิ้น${setupNote}`);
                                     });
                                 }
                             }
@@ -409,39 +456,85 @@ window.renderNgTrendChart = function() {
     if (charts.ngSymptomTrend) charts.ngSymptomTrend.destroy();
     const trendData = data.dailyTrend || [];
     
+    // รวม Setup เข้ากับอาการหลัก + เก็บ setup แยก
     let ngTypeTotals = {};
+    let setupTotals = {};
     trendData.forEach(d => {
         if(d.ngBreakdown) {
             Object.keys(d.ngBreakdown).forEach(k => {
-                ngTypeTotals[k] = (ngTypeTotals[k] || 0) + d.ngBreakdown[k];
+                const parsed = window.parseSetupType(k);
+                const baseKey = parsed.base;
+                ngTypeTotals[baseKey] = (ngTypeTotals[baseKey] || 0) + d.ngBreakdown[k];
+                if (parsed.isSetup && baseKey.toLowerCase() !== 'setup') {
+                    setupTotals[baseKey] = (setupTotals[baseKey] || 0) + d.ngBreakdown[k];
+                }
             });
         }
     });
     const uniqueNgTypes = Object.keys(ngTypeTotals).sort((a, b) => ngTypeTotals[b] - ngTypeTotals[a]);
-    
+    const hasSetupInTrend = Object.keys(setupTotals).length > 0;
+
     const lineColors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6'];
-    
-    let trendDatasets = uniqueNgTypes.map((type, idx) => {
-        return {
+
+    let trendDatasets = [];
+    uniqueNgTypes.forEach((type, idx) => {
+        const color = lineColors[idx % lineColors.length];
+        // เส้นรวม (Production + Setup)
+        trendDatasets.push({
             label: type,
             data: trendData.map(d => {
-                const rawPcs = (d.ngBreakdown && d.ngBreakdown[type]) ? d.ngBreakdown[type] : 0;
+                if (!d.ngBreakdown) return 0;
+                // รวม base + Setup ของ type นี้
+                let rawPcs = 0;
+                Object.keys(d.ngBreakdown).forEach(k => {
+                    const parsed = window.parseSetupType(k);
+                    if (parsed.base === type) rawPcs += d.ngBreakdown[k];
+                });
                 if (mode === 'percent') {
                     const total = (d.fg || 0) + (d.ng || 0);
                     if (total <= 0) return 0;
-                    const pct = parseFloat(((rawPcs / total) * 100).toFixed(2));
-                    return Math.min(pct, 100);
+                    return Math.min(parseFloat(((rawPcs / total) * 100).toFixed(2)), 100);
                 }
                 return rawPcs;
             }),
-            borderColor: lineColors[idx % lineColors.length],
-            backgroundColor: lineColors[idx % lineColors.length],
+            borderColor: color,
+            backgroundColor: color,
             tension: 0.3,
             borderWidth: 2,
             pointRadius: 3,
             pointHoverRadius: 6,
             fill: false
-        };
+        });
+
+        // เส้น Setup แยก (ถ้ามี) - เส้นประ
+        if (setupTotals[type] > 0) {
+            trendDatasets.push({
+                label: type + ' (Setup)',
+                data: trendData.map(d => {
+                    if (!d.ngBreakdown) return 0;
+                    let setupPcs = 0;
+                    Object.keys(d.ngBreakdown).forEach(k => {
+                        const parsed = window.parseSetupType(k);
+                        if (parsed.isSetup && parsed.base === type) setupPcs += d.ngBreakdown[k];
+                    });
+                    if (mode === 'percent') {
+                        const total = (d.fg || 0) + (d.ng || 0);
+                        if (total <= 0) return 0;
+                        return Math.min(parseFloat(((setupPcs / total) * 100).toFixed(2)), 100);
+                    }
+                    return setupPcs;
+                }),
+                borderColor: color,
+                backgroundColor: color + '40',
+                tension: 0.3,
+                borderWidth: 1.5,
+                borderDash: [5, 3],
+                pointRadius: 2,
+                pointHoverRadius: 5,
+                pointStyle: 'triangle',
+                fill: false
+            });
+        }
     });
     
     const commonOpts = { 
@@ -507,10 +600,16 @@ window.renderNgTrendChart = function() {
                         let machineBreakdown = [];
                         let totalPcs = 0;
                         
-                        // วนลูปหาข้อมูลของเสียอาการนี้ ในวันที่เลือก จากทุกเครื่องจักร
+                        // วนลูปหาข้อมูลของเสียอาการนี้ ในวันที่เลือก จากทุกเครื่องจักร (รวม Setup)
                         for (const [mac, mData] of Object.entries(currentDashboardData.machineData)) {
                             if (mData.daily && mData.daily[dateStr] && mData.daily[dateStr].ngBreakdown) {
-                                const mPcs = mData.daily[dateStr].ngBreakdown[symptom];
+                                const bd = mData.daily[dateStr].ngBreakdown;
+                                // รวม base + Setup ของอาการนี้
+                                let mPcs = 0;
+                                Object.keys(bd).forEach(k => {
+                                    const parsed = window.parseSetupType(k);
+                                    if (parsed.base === symptom) mPcs += bd[k];
+                                });
                                 if (mPcs > 0) {
                                     machineBreakdown.push({ machine: mac, pcs: mPcs });
                                     totalPcs += mPcs;
@@ -704,68 +803,136 @@ window.renderCharts = function(data) {
          const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
 
          const labels = data.ngLabels || [];
-         const valsPcs = data.ngValuesPcs || data.ngValues || []; 
+         const valsPcs = data.ngValuesPcs || data.ngValues || [];
          const valsKg = data.ngValuesKg || [];
 
-         const ngItems = labels.map((l, i) => ({ label: l, pcs: valsPcs[i] || 0, kg: valsKg[i] || 0 })).sort((a,b)=>b.pcs-a.pcs);
-         const totalNG = ngItems.reduce((a,b)=>a+b.pcs,0);
-         let acc = 0; 
-         const cumulative = ngItems.map(i=>{ acc+=i.pcs; return totalNG>0?((acc/totalNG)*100).toFixed(1):0; });
+         // สร้าง raw map แล้วแยก Setup vs Production
+         const rawPcsMap = {};
+         labels.forEach((l, i) => { rawPcsMap[l] = (rawPcsMap[l] || 0) + (valsPcs[i] || 0); });
+         const separated = window.separateSetupData(rawPcsMap);
+
+         const totalNG = separated.total.reduce((a,b) => a+b, 0);
+         let acc = 0;
+         const cumulative = separated.total.map(v => { acc += v; return totalNG > 0 ? ((acc/totalNG)*100).toFixed(1) : 0; });
+         const hasSetup = separated.setup.some(v => v > 0);
 
          const ctxP = document.getElementById('paretoChart');
          if(ctxP) {
              if(charts.pareto) charts.pareto.destroy();
-             charts.pareto = new Chart(ctxP, { 
+             const paretoDatasets = [
+                 { label: '% สะสม', data: cumulative, type: 'line', borderColor: '#8b5cf6', yAxisID: 'y1', datalabels: { display: false }, stack: false },
+                 { label: hasSetup ? 'Production (ชิ้น)' : 'NG (ชิ้น)', data: separated.production, backgroundColor: '#ef4444', yAxisID: 'y', stack: 'paretoStack', datalabels: {
+                    display: function(ctx) { if (!hasSetup) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; } return false; },
+                    align: 'end', anchor: 'end', formatter: (v) => v > 0 ? v + ' ชิ้น' : null
+                 } }
+             ];
+             if (hasSetup) {
+                 paretoDatasets.push({
+                     label: 'Setup (ชิ้น)', data: separated.setup, backgroundColor: '#fb923c', yAxisID: 'y', stack: 'paretoStack',
+                     borderColor: '#ea580c', borderWidth: 1, borderDash: [3, 2],
+                     datalabels: {
+                         display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
+                         align: 'end', anchor: 'end',
+                         formatter: (v, ctx) => {
+                             const total = separated.total[ctx.dataIndex];
+                             return total > 0 ? total + ' ชิ้น' : null;
+                         }
+                     }
+                 });
+             }
+             charts.pareto = new Chart(ctxP, {
                  type: 'bar', plugins: activePlugins,
-                 data: { 
-                     labels: ngItems.map(i=>i.label), 
-                     datasets: [
-                         { label: '% สะสม', data: cumulative, type: 'line', borderColor: '#8b5cf6', yAxisID: 'y1', datalabels: { display: false } },
-                         { label: 'NG (ชิ้น)', data: ngItems.map(i=>i.pcs), backgroundColor: '#ef4444', yAxisID: 'y', datalabels: {
-                            display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
-                            align: 'end', anchor: 'end', formatter: (v) => v > 0 ? v + ' ชิ้น' : null
-                         } }
-                     ]
-                 },
-                 options: { ...commonOpts, layout: { padding: { top: 20 } }, scales: { y: { beginAtZero: true, grace: '10%' }, y1: { beginAtZero: true, max: 105, position: 'right', grid: { display: false } } } }
+                 data: { labels: separated.labels, datasets: paretoDatasets },
+                 options: {
+                     ...commonOpts, layout: { padding: { top: 20 } },
+                     scales: {
+                         x: { stacked: true },
+                         y: { stacked: true, beginAtZero: true, grace: '10%' },
+                         y1: { beginAtZero: true, max: 105, position: 'right', grid: { display: false } }
+                     },
+                     plugins: {
+                         ...commonOpts.plugins,
+                         tooltip: {
+                             callbacks: {
+                                 afterBody: function(context) {
+                                     if (!hasSetup) return '';
+                                     const idx = context[0].dataIndex;
+                                     const prod = separated.production[idx] || 0;
+                                     const setup = separated.setup[idx] || 0;
+                                     const total = prod + setup;
+                                     if (total <= 0) return '';
+                                     return `รวม: ${total} ชิ้น (Production: ${prod}, Setup: ${setup})`;
+                                 }
+                             }
+                         }
+                     }
+                 }
              });
          }
          
          const ctxNgMac = document.getElementById('ngByMachineChart');
          if(ctxNgMac) {
              if(charts.ngMachine) charts.ngMachine.destroy();
-             
-             const sortedNgLabels = ngItems.filter(i => i.pcs > 0).map(i => i.label);
-             
+
+             // ใช้ merged labels จาก Pareto (Setup รวมเข้ากับอาการหลัก)
+             const sortedNgLabels = separated.labels.filter((l, i) => separated.total[i] > 0);
+
              const macColors = [
-                 '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', 
+                 '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4',
                  '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'
              ];
              let macDatasets = [];
              let colorIdx = 0;
-             
+
              const allMacs = Object.keys(data.machineData || {}).sort();
-             
+
              allMacs.forEach(m => {
                  const mData = data.machineData[m];
+                 if (!mData.ngBreakdownPcs) return;
+                 // แยก Setup ของเครื่องนี้
+                 const macSep = window.separateSetupData(mData.ngBreakdownPcs);
                  let hasNg = false;
-                 const ngDataForMac = sortedNgLabels.map(ngLabel => {
-                     const val = mData.ngBreakdownPcs ? (mData.ngBreakdownPcs[ngLabel] || 0) : 0;
-                     if(val > 0) hasNg = true;
+
+                 // Production layer
+                 const prodData = sortedNgLabels.map(ngLabel => {
+                     const idx = macSep.labels.indexOf(ngLabel);
+                     const val = idx >= 0 ? macSep.production[idx] : 0;
+                     if (val > 0) hasNg = true;
                      return val;
                  });
-                 
+
+                 // Setup layer
+                 const setupData = sortedNgLabels.map(ngLabel => {
+                     const idx = macSep.labels.indexOf(ngLabel);
+                     return idx >= 0 ? macSep.setup[idx] : 0;
+                 });
+                 const hasSetupForMac = setupData.some(v => v > 0);
+                 if (hasSetupForMac) hasNg = true;
+
                  if (hasNg) {
+                     const color = macColors[colorIdx % macColors.length];
                      macDatasets.push({
                          label: m,
-                         data: ngDataForMac,
-                         backgroundColor: macColors[colorIdx % macColors.length],
-                         stack: 'Stack 0'
+                         data: prodData,
+                         backgroundColor: color,
+                         stack: 'StackProd'
                      });
+                     if (hasSetupForMac) {
+                         // Setup ใช้สีเดียวกันแต่จางลง + ลายเส้น
+                         macDatasets.push({
+                             label: m + ' (Setup)',
+                             data: setupData,
+                             backgroundColor: color + '80', // 50% opacity
+                             borderColor: color,
+                             borderWidth: 1,
+                             borderDash: [4, 2],
+                             stack: 'StackSetup'
+                         });
+                     }
                      colorIdx++;
                  }
              });
-             
+
              charts.ngMachine = new Chart(ctxNgMac, {
                  type: 'bar',
                  data: {
@@ -777,37 +944,35 @@ window.renderCharts = function(data) {
                      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
                      plugins: {
                          ...commonOpts.plugins,
-                         legend: { 
+                         legend: {
                              display: window.innerWidth > 768,
                              position: 'right',
-                             labels: { boxWidth: 12, font: { size: 10 } }
+                             labels: {
+                                 boxWidth: 12, font: { size: 10 },
+                                 filter: function(item) {
+                                     // ซ่อน "(Setup)" จาก legend ถ้าไม่จำเป็น
+                                     return !item.text.includes('(Setup)');
+                                 }
+                             }
                          },
                          tooltip: {
                              mode: 'index',
                              intersect: false,
-                             itemSort: function(a, b) {
-                                 return b.raw - a.raw; 
-                             },
-                             filter: function(tooltipItem) {
-                                 return tooltipItem.raw > 0;
-                             },
+                             itemSort: function(a, b) { return b.raw - a.raw; },
+                             filter: function(tooltipItem) { return tooltipItem.raw > 0; },
                              callbacks: {
-                                 title: function(context) {
-                                     return `อาการ: ${context[0].label}`;
-                                 }
+                                 title: function(context) { return `อาการ: ${context[0].label}`; }
                              }
                          },
                          datalabels: {
-                             display: function(ctx) { 
-                                 const c = ctx.chart.canvas.closest('.widget-card'); 
-                                 const isMax = c ? c.classList.contains('maximized-card') : false; 
-                                 return ctx.dataset.data[ctx.dataIndex] > 0 && isMax; 
+                             display: function(ctx) {
+                                 const c = ctx.chart.canvas.closest('.widget-card');
+                                 const isMax = c ? c.classList.contains('maximized-card') : false;
+                                 return ctx.dataset.data[ctx.dataIndex] > 0 && isMax;
                              },
                              color: '#ffffff',
                              font: { weight: 'bold', size: 11 },
-                             formatter: (value, ctx) => {
-                                 return `${ctx.dataset.label}: ${value}`;
-                             }
+                             formatter: (value, ctx) => { return `${ctx.dataset.label}: ${value}`; }
                          }
                      }
                  }
@@ -994,14 +1159,17 @@ window.renderCharts = function(data) {
                                     ];
                                     
                                     if(mData.ngBreakdownPcs && Object.keys(mData.ngBreakdownPcs).length > 0) {
-                                        const sortedNg = Object.entries(mData.ngBreakdownPcs)
-                                            .filter(([k, v]) => v > 0)
+                                        const mdSep = window.separateSetupData(mData.ngBreakdownPcs);
+                                        const sortedNg = mdSep.labels
+                                            .map((l, idx) => [l, mdSep.total[idx], mdSep.setup[idx]])
+                                            .filter(x => x[1] > 0)
                                             .sort((a, b) => b[1] - a[1]);
-                                        
+
                                         if(sortedNg.length > 0) {
                                             lines.push(`-- รายละเอียด NG --`);
-                                            sortedNg.forEach(([k, v]) => {
-                                                lines.push(`   • ${k}: ${v.toLocaleString()} ชิ้น`);
+                                            sortedNg.forEach(([k, total, setup]) => {
+                                                let sn = setup > 0 ? ` (Setup: ${setup.toLocaleString()})` : '';
+                                                lines.push(`   • ${k}: ${total.toLocaleString()} ชิ้น${sn}`);
                                             });
                                         }
                                     }
@@ -1298,9 +1466,11 @@ const ctxQC = document.getElementById('qcTrendChart');
          const ctxNG = document.getElementById('ngChart');
          if(ctxNG) {
             if(charts.ng) charts.ng.destroy();
-            
-            const sortedLabels = ngItems.filter(item => item.pcs > 0).map(item => item.label);
-            const sortedData = ngItems.filter(item => item.pcs > 0).map(item => item.pcs);
+
+            // ใช้ separated data (Setup รวมเข้ากับอาการหลัก)
+            const ngItemsMerged = separated.labels.map((l, i) => ({ label: l, pcs: separated.total[i] || 0 }));
+            const sortedLabels = ngItemsMerged.filter(item => item.pcs > 0).map(item => item.label);
+            const sortedData = ngItemsMerged.filter(item => item.pcs > 0).map(item => item.pcs);
             const totalNGPcs = sortedData.reduce((a, b) => a + b, 0);
             
             charts.ng = new Chart(ctxNG, { 
@@ -1349,24 +1519,28 @@ const ctxQC = document.getElementById('qcTrendChart');
 };
 
 window.renderTable = function(data) {
-    let dynamicColumns = normalizeSymptomList(ngSymptoms);
+    // รวม Setup เข้ากับอาการหลักสำหรับ column headers
+    let rawColumns = normalizeSymptomList(ngSymptoms);
     if (data.machineData) {
         for (let m in data.machineData) {
             const d = data.machineData[m];
             if (d.ngBreakdownPcs) {
                 Object.keys(d.ngBreakdownPcs).forEach(k => {
-                    const stdK = capitalizeFirst(k);
-                    if (!dynamicColumns.some(s => s.toLowerCase() === stdK.toLowerCase())) {
-                        dynamicColumns.push(stdK);
+                    const parsed = window.parseSetupType(k);
+                    const stdK = capitalizeFirst(parsed.base);
+                    if (!rawColumns.some(s => s.toLowerCase() === stdK.toLowerCase())) {
+                        rawColumns.push(stdK);
                     }
                 });
             }
         }
     }
 
-    dynamicColumns = [...new Set(dynamicColumns.map(s => capitalizeFirst(s)))];
+    // ลบ "Setup" ออกจาก column ถ้ามี (เพราะรวมเข้ากับอาการหลักแล้ว)
+    let dynamicColumns = [...new Set(rawColumns.map(s => capitalizeFirst(s)))];
+    dynamicColumns = dynamicColumns.filter(s => s.toLowerCase() !== 'setup');
 
-    const h = document.getElementById('table-header'); 
+    const h = document.getElementById('table-header');
     const b = document.getElementById('table-body');
     
     // 1. แก้ไขหัวตารางให้แสดง (ชิ้น/Kg)
@@ -1385,21 +1559,24 @@ window.renderTable = function(data) {
     };
 
     for(let i=1; i<=16; i++) {
-        const m = `CWM-${String(i).padStart(2,'0')}`; 
+        const m = `CWM-${String(i).padStart(2,'0')}`;
         const d = (data.machineData && data.machineData[m]) ? data.machineData[m] : {fg:0, ngTotal:0, ngTotalKg:0, ngTotalPcs:0, ngBreakdownKg:{}, ngBreakdownPcs:{}};
-        
+
         const ngPcs = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
         const ngKg = d.ngTotalKg || 0;
-        
-        const t = d.fg + ngPcs; 
+
+        const t = d.fg + ngPcs;
         const y = t > 0 ? ((d.fg/t)*100).toFixed(1) : "0.0";
-        
+
         const productAssigned = machineMapping[m] || 'ไม่ได้ระบุรุ่น';
-        
-        // 3. เรียกใช้ฟังก์ชันเพื่อคำนวณ FG Kg
+
+        // แยก Setup data สำหรับเครื่องนี้
+        const macSep = window.separateSetupData(d.ngBreakdownPcs || {});
+        const macSepKg = window.separateSetupData(d.ngBreakdownKg || {});
+
+        // คำนวณ FG Kg
         const fgKg = getKgFromPcs(productAssigned, d.fg);
-        
-        // 4. แก้ไขคอลัมน์ FG ใน html ให้แสดงผลคล้ายกับ NG
+
         let html = `<td class="p-4 border-b font-bold cursor-pointer text-blue-600 hover:underline" onclick="window.showMachineDetail('${m}')">
                 <div class="flex flex-col">
                     <span>👉 ${m}</span>
@@ -1409,14 +1586,24 @@ window.renderTable = function(data) {
             <td class="p-4 border-b font-bold text-gray-800">${d.fg} <br><span class="text-[10px] text-gray-500 font-normal">(${fgKg.toFixed(2)} Kg)</span></td>
             <td class="p-4 border-b text-red-600 font-bold">${ngPcs} <br><span class="text-[10px] text-gray-500 font-normal">(${ngKg.toFixed(2)} Kg)</span></td>
             <td class="p-4 border-b">${y}%</td>`;
-            
-        dynamicColumns.forEach(s => { 
-            const keyPcs = Object.keys(d.ngBreakdownPcs || {}).find(k => k.toLowerCase() === s.toLowerCase());
-            const keyKg = Object.keys(d.ngBreakdownKg || {}).find(k => k.toLowerCase() === s.toLowerCase());
-            
-            const cPcs = keyPcs ? d.ngBreakdownPcs[keyPcs] : 0; 
-            const cKg = keyKg ? d.ngBreakdownKg[keyKg] : 0; 
-            html += `<td class="${cPcs>0?'bg-red-50 text-red-700 font-bold':''}">${cPcs>0 ? cPcs + '<br><span class="text-[10px] text-gray-500 font-normal">(' + cKg.toFixed(2) + ' Kg)</span>' : '-'}</td>`; 
+
+        dynamicColumns.forEach(s => {
+            const idx = macSep.labels.findIndex(l => l.toLowerCase() === s.toLowerCase());
+            const idxKg = macSepKg.labels.findIndex(l => l.toLowerCase() === s.toLowerCase());
+
+            const totalPcs = idx >= 0 ? macSep.total[idx] : 0;
+            const totalKg = idxKg >= 0 ? macSepKg.total[idxKg] : 0;
+            const setupPcs = idx >= 0 ? macSep.setup[idx] : 0;
+            const prodPcs = idx >= 0 ? macSep.production[idx] : 0;
+
+            let cellContent = '-';
+            if (totalPcs > 0) {
+                cellContent = totalPcs + '<br><span class="text-[10px] text-gray-500 font-normal">(' + totalKg.toFixed(2) + ' Kg)</span>';
+                if (setupPcs > 0) {
+                    cellContent += `<br><span class="text-[9px] text-orange-600 font-medium">Setup: ${setupPcs}</span>`;
+                }
+            }
+            html += `<td class="${totalPcs>0?'bg-red-50 text-red-700 font-bold':''}">${cellContent}</td>`;
         });
         b.innerHTML += `<tr>${html}</tr>`;
     }
@@ -1676,12 +1863,15 @@ window.showMachineDetail = function(machineName) {
                                 const breakdown = mData.hourlyNgBreakdown ? mData.hourlyNgBreakdown[idx] : null;
                                 
                                 if (breakdown && Object.keys(breakdown).length > 0) {
+                                    const hSep = window.separateSetupData(breakdown);
                                     let lines = ['----------------------'];
-                                    Object.entries(breakdown)
-                                        .filter(([k, v]) => v > 0)
+                                    hSep.labels
+                                        .map((l, i) => [l, hSep.total[i], hSep.setup[i]])
+                                        .filter(x => x[1] > 0)
                                         .sort((a, b) => b[1] - a[1])
-                                        .forEach(([k, v]) => {
-                                            lines.push(`  • ${k}: ${v.toLocaleString()} ชิ้น`);
+                                        .forEach(([k, total, setup]) => {
+                                            let sn = setup > 0 ? ` (Setup: ${setup})` : '';
+                                            lines.push(`  • ${k}: ${total.toLocaleString()} ชิ้น${sn}`);
                                         });
                                     if (lines.length > 1) return lines;
                                 }
@@ -1874,20 +2064,27 @@ window.showDailyNgBreakdown = function(machine, date) {
     const container = document.getElementById('daily-ng-content');
     document.getElementById('daily-ng-title').innerText = `🗑️ NG Breakdown: ${machine} (${date})`;
 
+    // รวม Setup เข้ากับอาการหลัก
+    const bdSep = window.separateSetupData(breakdown);
+
     let html = '<ul class="divide-y divide-gray-200">';
     let total = 0;
 
-    const sortedItems = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
+    const sortedItems = bdSep.labels
+        .map((l, i) => [l, bdSep.total[i], bdSep.setup[i], bdSep.production[i]])
+        .filter(x => x[1] > 0)
+        .sort((a, b) => b[1] - a[1]);
 
     if (sortedItems.length === 0) {
         html += '<li class="py-3 text-center text-gray-500">🎉 ไม่มีของเสียในวันนี้</li>';
     } else {
-        sortedItems.forEach(([type, pcs]) => {
-            total += pcs;
+        sortedItems.forEach(([type, totalPcs, setupPcs, prodPcs]) => {
+            total += totalPcs;
+            let setupNote = setupPcs > 0 ? `<span class="text-[10px] text-orange-600 ml-2">(Setup: ${setupPcs.toLocaleString()})</span>` : '';
             html += `
             <li class="py-3 flex justify-between items-center">
-                <span class="text-sm font-medium text-gray-700">${type}</span>
-                <span class="text-sm font-bold text-red-600">${pcs.toLocaleString()} ชิ้น</span>
+                <span class="text-sm font-medium text-gray-700">${type}${setupNote}</span>
+                <span class="text-sm font-bold text-red-600">${totalPcs.toLocaleString()} ชิ้น</span>
             </li>`;
         });
         html += `
