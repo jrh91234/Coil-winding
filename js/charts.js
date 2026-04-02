@@ -1724,3 +1724,34 @@ window.viewMaintImage = function(url, caption) {
         window.open(url, '_blank');
     }
 };
+// 🌟 ฟังก์ชันสำหรับ ขยาย/ย่อ หน้าต่าง Modal ให้เต็มจอ
+        window.toggleModalFullscreen = function(contentId, btn) {
+            const content = document.getElementById(contentId);
+            if (!content) return;
+
+            const isMaximized = content.classList.contains('max-w-full');
+
+            if (isMaximized) {
+                // ย่อกลับขนาดเดิม
+                content.classList.remove('max-w-full', 'h-full', 'w-full', 'max-h-screen', 'rounded-none');
+                content.classList.add('max-w-3xl', 'max-h-[90vh]', 'rounded-xl');
+                btn.innerHTML = '⛶'; 
+                btn.title = "ขยายเต็มจอ";
+            } else {
+                // ขยายเต็มจอ
+                content.classList.remove('max-w-3xl', 'max-h-[90vh]', 'rounded-xl');
+                content.classList.add('max-w-full', 'h-full', 'w-full', 'max-h-screen', 'rounded-none');
+                btn.innerHTML = '🗗'; 
+                btn.title = "ย่อหน้าต่าง";
+            }
+
+            // บังคับให้กราฟคำนวณสเกลตัวเองใหม่เมื่อขนาดหน้าต่างเปลี่ยน
+            setTimeout(() => {
+                if (typeof machineDetailChart !== 'undefined' && machineDetailChart) {
+                    machineDetailChart.resize();
+                }
+                if (typeof machineDailyChartInst !== 'undefined' && machineDailyChartInst) {
+                    machineDailyChartInst.resize();
+                }
+            }, 350); // รอให้ CSS Transition ขยายเสร็จก่อนค่อย Resize กราฟ
+        };
