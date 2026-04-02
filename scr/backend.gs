@@ -1463,16 +1463,18 @@ function syncHeaders(sheet) {
   }
 }
 
+function getWeightPerPc(productName) {
+    if (!productName) return 0.003;
+    if (productName.includes("10A")) return 0.00228;
+    if (productName.includes("16A")) return 0.00279;
+    if (productName.includes("20A")) return 0.00357;
+    if (productName.includes("25/32A")) return 0.005335;
+    return 0.003;
+}
+
 function getPcsFromKg(productName, kg) {
     if (!kg || kg <= 0) return 0;
-    
-    let weightPerPc = 0.003; 
-    if (productName.includes("10A")) weightPerPc = 0.00228;
-    else if (productName.includes("16A")) weightPerPc = 0.00279;
-    else if (productName.includes("20A")) weightPerPc = 0.00357;
-    else if (productName.includes("25/32A")) weightPerPc = 0.005335; 
-    
-    return Math.round(kg / weightPerPc);
+    return Math.round(kg / getWeightPerPc(productName));
 }
 
 function getUniqueOptionsFromHistory() {
@@ -1591,7 +1593,8 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
   const result = {
     productionTarget: planData.total,
     productionPlanByModel: planData.byProduct,
-    totalFg: 0, 
+    totalFg: 0,
+    totalFgKg: 0,
     totalNgPcs: 0, 
     totalNgKg: 0,
     hourlyLabels: displayLabels,
@@ -1723,6 +1726,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
         let details = []; try { const j = getVal(row, "NG_Details_JSON"); if(j) details = JSON.parse(j); } catch (e) {}
 
         result.totalFg += fg;
+        result.totalFgKg += fg * getWeightPerPc(product);
         result.totalNgKg += ngKg;
         result.totalNgPcs += ngPcs;
 
