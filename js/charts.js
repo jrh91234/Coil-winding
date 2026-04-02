@@ -1,6 +1,6 @@
 try { Chart.register(ChartDataLabels); } catch(e) { console.warn("ChartDataLabels not loaded"); }
 
-window.renderFgByModel = function(data, isPartialView = false) {
+window.renderFgByModel = function(data) {
     const container = document.getElementById('fgModelList');
     if(!container) return;
     const models = [
@@ -10,31 +10,36 @@ window.renderFgByModel = function(data, isPartialView = false) {
         "51207080HC-JR (25/32A)"
     ];
 
-    const wppMap = { "10A": 0.00228, "16A": 0.00279, "20A": 0.00357, "25/32A": 0.005335 };
-    const getWpp = (m) => { for (const k in wppMap) { if (m.includes(k)) return wppMap[k]; } return 0.003; };
-
-    // หา total FG ทุกรุ่นรวมกัน
-    let totalFgAll = 0;
-    models.forEach(m => { totalFgAll += (data.productData && data.productData[m]) ? data.productData[m].fg : 0; });
+    // ฟังก์ชันคำนวณน้ำหนัก (Kg) จากจำนวนชิ้นตามแต่ละรุ่น
+    const getKgFromPcs = (prod, pcs) => {
+        if (!pcs || pcs <= 0) return 0;
+        let w = 0.003; // ค่าเริ่มต้น
+        if(prod.includes("10A")) w = 0.00228;
+        else if(prod.includes("16A")) w = 0.00279;
+        else if(prod.includes("20A")) w = 0.00357;
+        else if(prod.includes("25/32A")) w = 0.005335;
+        return pcs * w;
+    };
 
     let html = '<ul class="divide-y divide-gray-100">';
     models.forEach(m => {
+        // ดึงยอดชิ้นงาน FG
         const fg = (data.productData && data.productData[m]) ? data.productData[m].fg : 0;
-        const fgKg = (fg * getWpp(m)).toFixed(2);
-        const pct = totalFgAll > 0 ? ((fg / totalFgAll) * 100).toFixed(1) : '0.0';
+        
+        // คำนวณยอดชิ้นงานเป็นกิโลกรัม
+        const fgKg = getKgFromPcs(m, fg);
 
         html += `
         <li class="py-3 flex flex-col gap-1">
             <div class="flex justify-between items-center">
                 <span class="text-sm text-gray-800 font-bold">${m}</span>
-                <span class="font-bold text-blue-600 text-lg">${pct}%</span>
             </div>
-            <div class="flex justify-between items-center text-xs">
-                <span class="text-gray-500">FG: <span class="font-bold text-blue-600">${fg.toLocaleString()}</span> ชิ้น</span>
-                <span class="text-gray-500">(<span class="font-bold text-indigo-600">${fgKg}</span> Kg)</span>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                <div class="bg-blue-500 h-1.5 rounded-full" style="width: ${Math.min(pct, 100)}%"></div>
+            <div class="flex justify-between items-center text-xs mt-1 bg-blue-50 p-2 rounded border border-blue-100">
+                <span class="text-gray-700">ยอดงานดี (FG)</span>
+                <div class="text-right">
+                    <span class="font-bold text-blue-700 text-sm">${fg.toLocaleString()} ชิ้น</span>
+                    <span class="text-gray-500 ml-2">(${fgKg.toFixed(3)} Kg)</span>
+                </div>
             </div>
         </li>`;
     });
