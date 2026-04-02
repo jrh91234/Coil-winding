@@ -1812,6 +1812,8 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
   const pendingSortByDate = {};
   const sortResultByDate = {};   // เก็บผล sort จริง: { fgPcs, ngPcs }
   const sortResultByMachine = {}; // แยกตามเครื่อง+วัน
+  const sortYieldBySymptom = {};  // อัตรา sort แยกตามอาการ: symptom → { fgPcs, ngPcs }
+  const pendingByDateSymptom = {}; // pending แยกตามวัน+อาการ: date → [ { symptom, pcs } ]
   let globalSortFg = 0, globalSortNg = 0; // ผลรวม sort ทั้งหมด
   try {
     const sortSheet = ss.getSheetByName("Sorting_Data");
@@ -1841,6 +1843,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
 
         const sQtyRaw = String(sRow[sCol["qty"]] || "").trim();
         const sProduct = String(sRow[sCol["product"]] || "").trim();
+        const sSymptom = String(sRow[sCol["symptom"]] || "").trim();
         const pParts = sProduct.split(" : ");
         const machineName = pParts[0] ? pParts[0].trim() : "";
         const prodName = pParts[1] ? pParts[1].trim() : sProduct;
@@ -1859,6 +1862,9 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
           if (pcs > 0) {
             if (!pendingSortByDate[sDateStr]) pendingSortByDate[sDateStr] = { qty: 0 };
             pendingSortByDate[sDateStr].qty += pcs;
+            // pending per symptom per date
+            if (!pendingByDateSymptom[sDateStr]) pendingByDateSymptom[sDateStr] = [];
+            pendingByDateSymptom[sDateStr].push({ symptom: sSymptom, pcs: pcs });
             // pending per machine
             if (machineName) {
               const pmKey = machineName + "|" + sDateStr;
@@ -1887,6 +1893,13 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
             globalSortFg += fgPcs;
             globalSortNg += ngPcs;
 
+            // อัตรา sort แยกตามอาการ
+            if (sSymptom) {
+              if (!sortYieldBySymptom[sSymptom]) sortYieldBySymptom[sSymptom] = { fgPcs: 0, ngPcs: 0 };
+              sortYieldBySymptom[sSymptom].fgPcs += fgPcs;
+              sortYieldBySymptom[sSymptom].ngPcs += ngPcs;
+            }
+
             // แยกตามเครื่อง
             if (machineName) {
               const mKey = machineName + "|" + sDateStr;
@@ -1904,7 +1917,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
 
   // คำนวณ global sorting yield rate
   const globalSortTotal = globalSortFg + globalSortNg;
-  const globalSortNgRatio = globalSortTotal > 0 ? (globalSortNg / globalSortTotal) : 0.5; // default 50% ถ้าไม่มีข้อมูล
+  const globalSortNgRatio = globalSortTotal > 0 ? (globalSortNg / globalSortTotal) : 0.5;
 
   const sortedDates = Object.keys(dailyStats).sort();
   // รวมวันที่จาก pendingSortByDate ที่อาจไม่มีใน dailyStats
