@@ -460,6 +460,7 @@
                                 </select>
                                 <select id="modelChartSelector" onchange="window.renderModelChart()" class="text-[10px] border rounded p-1 text-gray-600 bg-white print-hide">
                                     <option value="yield">% Yield</option>
+                                    <option value="ng_rate">% NG Rate</option>
                                     <option value="ng_pcs">NG (ชิ้น)</option>
                                     <option value="ng_kg">NG (Kg)</option>
                                     <option value="ng_both">NG (ชิ้น & Kg)</option>
@@ -516,7 +517,16 @@
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide">⛶</button>
                         </div>
                     </div>
-                    <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
+                   <div class="w-full flex justify-end mb-1 print-hide">
+                            <select id="qcModelSelector" onchange="if(typeof window.renderCharts === 'function') window.renderCharts(currentDashboardData);" class="text-[10px] border rounded p-1 text-gray-600 bg-white hover:bg-blue-50">
+                                <option value="all">รวมทุกรุ่น (All)</option>
+                                <option value="S1B29288-JR (10A)">S1B29288-JR (10A)</option>
+                                <option value="S1B71819-JR (16A)">S1B71819-JR (16A)</option>
+                                <option value="S1B29292-JR (20A)">S1B29292-JR (20A)</option>
+                                <option value="51207080HC-JR (25/32A)">51207080HC-JR (25/32A)</option>
+                            </select>
+                        </div>
+                        <div class="flex-1 relative w-full min-h-[250px]"><canvas id="qcTrendChart"></canvas></div>
                 </div>
 
                 <div id="card-ng-trend" class="widget-card p-4 h-[350px]">
