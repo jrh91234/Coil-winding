@@ -1810,13 +1810,14 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
 
   // === อ่านยอดงานรอ Sorting (Pending/Rejected) + ผลการ Sort จริง (Completed/Wait QC) แยกตามวันที่ ===
 // === อ่านยอดงานรอ Sorting และผล Sort จริง พร้อมคำนวณค่าน้ำหนักอาการ (Dynamic Weights) ===
+ // === อ่านยอดงานรอ Sorting และผล Sort จริง พร้อมคำนวณค่าน้ำหนักอาการ (Dynamic Weights) ===
   const pendingSortByDate = {};
   const sortResultByDate = {};   // เก็บผล sort จริง: { fgPcs, ngPcs }
   const sortResultByMachine = {}; // แยกตามเครื่อง+วัน
-  let globalSortFg = 0, globalSortNg = 0; // ผลรวม sort ทั้งหมด
+  let globalSortFg = 0, globalSortNg = 0;
 
-  const symptomRawStats = {}; // 🌟 เก็บค่าดิบของงานคัดแยกตามอาการ
-  const dynamicSymptomWeights = {}; // 🌟 เก็บ % การได้ FG ของแต่ละอาการ
+  const symptomRawStats = {}; // เก็บค่าดิบของงานคัดแยกตามอาการ
+  const dynamicSymptomWeights = {}; // เก็บ % การได้ FG ของแต่ละอาการ
 
   try {
     const sortSheet = ss.getSheetByName("Sorting_Data");
@@ -1851,7 +1852,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
         const prodName = pParts[1] ? pParts[1].trim() : sProduct;
         const symp = String(sRow[sCol["symptom"]] || "").trim();
 
-        // งาน Pending/Rejected → ยอดรอ sort
+        // 🌟 งาน Pending/Rejected → ยอดรอ sort
         if (sStatus === "Pending" || sStatus === "Rejected") {
           const numVal = parseFloat(sQtyRaw) || 0;
           let pcs = 0;
@@ -1865,7 +1866,6 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
           if (pcs > 0) {
             if (!pendingSortByDate[sDateStr]) pendingSortByDate[sDateStr] = { qty: 0 };
             pendingSortByDate[sDateStr].qty += pcs;
-            // pending per machine
             if (machineName) {
               const pmKey = machineName + "|" + sDateStr;
               if (!sortResultByMachine[pmKey]) sortResultByMachine[pmKey] = { fgPcs: 0, ngPcs: 0 };
@@ -1875,7 +1875,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
           }
         }
 
-        // งาน Completed/Wait QC → ผลการ Sort จริง (มี FG/NG)
+        // 🌟 งาน Completed/Wait QC → ผลการ Sort จริง (มี FG/NG)
         if (sStatus === "Completed" || sStatus === "Wait QC") {
           const fgRaw = String(sRow[sCol["fg_qty"]] || "").trim();
           const ngRaw = String(sRow[sCol["ng_qty"]] || "").trim();
@@ -1893,7 +1893,6 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
             globalSortFg += fgPcs;
             globalSortNg += ngPcs;
 
-            // แยกตามเครื่อง
             if (machineName) {
               const mKey = machineName + "|" + sDateStr;
               if (!sortResultByMachine[mKey]) sortResultByMachine[mKey] = { fgPcs: 0, ngPcs: 0 };
@@ -1901,7 +1900,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
               sortResultByMachine[mKey].ngPcs += ngPcs;
             }
 
-            // 🌟 เก็บสถิติแยกตามอาการ (Symptom Weighting)
+            // เก็บสถิติแยกตามอาการ
             if (symp) {
                 if (!symptomRawStats[symp]) symptomRawStats[symp] = { fg: 0, total: 0 };
                 symptomRawStats[symp].fg += fgPcs;
@@ -1915,7 +1914,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
     console.error("Error reading sorting data for trend: " + sortErr.toString());
   }
 
-  // 🌟 คำนวณค่าน้ำหนัก (Dynamic Weights) ส่งไปให้หน้าเว็บ
+  // คำนวณค่าน้ำหนักอาการส่งไปให้หน้าเว็บ
   Object.keys(symptomRawStats).forEach(symp => {
       if (symptomRawStats[symp].total > 0) {
           dynamicSymptomWeights[symp] = parseFloat((symptomRawStats[symp].fg / symptomRawStats[symp].total).toFixed(4));
@@ -1923,12 +1922,10 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
   });
   result.dynamicSymptomWeights = dynamicSymptomWeights;
 
-  // คำนวณ global sorting yield rate
   const globalSortTotal = globalSortFg + globalSortNg;
-  const globalSortNgRatio = globalSortTotal > 0 ? (globalSortNg / globalSortTotal) : 0.5; // default 50% ถ้าไม่มีข้อมูล
+  const globalSortNgRatio = globalSortTotal > 0 ? (globalSortNg / globalSortTotal) : 0.5;
 
   const sortedDates = Object.keys(dailyStats).sort();
-  // รวมวันที่จาก pendingSortByDate ที่อาจไม่มีใน dailyStats
   Object.keys(pendingSortByDate).forEach(d => { if (!dailyStats[d]) sortedDates.push(d); });
   sortedDates.sort();
   const uniqueDates = [...new Set(sortedDates)];
@@ -1939,20 +1936,18 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
     const rate = total > 0 ? ((d.ng / total) * 100).toFixed(2) : 0;
     const pending = pendingSortByDate[date] || null;
     const sortResult = sortResultByDate[date] || null;
-    let worstNgRate = null;  // NG 100%: pending ทั้งหมดเป็น NG
-    let bestNgRate = null;   // FG 100%: pending ทั้งหมดเป็น FG
-    let forecastNgRate = null; // Forecast: ใช้อัตรา sort จริงแบบถ่วงน้ำหนัก
+    let worstNgRate = null;  
+    let bestNgRate = null;   
+    let forecastNgRate = null; 
     
     if (pending && pending.qty > 0 && total > 0) {
       const projTotal = total + pending.qty;
       worstNgRate = parseFloat(((( d.ng + pending.qty) / projTotal) * 100).toFixed(2));
       bestNgRate = parseFloat(((d.ng / projTotal) * 100).toFixed(2));
       
-      // 🌟 Forecast ของภาพรวมรายวัน (ใช้ Weight ตามอาการ)
       if (d.ngBreakdown && Object.keys(d.ngBreakdown).length > 0 && d.ng > 0) {
           let totalWeightedNgRatio = 0;
           for (const [symp, pcs] of Object.entries(d.ngBreakdown)) {
-              // หาอัตราส่วนงานดี (fgRate) ก่อน แล้วแปลงเป็นอัตรางานเสีย (1 - fgRate)
               const fgRate = dynamicSymptomWeights[symp] !== undefined ? dynamicSymptomWeights[symp] : (1 - globalSortNgRatio);
               const ngRateForSymp = 1 - fgRate;
               const proportion = pcs / d.ng; 
@@ -1961,7 +1956,6 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
           const projNg = d.ng + Math.round(pending.qty * totalWeightedNgRatio);
           forecastNgRate = parseFloat(((projNg / projTotal) * 100).toFixed(2));
       } else {
-          // ถ้าไม่มี breakdown ให้ใช้อัตรา sort จริงรวม
           let ngRatio = globalSortNgRatio;
           if (sortResult && (sortResult.fgPcs + sortResult.ngPcs) > 0) {
             ngRatio = sortResult.ngPcs / (sortResult.fgPcs + sortResult.ngPcs);
@@ -1981,7 +1975,6 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
     };
   });
 
-  // === Inject sorting data เข้า machineData แต่ละเครื่อง ===
   result.globalSortNgRatio = parseFloat((globalSortNgRatio * 100).toFixed(2));
   for (const machine in result.machineData) {
     const mData = result.machineData[machine];
