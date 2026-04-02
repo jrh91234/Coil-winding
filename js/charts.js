@@ -1197,8 +1197,21 @@ window.renderTable = function(data) {
 
     const h = document.getElementById('table-header'); 
     const b = document.getElementById('table-body');
-    h.innerHTML = '<th>Machine</th><th>FG</th><th>NG (ชิ้น/Kg)</th><th>% Yield</th>' + dynamicColumns.map(s=>`<th>${s}</th>`).join('');
+    
+    // 1. แก้ไขหัวตารางให้แสดง (ชิ้น/Kg)
+    h.innerHTML = '<th>Machine</th><th>FG (ชิ้น/Kg)</th><th>NG (ชิ้น/Kg)</th><th>% Yield</th>' + dynamicColumns.map(s=>`<th>${s}</th>`).join('');
     b.innerHTML = '';
+
+    // 2. เพิ่มฟังก์ชันคำนวณ Kg สำหรับแปลงยอด FG 
+    const getKgFromPcs = (prod, pcs) => {
+        if (!pcs || pcs <= 0) return 0;
+        let w = 0.003;
+        if(prod && prod.includes("10A")) w = 0.00228;
+        else if(prod && prod.includes("16A")) w = 0.00279;
+        else if(prod && prod.includes("20A")) w = 0.00357;
+        else if(prod && prod.includes("25/32A")) w = 0.005335;
+        return pcs * w;
+    };
 
     for(let i=1; i<=16; i++) {
         const m = `CWM-${String(i).padStart(2,'0')}`; 
@@ -1212,13 +1225,17 @@ window.renderTable = function(data) {
         
         const productAssigned = machineMapping[m] || 'ไม่ได้ระบุรุ่น';
         
+        // 3. เรียกใช้ฟังก์ชันเพื่อคำนวณ FG Kg
+        const fgKg = getKgFromPcs(productAssigned, d.fg);
+        
+        // 4. แก้ไขคอลัมน์ FG ใน html ให้แสดงผลคล้ายกับ NG
         let html = `<td class="p-4 border-b font-bold cursor-pointer text-blue-600 hover:underline" onclick="window.showMachineDetail('${m}')">
                 <div class="flex flex-col">
                     <span>👉 ${m}</span>
                     <span class="text-[10px] text-gray-500 font-normal mt-0.5">📦 ${productAssigned}</span>
                 </div>
             </td>
-            <td class="p-4 border-b">${d.fg}</td>
+            <td class="p-4 border-b font-bold text-gray-800">${d.fg} <br><span class="text-[10px] text-gray-500 font-normal">(${fgKg.toFixed(2)} Kg)</span></td>
             <td class="p-4 border-b text-red-600 font-bold">${ngPcs} <br><span class="text-[10px] text-gray-500 font-normal">(${ngKg.toFixed(2)} Kg)</span></td>
             <td class="p-4 border-b">${y}%</td>`;
             
