@@ -4,9 +4,9 @@ window.renderFgByModel = function(data) {
     const container = document.getElementById('fgModelList');
     if(!container) return;
     const models = [
+        "S1B29288-JR (10A)",
         "S1B29292-JR (20A)",
         "S1B71819-JR (16A)",
-        "S1B29288-JR (10A)",
         "51207080HC-JR (25/32A)"
     ];
 
