@@ -9,32 +9,32 @@ window.renderFgByModel = function(data, isPartialView = false) {
         "S1B29288-JR (10A)",
         "51207080HC-JR (25/32A)"
     ];
+
+    const wppMap = { "10A": 0.00228, "16A": 0.00279, "20A": 0.00357, "25/32A": 0.005335 };
+    const getWpp = (m) => { for (const k in wppMap) { if (m.includes(k)) return wppMap[k]; } return 0.003; };
+
+    // หา total FG ทุกรุ่นรวมกัน
+    let totalFgAll = 0;
+    models.forEach(m => { totalFgAll += (data.productData && data.productData[m]) ? data.productData[m].fg : 0; });
+
     let html = '<ul class="divide-y divide-gray-100">';
     models.forEach(m => {
         const fg = (data.productData && data.productData[m]) ? data.productData[m].fg : 0;
-        const plan = (data.productionPlanByModel && data.productionPlanByModel[m]) ? data.productionPlanByModel[m] : 0;
-        const ach = plan > 0 ? ((fg / plan) * 100).toFixed(1) : (fg > 0 ? '100.0' : '0.0');
-        
-        const achColor = ach >= 100 ? 'text-green-600' : (ach >= 80 ? 'text-orange-500' : 'text-red-500');
-        const barColor = ach >= 100 ? 'bg-green-500' : (ach >= 80 ? 'bg-orange-500' : 'bg-red-500');
-
-        let planLabel = plan.toLocaleString();
-        if (isPartialView && plan > 0) {
-            planLabel += ` <span class="text-gray-400 font-normal text-[10px]">/day</span>`;
-        }
+        const fgKg = (fg * getWpp(m)).toFixed(2);
+        const pct = totalFgAll > 0 ? ((fg / totalFgAll) * 100).toFixed(1) : '0.0';
 
         html += `
         <li class="py-3 flex flex-col gap-1">
             <div class="flex justify-between items-center">
                 <span class="text-sm text-gray-800 font-bold">${m}</span>
-                <span class="font-bold ${achColor} text-lg">${ach}%</span>
+                <span class="font-bold text-blue-600 text-lg">${pct}%</span>
             </div>
             <div class="flex justify-between items-center text-xs">
                 <span class="text-gray-500">FG: <span class="font-bold text-blue-600">${fg.toLocaleString()}</span> ชิ้น</span>
-                <span class="text-gray-500">Plan: <span class="font-bold text-indigo-600">${planLabel}</span> ชิ้น</span>
+                <span class="text-gray-500">(<span class="font-bold text-indigo-600">${fgKg}</span> Kg)</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                <div class="${barColor} h-1.5 rounded-full" style="width: ${Math.min(ach, 100)}%"></div>
+                <div class="bg-blue-500 h-1.5 rounded-full" style="width: ${Math.min(pct, 100)}%"></div>
             </div>
         </li>`;
     });
@@ -1240,6 +1240,10 @@ window.switchMachineChart = function() {
         document.getElementById('machine-hourly-wrapper').classList.add('hidden');
         document.getElementById('machine-daily-wrapper').classList.remove('hidden');
         if(hint) hint.classList.remove('hidden');
+        // force resize เมื่อ canvas กลับมา visible
+        if (typeof machineDailyChartInst !== 'undefined' && machineDailyChartInst) {
+            setTimeout(() => machineDailyChartInst.resize(), 50);
+        }
     }
 };
 
