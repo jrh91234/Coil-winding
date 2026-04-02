@@ -1023,77 +1023,93 @@ window.renderCharts = function(data) {
          }
 
 const ctxQC = document.getElementById('qcTrendChart');
-         if(ctxQC) {
-            if(charts.qcTrend) charts.qcTrend.destroy();
-            
-            // 🌟 อ่านค่า Model ที่ต้องการกรอง
-            const qcSelector = document.getElementById('qcModelSelector');
-            const selectedModel = qcSelector ? qcSelector.value : 'all';
+            if(ctxQC) {
+                if(charts.qcTrend) charts.qcTrend.destroy();
+                
+                // 🌟 อ่านค่า Model ที่ต้องการกรอง
+                const qcSelector = document.getElementById('qcModelSelector');
+                const selectedModel = qcSelector ? qcSelector.value : 'all';
 
-            const trendData = data.dailyTrend || [];
-            let displayTrendData = [];
+                const trendData = data.dailyTrend || [];
+                let displayTrendData = [];
 
-            if (selectedModel === 'all') {
-                displayTrendData = trendData;
-            } else {
-                // 🌟 คำนวณข้อมูลใหม่แยกตามรุ่นแบบ On-the-fly (ดึงจากเครื่องจักรที่รันรุ่นนั้น)
-                displayTrendData = trendData.map(originalDay => {
-                    const dateStr = originalDay.date;
-                    let mFg = 0; let mNg = 0; let mPending = 0;
-                    let modelSortFg = 0; let modelSortNg = 0;
-                    let modelNgBreakdown = {};
+                if (selectedModel === 'all') {
+                    displayTrendData = trendData;
+                } else {
+                    // 🌟 คำนวณข้อมูลใหม่แยกตามรุ่นแบบ On-the-fly (ดึงจากเครื่องจักรที่รันรุ่นนั้น)
+                    displayTrendData = trendData.map(originalDay => {
+                        const dateStr = originalDay.date;
+                        let mFg = 0; let mNg = 0; let mPending = 0;
+                        let modelSortFg = 0; let modelSortNg = 0;
+                        let modelNgBreakdown = {};
 
-                    Object.entries(data.machineData || {}).forEach(([mac, mData]) => {
-                        const assignedModel = (data.machineMapping && data.machineMapping[mac]) ? data.machineMapping[mac] : '';
-                        if (assignedModel === selectedModel || assignedModel.includes(selectedModel)) {
-                            if (mData.daily && mData.daily[dateStr]) {
-                                mFg += mData.daily[dateStr].fg || 0;
-                                mNg += (mData.daily[dateStr].ngPcs !== undefined ? mData.daily[dateStr].ngPcs : (mData.daily[dateStr].ng || 0));
-                                if (mData.daily[dateStr].ngBreakdown) {
-                                    for (const [symp, pcs] of Object.entries(mData.daily[dateStr].ngBreakdown)) {
-                                        modelNgBreakdown[symp] = (modelNgBreakdown[symp] || 0) + pcs;
+                        Object.entries(data.machineData || {}).forEach(([mac, mData]) => {
+                            // ✅ 1. แก้ไขการดึงชื่อรุ่น ให้ดึงจากตัวแปร Global ที่มีอยู่จริงในระบบ
+                            let assignedModel = '';
+                            if (typeof machineMapping !== 'undefined' && machineMapping[mac]) {
+                                assignedModel = machineMapping[mac];
+                            } else if (typeof globalMachineMapping !== 'undefined' && globalMachineMapping[mac]) {
+                                assignedModel = globalMachineMapping[mac];
+                            } else if (data.machineMapping && data.machineMapping[mac]) {
+                                assignedModel = data.machineMapping[mac];
+                            }
+
+                            if (assignedModel === selectedModel || assignedModel.includes(selectedModel)) {
+                                if (mData.daily && mData.daily[dateStr]) {
+                                    mFg += mData.daily[dateStr].fg || 0;
+                                    mNg += (mData.daily[dateStr].ngPcs !== undefined ? mData.daily[dateStr].ngPcs : (mData.daily[dateStr].ng || 0));
+                                    if (mData.daily[dateStr].ngBreakdown) {
+                                        for (const [symp, pcs] of Object.entries(mData.daily[dateStr].ngBreakdown)) {
+                                            modelNgBreakdown[symp] = (modelNgBreakdown[symp] || 0) + pcs;
+                                        }
                                     }
                                 }
+                                if (mData.sortData && mData.sortData[dateStr]) {
+                                    mPending += mData.sortData[dateStr].pendingPcs || 0;
+                                    modelSortFg += mData.sortData[dateStr].fgPcs || 0;
+                                    modelSortNg += mData.sortData[dateStr].ngPcs || 0;
+                                }
                             }
-                            if (mData.sortData && mData.sortData[dateStr]) {
-                                mPending += mData.sortData[dateStr].pendingPcs || 0;
-                                modelSortFg += mData.sortData[dateStr].fgPcs || 0;
-                                modelSortNg += mData.sortData[dateStr].ngPcs || 0;
+                        });
+
+                        const total = mFg + mNg;
+                        const ngRate = total > 0 ? (mNg / total) * 100 : 0;
+                        let worstNgRate = null; let bestNgRate = null; let forecastNgRate = null;
+
+                        if (mPending > 0 && total > 0) {
+                            const projTotal = total + mPending;
+                            worstNgRate = ((mNg + mPending) / projTotal) * 100;
+                            bestNgRate = (mNg / projTotal) * 100;
+                            
+                            const dynamicWeights = data.dynamicSymptomWeights || {};
+                            let totalWeightedNgRatio = 0;
+                            if (Object.keys(modelNgBreakdown).length > 0 && mNg > 0) {
+                                for (const [symp, pcs] of Object.entries(modelNgBreakdown)) {
+                                    const fgRate = dynamicWeights[symp] !== undefined ? dynamicWeights[symp] : (1 - ((data.globalSortNgRatio || 50)/100));
+                                    totalWeightedNgRatio += ((pcs / mNg) * (1 - fgRate));
+                                }
+                                forecastNgRate = ((mNg + Math.round(mPending * totalWeightedNgRatio)) / projTotal) * 100;
+                            } else {
+                                let avgNgRatio = (data.globalSortNgRatio || 50) / 100;
+                                if ((modelSortFg + modelSortNg) > 0) avgNgRatio = modelSortNg / (modelSortFg + modelSortNg);
+                                forecastNgRate = ((mNg + Math.round(mPending * avgNgRatio)) / projTotal) * 100;
                             }
                         }
+
+                        return { date: dateStr, fg: mFg, ng: mNg, ngRate: ngRate, pendingSortQty: mPending, worstNgRate: worstNgRate, bestNgRate: bestNgRate, forecastNgRate: forecastNgRate };
                     });
+                }
 
-                    const total = mFg + mNg;
-                    const ngRate = total > 0 ? (mNg / total) * 100 : 0;
-                    let worstNgRate = null; let bestNgRate = null; let forecastNgRate = null;
-
-                    if (mPending > 0 && total > 0) {
-                        const projTotal = total + mPending;
-                        worstNgRate = ((mNg + mPending) / projTotal) * 100;
-                        bestNgRate = (mNg / projTotal) * 100;
-                        
-                        const dynamicWeights = data.dynamicSymptomWeights || {};
-                        let totalWeightedNgRatio = 0;
-                        if (Object.keys(modelNgBreakdown).length > 0 && mNg > 0) {
-                            for (const [symp, pcs] of Object.entries(modelNgBreakdown)) {
-                                const fgRate = dynamicWeights[symp] !== undefined ? dynamicWeights[symp] : (1 - ((data.globalSortNgRatio || 50)/100));
-                                totalWeightedNgRatio += ((pcs / mNg) * (1 - fgRate));
-                            }
-                            forecastNgRate = ((mNg + Math.round(mPending * totalWeightedNgRatio)) / projTotal) * 100;
-                        } else {
-                            let avgNgRatio = (data.globalSortNgRatio || 50) / 100;
-                            if ((modelSortFg + modelSortNg) > 0) avgNgRatio = modelSortNg / (modelSortFg + modelSortNg);
-                            forecastNgRate = ((mNg + Math.round(mPending * avgNgRatio)) / projTotal) * 100;
-                        }
-                    }
-
-                    return { date: dateStr, fg: mFg, ng: mNg, ngRate: ngRate, pendingSortQty: mPending, worstNgRate: worstNgRate, bestNgRate: bestNgRate, forecastNgRate: forecastNgRate };
+                const hasPendingSort = displayTrendData.some(d => d.pendingSortQty > 0);
+                
+                // ✅ 2. เปลี่ยนสูตรการคิดค่าเฉลี่ยเป็นแบบ True Average (ถ่วงน้ำหนักยอดรวมการผลิต)
+                let sumTotalProd = 0;
+                let sumTotalNg = 0;
+                displayTrendData.forEach(d => {
+                    sumTotalProd += (d.fg + d.ng);
+                    sumTotalNg += d.ng;
                 });
-            }
-
-             const hasPendingSort = displayTrendData.some(d => d.pendingSortQty > 0);
-             const validNgRates = displayTrendData.map(d => Math.min(d.ngRate || 0, 100));
-             const avgNgRate = validNgRates.length > 0 ? validNgRates.reduce((a, b) => a + b, 0) / validNgRates.length : 0;
+                const avgNgRate = sumTotalProd > 0 ? (sumTotalNg / sumTotalProd) * 100 : 0;
 
              const datasets = [
                  {label:'% NG Rate', data:displayTrendData.map(d=> Math.min(d.ngRate, 100)), borderColor:'#f97316', borderWidth: 2, pointRadius: 3},
