@@ -1092,7 +1092,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                 const totalKg = mFgKg + mNgKg;
                 const ngRate = totalKg > 0 ? (mNgKg / totalKg) * 100 : 0;
                 let worstNgRate = null; let bestNgRate = null; let forecastNgRate = null;
-                let projectedNgKg = 0; // 🌟 เก็บค่าน้ำหนัก Forecast NG เพื่อนำไปคำนวณเส้นค่าเฉลี่ย
+                let projectedNgKg = 0; 
 
                 if (mPendingKg > 0 && totalKg > 0) {
                     const projTotalKg = totalKg + mPendingKg;
@@ -1142,7 +1142,6 @@ const ctxQC = document.getElementById('qcTrendChart');
 
             const avgNgRate = sumTotalProdKg > 0 ? (sumTotalNgKg / sumTotalProdKg) * 100 : 0;
             
-            // หาค่าเฉลี่ยของเส้น Worst, Best, Forecast
             let avgWorstNgRate = null; let avgBestNgRate = null; let avgForecastNgRate = null;
 
             if (sumTotalPendingKg > 0) {
@@ -1152,6 +1151,76 @@ const ctxQC = document.getElementById('qcTrendChart');
                 avgForecastNgRate = ((sumTotalNgKg + sumTotalProjectedNgKg) / totalProjProdKg) * 100;
             }
 
+            // 🌟 2. เพิ่มเส้น Average เข้าไปใน Datasets 🌟
+            const datasets = [
+                {label:'% NG Rate (ถ่วงน้ำหนัก Kg)', data:displayTrendData.map(d=> Math.min(d.ngRate, 100)), borderColor:'#f97316', borderWidth: 2, pointRadius: 3},
+                {label: `Avg NG (${avgNgRate.toFixed(2)}%)`, data: displayTrendData.map(() => parseFloat(avgNgRate.toFixed(2))), borderColor: '#6b7280', borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false, tension: 0}
+            ];
+
+            if (hasPendingSort) {
+                // เส้น Worst Case + Avg Worst
+                datasets.push({label:'NG 100% (Worst)', data: displayTrendData.map(d => d.worstNgRate != null ? Math.min(d.worstNgRate, 100) : null), borderColor: 'rgba(239, 68, 68, 0.35)', backgroundColor: 'rgba(239, 68, 68, 0.05)', borderWidth: 2, borderDash: [6, 4], pointRadius: 2, fill: false, spanGaps: false});
+                if (avgWorstNgRate !== null) {
+                    datasets.push({label: `Avg Worst (${avgWorstNgRate.toFixed(2)}%)`, data: displayTrendData.map(() => parseFloat(avgWorstNgRate.toFixed(2))), borderColor: 'rgba(239, 68, 68, 0.4)', borderWidth: 1, borderDash: [3, 3], pointRadius: 0, fill: false, tension: 0});
+                }
+
+                // เส้น Best Case + Avg Best
+                datasets.push({label:'FG 100% (Best)', data: displayTrendData.map(d => d.bestNgRate != null ? Math.min(d.bestNgRate, 100) : null), borderColor: 'rgba(34, 197, 94, 0.35)', backgroundColor: 'rgba(34, 197, 94, 0.05)', borderWidth: 2, borderDash: [6, 4], pointRadius: 2, fill: false, spanGaps: false});
+                if (avgBestNgRate !== null) {
+                    datasets.push({label: `Avg Best (${avgBestNgRate.toFixed(2)}%)`, data: displayTrendData.map(() => parseFloat(avgBestNgRate.toFixed(2))), borderColor: 'rgba(34, 197, 94, 0.4)', borderWidth: 1, borderDash: [3, 3], pointRadius: 0, fill: false, tension: 0});
+                }
+
+                // เส้น Forecast + Avg Forecast
+                datasets.push({label:'📊 Forecast', data: displayTrendData.map(d => d.forecastNgRate != null ? Math.min(d.forecastNgRate, 100) : null), borderColor: 'rgba(139, 92, 246, 0.8)', borderWidth: 2.5, borderDash: [8, 3], pointRadius: 3, pointStyle: 'triangle', fill: false, spanGaps: false});
+                if (avgForecastNgRate !== null) {
+                    datasets.push({label: `Avg Forecast (${avgForecastNgRate.toFixed(2)}%)`, data: displayTrendData.map(() => parseFloat(avgForecastNgRate.toFixed(2))), borderColor: 'rgba(139, 92, 246, 0.6)', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, fill: false, tension: 0});
+                }
+            }
+
+            // 🌟 3. สร้างกราฟ Chart.js 🌟
+            charts.qcTrend = new Chart(ctxQC, {
+                type: 'line',
+                data: {
+                    labels: displayTrendData.map(d=>d.date),
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { offset: true },
+                        y: {
+                            type: 'logarithmic',
+                            min: 0.1,
+                            max: 100,
+                            ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 }
+                        }
+                    },
+                    layout: { padding: { top: 20 } },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                afterBody: function(tooltipItems) {
+                                    const idx = tooltipItems[0].dataIndex;
+                                    const d = displayTrendData[idx];
+                                    if (d && d.pendingSortQty > 0) return `รองาน Sort: ${d.pendingSortQty.toLocaleString()} ชิ้น`;
+                                    return '';
+                                }
+                            }
+                        },
+                        datalabels: {
+                            display: function(ctx) {
+                                if (ctx.datasetIndex !== 0) return false;
+                                const c = ctx.chart.canvas.closest('.widget-card');
+                                return c ? c.classList.contains('maximized-card') : true;
+                            },
+                            color: '#c2410c', align: 'top', anchor: 'end', font: { weight: 'bold' },
+                            formatter: (value) => value > 0 ? value.toFixed(1) + '%' : null
+                        }
+                    }
+                }
+            });
+         }
             // 🌟 2. เพิ่มเส้น Average เข้าไปใน Datasets 🌟
             const datasets = [
                 {label:'% NG Rate (ถ่วงน้ำหนัก Kg)', data:displayTrendData.map(d=> Math.min(d.ngRate, 100)), borderColor:'#f97316', borderWidth: 2, pointRadius: 3},
