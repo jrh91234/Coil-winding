@@ -1378,6 +1378,14 @@ const ctxQC = document.getElementById('qcTrendChart');
                     },
                     layout: { padding: { top: 20 } },
                     plugins: {
+                        zoom: {
+                            pan: { enabled: true, mode: 'xy' },
+                            zoom: {
+                                wheel: { enabled: true },
+                                pinch: { enabled: true },
+                                mode: 'xy'
+                            }
+                        },
                         tooltip: {
                             callbacks: {
                                 afterBody: function(tooltipItems) {
