@@ -1200,13 +1200,17 @@ const ctxQC = document.getElementById('qcTrendChart');
 
             const trendData = data.dailyTrend || [];
             
+            const getWppStrict = (prod) => {
+                if(prod && prod.includes("10A")) return 0.00228;
+                if(prod && prod.includes("16A")) return 0.00279;
+                if(prod && prod.includes("20A")) return 0.00357;
+                if(prod && prod.includes("25/32A")) return 0.005335;
+                return null; // ไม่ใช้ fallback — ข้ามเครื่องที่ไม่ได้ Assign
+            };
             const getKgFromPcs = (prod, pcs) => {
                 if (!pcs || pcs <= 0) return 0;
-                let w = 0.003; 
-                if(prod && prod.includes("10A")) w = 0.00228;
-                else if(prod && prod.includes("16A")) w = 0.00279;
-                else if(prod && prod.includes("20A")) w = 0.00357;
-                else if(prod && prod.includes("25/32A")) w = 0.005335;
+                const w = getWppStrict(prod);
+                if (w === null) return 0; // ไม่แปลง Kg ถ้าไม่รู้รุ่น
                 return pcs * w;
             };
 
@@ -1228,14 +1232,17 @@ const ctxQC = document.getElementById('qcTrendChart');
                         assignedModel = data.machineMapping[mac];
                     }
 
+                    // ข้ามเครื่องที่ไม่ได้ Assign รุ่น (ไม่มี WPP ที่ถูกต้อง)
+                    if (!assignedModel || getWppStrict(assignedModel) === null) return;
+
                     if (selectedModel === 'all' || assignedModel === selectedModel || assignedModel.includes(selectedModel)) {
                         if (mData.daily && mData.daily[dateStr]) {
                             const dailyFgPcs = mData.daily[dateStr].fg || 0;
                             const dailyNgPcs = mData.daily[dateStr].ngPcs !== undefined ? mData.daily[dateStr].ngPcs : (mData.daily[dateStr].ng || 0);
-                            
+
                             mFgPcs += dailyFgPcs;
                             mNgPcs += dailyNgPcs;
-                            
+
                             mFgKg += getKgFromPcs(assignedModel, dailyFgPcs);
                             mNgKg += getKgFromPcs(assignedModel, dailyNgPcs);
 
@@ -1269,20 +1276,25 @@ const ctxQC = document.getElementById('qcTrendChart');
                     
                     const dynamicWeights = data.dynamicSymptomWeights || {};
                     let totalWeightedNgRatio = 0;
-                    
+                    let knownWeightKg = 0; // เฉพาะอาการที่มีข้อมูล Sort จริง
+
                     if (Object.keys(modelNgBreakdownKg).length > 0 && mNgKg > 0) {
                         for (const [symp, sympKg] of Object.entries(modelNgBreakdownKg)) {
-                            const fgRate = dynamicWeights[symp] !== undefined ? dynamicWeights[symp] : (1 - ((data.globalSortNgRatio || 50)/100));
+                            if (dynamicWeights[symp] === undefined) continue; // ข้ามอาการที่ไม่มีข้อมูล Sort
+                            const fgRate = dynamicWeights[symp];
+                            knownWeightKg += sympKg;
                             totalWeightedNgRatio += ((sympKg / mNgKg) * (1 - fgRate));
                         }
-                        projectedNgKg = mPendingKg * totalWeightedNgRatio;
-                        forecastNgRate = ((mNgKg + projectedNgKg) / projTotalKg) * 100;
-                    } else {
-                        let avgNgRatio = (data.globalSortNgRatio || 50) / 100;
-                        if ((modelSortFgPcs + modelSortNgPcs) > 0) avgNgRatio = modelSortNgPcs / (modelSortFgPcs + modelSortNgPcs);
-                        projectedNgKg = mPendingKg * avgNgRatio;
-                        forecastNgRate = ((mNgKg + projectedNgKg) / projTotalKg) * 100;
+                        if (knownWeightKg > 0) {
+                            // Re-normalize: ปรับสัดส่วนเฉพาะอาการที่มีข้อมูลจริง
+                            const coverageRatio = knownWeightKg / mNgKg;
+                            if (coverageRatio > 0) totalWeightedNgRatio = totalWeightedNgRatio / coverageRatio;
+                            projectedNgKg = mPendingKg * totalWeightedNgRatio;
+                            forecastNgRate = ((mNgKg + projectedNgKg) / projTotalKg) * 100;
+                        }
+                        // ถ้าไม่มีอาการไหนมีข้อมูล Sort → ไม่แสดง Forecast (forecastNgRate = null)
                     }
+                    // ไม่ใช้ Global Fallback — ถ้าไม่มีข้อมูลจริงก็ไม่พยากรณ์
                 }
 
                 return { 
@@ -2101,17 +2113,21 @@ window.exportNgRateAudit = function() {
     const now = new Date().toLocaleString('th-TH');
 
     const wppTable = { "10A": 0.00228, "16A": 0.00279, "20A": 0.00357, "25/32A": 0.005335 };
-    const getWpp = (prod) => {
-        if (!prod) return 0.003;
+    const getWppStrict = (prod) => {
+        if (!prod) return null;
         for (const k in wppTable) { if (prod.includes(k)) return wppTable[k]; }
-        return 0.003;
+        return null; // ไม่ใช้ fallback
     };
-    const getKgFromPcs = (prod, pcs) => pcs > 0 ? pcs * getWpp(prod) : 0;
+    const getKgFromPcs = (prod, pcs) => {
+        if (!pcs || pcs <= 0) return 0;
+        const w = getWppStrict(prod);
+        if (w === null) return 0;
+        return pcs * w;
+    };
     const f = (v, d) => v !== null && v !== undefined ? parseFloat(v).toFixed(d === undefined ? 4 : d) : '-';
 
     const trendData = data.dailyTrend || [];
     const dynamicWeights = data.dynamicSymptomWeights || {};
-    const globalSortNgRatio = (data.globalSortNgRatio || 50) / 100;
 
     // === Build per-day audit rows ===
     let auditRows = [];
@@ -2130,6 +2146,10 @@ window.exportNgRateAudit = function() {
             else if (typeof globalMachineMapping !== 'undefined' && globalMachineMapping[mac]) assignedModel = globalMachineMapping[mac];
             else if (data.machineMapping && data.machineMapping[mac]) assignedModel = data.machineMapping[mac];
 
+            // ข้ามเครื่องที่ไม่ได้ Assign รุ่น
+            const wpp = getWppStrict(assignedModel);
+            if (!assignedModel || wpp === null) return;
+
             if (selectedModel === 'all' || assignedModel === selectedModel || assignedModel.includes(selectedModel)) {
                 if (mData.daily && mData.daily[dateStr]) {
                     const dd = mData.daily[dateStr];
@@ -2137,7 +2157,6 @@ window.exportNgRateAudit = function() {
                     const dailyNgPcs = dd.ngPcs !== undefined ? dd.ngPcs : (dd.ng || 0);
                     if (dailyFgPcs === 0 && dailyNgPcs === 0) return;
 
-                    const wpp = getWpp(assignedModel);
                     const macFgKg = getKgFromPcs(assignedModel, dailyFgPcs);
                     const macNgKg = getKgFromPcs(assignedModel, dailyNgPcs);
                     let pendPcs = 0, pendKg = 0;
@@ -2181,23 +2200,29 @@ window.exportNgRateAudit = function() {
             bestNgRate = (mNgKg / projTotalKg) * 100;
             let totalWeightedNgRatio = 0;
 
+            let knownWeightKg = 0;
             if (Object.keys(modelNgBreakdownKg).length > 0 && mNgKg > 0) {
                 for (const [symp, sympKg] of Object.entries(modelNgBreakdownKg)) {
-                    const fgRate = dynamicWeights[symp] !== undefined ? dynamicWeights[symp] : (1 - globalSortNgRatio);
+                    if (dynamicWeights[symp] === undefined) {
+                        forecastDetail.push({ symp, sympKg, proportion: sympKg / mNgKg, fgRate: null, ngRatio: null, source: 'No Sort Data (skipped)' });
+                        continue;
+                    }
+                    const fgRate = dynamicWeights[symp];
                     const proportion = sympKg / mNgKg;
                     const ngRatio = 1 - fgRate;
+                    knownWeightKg += sympKg;
                     totalWeightedNgRatio += (proportion * ngRatio);
-                    forecastDetail.push({ symp, sympKg, proportion, fgRate, ngRatio, source: dynamicWeights[symp] !== undefined ? 'Dynamic' : 'Global' });
+                    forecastDetail.push({ symp, sympKg, proportion, fgRate, ngRatio, source: 'Dynamic (Sort History)' });
                 }
-                projectedNgKg = mPendingKg * totalWeightedNgRatio;
-                forecastNgRate = ((mNgKg + projectedNgKg) / projTotalKg) * 100;
-            } else {
-                let avgNgRatio = globalSortNgRatio;
-                if ((modelSortFgPcs + modelSortNgPcs) > 0) avgNgRatio = modelSortNgPcs / (modelSortFgPcs + modelSortNgPcs);
-                projectedNgKg = mPendingKg * avgNgRatio;
-                forecastNgRate = ((mNgKg + projectedNgKg) / projTotalKg) * 100;
-                forecastDetail.push({ symp: '(Global Avg)', sympKg: mNgKg, proportion: 1, fgRate: 1 - avgNgRatio, ngRatio: avgNgRatio, source: 'Global Avg' });
+                if (knownWeightKg > 0) {
+                    const coverageRatio = knownWeightKg / mNgKg;
+                    if (coverageRatio > 0) totalWeightedNgRatio = totalWeightedNgRatio / coverageRatio;
+                    projectedNgKg = mPendingKg * totalWeightedNgRatio;
+                    forecastNgRate = ((mNgKg + projectedNgKg) / projTotalKg) * 100;
+                }
+                // ถ้าไม่มีอาการไหนมีข้อมูล Sort → ไม่แสดง Forecast (forecastNgRate = null)
             }
+            // ไม่ใช้ Global Fallback — ถ้าไม่มีข้อมูลจริงก็ไม่พยากรณ์
         }
 
         grandFgKg += mFgKg; grandNgKg += mNgKg; grandPendingKg += mPendingKg; grandProjNgKg += projectedNgKg;
@@ -2238,7 +2263,8 @@ window.exportNgRateAudit = function() {
             <p><b>1.3 Conversion:</b> <code class="bg-gray-100 px-1 rounded">Weight (Kg) = Piece Count × Weight Per Piece (WPP)</code></p>
             <p><b>1.4 Worst Case:</b> <code class="bg-gray-100 px-1 rounded">Worst NG Rate = (NG Kg + Pending Kg) / (Total Kg + Pending Kg) × 100</code> — assumes all pending sort items are NG</p>
             <p><b>1.5 Best Case:</b> <code class="bg-gray-100 px-1 rounded">Best NG Rate = NG Kg / (Total Kg + Pending Kg) × 100</code> — assumes all pending sort items are FG</p>
-            <p><b>1.6 Forecast:</b> Uses <b>Dynamic Symptom Weights</b> from actual sort history to predict NG ratio of pending items per defect type.</p>
+            <p><b>1.6 Forecast:</b> Uses <b>Dynamic Symptom Weights</b> from actual sort history to predict NG ratio of pending items per defect type. <span class="text-green-700 font-bold">Only verified data is used — no fallback values.</span> Symptoms without sort history are skipped and weights are re-normalized based on coverage ratio.</p>
+            <p><b>1.7 Data Integrity:</b> <span class="text-green-700">Machines with unassigned/unknown products are excluded from calculation. Only known WPP constants are used (no default 0.003 fallback).</span></p>
             <p class="text-[10px] text-gray-500 mt-1"><code>Forecast NG Kg = Pending Kg × Σ(Symptom Proportion × Symptom NG Ratio)</code><br>
             <code>Forecast NG Rate = (NG Kg + Forecast NG Kg) / (Total Kg + Pending Kg) × 100</code></p>
         </div>
@@ -2253,7 +2279,7 @@ window.exportNgRateAudit = function() {
     [["S1B29288-JR (10A)", 0.00228], ["S1B71819-JR (16A)", 0.00279], ["S1B29292-JR (20A)", 0.00357], ["51207080HC-JR (25/32A)", 0.005335]].forEach(([m, w]) => {
         html += `<tr><td class="border p-1">${m}</td><td class="border p-1 text-right font-mono">${w}</td><td class="border p-1 text-gray-500">Fixed constant</td></tr>`;
     });
-    html += `<tr class="bg-yellow-50"><td class="border p-1">Other / Unknown</td><td class="border p-1 text-right font-mono">0.003</td><td class="border p-1 text-gray-500">Default fallback</td></tr>`;
+    html += `<tr class="bg-green-50"><td class="border p-1 text-gray-600" colspan="3">⚠️ Only verified WPP values are used. Machines with unknown products are excluded from calculation.</td></tr>`;
     html += `</tbody></table></div>`;
 
     // Section 3: Dynamic Symptom Weights
@@ -2270,7 +2296,7 @@ window.exportNgRateAudit = function() {
     } else {
         html += `<tr><td class="border p-1 text-gray-400" colspan="4">No sort history data available</td></tr>`;
     }
-    html += `<tr class="bg-yellow-50"><td class="border p-1 font-bold">Global Fallback</td><td class="border p-1 text-right font-mono">${((1 - globalSortNgRatio) * 100).toFixed(2)}%</td><td class="border p-1 text-right font-mono">${(globalSortNgRatio * 100).toFixed(2)}%</td><td class="border p-1 text-gray-500">Used when symptom has no sort data</td></tr>`;
+    html += `<tr class="bg-green-50"><td class="border p-1 text-gray-600" colspan="4">⚠️ Only symptoms with verified sort history are used for forecast. Symptoms without data are skipped and re-normalized.</td></tr>`;
     html += `</tbody></table></div>`;
 
     // Section 4: Machine-Product Assignment
@@ -2285,8 +2311,12 @@ window.exportNgRateAudit = function() {
         if (typeof machineMapping !== 'undefined' && machineMapping[m]) prod = machineMapping[m];
         else if (data.machineMapping && data.machineMapping[m]) prod = data.machineMapping[m];
         if (selectedModel !== 'all' && !prod.includes(selectedModel)) continue;
-        const w = getWpp(prod);
-        html += `<tr><td class="border p-1 font-bold">${m}</td><td class="border p-1">${prod || '<i class="text-gray-400">Unassigned</i>'}</td><td class="border p-1 text-right font-mono">${w}</td></tr>`;
+        const w = getWppStrict(prod);
+        if (w === null) {
+            html += `<tr class="bg-gray-50"><td class="border p-1 font-bold text-gray-400">${m}</td><td class="border p-1 text-gray-400">${prod || 'Unassigned'}</td><td class="border p-1 text-right font-mono text-gray-400">— (excluded)</td></tr>`;
+        } else {
+            html += `<tr><td class="border p-1 font-bold">${m}</td><td class="border p-1">${prod}</td><td class="border p-1 text-right font-mono">${w}</td></tr>`;
+        }
     }
     html += `</tbody></table></div>`;
 
@@ -2376,15 +2406,16 @@ window.exportNgRateAudit = function() {
                 </tr></thead><tbody>`;
             let sumWeighted = 0;
             row.forecastDetail.forEach(fd => {
-                const weighted = fd.proportion * fd.ngRatio;
-                sumWeighted += weighted;
-                html += `<tr>
+                const isSkipped = fd.fgRate === null;
+                const weighted = isSkipped ? 0 : (fd.proportion * fd.ngRatio);
+                if (!isSkipped) sumWeighted += weighted;
+                html += `<tr class="${isSkipped ? 'text-gray-400' : ''}">
                     <td class="border p-1">${fd.symp}</td>
                     <td class="border p-1 text-right font-mono">${f(fd.sympKg, 4)}</td>
                     <td class="border p-1 text-right font-mono">${(fd.proportion * 100).toFixed(2)}%</td>
-                    <td class="border p-1 text-right font-mono">${(fd.fgRate * 100).toFixed(2)}%</td>
-                    <td class="border p-1 text-right font-mono">${(fd.ngRatio * 100).toFixed(2)}%</td>
-                    <td class="border p-1 text-right font-mono">${(weighted * 100).toFixed(4)}%</td>
+                    <td class="border p-1 text-right font-mono">${isSkipped ? '—' : (fd.fgRate * 100).toFixed(2) + '%'}</td>
+                    <td class="border p-1 text-right font-mono">${isSkipped ? '—' : (fd.ngRatio * 100).toFixed(2) + '%'}</td>
+                    <td class="border p-1 text-right font-mono">${isSkipped ? '—' : (weighted * 100).toFixed(4) + '%'}</td>
                     <td class="border p-1 text-gray-500">${fd.source}</td>
                 </tr>`;
             });
