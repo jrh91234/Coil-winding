@@ -809,6 +809,19 @@
             return 0.003;
         }
 
+        function formatNumber(value, decimals = 0) {
+            const num = Number(value);
+            if (!Number.isFinite(num)) return "0";
+            return num.toLocaleString('en-US', {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            });
+        }
+
+        function formatKg(value, decimals = 2) {
+            return formatNumber(value, decimals);
+        }
+
         function parseQuantity(qtyStr, productStr) {
             if (!qtyStr && qtyStr !== 0) return { pcs: 0, kg: 0, display: "-" };
             qtyStr = String(qtyStr);
@@ -820,13 +833,13 @@
                 return { 
                     pcs: Math.round(val/wpp), 
                     kg: val, 
-                    display: `<span class="font-bold text-gray-800">${val.toFixed(2)} kg</span><br><span class="text-xs text-gray-500">(${Math.round(val/wpp).toLocaleString()} ชิ้น)</span>` 
+                    display: `<span class="font-bold text-gray-800">${formatKg(val)} kg</span><br><span class="text-xs text-gray-500">(${Math.round(val/wpp).toLocaleString()} ชิ้น)</span>` 
                 };
             } else {
                 return { 
                     pcs: val, 
                     kg: val*wpp, 
-                    display: `<span class="font-bold text-gray-800">${val.toLocaleString()} ชิ้น</span><br><span class="text-xs text-gray-500">(${(val*wpp).toFixed(2)} kg)</span>` 
+                    display: `<span class="font-bold text-gray-800">${val.toLocaleString()} ชิ้น</span><br><span class="text-xs text-gray-500">(${formatKg(val*wpp)} kg)</span>` 
                 };
             }
         }
@@ -1075,8 +1088,8 @@
                 <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 col-span-full md:col-span-1 flex flex-col justify-center items-center text-center shadow-sm h-full">
                     <h4 class="font-bold text-blue-800 mb-3 text-sm">🌟 ยอดรวมช่วงเวลานี้</h4>
                     <div class="w-full flex justify-between px-2 text-base">
-                        <div class="text-left"><span class="text-green-700 font-extrabold text-xl">FG:</span><br><span class="text-gray-800 font-bold">${totalFgKg.toFixed(2)} kg</span></div>
-                        <div class="text-right"><span class="text-red-700 font-extrabold text-xl">NG:</span><br><span class="text-gray-800 font-bold">${totalNgKg.toFixed(2)} kg</span></div>
+                        <div class="text-left"><span class="text-green-700 font-extrabold text-xl">FG:</span><br><span class="text-gray-800 font-bold">${formatKg(totalFgKg)} kg</span></div>
+                        <div class="text-right"><span class="text-red-700 font-extrabold text-xl">NG:</span><br><span class="text-gray-800 font-bold">${formatKg(totalNgKg)} kg</span></div>
                     </div>
                     <div class="w-full flex justify-between px-2 text-xs mt-1 font-medium">
                         <span class="text-green-600">(${totalFgPcs.toLocaleString()} ชิ้น)</span>
@@ -1124,11 +1137,11 @@
                                 <div class="w-full flex gap-1 text-[11px] sm:text-xs">
                                     <div class="flex-1 min-w-0 text-center bg-white rounded border border-gray-100 py-1 shadow-sm">
                                         <span class="text-green-600 font-bold">ดี:</span> ${sd.fgPcs.toLocaleString()}<br>
-                                        <span class="text-gray-400">(${sd.fgKg.toFixed(2)}kg)</span>
+                                        <span class="text-gray-400">(${formatKg(sd.fgKg)}kg)</span>
                                     </div>
                                     <div class="flex-1 min-w-0 text-center bg-white rounded border border-gray-100 py-1 shadow-sm">
                                         <span class="text-red-600 font-bold">เสีย:</span> ${sd.ngPcs.toLocaleString()}<br>
-                                        <span class="text-gray-400">(${sd.ngKg.toFixed(2)}kg)</span>
+                                        <span class="text-gray-400">(${formatKg(sd.ngKg)}kg)</span>
                                     </div>
                                     <div class="flex-none flex items-center justify-center">
                                         <span class="bg-red-50 border border-red-200 text-red-800 px-1.5 py-1 rounded-md font-bold text-[10px] sm:text-xs whitespace-nowrap">%NG:<br>${sympNgRate}%</span>
@@ -1208,17 +1221,17 @@
                                 <div class="flex-1 text-center bg-green-50 rounded p-1.5 border border-green-100">
                                     <div class="text-green-700 font-bold">FG</div>
                                     <div class="text-green-800 font-extrabold text-sm">${s.fgPcs.toLocaleString()}</div>
-                                    <div class="text-gray-400 text-[10px]">${s.fgKg.toFixed(2)} kg</div>
+                                    <div class="text-gray-400 text-[10px]">${formatKg(s.fgKg)} kg</div>
                                 </div>
                                 <div class="flex-1 text-center bg-red-50 rounded p-1.5 border border-red-100">
                                     <div class="text-red-700 font-bold">NG</div>
                                     <div class="text-red-800 font-extrabold text-sm">${s.ngPcs.toLocaleString()}</div>
-                                    <div class="text-gray-400 text-[10px]">${s.ngKg.toFixed(2)} kg</div>
+                                    <div class="text-gray-400 text-[10px]">${formatKg(s.ngKg)} kg</div>
                                 </div>
                                 <div class="flex-1 text-center bg-blue-50 rounded p-1.5 border border-blue-100">
                                     <div class="text-blue-700 font-bold">รวม</div>
                                     <div class="text-blue-800 font-extrabold text-sm">${totalPcs.toLocaleString()}</div>
-                                    <div class="text-gray-400 text-[10px]">${totalKg.toFixed(2)} kg</div>
+                                    <div class="text-gray-400 text-[10px]">${formatKg(totalKg)} kg</div>
                                 </div>
                             </div>
                         </div>`;
@@ -1594,7 +1607,7 @@
                 modelHtml += `
                     <li class="flex justify-between items-center border-b border-gray-100 pb-1">
                         <span class="font-semibold text-blue-900 truncate pr-2">${m}</span>
-                        <span class="text-right whitespace-nowrap"><span class="font-bold">${breakdownModel[m].kg.toFixed(2)} kg</span> <span class="text-xs text-gray-500">(${breakdownModel[m].pcs.toLocaleString()} ชิ้น)</span></span>
+                        <span class="text-right whitespace-nowrap"><span class="font-bold">${formatKg(breakdownModel[m].kg)} kg</span> <span class="text-xs text-gray-500">(${breakdownModel[m].pcs.toLocaleString()} ชิ้น)</span></span>
                     </li>`;
             });
             modelHtml += '</ul>';
@@ -1604,7 +1617,7 @@
                 machineHtml += `
                     <li class="flex justify-between items-center border-b border-gray-100 pb-1">
                         <span class="font-semibold text-gray-800">${m}</span>
-                        <span class="text-right whitespace-nowrap"><span class="font-bold">${breakdownMachine[m].kg.toFixed(2)} kg</span> <span class="text-xs text-gray-500">(${breakdownMachine[m].pcs.toLocaleString()} ชิ้น)</span></span>
+                        <span class="text-right whitespace-nowrap"><span class="font-bold">${formatKg(breakdownMachine[m].kg)} kg</span> <span class="text-xs text-gray-500">(${breakdownMachine[m].pcs.toLocaleString()} ชิ้น)</span></span>
                     </li>`;
             });
             machineHtml += '</ul>';
@@ -1616,7 +1629,7 @@
                         
                         <div class="bg-white p-4 rounded-xl shadow-sm border border-blue-100 flex flex-col justify-start items-center text-center">
                             <h4 class="font-bold text-gray-500 mb-2 uppercase tracking-wider text-xs">📊 รวมรายการค้างทั้งหมด</h4>
-                            <div class="text-4xl font-extrabold text-blue-800 mb-1">${totalKg.toFixed(2)} <span class="text-xl">kg</span></div>
+                            <div class="text-4xl font-extrabold text-blue-800 mb-1">${formatKg(totalKg)} <span class="text-xl">kg</span></div>
                             <div class="text-lg text-blue-600 font-medium bg-blue-50 px-4 py-1 rounded-full mb-2">${totalPcs.toLocaleString()} ชิ้น</div>
                             ${predictionHtml}
                         </div>
