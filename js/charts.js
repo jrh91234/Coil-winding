@@ -82,7 +82,7 @@ window.renderFgByModel = function(data) {
                 <span class="text-gray-700">ยอดงานดี (FG)</span>
                 <div class="text-right">
                     <span class="font-bold text-blue-700 text-sm">${fg.toLocaleString()} ชิ้น</span>
-                    <span class="text-gray-500 ml-2">(${fgKg.toFixed(3)} Kg)</span>
+                    <span class="text-gray-500 ml-2">(${window.formatKg ? window.formatKg(fgKg, 3) : fgKg.toFixed(3)} Kg)</span>
                 </div>
             </div>
         </li>`;
@@ -1532,8 +1532,8 @@ window.renderTable = function(data) {
                     <span class="text-[10px] text-gray-500 font-normal mt-0.5">📦 ${productAssigned}</span>
                 </div>
             </td>
-            <td class="p-4 border-b font-bold text-gray-800">${d.fg} <br><span class="text-[10px] text-gray-500 font-normal">(${fgKg.toFixed(2)} Kg)</span></td>
-            <td class="p-4 border-b text-red-600 font-bold">${ngPcs} <br><span class="text-[10px] text-gray-500 font-normal">(${ngKg.toFixed(2)} Kg)</span></td>
+            <td class="p-4 border-b font-bold text-gray-800">${d.fg.toLocaleString()} <br><span class="text-[10px] text-gray-500 font-normal">(${window.formatKg ? window.formatKg(fgKg) : fgKg.toFixed(2)} Kg)</span></td>
+            <td class="p-4 border-b text-red-600 font-bold">${ngPcs.toLocaleString()} <br><span class="text-[10px] text-gray-500 font-normal">(${window.formatKg ? window.formatKg(ngKg) : ngKg.toFixed(2)} Kg)</span></td>
             <td class="p-4 border-b">${y}%</td>`;
 
         dynamicColumns.forEach(s => {
@@ -1547,7 +1547,7 @@ window.renderTable = function(data) {
 
             let cellContent = '-';
             if (totalPcs > 0) {
-                cellContent = totalPcs + '<br><span class="text-[10px] text-gray-500 font-normal">(' + totalKg.toFixed(2) + ' Kg)</span>';
+                cellContent = totalPcs.toLocaleString() + '<br><span class="text-[10px] text-gray-500 font-normal">(' + (window.formatKg ? window.formatKg(totalKg) : totalKg.toFixed(2)) + ' Kg)</span>';
                 if (setupPcs > 0) {
                     cellContent += `<br><span class="text-[9px] text-orange-600 font-medium">Setup: ${setupPcs}</span>`;
                 }
@@ -1599,7 +1599,7 @@ window.showMachineDetail = function(machineName) {
     const ngKg = mData.ngTotalKg || 0;
 
     document.getElementById('machine-detail-title').innerText = `📊 รายละเอียดเครื่อง ${machineName}`;
-    document.getElementById('machine-detail-stats').innerHTML = `<div class="bg-blue-50 p-2 rounded">FG รวม: <b class="text-blue-700 text-xl">${mData.fg}</b></div><div class="bg-red-50 p-2 rounded">NG รวม: <b class="text-red-700 text-xl">${ngPcs} ชิ้น</b><br><span class="text-xs text-gray-500">(${ngKg.toFixed(2)} Kg)</span></div>`;
+    document.getElementById('machine-detail-stats').innerHTML = `<div class="bg-blue-50 p-2 rounded">FG รวม: <b class="text-blue-700 text-xl">${mData.fg.toLocaleString()}</b></div><div class="bg-red-50 p-2 rounded">NG รวม: <b class="text-red-700 text-xl">${ngPcs.toLocaleString()} ชิ้น</b><br><span class="text-xs text-gray-500">(${window.formatKg ? window.formatKg(ngKg) : ngKg.toFixed(2)} Kg)</span></div>`;
 
     const rList = document.getElementById('machine-remarks-list'); 
     const rSec = document.getElementById('machine-detail-remarks');

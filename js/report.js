@@ -982,7 +982,7 @@ window.renderAutoReportContent = async function() {
                     <div class="border border-gray-300 rounded p-4 bg-white shadow-sm">
                         <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Good (FG)</p>
                         <p class="text-2xl font-black text-blue-600 mt-1">${totalFG.toLocaleString()} <span class="text-sm font-normal">ชิ้น</span></p>
-                        <p class="text-xs text-gray-400 mt-0.5">(${totalFGKg.toFixed(2)} Kg)</p>
+                        <p class="text-xs text-gray-400 mt-0.5">(${window.formatKg ? window.formatKg(totalFGKg) : totalFGKg.toFixed(2)} Kg)</p>
                     </div>
                     <div class="border ${isPassTarget ? 'border-gray-300 bg-white' : 'border-red-300 bg-red-50'} rounded p-4 shadow-sm relative overflow-hidden">
                         ${!isPassTarget ? `<div class="absolute top-0 right-0 bg-red-600 text-white text-[9px] px-2 py-0.5 rounded-bl-lg font-bold">OVER 0.5%</div>` : ''}
@@ -1462,7 +1462,7 @@ window.loadDashboard = async function() {
         document.getElementById('stat-fg').innerText = fg.toLocaleString();
         const fgKg = data.totalFgKg || 0;
         const fgSubEl = document.getElementById('stat-fg-sub');
-        if (fgSubEl) fgSubEl.innerText = fgKg > 0 ? `${fg.toLocaleString()} ชิ้น (${fgKg.toFixed(2)} Kg)` : 'ชิ้น';
+        if (fgSubEl) fgSubEl.innerText = fgKg > 0 ? `${fg.toLocaleString()} ชิ้น (${window.formatKg ? window.formatKg(fgKg) : fgKg.toFixed(2)} Kg)` : 'ชิ้น';
         
         let targetDisplay = target.toLocaleString();
         if (isPartialView && target > 0) {
@@ -1471,7 +1471,7 @@ window.loadDashboard = async function() {
         document.getElementById('stat-target').innerHTML = targetDisplay;
         
         document.getElementById('stat-ng').innerText = `${ngPcs.toLocaleString()} ชิ้น`;
-        document.getElementById('stat-ng-sub').innerText = `(${ngKg.toFixed(2)} Kg)`;
+        document.getElementById('stat-ng-sub').innerText = `(${window.formatKg ? window.formatKg(ngKg) : ngKg.toFixed(2)} Kg)`;
         
         const ach = target > 0 ? ((fg / target) * 100).toFixed(1) : 0;
         document.getElementById('stat-achievement').innerText = ach + "%";

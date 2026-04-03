@@ -280,7 +280,7 @@ window.saveCurrentNgInputs = function() {
     const fgInput = document.querySelector(`#${currentRowIdForNg} input[name="fgAmount"]`);
     
     if(total > 0) { 
-        badge.innerText = total.toFixed(2); 
+        badge.innerText = window.formatNumber ? window.formatNumber(total, 2) : total.toFixed(2); 
         badge.classList.remove('hidden'); 
         if (fgInput) {
             fgInput.value = 0;
