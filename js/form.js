@@ -175,6 +175,15 @@ window.openNgModal = function(rowId) {
     modal.classList.remove('hidden');
 };
 
+const setupDropdownExcludedExact = new Set(['setup', 'อื่นๆ (others)']);
+const setupDropdownExcludedKeywords = ['เปลี่ยนม้วน', 'เปลี่ยนรุ่น'];
+function isExcludedSetupSubSymptom(symptom) {
+    const normalized = (symptom || '').trim().toLowerCase();
+    if (!normalized) return true;
+    if (setupDropdownExcludedExact.has(normalized)) return true;
+    return setupDropdownExcludedKeywords.some(keyword => normalized.includes(keyword));
+}
+
 window.renderNgItem = function(container, label, qty, remark, isCustom=false, setupSubSymptom='') {
     const div = document.createElement('div');
     div.className = "border-b pb-2 mb-2 ng-item-row";
@@ -187,7 +196,7 @@ window.renderNgItem = function(container, label, qty, remark, isCustom=false, se
     // สร้าง dropdown เลือกอาการย่อยสำหรับ Setup
     let setupDropdownHtml = '';
     if (isSetup) {
-        const otherSymptoms = ngSymptoms.filter(s => s.trim().toLowerCase() !== 'setup' && s.trim().toLowerCase() !== 'อื่นๆ (others)');
+        const otherSymptoms = ngSymptoms.filter(s => !isExcludedSetupSubSymptom(s));
         const options = otherSymptoms.map(s => {
             const selected = setupSubSymptom && s.toLowerCase() === setupSubSymptom.toLowerCase() ? 'selected' : '';
             return `<option value="${s}" ${selected}>${s}</option>`;
@@ -367,7 +376,6 @@ window.addNewItemToList = function() {
      if (currentManageType === 'recorder') { 
          if (!recorderList.some(r => r.toLowerCase() === rawVal.toLowerCase())) { 
              recorderList.push(rawVal); 
-             localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
              window.renderRecorderOptions(); 
              window.renderManageListContent(recorderList); 
          } 
@@ -375,7 +383,6 @@ window.addNewItemToList = function() {
          const stdVal = capitalizeFirst(rawVal);
          if (!ngSymptoms.some(s => s.toLowerCase() === stdVal.toLowerCase())) { 
              ngSymptoms.push(stdVal); 
-             localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
              window.renderManageListContent(ngSymptoms); 
          } 
      }
@@ -386,15 +393,13 @@ window.addNewItemToList = function() {
 };
 
 window.deleteListItem = function(index) {
-     if (!confirm('ยืนยันการลบรายการนี้ (ออกจาก Local)?')) return;
+     if (!confirm('ยืนยันการลบรายการนี้?')) return;
      if (currentManageType === 'recorder') { 
          recorderList.splice(index, 1); 
-         localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
          window.renderRecorderOptions(); 
          window.renderManageListContent(recorderList); 
      } else if (currentManageType === 'symptom') { 
          ngSymptoms.splice(index, 1); 
-         localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
          window.renderManageListContent(ngSymptoms); 
      }
      if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
@@ -491,7 +496,6 @@ document.getElementById('productionForm').onsubmit = async (e) => {
     
     if(currentRec && !recorderList.some(r => r.toLowerCase() === currentRec.toLowerCase())) { 
         recorderList.push(currentRec); 
-        localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
         window.renderRecorderOptions(); 
     }
     
@@ -527,7 +531,6 @@ document.getElementById('productionForm').onsubmit = async (e) => {
 
     if(newNgTypes.length > 0) { 
         ngSymptoms = [...ngSymptoms, ...newNgTypes]; 
-        localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
     }
 
     if(items.length === 0) { 
