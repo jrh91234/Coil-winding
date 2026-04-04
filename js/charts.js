@@ -1351,8 +1351,24 @@ const ctxQC = document.getElementById('qcTrendChart');
 
                             // เก็บรายละเอียดงานรอ Sort แยกตามเครื่อง+อาการจริงจาก Sorting_Data
                             if (pendingPcs > 0) {
-                                const realSymptoms = mData.sortData[dateStr].pendingBySymptom || {};
-                                pendingByMachine.push({ machine: mac, model: assignedModel, pendingPcs, symptoms: realSymptoms });
+                                const realSymptoms = mData.sortData[dateStr].pendingBySymptom || null;
+                                let symptoms = {};
+                                let estimated = false;
+                                if (realSymptoms && Object.keys(realSymptoms).length > 0) {
+                                    // มีข้อมูลอาการจริงจาก backend
+                                    symptoms = realSymptoms;
+                                } else if (mData.daily && mData.daily[dateStr] && mData.daily[dateStr].ngBreakdown) {
+                                    // Fallback: ประมาณจากสัดส่วน NG ของเครื่องนั้น
+                                    const ngBk = mData.daily[dateStr].ngBreakdown;
+                                    const totalNgDay = Object.values(ngBk).reduce((a, b) => a + b, 0);
+                                    if (totalNgDay > 0) {
+                                        for (const [symp, pcs] of Object.entries(ngBk)) {
+                                            symptoms[symp] = Math.round((pcs / totalNgDay) * pendingPcs);
+                                        }
+                                        estimated = true;
+                                    }
+                                }
+                                pendingByMachine.push({ machine: mac, model: assignedModel, pendingPcs, symptoms, estimated });
                             }
                         }
                     }
@@ -2209,9 +2225,10 @@ window.showTrendDayBreakdown = function(d) {
         const sortedPending = [...d.pendingByMachine].sort((a, b) => b.pendingPcs - a.pendingPcs);
         sortedPending.forEach(item => {
             const sympEntries = Object.entries(item.symptoms || {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+            const estLabel = item.estimated ? ' <span class="text-[10px] text-orange-500 font-normal">(ประมาณการจาก NG)</span>' : '';
             html += `<div class="border rounded-lg mb-2 overflow-hidden">
                 <div class="bg-amber-50 px-3 py-2 flex justify-between items-center">
-                    <span class="font-bold text-sm text-gray-800">${item.machine}</span>
+                    <span class="font-bold text-sm text-gray-800">${item.machine}${estLabel}</span>
                     <span class="text-sm font-bold text-amber-700">${item.pendingPcs.toLocaleString()} ชิ้น</span>
                 </div>`;
             if (sympEntries.length > 0) {
@@ -2225,7 +2242,7 @@ window.showTrendDayBreakdown = function(d) {
                 });
                 html += '</div>';
             } else {
-                html += '<div class="px-3 py-1 text-xs text-gray-400">ไม่มีข้อมูลอาการ</div>';
+                html += '<div class="px-3 py-1 text-xs text-gray-400">ไม่มีข้อมูลอาการ (ยังไม่ได้ Deploy Backend)</div>';
             }
             html += '</div>';
         });
