@@ -802,31 +802,63 @@ window.renderCharts = function(data) {
          const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
          const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
 
-         const labels = data.ngLabels || [];
-         const valsPcs = data.ngValuesPcs || data.ngValues || [];
-         const valsKg = data.ngValuesKg || [];
+         const baseNgLabels = data.ngLabels || [];
+         const baseNgValsPcs = data.ngValuesPcs || data.ngValues || [];
+         const baseRawPcsMap = {};
+         baseNgLabels.forEach((l, i) => { baseRawPcsMap[l] = (baseRawPcsMap[l] || 0) + (baseNgValsPcs[i] || 0); });
+         const separatedBySymptom = window.separateSetupData(baseRawPcsMap);
 
-         // สร้าง raw map แล้วแยก Setup vs Production
-         const rawPcsMap = {};
-         labels.forEach((l, i) => { rawPcsMap[l] = (rawPcsMap[l] || 0) + (valsPcs[i] || 0); });
-         const separated = window.separateSetupData(rawPcsMap);
+         const paretoSelector = document.getElementById('paretoViewSelector');
+         const paretoView = paretoSelector ? paretoSelector.value : 'symptom';
+
+         let separated = { labels: [], production: [], setup: [], total: [] };
+         let hasSetup = false;
+         let paretoBarLabel = 'NG (ชิ้น)';
+
+         if (paretoView === 'symptom') {
+             separated = separatedBySymptom;
+             hasSetup = separated.setup.some(v => v > 0);
+             paretoBarLabel = hasSetup ? 'Production (ชิ้น)' : 'NG (ชิ้น)';
+         } else {
+             const groupedMap = {};
+             const mapSource = (typeof machineMapping !== 'undefined' && machineMapping)
+                 ? machineMapping
+                 : (window.globalMachineMapping || data.machineMapping || {});
+
+             Object.entries(data.machineData || {}).forEach(([machineName, mData]) => {
+                 const sep = window.separateSetupData(mData.ngBreakdownPcs || {});
+                 const totalNg = sep.total.reduce((sum, v) => sum + v, 0);
+                 if (totalNg <= 0) return;
+
+                 const key = (paretoView === 'model')
+                     ? (mapSource[machineName] && mapSource[machineName] !== 'Unassigned' ? mapSource[machineName] : 'Unassigned')
+                     : machineName;
+                 groupedMap[key] = (groupedMap[key] || 0) + totalNg;
+             });
+
+             const sortedEntries = Object.entries(groupedMap).sort((a, b) => b[1] - a[1]);
+             separated.labels = sortedEntries.map(([k]) => k);
+             separated.total = sortedEntries.map(([, v]) => v);
+             separated.production = [...separated.total];
+             separated.setup = separated.total.map(() => 0);
+             paretoBarLabel = paretoView === 'model' ? 'NG ตามรุ่น (ชิ้น)' : 'NG ตามเครื่อง (ชิ้น)';
+         }
 
          const totalNG = separated.total.reduce((a,b) => a+b, 0);
          let acc = 0;
          const cumulative = separated.total.map(v => { acc += v; return totalNG > 0 ? ((acc/totalNG)*100).toFixed(1) : 0; });
-         const hasSetup = separated.setup.some(v => v > 0);
 
          const ctxP = document.getElementById('paretoChart');
          if(ctxP) {
              if(charts.pareto) charts.pareto.destroy();
              const paretoDatasets = [
                  { label: '% สะสม', data: cumulative, type: 'line', borderColor: '#8b5cf6', yAxisID: 'y1', datalabels: { display: false }, stack: false },
-                 { label: hasSetup ? 'Production (ชิ้น)' : 'NG (ชิ้น)', data: separated.production, backgroundColor: '#ef4444', yAxisID: 'y', stack: 'paretoStack', datalabels: {
+                 { label: paretoBarLabel, data: separated.production, backgroundColor: '#ef4444', yAxisID: 'y', stack: 'paretoStack', datalabels: {
                     display: function(ctx) { if (!hasSetup) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; } return false; },
-                    align: 'end', anchor: 'end', formatter: (v) => v > 0 ? v + ' ชิ้น' : null
+                    align: 'end', anchor: 'end', formatter: (v) => v > 0 ? v.toLocaleString() + ' ชิ้น' : null
                  } }
              ];
-             if (hasSetup) {
+             if (paretoView === 'symptom' && hasSetup) {
                  paretoDatasets.push({
                      label: 'Setup (ชิ้น)', data: separated.setup, backgroundColor: '#fb923c', yAxisID: 'y', stack: 'paretoStack',
                      borderColor: '#ea580c', borderWidth: 1, borderDash: [3, 2],
@@ -835,7 +867,7 @@ window.renderCharts = function(data) {
                          align: 'end', anchor: 'end',
                          formatter: (v, ctx) => {
                              const total = separated.total[ctx.dataIndex];
-                             return total > 0 ? total + ' ชิ้น' : null;
+                             return total > 0 ? total.toLocaleString() + ' ชิ้น' : null;
                          }
                      }
                  });
@@ -861,7 +893,7 @@ window.renderCharts = function(data) {
                                      const setup = separated.setup[idx] || 0;
                                      const total = prod + setup;
                                      if (total <= 0) return '';
-                                     return `รวม: ${total} ชิ้น (Production: ${prod}, Setup: ${setup})`;
+                                     return `รวม: ${total.toLocaleString()} ชิ้น (Production: ${prod.toLocaleString()}, Setup: ${setup.toLocaleString()})`;
                                  }
                              }
                          }
@@ -875,7 +907,7 @@ window.renderCharts = function(data) {
              if(charts.ngMachine) charts.ngMachine.destroy();
 
              // ใช้ merged labels จาก Pareto (Setup รวมเข้ากับอาการหลัก)
-             const sortedNgLabels = separated.labels.filter((l, i) => separated.total[i] > 0);
+             const sortedNgLabels = separatedBySymptom.labels.filter((l, i) => separatedBySymptom.total[i] > 0);
 
              const macColors = [
                  '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4',
@@ -1417,7 +1449,7 @@ const ctxQC = document.getElementById('qcTrendChart');
             if(charts.ng) charts.ng.destroy();
 
             // ใช้ separated data (Setup รวมเข้ากับอาการหลัก)
-            const ngItemsMerged = separated.labels.map((l, i) => ({ label: l, pcs: separated.total[i] || 0 }));
+            const ngItemsMerged = separatedBySymptom.labels.map((l, i) => ({ label: l, pcs: separatedBySymptom.total[i] || 0 }));
             const sortedLabels = ngItemsMerged.filter(item => item.pcs > 0).map(item => item.label);
             const sortedData = ngItemsMerged.filter(item => item.pcs > 0).map(item => item.pcs);
             const totalNGPcs = sortedData.reduce((a, b) => a + b, 0);
