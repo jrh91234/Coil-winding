@@ -421,6 +421,9 @@
                                 <option value="model">ตามรุ่น</option>
                                 <option value="machine">ตามเครื่อง</option>
                             </select>
+                            <select id="paretoMachineSelector" class="text-[10px] border rounded p-1 text-gray-600 bg-white hover:bg-blue-50 print-hide" onchange="if(typeof currentDashboardData!=='undefined') window.renderCharts(currentDashboardData)">
+                                <option value="all">ทุกเครื่อง</option>
+                            </select>
                         </div>
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide">↕</button>

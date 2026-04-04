@@ -802,21 +802,49 @@ window.renderCharts = function(data) {
          const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
          const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
 
-         const baseNgLabels = data.ngLabels || [];
-         const baseNgValsPcs = data.ngValuesPcs || data.ngValues || [];
-         const baseRawPcsMap = {};
-         baseNgLabels.forEach((l, i) => { baseRawPcsMap[l] = (baseRawPcsMap[l] || 0) + (baseNgValsPcs[i] || 0); });
-         const separatedBySymptom = window.separateSetupData(baseRawPcsMap);
-
+         // === Pareto View Selector (symptom / model / machine) ===
          const paretoSelector = document.getElementById('paretoViewSelector');
          const paretoView = paretoSelector ? paretoSelector.value : 'symptom';
+
+         // === Pareto Machine Filter (เลือกเครื่องเฉพาะเมื่อดูตามอาการ) ===
+         const paretoMacSel = document.getElementById('paretoMachineSelector');
+         if (paretoMacSel) {
+             // แสดง/ซ่อน machine selector ตาม view
+             paretoMacSel.style.display = (paretoView === 'symptom') ? '' : 'none';
+             const prevVal = paretoMacSel.value;
+             const allMachines = Object.keys(data.machineData || {}).sort();
+             paretoMacSel.innerHTML = '<option value="all">ทุกเครื่อง</option>';
+             allMachines.forEach(m => {
+                 const md = data.machineData[m];
+                 const hasNg = md && md.ngBreakdownPcs && Object.keys(md.ngBreakdownPcs).length > 0;
+                 if (hasNg) {
+                     const opt = document.createElement('option');
+                     opt.value = m;
+                     opt.textContent = m;
+                     paretoMacSel.appendChild(opt);
+                 }
+             });
+             if (prevVal && [...paretoMacSel.options].some(o => o.value === prevVal)) {
+                 paretoMacSel.value = prevVal;
+             }
+         }
+         const selectedParetoMac = (paretoMacSel && paretoView === 'symptom') ? paretoMacSel.value : 'all';
 
          let separated = { labels: [], production: [], setup: [], total: [] };
          let hasSetup = false;
          let paretoBarLabel = 'NG (ชิ้น)';
 
          if (paretoView === 'symptom') {
-             separated = separatedBySymptom;
+             // กรองตามเครื่องที่เลือก (ถ้าเลือก)
+             let rawPcsMap = {};
+             if (selectedParetoMac !== 'all' && data.machineData && data.machineData[selectedParetoMac]) {
+                 rawPcsMap = { ...(data.machineData[selectedParetoMac].ngBreakdownPcs || {}) };
+             } else {
+                 const baseNgLabels = data.ngLabels || [];
+                 const baseNgValsPcs = data.ngValuesPcs || data.ngValues || [];
+                 baseNgLabels.forEach((l, i) => { rawPcsMap[l] = (rawPcsMap[l] || 0) + (baseNgValsPcs[i] || 0); });
+             }
+             separated = window.separateSetupData(rawPcsMap);
              hasSetup = separated.setup.some(v => v > 0);
              paretoBarLabel = hasSetup ? 'Production (ชิ้น)' : 'NG (ชิ้น)';
          } else {
@@ -847,6 +875,21 @@ window.renderCharts = function(data) {
          const totalNG = separated.total.reduce((a,b) => a+b, 0);
          let acc = 0;
          const cumulative = separated.total.map(v => { acc += v; return totalNG > 0 ? ((acc/totalNG)*100).toFixed(1) : 0; });
+
+         // อัปเดตหัวข้อ Pareto ตามเครื่อง/มุมมองที่เลือก
+         const paretoCard = document.getElementById('card-pareto');
+         if (paretoCard) {
+             const h3 = paretoCard.querySelector('h3');
+             if (h3) {
+                 if (paretoView !== 'symptom') {
+                     h3.textContent = paretoView === 'model' ? '📉 NG Analysis — ตามรุ่น' : '📉 NG Analysis — ตามเครื่อง';
+                 } else if (selectedParetoMac !== 'all') {
+                     h3.textContent = `📉 NG Analysis — ${selectedParetoMac}`;
+                 } else {
+                     h3.textContent = '📉 NG Analysis (Pareto)';
+                 }
+             }
+         }
 
          const ctxP = document.getElementById('paretoChart');
          if(ctxP) {
