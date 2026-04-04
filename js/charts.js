@@ -802,6 +802,13 @@ window.renderCharts = function(data) {
          const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
          const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
 
+         // === Base symptom data (ใช้สำหรับ NG by Machine chart และ Doughnut) ===
+         const baseNgLabels = data.ngLabels || [];
+         const baseNgValsPcs = data.ngValuesPcs || data.ngValues || [];
+         const baseRawPcsMap = {};
+         baseNgLabels.forEach((l, i) => { baseRawPcsMap[l] = (baseRawPcsMap[l] || 0) + (baseNgValsPcs[i] || 0); });
+         const separatedBySymptom = window.separateSetupData(baseRawPcsMap);
+
          // === Pareto View Selector (symptom / model / machine) ===
          const paretoSelector = document.getElementById('paretoViewSelector');
          const paretoView = paretoSelector ? paretoSelector.value : 'symptom';
