@@ -1300,9 +1300,10 @@ const ctxQC = document.getElementById('qcTrendChart');
                 const dateStr = originalDay.date;
                 
                 let mFgKg = 0; let mNgKg = 0; let mPendingKg = 0;
-                let mFgPcs = 0; let mNgPcs = 0; let mPendingPcs = 0; 
+                let mFgPcs = 0; let mNgPcs = 0; let mPendingPcs = 0;
                 let modelNgBreakdownKg = {};
                 let modelSortFgPcs = 0; let modelSortNgPcs = 0;
+                let pendingByMachine = []; // เก็บรายละเอียดงานรอ Sort แยกตามเครื่อง
 
                 Object.entries(data.machineData || {}).forEach(([mac, mData]) => {
                     let assignedModel = '';
@@ -1339,9 +1340,24 @@ const ctxQC = document.getElementById('qcTrendChart');
                             const pendingPcs = mData.sortData[dateStr].pendingPcs || 0;
                             mPendingPcs += pendingPcs;
                             mPendingKg += getKgFromPcs(assignedModel, pendingPcs);
-                            
+
                             modelSortFgPcs += mData.sortData[dateStr].fgPcs || 0;
                             modelSortNgPcs += mData.sortData[dateStr].ngPcs || 0;
+
+                            // เก็บรายละเอียดงานรอ Sort แยกตามเครื่อง+อาการ
+                            if (pendingPcs > 0 && mData.daily && mData.daily[dateStr] && mData.daily[dateStr].ngBreakdown) {
+                                const ngBk = mData.daily[dateStr].ngBreakdown;
+                                const totalNgDay = Object.values(ngBk).reduce((a, b) => a + b, 0);
+                                const symptoms = {};
+                                if (totalNgDay > 0) {
+                                    for (const [symp, pcs] of Object.entries(ngBk)) {
+                                        symptoms[symp] = Math.round((pcs / totalNgDay) * pendingPcs);
+                                    }
+                                }
+                                pendingByMachine.push({ machine: mac, model: assignedModel, pendingPcs, symptoms });
+                            } else if (pendingPcs > 0) {
+                                pendingByMachine.push({ machine: mac, model: assignedModel, pendingPcs, symptoms: {} });
+                            }
                         }
                     }
                 });
@@ -1379,11 +1395,12 @@ const ctxQC = document.getElementById('qcTrendChart');
                     // ไม่ใช้ Global Fallback — ถ้าไม่มีข้อมูลจริงก็ไม่พยากรณ์
                 }
 
-                return { 
-                    date: dateStr, 
-                    fgKg: mFgKg, ngKg: mNgKg, pendingSortQty: mPendingPcs, 
+                return {
+                    date: dateStr,
+                    fgKg: mFgKg, ngKg: mNgKg, pendingSortQty: mPendingPcs,
                     pendingKg: mPendingKg, projectedNgKg: projectedNgKg,
-                    ngRate: ngRate, worstNgRate: worstNgRate, bestNgRate: bestNgRate, forecastNgRate: forecastNgRate 
+                    ngRate: ngRate, worstNgRate: worstNgRate, bestNgRate: bestNgRate, forecastNgRate: forecastNgRate,
+                    pendingByMachine: pendingByMachine
                 };
             });
 
@@ -1473,7 +1490,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                                 afterBody: function(tooltipItems) {
                                     const idx = tooltipItems[0].dataIndex;
                                     const d = displayTrendData[idx];
-                                    if (d && d.pendingSortQty > 0) return `รองาน Sort: ${d.pendingSortQty.toLocaleString()} ชิ้น`;
+                                    if (d && d.pendingSortQty > 0) return `รองาน Sort: ${d.pendingSortQty.toLocaleString()} ชิ้น (คลิกดูรายละเอียด)`;
                                     return '';
                                 }
                             }
@@ -1487,6 +1504,13 @@ const ctxQC = document.getElementById('qcTrendChart');
                             color: '#c2410c', align: 'top', anchor: 'end', font: { weight: 'bold' },
                             formatter: (value) => value > 0 ? value.toFixed(1) + '%' : null
                         }
+                    },
+                    onClick: (e, elements, chart) => {
+                        if (!elements || elements.length === 0) return;
+                        const idx = elements[0].index;
+                        const d = displayTrendData[idx];
+                        if (!d || !d.pendingByMachine || d.pendingByMachine.length === 0) return;
+                        window.showPendingSortBreakdown(d.date, d.pendingByMachine, d.pendingSortQty);
                     }
                 }
             });
@@ -2132,6 +2156,50 @@ window.showDailyNgBreakdown = function(machine, date) {
     if(modalWindow) {
         modalWindow.classList.remove('hidden');
         // ดัน z-index ให้สูงสุดแบบบังคับเพื่อทะลุโหมด Maximize
+        modalWindow.style.setProperty('z-index', '999999', 'important');
+    }
+};
+
+window.showPendingSortBreakdown = function(date, pendingByMachine, totalPending) {
+    const container = document.getElementById('daily-ng-content');
+    const titleEl = document.getElementById('daily-ng-title');
+    if (!container || !titleEl) return;
+    titleEl.innerText = `⏳ งานรอ Sort: ${date} (รวม ${totalPending.toLocaleString()} ชิ้น)`;
+
+    let html = '';
+    const sorted = [...pendingByMachine].sort((a, b) => b.pendingPcs - a.pendingPcs);
+
+    sorted.forEach(item => {
+        const sympEntries = Object.entries(item.symptoms || {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+        html += `<div class="border rounded-lg mb-2 overflow-hidden">
+            <div class="bg-amber-50 px-3 py-2 flex justify-between items-center">
+                <span class="font-bold text-sm text-gray-800">${item.machine}</span>
+                <span class="text-sm font-bold text-amber-700">${item.pendingPcs.toLocaleString()} ชิ้น</span>
+            </div>`;
+        if (sympEntries.length > 0) {
+            html += '<div class="px-3 py-1 space-y-1">';
+            sympEntries.forEach(([symp, pcs]) => {
+                const pct = item.pendingPcs > 0 ? ((pcs / item.pendingPcs) * 100).toFixed(0) : 0;
+                html += `<div class="flex justify-between text-xs text-gray-600">
+                    <span>${symp}</span>
+                    <span class="font-mono">${pcs.toLocaleString()} ชิ้น <span class="text-gray-400">(${pct}%)</span></span>
+                </div>`;
+            });
+            html += '</div>';
+        } else {
+            html += '<div class="px-3 py-1 text-xs text-gray-400">ไม่มีข้อมูลอาการ</div>';
+        }
+        html += '</div>';
+    });
+
+    if (sorted.length === 0) {
+        html = '<div class="text-center text-gray-500 py-4">ไม่มีงานรอ Sort ในวันนี้</div>';
+    }
+
+    container.innerHTML = html;
+    const modalWindow = document.getElementById('modal-daily-ng-breakdown');
+    if (modalWindow) {
+        modalWindow.classList.remove('hidden');
         modalWindow.style.setProperty('z-index', '999999', 'important');
     }
 };
