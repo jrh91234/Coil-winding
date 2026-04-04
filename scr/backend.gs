@@ -1877,6 +1877,11 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
               if (!sortResultByMachine[pmKey]) sortResultByMachine[pmKey] = { fgPcs: 0, ngPcs: 0 };
               if (!sortResultByMachine[pmKey].pendingPcs) sortResultByMachine[pmKey].pendingPcs = 0;
               sortResultByMachine[pmKey].pendingPcs += pcs;
+              // เก็บ pending แยกตามอาการจริง
+              if (sSymptom) {
+                if (!sortResultByMachine[pmKey].pendingBySymptom) sortResultByMachine[pmKey].pendingBySymptom = {};
+                sortResultByMachine[pmKey].pendingBySymptom[sSymptom] = (sortResultByMachine[pmKey].pendingBySymptom[sSymptom] || 0) + pcs;
+              }
             }
           }
         }
