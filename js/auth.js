@@ -62,9 +62,9 @@ function initAppAfterLogin() {
     document.getElementById('startDate').value = shiftDate;
     document.getElementById('endDate').value = shiftDate;
 
-    if(localStorage.getItem('CWM_CUSTOM_NG')) ngSymptoms = JSON.parse(localStorage.getItem('CWM_CUSTOM_NG'));
+    // บังคับใช้ข้อมูล NG Symptoms จาก Cloud เท่านั้น
+    localStorage.removeItem('CWM_CUSTOM_NG');
     ngSymptoms = normalizeSymptomList(ngSymptoms);
-    localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
 
     // โหลด Dropdown หมายเลขพาเลทให้พร้อมใช้งาน
     if(typeof window.renderPalletDropdown === 'function') {
@@ -76,7 +76,8 @@ function initAppAfterLogin() {
         window.renderRtvSymptomsOptions();
     }
 
-    if(localStorage.getItem('CWM_RECORDERS')) recorderList = JSON.parse(localStorage.getItem('CWM_RECORDERS'));
+    // บังคับใช้รายชื่อผู้บันทึกจาก Cloud เท่านั้น
+    localStorage.removeItem('CWM_RECORDERS');
     if(localStorage.getItem('CWM_MACHINE_MAPPING')) machineMapping = JSON.parse(localStorage.getItem('CWM_MACHINE_MAPPING'));
 
     window.detectCurrentShift();

@@ -376,7 +376,6 @@ window.addNewItemToList = function() {
      if (currentManageType === 'recorder') { 
          if (!recorderList.some(r => r.toLowerCase() === rawVal.toLowerCase())) { 
              recorderList.push(rawVal); 
-             localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
              window.renderRecorderOptions(); 
              window.renderManageListContent(recorderList); 
          } 
@@ -384,7 +383,6 @@ window.addNewItemToList = function() {
          const stdVal = capitalizeFirst(rawVal);
          if (!ngSymptoms.some(s => s.toLowerCase() === stdVal.toLowerCase())) { 
              ngSymptoms.push(stdVal); 
-             localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
              window.renderManageListContent(ngSymptoms); 
          } 
      }
@@ -395,15 +393,13 @@ window.addNewItemToList = function() {
 };
 
 window.deleteListItem = function(index) {
-     if (!confirm('ยืนยันการลบรายการนี้ (ออกจาก Local)?')) return;
+     if (!confirm('ยืนยันการลบรายการนี้?')) return;
      if (currentManageType === 'recorder') { 
          recorderList.splice(index, 1); 
-         localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
          window.renderRecorderOptions(); 
          window.renderManageListContent(recorderList); 
      } else if (currentManageType === 'symptom') { 
          ngSymptoms.splice(index, 1); 
-         localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
          window.renderManageListContent(ngSymptoms); 
      }
      if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
@@ -500,7 +496,6 @@ document.getElementById('productionForm').onsubmit = async (e) => {
     
     if(currentRec && !recorderList.some(r => r.toLowerCase() === currentRec.toLowerCase())) { 
         recorderList.push(currentRec); 
-        localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
         window.renderRecorderOptions(); 
     }
     
@@ -536,7 +531,6 @@ document.getElementById('productionForm').onsubmit = async (e) => {
 
     if(newNgTypes.length > 0) { 
         ngSymptoms = [...ngSymptoms, ...newNgTypes]; 
-        localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms)); 
     }
 
     if(items.length === 0) { 

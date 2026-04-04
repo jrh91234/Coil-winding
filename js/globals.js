@@ -120,7 +120,6 @@ window.fetchOptions = async function() {
         
         if (data.recorders && data.recorders.length > 0) {
             recorderList = data.recorders; 
-            localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
         }
         
         if(typeof window.renderRecorderOptions === 'function') {
@@ -135,7 +134,6 @@ window.fetchOptions = async function() {
                }
            });
            ngSymptoms = normalizeSymptomList(ngSymptoms);
-           localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
            
            if (typeof window.renderRtvSymptomsOptions === 'function') {
                window.renderRtvSymptomsOptions();
