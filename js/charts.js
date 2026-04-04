@@ -802,19 +802,51 @@ window.renderCharts = function(data) {
          const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
          const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
 
-         const labels = data.ngLabels || [];
-         const valsPcs = data.ngValuesPcs || data.ngValues || [];
-         const valsKg = data.ngValuesKg || [];
+         // === Pareto Machine Selector ===
+         const paretoMacSel = document.getElementById('paretoMachineSelector');
+         if (paretoMacSel) {
+             const prevVal = paretoMacSel.value;
+             const allMachines = Object.keys(data.machineData || {}).sort();
+             paretoMacSel.innerHTML = '<option value="all">ทุกเครื่อง</option>';
+             allMachines.forEach(m => {
+                 const md = data.machineData[m];
+                 const hasNg = md && md.ngBreakdownPcs && Object.keys(md.ngBreakdownPcs).length > 0;
+                 if (hasNg) {
+                     const opt = document.createElement('option');
+                     opt.value = m;
+                     opt.textContent = m;
+                     paretoMacSel.appendChild(opt);
+                 }
+             });
+             if (prevVal && [...paretoMacSel.options].some(o => o.value === prevVal)) {
+                 paretoMacSel.value = prevVal;
+             }
+         }
+         const selectedParetoMac = paretoMacSel ? paretoMacSel.value : 'all';
 
-         // สร้าง raw map แล้วแยก Setup vs Production
-         const rawPcsMap = {};
-         labels.forEach((l, i) => { rawPcsMap[l] = (rawPcsMap[l] || 0) + (valsPcs[i] || 0); });
+         let rawPcsMap = {};
+         if (selectedParetoMac !== 'all' && data.machineData && data.machineData[selectedParetoMac]) {
+             // ใช้ข้อมูลเฉพาะเครื่องที่เลือก
+             rawPcsMap = { ...(data.machineData[selectedParetoMac].ngBreakdownPcs || {}) };
+         } else {
+             // ใช้ข้อมูลรวมทุกเครื่อง
+             const labels = data.ngLabels || [];
+             const valsPcs = data.ngValuesPcs || data.ngValues || [];
+             labels.forEach((l, i) => { rawPcsMap[l] = (rawPcsMap[l] || 0) + (valsPcs[i] || 0); });
+         }
          const separated = window.separateSetupData(rawPcsMap);
 
          const totalNG = separated.total.reduce((a,b) => a+b, 0);
          let acc = 0;
          const cumulative = separated.total.map(v => { acc += v; return totalNG > 0 ? ((acc/totalNG)*100).toFixed(1) : 0; });
          const hasSetup = separated.setup.some(v => v > 0);
+
+         // อัปเดตหัวข้อ Pareto ตามเครื่องที่เลือก
+         const paretoCard = document.getElementById('card-pareto');
+         if (paretoCard) {
+             const h3 = paretoCard.querySelector('h3');
+             if (h3) h3.textContent = selectedParetoMac === 'all' ? '📉 NG Analysis (Pareto)' : `📉 NG Analysis — ${selectedParetoMac}`;
+         }
 
          const ctxP = document.getElementById('paretoChart');
          if(ctxP) {
