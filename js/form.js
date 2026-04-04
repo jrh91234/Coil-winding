@@ -175,6 +175,15 @@ window.openNgModal = function(rowId) {
     modal.classList.remove('hidden');
 };
 
+const setupDropdownExcludedExact = new Set(['setup', 'อื่นๆ (others)']);
+const setupDropdownExcludedKeywords = ['เปลี่ยนม้วน', 'เปลี่ยนรุ่น'];
+function isExcludedSetupSubSymptom(symptom) {
+    const normalized = (symptom || '').trim().toLowerCase();
+    if (!normalized) return true;
+    if (setupDropdownExcludedExact.has(normalized)) return true;
+    return setupDropdownExcludedKeywords.some(keyword => normalized.includes(keyword));
+}
+
 window.renderNgItem = function(container, label, qty, remark, isCustom=false, setupSubSymptom='') {
     const div = document.createElement('div');
     div.className = "border-b pb-2 mb-2 ng-item-row";
@@ -187,7 +196,7 @@ window.renderNgItem = function(container, label, qty, remark, isCustom=false, se
     // สร้าง dropdown เลือกอาการย่อยสำหรับ Setup
     let setupDropdownHtml = '';
     if (isSetup) {
-        const otherSymptoms = ngSymptoms.filter(s => s.trim().toLowerCase() !== 'setup' && s.trim().toLowerCase() !== 'อื่นๆ (others)');
+        const otherSymptoms = ngSymptoms.filter(s => !isExcludedSetupSubSymptom(s));
         const options = otherSymptoms.map(s => {
             const selected = setupSubSymptom && s.toLowerCase() === setupSubSymptom.toLowerCase() ? 'selected' : '';
             return `<option value="${s}" ${selected}>${s}</option>`;
