@@ -47,6 +47,19 @@ window.currentUser = null;
 // 🌟 Utilities & Global UI Functions
 // ==========================================
 
+window.formatNumber = function(value, decimals = 0) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return "0";
+    return num.toLocaleString('en-US', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
+};
+
+window.formatKg = function(value, decimals = 2) {
+    return window.formatNumber(value, decimals);
+};
+
 function systemLog(logType, details) {
     if (!window.currentUser) return;
     const payload = {

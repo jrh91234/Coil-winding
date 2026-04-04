@@ -82,7 +82,7 @@ window.renderFgByModel = function(data) {
                 <span class="text-gray-700">ยอดงานดี (FG)</span>
                 <div class="text-right">
                     <span class="font-bold text-blue-700 text-sm">${fg.toLocaleString()} ชิ้น</span>
-                    <span class="text-gray-500 ml-2">(${fgKg.toFixed(3)} Kg)</span>
+                    <span class="text-gray-500 ml-2">(${window.formatKg ? window.formatKg(fgKg, 3) : fgKg.toFixed(3)} Kg)</span>
                 </div>
             </div>
         </li>`;
@@ -802,9 +802,15 @@ window.renderCharts = function(data) {
          const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
          const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
 
-         // === Pareto Machine Selector ===
+         // === Pareto View Selector (symptom / model / machine) ===
+         const paretoSelector = document.getElementById('paretoViewSelector');
+         const paretoView = paretoSelector ? paretoSelector.value : 'symptom';
+
+         // === Pareto Machine Filter (เลือกเครื่องเฉพาะเมื่อดูตามอาการ) ===
          const paretoMacSel = document.getElementById('paretoMachineSelector');
          if (paretoMacSel) {
+             // แสดง/ซ่อน machine selector ตาม view
+             paretoMacSel.style.display = (paretoView === 'symptom') ? '' : 'none';
              const prevVal = paretoMacSel.value;
              const allMachines = Object.keys(data.machineData || {}).sort();
              paretoMacSel.innerHTML = '<option value="all">ทุกเครื่อง</option>';
@@ -822,30 +828,67 @@ window.renderCharts = function(data) {
                  paretoMacSel.value = prevVal;
              }
          }
-         const selectedParetoMac = paretoMacSel ? paretoMacSel.value : 'all';
+         const selectedParetoMac = (paretoMacSel && paretoView === 'symptom') ? paretoMacSel.value : 'all';
 
-         let rawPcsMap = {};
-         if (selectedParetoMac !== 'all' && data.machineData && data.machineData[selectedParetoMac]) {
-             // ใช้ข้อมูลเฉพาะเครื่องที่เลือก
-             rawPcsMap = { ...(data.machineData[selectedParetoMac].ngBreakdownPcs || {}) };
+         let separated = { labels: [], production: [], setup: [], total: [] };
+         let hasSetup = false;
+         let paretoBarLabel = 'NG (ชิ้น)';
+
+         if (paretoView === 'symptom') {
+             // กรองตามเครื่องที่เลือก (ถ้าเลือก)
+             let rawPcsMap = {};
+             if (selectedParetoMac !== 'all' && data.machineData && data.machineData[selectedParetoMac]) {
+                 rawPcsMap = { ...(data.machineData[selectedParetoMac].ngBreakdownPcs || {}) };
+             } else {
+                 const baseNgLabels = data.ngLabels || [];
+                 const baseNgValsPcs = data.ngValuesPcs || data.ngValues || [];
+                 baseNgLabels.forEach((l, i) => { rawPcsMap[l] = (rawPcsMap[l] || 0) + (baseNgValsPcs[i] || 0); });
+             }
+             separated = window.separateSetupData(rawPcsMap);
+             hasSetup = separated.setup.some(v => v > 0);
+             paretoBarLabel = hasSetup ? 'Production (ชิ้น)' : 'NG (ชิ้น)';
          } else {
-             // ใช้ข้อมูลรวมทุกเครื่อง
-             const labels = data.ngLabels || [];
-             const valsPcs = data.ngValuesPcs || data.ngValues || [];
-             labels.forEach((l, i) => { rawPcsMap[l] = (rawPcsMap[l] || 0) + (valsPcs[i] || 0); });
+             const groupedMap = {};
+             const mapSource = (typeof machineMapping !== 'undefined' && machineMapping)
+                 ? machineMapping
+                 : (window.globalMachineMapping || data.machineMapping || {});
+
+             Object.entries(data.machineData || {}).forEach(([machineName, mData]) => {
+                 const sep = window.separateSetupData(mData.ngBreakdownPcs || {});
+                 const totalNg = sep.total.reduce((sum, v) => sum + v, 0);
+                 if (totalNg <= 0) return;
+
+                 const key = (paretoView === 'model')
+                     ? (mapSource[machineName] && mapSource[machineName] !== 'Unassigned' ? mapSource[machineName] : 'Unassigned')
+                     : machineName;
+                 groupedMap[key] = (groupedMap[key] || 0) + totalNg;
+             });
+
+             const sortedEntries = Object.entries(groupedMap).sort((a, b) => b[1] - a[1]);
+             separated.labels = sortedEntries.map(([k]) => k);
+             separated.total = sortedEntries.map(([, v]) => v);
+             separated.production = [...separated.total];
+             separated.setup = separated.total.map(() => 0);
+             paretoBarLabel = paretoView === 'model' ? 'NG ตามรุ่น (ชิ้น)' : 'NG ตามเครื่อง (ชิ้น)';
          }
-         const separated = window.separateSetupData(rawPcsMap);
 
          const totalNG = separated.total.reduce((a,b) => a+b, 0);
          let acc = 0;
          const cumulative = separated.total.map(v => { acc += v; return totalNG > 0 ? ((acc/totalNG)*100).toFixed(1) : 0; });
-         const hasSetup = separated.setup.some(v => v > 0);
 
-         // อัปเดตหัวข้อ Pareto ตามเครื่องที่เลือก
+         // อัปเดตหัวข้อ Pareto ตามเครื่อง/มุมมองที่เลือก
          const paretoCard = document.getElementById('card-pareto');
          if (paretoCard) {
              const h3 = paretoCard.querySelector('h3');
-             if (h3) h3.textContent = selectedParetoMac === 'all' ? '📉 NG Analysis (Pareto)' : `📉 NG Analysis — ${selectedParetoMac}`;
+             if (h3) {
+                 if (paretoView !== 'symptom') {
+                     h3.textContent = paretoView === 'model' ? '📉 NG Analysis — ตามรุ่น' : '📉 NG Analysis — ตามเครื่อง';
+                 } else if (selectedParetoMac !== 'all') {
+                     h3.textContent = `📉 NG Analysis — ${selectedParetoMac}`;
+                 } else {
+                     h3.textContent = '📉 NG Analysis (Pareto)';
+                 }
+             }
          }
 
          const ctxP = document.getElementById('paretoChart');
@@ -853,12 +896,12 @@ window.renderCharts = function(data) {
              if(charts.pareto) charts.pareto.destroy();
              const paretoDatasets = [
                  { label: '% สะสม', data: cumulative, type: 'line', borderColor: '#8b5cf6', yAxisID: 'y1', datalabels: { display: false }, stack: false },
-                 { label: hasSetup ? 'Production (ชิ้น)' : 'NG (ชิ้น)', data: separated.production, backgroundColor: '#ef4444', yAxisID: 'y', stack: 'paretoStack', datalabels: {
+                 { label: paretoBarLabel, data: separated.production, backgroundColor: '#ef4444', yAxisID: 'y', stack: 'paretoStack', datalabels: {
                     display: function(ctx) { if (!hasSetup) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; } return false; },
-                    align: 'end', anchor: 'end', formatter: (v) => v > 0 ? v + ' ชิ้น' : null
+                    align: 'end', anchor: 'end', formatter: (v) => v > 0 ? v.toLocaleString() + ' ชิ้น' : null
                  } }
              ];
-             if (hasSetup) {
+             if (paretoView === 'symptom' && hasSetup) {
                  paretoDatasets.push({
                      label: 'Setup (ชิ้น)', data: separated.setup, backgroundColor: '#fb923c', yAxisID: 'y', stack: 'paretoStack',
                      borderColor: '#ea580c', borderWidth: 1, borderDash: [3, 2],
@@ -867,7 +910,7 @@ window.renderCharts = function(data) {
                          align: 'end', anchor: 'end',
                          formatter: (v, ctx) => {
                              const total = separated.total[ctx.dataIndex];
-                             return total > 0 ? total + ' ชิ้น' : null;
+                             return total > 0 ? total.toLocaleString() + ' ชิ้น' : null;
                          }
                      }
                  });
@@ -893,7 +936,7 @@ window.renderCharts = function(data) {
                                      const setup = separated.setup[idx] || 0;
                                      const total = prod + setup;
                                      if (total <= 0) return '';
-                                     return `รวม: ${total} ชิ้น (Production: ${prod}, Setup: ${setup})`;
+                                     return `รวม: ${total.toLocaleString()} ชิ้น (Production: ${prod.toLocaleString()}, Setup: ${setup.toLocaleString()})`;
                                  }
                              }
                          }
@@ -907,7 +950,7 @@ window.renderCharts = function(data) {
              if(charts.ngMachine) charts.ngMachine.destroy();
 
              // ใช้ merged labels จาก Pareto (Setup รวมเข้ากับอาการหลัก)
-             const sortedNgLabels = separated.labels.filter((l, i) => separated.total[i] > 0);
+             const sortedNgLabels = separatedBySymptom.labels.filter((l, i) => separatedBySymptom.total[i] > 0);
 
              const macColors = [
                  '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4',
@@ -1410,6 +1453,14 @@ const ctxQC = document.getElementById('qcTrendChart');
                     },
                     layout: { padding: { top: 20 } },
                     plugins: {
+                        zoom: {
+                            pan: { enabled: true, mode: 'xy' },
+                            zoom: {
+                                wheel: { enabled: true },
+                                pinch: { enabled: true },
+                                mode: 'xy'
+                            }
+                        },
                         tooltip: {
                             callbacks: {
                                 afterBody: function(tooltipItems) {
@@ -1441,7 +1492,7 @@ const ctxQC = document.getElementById('qcTrendChart');
             if(charts.ng) charts.ng.destroy();
 
             // ใช้ separated data (Setup รวมเข้ากับอาการหลัก)
-            const ngItemsMerged = separated.labels.map((l, i) => ({ label: l, pcs: separated.total[i] || 0 }));
+            const ngItemsMerged = separatedBySymptom.labels.map((l, i) => ({ label: l, pcs: separatedBySymptom.total[i] || 0 }));
             const sortedLabels = ngItemsMerged.filter(item => item.pcs > 0).map(item => item.label);
             const sortedData = ngItemsMerged.filter(item => item.pcs > 0).map(item => item.pcs);
             const totalNGPcs = sortedData.reduce((a, b) => a + b, 0);
@@ -1556,8 +1607,8 @@ window.renderTable = function(data) {
                     <span class="text-[10px] text-gray-500 font-normal mt-0.5">📦 ${productAssigned}</span>
                 </div>
             </td>
-            <td class="p-4 border-b font-bold text-gray-800">${d.fg} <br><span class="text-[10px] text-gray-500 font-normal">(${fgKg.toFixed(2)} Kg)</span></td>
-            <td class="p-4 border-b text-red-600 font-bold">${ngPcs} <br><span class="text-[10px] text-gray-500 font-normal">(${ngKg.toFixed(2)} Kg)</span></td>
+            <td class="p-4 border-b font-bold text-gray-800">${d.fg.toLocaleString()} <br><span class="text-[10px] text-gray-500 font-normal">(${window.formatKg ? window.formatKg(fgKg) : fgKg.toFixed(2)} Kg)</span></td>
+            <td class="p-4 border-b text-red-600 font-bold">${ngPcs.toLocaleString()} <br><span class="text-[10px] text-gray-500 font-normal">(${window.formatKg ? window.formatKg(ngKg) : ngKg.toFixed(2)} Kg)</span></td>
             <td class="p-4 border-b">${y}%</td>`;
 
         dynamicColumns.forEach(s => {
@@ -1571,7 +1622,7 @@ window.renderTable = function(data) {
 
             let cellContent = '-';
             if (totalPcs > 0) {
-                cellContent = totalPcs + '<br><span class="text-[10px] text-gray-500 font-normal">(' + totalKg.toFixed(2) + ' Kg)</span>';
+                cellContent = totalPcs.toLocaleString() + '<br><span class="text-[10px] text-gray-500 font-normal">(' + (window.formatKg ? window.formatKg(totalKg) : totalKg.toFixed(2)) + ' Kg)</span>';
                 if (setupPcs > 0) {
                     cellContent += `<br><span class="text-[9px] text-orange-600 font-medium">Setup: ${setupPcs}</span>`;
                 }
@@ -1623,7 +1674,7 @@ window.showMachineDetail = function(machineName) {
     const ngKg = mData.ngTotalKg || 0;
 
     document.getElementById('machine-detail-title').innerText = `📊 รายละเอียดเครื่อง ${machineName}`;
-    document.getElementById('machine-detail-stats').innerHTML = `<div class="bg-blue-50 p-2 rounded">FG รวม: <b class="text-blue-700 text-xl">${mData.fg}</b></div><div class="bg-red-50 p-2 rounded">NG รวม: <b class="text-red-700 text-xl">${ngPcs} ชิ้น</b><br><span class="text-xs text-gray-500">(${ngKg.toFixed(2)} Kg)</span></div>`;
+    document.getElementById('machine-detail-stats').innerHTML = `<div class="bg-blue-50 p-2 rounded">FG รวม: <b class="text-blue-700 text-xl">${mData.fg.toLocaleString()}</b></div><div class="bg-red-50 p-2 rounded">NG รวม: <b class="text-red-700 text-xl">${ngPcs.toLocaleString()} ชิ้น</b><br><span class="text-xs text-gray-500">(${window.formatKg ? window.formatKg(ngKg) : ngKg.toFixed(2)} Kg)</span></div>`;
 
     const rList = document.getElementById('machine-remarks-list'); 
     const rSec = document.getElementById('machine-detail-remarks');
