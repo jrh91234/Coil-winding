@@ -380,9 +380,11 @@ window.addNewItemToList = function() {
              window.renderManageListContent(recorderList); 
          } 
      } else if (currentManageType === 'symptom') { 
-         const stdVal = capitalizeFirst(rawVal);
+         const stdVal = normalizeNgSymptomName(rawVal);
+         if (!stdVal) return;
          if (!ngSymptoms.some(s => s.toLowerCase() === stdVal.toLowerCase())) { 
              ngSymptoms.push(stdVal); 
+             ngSymptoms = normalizeNgSymptomMasterList(ngSymptoms);
              window.renderManageListContent(ngSymptoms); 
          } 
      }
@@ -400,6 +402,7 @@ window.deleteListItem = function(index) {
          window.renderManageListContent(recorderList); 
      } else if (currentManageType === 'symptom') { 
          ngSymptoms.splice(index, 1); 
+         ngSymptoms = normalizeNgSymptomMasterList(ngSymptoms);
          window.renderManageListContent(ngSymptoms); 
      }
      if (!document.getElementById('modal-ng').classList.contains('hidden') && currentRowIdForNg) {
@@ -415,7 +418,9 @@ window.saveListToCloud = async function() {
     btn.classList.add('opacity-50', 'cursor-not-allowed');
     try {
         const actionName = (currentManageType === 'symptom') ? 'SAVE_NG_SYMPTOMS' : 'SAVE_RECORDERS';
-        const dataList = (currentManageType === 'symptom') ? ngSymptoms : recorderList;
+        const dataList = (currentManageType === 'symptom')
+            ? normalizeNgSymptomMasterList(ngSymptoms)
+            : recorderList;
         const payload = { 
             action: actionName, 
             timestamp: new Date().toLocaleString('th-TH'),
