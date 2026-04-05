@@ -1,7 +1,14 @@
 # Coil-winding QC Dashboard
 
 ## Project Structure
-- `js/charts.js` (~2500 lines) — All chart rendering (Pareto, NG Trend, Machine charts, Audit export)
+- `js/charts/` — Chart rendering (split into modules):
+  - `helpers.js` (46 lines) — parseSetupType(), separateSetupData()
+  - `models.js` (399 lines) — FG by model, simulator, model chart, daily output
+  - `ng-trend.js` (329 lines) — NG symptom trend chart
+  - `main.js` (817 lines) — renderCharts: Pareto, NG by Machine, qcTrend, doughnut
+  - `table-machine.js` (533 lines) — renderTable, machine detail/switch
+  - `popups.js` (184 lines) — showDailyNgBreakdown, showTrendDayBreakdown, image viewer
+  - `audit.js` (393 lines) — exportNgRateAudit, downloadAuditCSV, printAuditReport
 - `js/form.js` — NG input form, Setup sub-symptom selection
 - `js/report.js` — Auto report generation
 - `js/globals.js` — Global variables (ngSymptoms, machineMapping)
@@ -21,15 +28,6 @@
 - Frontend `data.machineData[mac].sortData[date]` = above object
 - `data.machineData[mac].daily[date]` = { fg, ngPcs, ngBreakdown: {symptom: count} }
 - `data.dynamicSymptomWeights` = { symptom: fgRate } from sort history
-
-## Charts.js Section Map (use offset/limit, never read whole file)
-- Lines 1-50: parseSetupType(), separateSetupData()
-- Lines 805-950: Pareto chart (view selector + machine filter)
-- Lines 1200-1220: getWppStrict(), getKgFromPcs()
-- Lines 1300-1400: displayTrendData computation
-- Lines 1400-1520: qcTrend chart instance
-- Lines 2100-2260: showDailyNgBreakdown, showTrendDayBreakdown
-- Lines 2270+: exportNgRateAudit
 
 ## Git
 - Always push to branch starting with `claude/` and matching session ID

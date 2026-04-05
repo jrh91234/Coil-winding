@@ -1,23 +1,16 @@
-Edit js/charts.js for chart feature changes.
+Edit chart files in js/charts/ directory.
 
-IMPORTANT: This file is ~2500 lines. NEVER read the whole file.
+Charts are split into modules — edit the correct file directly:
 
-Section map (use offset/limit):
-- Lines 1-50: Helper functions (parseSetupType, separateSetupData)
-- Lines 450-570: NG Symptom Trend chart
-- Lines 780-800: commonOpts, dataLabelsPlugin
-- Lines 805-950: Pareto chart (paretoViewSelector, paretoMachineSelector, separated data)
-- Lines 950-1050: NG by Machine chart
-- Lines 1050-1200: Machine detail modal charts
-- Lines 1200-1220: getWppStrict, getKgFromPcs (strict, no fallback)
-- Lines 1300-1400: displayTrendData computation (per-day loop, pendingByMachine, ngByMachine)
-- Lines 1400-1520: qcTrend Chart.js instance (datasets, tooltip, onClick)
-- Lines 1520-1600: renderTable
-- Lines 2100-2160: showDailyNgBreakdown
-- Lines 2170-2260: showTrendDayBreakdown (NG + pending popup)
-- Lines 2270-2500: exportNgRateAudit (audit export)
+| File | Content |
+|------|---------|
+| `js/charts/helpers.js` | parseSetupType(), separateSetupData() |
+| `js/charts/models.js` | FG by model, simulator, model chart, daily output |
+| `js/charts/ng-trend.js` | NG symptom trend chart, toggleNgTrendLabels |
+| `js/charts/main.js` | renderCharts: Pareto, NG by Machine, qcTrend, doughnut |
+| `js/charts/table-machine.js` | renderTable, switchMachineChart, showMachineDetail |
+| `js/charts/popups.js` | showDailyNgBreakdown, showTrendDayBreakdown, viewMaintImage |
+| `js/charts/audit.js` | exportNgRateAudit, downloadAuditCSV, printAuditReport |
 
-Always:
-1. Use Grep to find exact line first
-2. Read only 30-50 lines around the target
-3. Use Edit (not Write) for changes
+All files use `window.functionName` — no imports needed.
+Shared data: `currentDashboardData`, `charts` object, `machineMapping`.
