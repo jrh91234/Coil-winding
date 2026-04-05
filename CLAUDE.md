@@ -25,5 +25,8 @@ Read `.ai/PROJECT_CONTEXT.md` for full project structure, rules, and data flow.
 | Model charts, simulator | `js/charts/models.js` |
 | Shared helpers | `js/charts/helpers.js` |
 | NG input form | `js/form.js` |
-| Auto report | `js/report.js` |
+| Auto report content | `js/report/auto-report.js` |
+| Print/CSV export | `js/report/export.js` |
+| Widget manager | `js/report/widgets.js` |
+| Dashboard loader | `js/report/dashboard.js` |
 | Backend data | `scr/backend.gs` |

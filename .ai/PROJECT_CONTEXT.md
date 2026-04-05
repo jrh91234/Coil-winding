@@ -9,8 +9,12 @@
   - `table-machine.js` (533 lines) — renderTable, machine detail/switch
   - `popups.js` (184 lines) — showDailyNgBreakdown, showTrendDayBreakdown, image viewer
   - `audit.js` (393 lines) — exportNgRateAudit, downloadAuditCSV, printAuditReport
+- `js/report/` — Report & dashboard (split into modules):
+  - `widgets.js` (57 lines) — Widget manager (open/save/apply visibility)
+  - `auto-report.js` (1158 lines) — renderAutoReportContent (full report generation)
+  - `export.js` (131 lines) — printAutoReport, exportCSV
+  - `dashboard.js` (171 lines) — loadDashboard
 - `js/form.js` (907 lines) — NG input form, Setup sub-symptom selection
-- `js/report.js` (1517 lines) — Auto report generation
 - `js/globals.js` (426 lines) — Global variables (ngSymptoms, machineMapping)
 - `js/auth.js` (262 lines) — Authentication
 - `js/packing.js` (366 lines) — Packing module
