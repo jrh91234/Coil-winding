@@ -25,6 +25,15 @@ function capitalizeFirst(str) {
   return strTrimmed;
 }
 
+function normalizeNgSymptomName(str) {
+  const text = String(str || "").trim();
+  if (!text) return "";
+  const setupMatch = text.match(/^setup\s*-\s*(.+)$/i);
+  if (setupMatch) return capitalizeFirst(setupMatch[1]);
+  if (text.toLowerCase() === "setup") return "Setup";
+  return capitalizeFirst(text);
+}
+
 // ==================================================
 // 🌟 ฟังก์ชันสำหรับเซฟรูปภาพลง Google Drive
 // ==================================================
@@ -1500,7 +1509,12 @@ function getUniqueOptionsFromHistory() {
           }
       } 
       else if (key === "MASTER_NG_SYMPTOMS" && val !== "") {
-         try { JSON.parse(val).forEach(item => ngTypes.add(capitalizeFirst(item))); } catch(e) {}
+         try {
+           JSON.parse(val).forEach(item => {
+             const symptom = normalizeNgSymptomName(item);
+             if (symptom) ngTypes.add(symptom);
+           });
+         } catch(e) {}
       } 
       else if (key === "MASTER_RECORDERS" && val !== "") {
          try { JSON.parse(val).forEach(item => recorders.add(item)); } catch(e) {}
@@ -1522,11 +1536,17 @@ function getUniqueOptionsFromHistory() {
           for (let i = start; i < data.length; i++) {
              if(idxRec !== -1 && data[i][idxRec]) recorders.add(String(data[i][idxRec]).trim());
              if(idxJson !== -1 && data[i][idxJson]) {
-                try { JSON.parse(data[i][idxJson]).forEach(d => { if(d.type) ngTypes.add(capitalizeFirst(d.type)); }); } catch(e){}
+                try {
+                  JSON.parse(data[i][idxJson]).forEach(d => {
+                    const symptom = normalizeNgSymptomName(d.type);
+                    if (symptom) ngTypes.add(symptom);
+                  });
+                } catch(e){}
              }
           }
       }
   }
+  ngTypes.add("Setup");
   
   return { 
       recorders: Array.from(recorders).sort(), 
