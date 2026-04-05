@@ -44,3 +44,21 @@ window.separateSetupData = function(breakdownMap) {
     };
 };
 
+// ==========================================
+// Helper: WPP (Weight Per Piece) — shared, strict (no fallback)
+// ==========================================
+const WPP_TABLE = { "10A": 0.00228, "16A": 0.00279, "20A": 0.00357, "25/32A": 0.005335 };
+
+window.getWppStrict = function(prod) {
+    if (!prod) return null;
+    for (const k in WPP_TABLE) { if (prod.includes(k)) return WPP_TABLE[k]; }
+    return null;
+};
+
+window.getKgFromPcs = function(prod, pcs) {
+    if (!pcs || pcs <= 0) return 0;
+    const w = window.getWppStrict(prod);
+    if (w === null) return 0;
+    return pcs * w;
+};
+

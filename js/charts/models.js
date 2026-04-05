@@ -8,16 +8,7 @@ window.renderFgByModel = function(data) {
         "51207080HC-JR (25/32A)"
     ];
 
-    // ฟังก์ชันคำนวณน้ำหนัก (Kg) จากจำนวนชิ้นตามแต่ละรุ่น
-    const getKgFromPcs = (prod, pcs) => {
-        if (!pcs || pcs <= 0) return 0;
-        let w = 0.003; // ค่าเริ่มต้น
-        if(prod.includes("10A")) w = 0.00228;
-        else if(prod.includes("16A")) w = 0.00279;
-        else if(prod.includes("20A")) w = 0.00357;
-        else if(prod.includes("25/32A")) w = 0.005335;
-        return pcs * w;
-    };
+    // uses shared getKgFromPcs from helpers.js (strict, no fallback)
 
     let html = '<ul class="divide-y divide-gray-100">';
     models.forEach(m => {
@@ -126,15 +117,7 @@ window.renderModelChart = function() {
     if(!ctxYM) return;
     if(charts.yieldModel) charts.yieldModel.destroy();
 
-    const getKgFromPcs = (prod, pcs) => {
-        if (!pcs || pcs <= 0) return 0;
-        let w = 0.003;
-        if(prod.includes("10A")) w = 0.00228;
-        else if(prod.includes("16A")) w = 0.00279;
-        else if(prod.includes("20A")) w = 0.00357;
-        else if(prod.includes("25/32A")) w = 0.005335;
-        return pcs * w;
-    };
+    // uses shared getKgFromPcs from helpers.js (strict, no fallback)
 
     let datasets = [];
     let scales = { y: { stacked: false } };

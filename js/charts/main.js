@@ -507,19 +507,7 @@ const ctxQC = document.getElementById('qcTrendChart');
 
             const trendData = data.dailyTrend || [];
             
-            const getWppStrict = (prod) => {
-                if(prod && prod.includes("10A")) return 0.00228;
-                if(prod && prod.includes("16A")) return 0.00279;
-                if(prod && prod.includes("20A")) return 0.00357;
-                if(prod && prod.includes("25/32A")) return 0.005335;
-                return null; // ไม่ใช้ fallback — ข้ามเครื่องที่ไม่ได้ Assign
-            };
-            const getKgFromPcs = (prod, pcs) => {
-                if (!pcs || pcs <= 0) return 0;
-                const w = getWppStrict(prod);
-                if (w === null) return 0; // ไม่แปลง Kg ถ้าไม่รู้รุ่น
-                return pcs * w;
-            };
+            // uses shared getWppStrict / getKgFromPcs from helpers.js
 
             let displayTrendData = trendData.map(originalDay => {
                 const dateStr = originalDay.date;
