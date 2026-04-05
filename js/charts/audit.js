@@ -17,18 +17,7 @@ window.exportNgRateAudit = function() {
     const shiftTypeFilter = document.getElementById('shiftTypeFilter')?.value || 'All';
     const now = new Date().toLocaleString('th-TH');
 
-    const wppTable = { "10A": 0.00228, "16A": 0.00279, "20A": 0.00357, "25/32A": 0.005335 };
-    const getWppStrict = (prod) => {
-        if (!prod) return null;
-        for (const k in wppTable) { if (prod.includes(k)) return wppTable[k]; }
-        return null; // ไม่ใช้ fallback
-    };
-    const getKgFromPcs = (prod, pcs) => {
-        if (!pcs || pcs <= 0) return 0;
-        const w = getWppStrict(prod);
-        if (w === null) return 0;
-        return pcs * w;
-    };
+    // uses shared getWppStrict / getKgFromPcs from helpers.js
     const f = (v, d) => v !== null && v !== undefined ? parseFloat(v).toFixed(d === undefined ? 4 : d) : '-';
 
     const trendData = data.dailyTrend || [];

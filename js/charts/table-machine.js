@@ -27,16 +27,7 @@ window.renderTable = function(data) {
     h.innerHTML = '<th>Machine</th><th>FG (ชิ้น/Kg)</th><th>NG (ชิ้น/Kg)</th><th>% Yield</th>' + dynamicColumns.map(s=>`<th>${s}</th>`).join('');
     b.innerHTML = '';
 
-    // 2. เพิ่มฟังก์ชันคำนวณ Kg สำหรับแปลงยอด FG 
-    const getKgFromPcs = (prod, pcs) => {
-        if (!pcs || pcs <= 0) return 0;
-        let w = 0.003;
-        if(prod && prod.includes("10A")) w = 0.00228;
-        else if(prod && prod.includes("16A")) w = 0.00279;
-        else if(prod && prod.includes("20A")) w = 0.00357;
-        else if(prod && prod.includes("25/32A")) w = 0.005335;
-        return pcs * w;
-    };
+    // uses shared getKgFromPcs from helpers.js (strict, no fallback)
 
     for(let i=1; i<=16; i++) {
         const m = `CWM-${String(i).padStart(2,'0')}`;
