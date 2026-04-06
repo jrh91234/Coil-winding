@@ -627,7 +627,9 @@ const ctxQC = document.getElementById('qcTrendChart');
                     pendingKg: mPendingKg, projectedNgKg: projectedNgKg,
                     ngRate: ngRate, worstNgRate: worstNgRate, bestNgRate: bestNgRate, forecastNgRate: forecastNgRate,
                     pendingByMachine: pendingByMachine,
-                    ngByMachine: ngByMachine
+                    ngByMachine: ngByMachine,
+                    coilChanges: originalDay.coilChanges || 0,
+                    coilChangesByMachine: originalDay.coilChangesByMachine || {}
                 };
             });
 
@@ -683,6 +685,23 @@ const ctxQC = document.getElementById('qcTrendChart');
                 }
             }
 
+            // 🌟 2.5 เพิ่ม Bar เปลี่ยนม้วน (Coil Changes) บน y2 🌟
+            const hasCoilChanges = displayTrendData.some(d => d.coilChanges > 0);
+            if (hasCoilChanges) {
+                datasets.unshift({
+                    label: '🔄 เปลี่ยนม้วน (ม้วน)',
+                    type: 'bar',
+                    data: displayTrendData.map(d => d.coilChanges),
+                    backgroundColor: 'rgba(59, 130, 246, 0.18)',
+                    borderColor: 'rgba(59, 130, 246, 0.5)',
+                    borderWidth: 1,
+                    yAxisID: 'y2',
+                    order: 10, // draw behind lines
+                    barPercentage: 0.6,
+                    datalabels: { display: false }
+                });
+            }
+
             // 🌟 3. สร้างกราฟ Chart.js 🌟
             charts.qcTrend = new Chart(ctxQC, {
                 type: 'line',
@@ -700,6 +719,14 @@ const ctxQC = document.getElementById('qcTrendChart');
                             min: 0.1,
                             max: 100,
                             ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 }
+                        },
+                        y2: {
+                            position: 'right',
+                            display: hasCoilChanges,
+                            title: { display: true, text: 'เปลี่ยนม้วน (ม้วน)', font: { size: 11 } },
+                            grid: { drawOnChartArea: false },
+                            beginAtZero: true,
+                            ticks: { stepSize: 1, precision: 0 }
                         }
                     },
                     layout: { padding: { top: 20 } },
@@ -720,6 +747,12 @@ const ctxQC = document.getElementById('qcTrendChart');
                                     if (!d) return '';
                                     let lines = [];
                                     if (d.pendingSortQty > 0) lines.push(`รองาน Sort: ${d.pendingSortQty.toLocaleString()} ชิ้น`);
+                                    if (d.coilChanges > 0) {
+                                        lines.push(`🔄 เปลี่ยนม้วน: ${d.coilChanges} ม้วน`);
+                                        const byMac = d.coilChangesByMachine || {};
+                                        const sorted = Object.entries(byMac).sort((a,b) => b[1] - a[1]);
+                                        sorted.forEach(([mac, cnt]) => { lines.push(`   ${mac}: ${cnt} ม้วน`); });
+                                    }
                                     lines.push('(คลิกดูรายละเอียด)');
                                     return lines.join('\n');
                                 }

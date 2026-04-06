@@ -1967,6 +1967,53 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
   });
   result.dynamicSymptomWeights = dynamicSymptomWeights;
 
+  // 🌟 ดึงข้อมูลเปลี่ยนม้วน (Coil Changes) จาก RawMaterial — นับจำนวนครั้งต่อวัน+แยกเครื่อง 🌟
+  const coilChangesByDate = {};       // date → total count
+  const coilChangesByDateMachine = {}; // date → { machine: count }
+  try {
+    const rmSheet = ss.getSheetByName("RawMaterial");
+    if (rmSheet && rmSheet.getLastRow() > 1) {
+      const rmData = rmSheet.getDataRange().getValues();
+      // Column A = Date Time, F = Machine
+      for (let i = 1; i < rmData.length; i++) {
+        const rmDateRaw = rmData[i][0]; // Column A: Date Time
+        const rmMachine = String(rmData[i][5] || "").trim(); // Column F: Machine
+        if (!rmDateRaw) continue;
+        let rmDateStr = "";
+        if (rmDateRaw instanceof Date && !isNaN(rmDateRaw.getTime())) {
+          // ตัดวัน 08:00 — ก่อน 08:00 นับเป็นวันก่อนหน้า
+          let rmShiftDate = new Date(rmDateRaw.getTime());
+          let rmHour = parseInt(Utilities.formatDate(rmShiftDate, "GMT+7", "HH")) || 0;
+          if (rmHour < 8) rmShiftDate.setDate(rmShiftDate.getDate() - 1);
+          rmDateStr = Utilities.formatDate(rmShiftDate, "GMT+7", "yyyy-MM-dd");
+        } else {
+          const rmStr = String(rmDateRaw).trim();
+          const rmParts = rmStr.split(" ");
+          rmDateStr = rmParts[0].substring(0, 10);
+          if (rmParts[1]) {
+            const rmH = parseInt(rmParts[1].split(":")[0]) || 0;
+            if (rmH < 8) {
+              const tmpD = new Date(rmDateStr + "T00:00:00");
+              tmpD.setDate(tmpD.getDate() - 1);
+              rmDateStr = tmpD.getFullYear() + "-" + String(tmpD.getMonth() + 1).padStart(2, '0') + "-" + String(tmpD.getDate()).padStart(2, '0');
+            }
+          }
+        }
+        if (rmDateStr < startDate || rmDateStr > endDate) continue;
+        // รวมยอดทั้งวัน
+        if (!coilChangesByDate[rmDateStr]) coilChangesByDate[rmDateStr] = 0;
+        coilChangesByDate[rmDateStr]++;
+        // แยกตามเครื่อง
+        if (rmMachine) {
+          if (!coilChangesByDateMachine[rmDateStr]) coilChangesByDateMachine[rmDateStr] = {};
+          coilChangesByDateMachine[rmDateStr][rmMachine] = (coilChangesByDateMachine[rmDateStr][rmMachine] || 0) + 1;
+        }
+      }
+    }
+  } catch (rmErr) {
+    console.error("Error reading RawMaterial: " + rmErr.toString());
+  }
+
   const globalSortTotal = globalSortFg + globalSortNg;
   const globalSortNgRatio = globalSortTotal > 0 ? (globalSortNg / globalSortTotal) : 0.5;
 
@@ -2016,7 +2063,9 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
       worstNgRate: worstNgRate,
       bestNgRate: bestNgRate,
       forecastNgRate: forecastNgRate,
-      sortYield: sortResult ? { fg: sortResult.fgPcs, ng: sortResult.ngPcs } : null
+      sortYield: sortResult ? { fg: sortResult.fgPcs, ng: sortResult.ngPcs } : null,
+      coilChanges: coilChangesByDate[date] || 0,
+      coilChangesByMachine: coilChangesByDateMachine[date] || {}
     };
   });
 

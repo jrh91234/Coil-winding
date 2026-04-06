@@ -66,7 +66,25 @@ window.showTrendDayBreakdown = function(d) {
         <div><span class="text-gray-500">NG:</span> <b class="text-red-700">${(d.ngPcs || 0).toLocaleString()} ชิ้น</b></div>
         <div><span class="text-gray-500">NG Rate:</span> <b class="text-orange-700">${d.ngRate.toFixed(2)}%</b></div>
         <div><span class="text-gray-500">รอ Sort:</span> <b class="text-amber-700">${(d.pendingSortQty || 0).toLocaleString()} ชิ้น</b></div>
+        <div><span class="text-gray-500">🔄 เปลี่ยนม้วน:</span> <b class="text-blue-700">${(d.coilChanges || 0)} ม้วน</b></div>
     </div>`;
+
+    // === ส่วนที่ 1.5: เปลี่ยนม้วน (Coil Changes) แยกตามเครื่อง ===
+    if (d.coilChanges > 0) {
+        html += `<h4 class="font-bold text-sm text-blue-800 mb-1 mt-3 border-b pb-1">🔄 เปลี่ยนม้วน: ${d.coilChanges} ม้วน</h4>`;
+        const byMac = d.coilChangesByMachine || {};
+        const sortedMacs = Object.entries(byMac).sort((a, b) => b[1] - a[1]);
+        if (sortedMacs.length > 0) {
+            html += '<div class="grid grid-cols-2 gap-1 mb-2">';
+            sortedMacs.forEach(([mac, cnt]) => {
+                html += `<div class="flex justify-between text-xs bg-blue-50 rounded px-2 py-1">
+                    <span class="font-medium text-gray-700">${mac}</span>
+                    <span class="font-bold text-blue-700">${cnt} ม้วน</span>
+                </div>`;
+            });
+            html += '</div>';
+        }
+    }
 
     // === ส่วนที่ 2: NG แยกตามเครื่อง ===
     if (d.ngByMachine && d.ngByMachine.length > 0) {
