@@ -62,6 +62,16 @@ window.renderCharts = function(data) {
          }
          const selectedParetoMac = (paretoMacSel && paretoView === 'symptom') ? paretoMacSel.value : 'all';
 
+         // คำนวณจำนวนเปลี่ยนม้วนรวม (จาก dailyTrend) สำหรับ Pareto tooltip
+         let paretoTotalCoils = 0;
+         (data.dailyTrend || []).forEach(day => {
+             if (selectedParetoMac !== 'all') {
+                 paretoTotalCoils += (day.coilChangesByMachine && day.coilChangesByMachine[selectedParetoMac]) || 0;
+             } else {
+                 paretoTotalCoils += day.coilChanges || 0;
+             }
+         });
+
          let separated = { labels: [], production: [], setup: [], total: [] };
          let hasSetup = false;
          let paretoBarLabel = 'NG (ชิ้น)';
@@ -162,13 +172,25 @@ window.renderCharts = function(data) {
                          tooltip: {
                              callbacks: {
                                  afterBody: function(context) {
-                                     if (!hasSetup) return '';
                                      const idx = context[0].dataIndex;
-                                     const prod = separated.production[idx] || 0;
-                                     const setup = separated.setup[idx] || 0;
-                                     const total = prod + setup;
-                                     if (total <= 0) return '';
-                                     return `รวม: ${total.toLocaleString()} ชิ้น (Production: ${prod.toLocaleString()}, Setup: ${setup.toLocaleString()})`;
+                                     const lines = [];
+                                     if (hasSetup) {
+                                         const prod = separated.production[idx] || 0;
+                                         const setup = separated.setup[idx] || 0;
+                                         const total = prod + setup;
+                                         if (total > 0) lines.push(`รวม: ${total.toLocaleString()} ชิ้น (Production: ${prod.toLocaleString()}, Setup: ${setup.toLocaleString()})`);
+                                     }
+                                     // แสดงข้อมูลเปลี่ยนม้วนเมื่อ hover อาการเปลี่ยนม้วน
+                                     if (paretoView === 'symptom' && paretoTotalCoils > 0) {
+                                         const label = (separated.labels[idx] || '').toLowerCase();
+                                         if (label.includes('เปลี่ยนม้วน') || label.includes('roll change')) {
+                                             const ngPcs = separated.total[idx] || 0;
+                                             const avg = (ngPcs / paretoTotalCoils).toFixed(1);
+                                             lines.push(`🔄 เปลี่ยนม้วน: ${paretoTotalCoils} ม้วน`);
+                                             lines.push(`📊 เฉลี่ย: ${avg} ชิ้น/ม้วน`);
+                                         }
+                                     }
+                                     return lines.join('\n');
                                  }
                              }
                          }
