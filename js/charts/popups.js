@@ -69,32 +69,51 @@ window.showTrendDayBreakdown = function(d) {
         <div><span class="text-gray-500">🔄 เปลี่ยนม้วน:</span> <b class="text-blue-700">${(d.coilChanges || 0)} ม้วน</b></div>
     </div>`;
 
-    // === ส่วนที่ 1.5: เปลี่ยนม้วน (Coil Changes) แยกตามเครื่อง ===
-    if (d.coilChanges > 0) {
-        html += `<h4 class="font-bold text-sm text-blue-800 mb-1 mt-3 border-b pb-1">🔄 เปลี่ยนม้วน: ${d.coilChanges} ม้วน</h4>`;
-        const byMac = d.coilChangesByMachine || {};
-        const sortedMacs = Object.entries(byMac).sort((a, b) => b[1] - a[1]);
-        if (sortedMacs.length > 0) {
-            html += '<div class="grid grid-cols-2 gap-1 mb-2">';
-            sortedMacs.forEach(([mac, cnt]) => {
-                html += `<div class="flex justify-between text-xs bg-blue-50 rounded px-2 py-1">
-                    <span class="font-medium text-gray-700">${mac}</span>
-                    <span class="font-bold text-blue-700">${cnt} ม้วน</span>
-                </div>`;
-            });
-            html += '</div>';
-        }
-    }
+    // === ส่วนที่ 2: NG แยกตามเครื่อง + ข้อมูลเปลี่ยนม้วน ===
+    const coilByMac = d.coilChangesByMachine || {};
+    const totalCoil = d.coilChanges || 0;
 
-    // === ส่วนที่ 2: NG แยกตามเครื่อง ===
     if (d.ngByMachine && d.ngByMachine.length > 0) {
-        html += `<h4 class="font-bold text-sm text-red-800 mb-1 border-b pb-1">🗑️ งาน NG แยกตามเครื่อง (${(d.ngPcs || 0).toLocaleString()} ชิ้น)</h4>`;
+        // คำนวณ NG จากอาการเปลี่ยนม้วนทั้งหมด
+        let totalRollChangeNg = 0;
+        d.ngByMachine.forEach(item => {
+            Object.entries(item.symptoms || {}).forEach(([symp, pcs]) => {
+                if (symp.toLowerCase().includes('เปลี่ยนม้วน') || symp.toLowerCase().includes('roll change')) {
+                    totalRollChangeNg += pcs;
+                }
+            });
+        });
+        const avgNgPerCoil = totalCoil > 0 ? (totalRollChangeNg / totalCoil).toFixed(1) : '-';
+
+        let headerExtra = '';
+        if (totalCoil > 0) {
+            headerExtra = `<div class="text-xs font-normal text-blue-700 mt-0.5">🔄 เปลี่ยนม้วนทั้งหมด: <b>${totalCoil}</b> ม้วน | NG เปลี่ยนม้วน: <b>${totalRollChangeNg.toLocaleString()}</b> ชิ้น | เฉลี่ย: <b>${avgNgPerCoil}</b> ชิ้น/ม้วน</div>`;
+        }
+        html += `<h4 class="font-bold text-sm text-red-800 mb-1 border-b pb-1">🗑️ งาน NG แยกตามเครื่อง (${(d.ngPcs || 0).toLocaleString()} ชิ้น)${headerExtra}</h4>`;
+
         const sortedNg = [...d.ngByMachine].sort((a, b) => b.ngPcs - a.ngPcs);
         sortedNg.forEach(item => {
             const sympEntries = Object.entries(item.symptoms || {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+            const macCoils = coilByMac[item.machine] || 0;
+
+            // คำนวณ NG จากเปลี่ยนม้วนของเครื่องนี้
+            let macRollNg = 0;
+            sympEntries.forEach(([symp, pcs]) => {
+                if (symp.toLowerCase().includes('เปลี่ยนม้วน') || symp.toLowerCase().includes('roll change')) {
+                    macRollNg += pcs;
+                }
+            });
+            const macAvg = macCoils > 0 ? (macRollNg / macCoils).toFixed(1) : null;
+
+            // แสดงข้อมูลเปลี่ยนม้วนคู่กับยอด NG
+            let coilBadge = '';
+            if (macCoils > 0) {
+                coilBadge = `<span class="text-xs text-blue-600 font-normal ml-1">🔄 ${macCoils} ม้วน${macAvg ? ` (${macAvg} ชิ้น/ม้วน)` : ''}</span>`;
+            }
+
             html += `<div class="border rounded-lg mb-2 overflow-hidden">
                 <div class="bg-red-50 px-3 py-2 flex justify-between items-center">
-                    <span class="font-bold text-sm text-gray-800">${item.machine}</span>
+                    <span class="font-bold text-sm text-gray-800">${item.machine}${coilBadge}</span>
                     <span class="text-sm font-bold text-red-600">${item.ngPcs.toLocaleString()} ชิ้น</span>
                 </div>`;
             if (sympEntries.length > 0) {
