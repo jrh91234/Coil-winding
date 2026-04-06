@@ -91,15 +91,14 @@ window.showTrendDayBreakdown = function(d) {
                 sympEntries.forEach(([symp, pcs]) => {
                     const pct = item.ngPcs > 0 ? ((pcs / item.ngPcs) * 100).toFixed(0) : 0;
                     const isRollChange = symp.toLowerCase().includes('เปลี่ยนม้วน') || symp.toLowerCase().includes('roll change');
-                    let coilInfo = '';
+                    html += `<div class="flex justify-between text-xs text-gray-600">
+                        <span>${symp}</span>
+                        <span class="font-mono whitespace-nowrap ml-2">${pcs.toLocaleString()} ชิ้น <span class="text-gray-400">(${pct}%)</span></span>
+                    </div>`;
                     if (isRollChange && macCoils > 0) {
                         const avg = (pcs / macCoils).toFixed(1);
-                        coilInfo = ` <span class="text-blue-600">🔄 ${macCoils} ม้วน (${avg} ชิ้น/ม้วน)</span>`;
+                        html += `<div class="text-xs text-blue-600 pl-3 -mt-0.5 mb-0.5">🔄 เปลี่ยน ${macCoils} ม้วน → เฉลี่ย ${avg} ชิ้น/ม้วน</div>`;
                     }
-                    html += `<div class="flex justify-between text-xs text-gray-600">
-                        <span>${symp}${coilInfo}</span>
-                        <span class="font-mono">${pcs.toLocaleString()} ชิ้น <span class="text-gray-400">(${pct}%)</span></span>
-                    </div>`;
                 });
                 html += '</div>';
             }
