@@ -931,17 +931,26 @@ function doPost(e) {
                           }
                       }
 
-                      // === แปลงวันที่จาก Sorting_Data ===
+                      // === แปลงวันที่จาก Sorting_Data (ตัดวัน 08:00) ===
                       let dateStr = "";
                       let hourNum = 0;
                       if (sortDateRaw instanceof Date && !isNaN(sortDateRaw.getTime())) {
-                          dateStr = Utilities.formatDate(sortDateRaw, "GMT+7", "yyyy-MM-dd");
                           hourNum = parseInt(Utilities.formatDate(sortDateRaw, "GMT+7", "HH")) || 0;
+                          // ตัดวัน 08:00 — ก่อน 08:00 นับเป็นวันก่อนหน้า
+                          let shiftD = new Date(sortDateRaw.getTime());
+                          if (hourNum < 8) shiftD.setDate(shiftD.getDate() - 1);
+                          dateStr = Utilities.formatDate(shiftD, "GMT+7", "yyyy-MM-dd");
                       } else if (sortDateRaw) {
                           const dateParts = String(sortDateRaw).split(" ");
                           dateStr = dateParts[0] || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
                           const rawTime = dateParts[1] || "";
                           hourNum = parseInt(rawTime.split(":")[0]) || 0;
+                          // ตัดวัน 08:00
+                          if (hourNum < 8 && rawTime) {
+                              const tmpD = new Date(dateStr + "T00:00:00");
+                              tmpD.setDate(tmpD.getDate() - 1);
+                              dateStr = tmpD.getFullYear() + "-" + String(tmpD.getMonth() + 1).padStart(2, '0') + "-" + String(tmpD.getDate()).padStart(2, '0');
+                          }
                       } else {
                           dateStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
                       }
@@ -1838,11 +1847,28 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
         if (!sDateRaw) continue;
         let sDateStr = "";
         if (sDateRaw instanceof Date && !isNaN(sDateRaw.getTime())) {
-          let yyyy = sDateRaw.getFullYear();
+          // ตัดวัน 08:00 — ก่อน 08:00 นับเป็นวันก่อนหน้า
+          let shiftDate = new Date(sDateRaw.getTime());
+          let hourCheck = parseInt(Utilities.formatDate(shiftDate, "GMT+7", "HH")) || 0;
+          if (hourCheck < 8) {
+            shiftDate.setDate(shiftDate.getDate() - 1);
+          }
+          let yyyy = parseInt(Utilities.formatDate(shiftDate, "GMT+7", "yyyy"));
           if (yyyy > 2500) yyyy -= 543;
-          sDateStr = yyyy + "-" + String(sDateRaw.getMonth() + 1).padStart(2, '0') + "-" + String(sDateRaw.getDate()).padStart(2, '0');
+          sDateStr = yyyy + "-" + Utilities.formatDate(shiftDate, "GMT+7", "MM") + "-" + Utilities.formatDate(shiftDate, "GMT+7", "dd");
         } else {
-          sDateStr = String(sDateRaw).trim().substring(0, 10);
+          // string format: "2026-04-06 02:30" or "2026-04-06"
+          const sDateParts = String(sDateRaw).trim().split(" ");
+          sDateStr = sDateParts[0].substring(0, 10);
+          // ถ้ามี time component → ตัดวัน 08:00
+          if (sDateParts[1]) {
+            const sHour = parseInt(sDateParts[1].split(":")[0]) || 0;
+            if (sHour < 8) {
+              const tmpDate = new Date(sDateStr + "T00:00:00");
+              tmpDate.setDate(tmpDate.getDate() - 1);
+              sDateStr = tmpDate.getFullYear() + "-" + String(tmpDate.getMonth() + 1).padStart(2, '0') + "-" + String(tmpDate.getDate()).padStart(2, '0');
+            }
+          }
         }
 
         if (sDateStr < startDate || sDateStr > endDate) continue;
