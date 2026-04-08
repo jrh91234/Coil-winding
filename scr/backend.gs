@@ -701,6 +701,180 @@ function doPost(e) {
   }
 
   // --- ส่วนที่ 2.5: ระบบงานเคลม RTV ---
+
+  // --- ระบบ Tracking อะไหล่เครื่องจักร (Parts Tracking) ---
+  if (action === "GET_PARTS_MASTER") {
+    let sheet = ss.getSheetByName("Parts_Master");
+    if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "success", data: []})).setMimeType(ContentService.MimeType.JSON);
+    const rows = sheet.getDataRange().getValues();
+    if (rows.length <= 1) return ContentService.createTextOutput(JSON.stringify({status: "success", data: []})).setMimeType(ContentService.MimeType.JSON);
+    const headers = rows[0].map(h => String(h).trim());
+    const data2 = [];
+    for (let i = 1; i < rows.length; i++) {
+      const obj = {};
+      headers.forEach((h, idx) => { obj[h] = rows[i][idx] !== undefined ? rows[i][idx] : ""; });
+      if (obj.Part_ID) data2.push(obj);
+    }
+    return ContentService.createTextOutput(JSON.stringify({status: "success", data: data2})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === "SAVE_PARTS_MASTER") {
+    let sheet = ss.getSheetByName("Parts_Master");
+    if (!sheet) {
+      sheet = ss.insertSheet("Parts_Master");
+      sheet.appendRow(["Part_ID", "Part_Name", "Category", "Life_Shots", "Unit_Cost", "Supplier", "Remark"]);
+    }
+    const d = data.part;
+    const rows = sheet.getDataRange().getValues();
+    const headers = rows[0].map(h => String(h).trim());
+    const colIdx = (name) => headers.indexOf(name);
+
+    if (data.mode === "edit" && d.Part_ID) {
+      // แก้ไขอะไหล่เดิม
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][colIdx("Part_ID")]).trim() === d.Part_ID) {
+          sheet.getRange(i + 1, colIdx("Part_Name") + 1).setValue(d.Part_Name || "");
+          sheet.getRange(i + 1, colIdx("Category") + 1).setValue(d.Category || "");
+          sheet.getRange(i + 1, colIdx("Life_Shots") + 1).setValue(parseInt(d.Life_Shots) || 0);
+          sheet.getRange(i + 1, colIdx("Unit_Cost") + 1).setValue(parseFloat(d.Unit_Cost) || 0);
+          sheet.getRange(i + 1, colIdx("Supplier") + 1).setValue(d.Supplier || "");
+          sheet.getRange(i + 1, colIdx("Remark") + 1).setValue(d.Remark || "");
+          SpreadsheetApp.flush();
+          return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Updated"})).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Part_ID not found"})).setMimeType(ContentService.MimeType.JSON);
+    } else {
+      // เพิ่มอะไหล่ใหม่ — สร้าง Part_ID อัตโนมัติ
+      const prefix = (d.Category || "PART").substring(0, 3).toUpperCase();
+      const newId = prefix + "-" + String(rows.length).padStart(3, "0");
+      sheet.appendRow([newId, d.Part_Name || "", d.Category || "", parseInt(d.Life_Shots) || 0, parseFloat(d.Unit_Cost) || 0, d.Supplier || "", d.Remark || ""]);
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Added", partId: newId})).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  if (action === "DELETE_PARTS_MASTER") {
+    let sheet = ss.getSheetByName("Parts_Master");
+    if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Sheet not found"})).setMimeType(ContentService.MimeType.JSON);
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === data.partId) {
+        sheet.deleteRow(i + 1);
+        SpreadsheetApp.flush();
+        return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Deleted"})).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Part not found"})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === "GET_PARTS_INSTALLATION") {
+    let sheet = ss.getSheetByName("Parts_Installation");
+    if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "success", data: []})).setMimeType(ContentService.MimeType.JSON);
+    const rows = sheet.getDataRange().getValues();
+    if (rows.length <= 1) return ContentService.createTextOutput(JSON.stringify({status: "success", data: []})).setMimeType(ContentService.MimeType.JSON);
+    const headers = rows[0].map(h => String(h).trim());
+    const filterMachine = data.machine || "";
+    const results = [];
+    for (let i = 1; i < rows.length; i++) {
+      const obj = {};
+      headers.forEach((h, idx) => { obj[h] = rows[i][idx] !== undefined ? rows[i][idx] : ""; });
+      if (!obj.Install_ID) continue;
+      if (filterMachine && obj.Machine !== filterMachine) continue;
+      results.push(obj);
+    }
+    return ContentService.createTextOutput(JSON.stringify({status: "success", data: results})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === "SAVE_PARTS_INSTALLATION") {
+    let sheet = ss.getSheetByName("Parts_Installation");
+    if (!sheet) {
+      sheet = ss.insertSheet("Parts_Installation");
+      sheet.appendRow(["Install_ID", "Machine", "Part_ID", "Part_Name", "Install_Date", "Install_Shot", "Life_Shots", "Status", "Maint_Job_ID", "Recorder", "Replaced_Date"]);
+    }
+    const d = data.installation;
+    const now = new Date();
+
+    if (data.mode === "replace" && d.Install_ID) {
+      // เปลี่ยนอะไหล่: ปิดตัวเก่า + สร้างตัวใหม่
+      const rows = sheet.getDataRange().getValues();
+      const headers = rows[0].map(h => String(h).trim());
+      const colIdx = (name) => headers.indexOf(name);
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][colIdx("Install_ID")]).trim() === d.Install_ID) {
+          sheet.getRange(i + 1, colIdx("Status") + 1).setValue("Replaced");
+          sheet.getRange(i + 1, colIdx("Replaced_Date") + 1).setValue(Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd"));
+          break;
+        }
+      }
+      // สร้าง Installation ใหม่
+      const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
+      sheet.appendRow([newId, d.Machine, d.Part_ID, d.Part_Name || "", Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd"), parseInt(d.Current_Shot) || 0, parseInt(d.Life_Shots) || 0, "Active", d.Maint_Job_ID || "", d.Recorder || "", ""]);
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId})).setMimeType(ContentService.MimeType.JSON);
+    } else {
+      // ติดตั้งอะไหล่ใหม่
+      const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
+      sheet.appendRow([newId, d.Machine, d.Part_ID, d.Part_Name || "", Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd"), parseInt(d.Current_Shot) || 0, parseInt(d.Life_Shots) || 0, "Active", d.Maint_Job_ID || "", d.Recorder || "", ""]);
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Installed", installId: newId})).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  if (action === "GET_MACHINE_SHOTS") {
+    // คำนวณ Shot สะสมของเครื่องตั้งแต่วันที่ระบุ (FG + NG pcs)
+    const machine = data.machine;
+    const sinceDate = data.sinceDate || "2020-01-01";
+    let totalShots = 0;
+    const prodSheet = ss.getSheetByName("Production_Data");
+    if (prodSheet && prodSheet.getLastRow() > 1) {
+      const pRows = prodSheet.getDataRange().getValues();
+      const pH = pRows[0].map(h => String(h).trim().toLowerCase());
+      const pDateIdx = pH.indexOf("date");
+      const pMachIdx = pH.indexOf("machine");
+      const pFgIdx = pH.indexOf("fg");
+      const pNgIdx = pH.indexOf("ng_total");
+      const pProdIdx = pH.indexOf("product");
+      if (pDateIdx !== -1 && pMachIdx !== -1 && pFgIdx !== -1) {
+        for (let i = 1; i < pRows.length; i++) {
+          const pMach = String(pRows[i][pMachIdx] || "").trim();
+          if (pMach !== machine) continue;
+          const pDateRaw = pRows[i][pDateIdx];
+          let pDateStr = "";
+          if (pDateRaw instanceof Date && !isNaN(pDateRaw.getTime())) {
+            pDateStr = Utilities.formatDate(pDateRaw, "GMT+7", "yyyy-MM-dd");
+          } else {
+            pDateStr = String(pDateRaw || "").trim().substring(0, 10);
+          }
+          if (pDateStr < sinceDate) continue;
+          const fg = parseInt(pRows[i][pFgIdx]) || 0;
+          const ngKg = parseFloat(pRows[i][pNgIdx]) || 0;
+          const prod = String(pRows[i][pProdIdx] || "");
+          const ngPcs = getPcsFromKg(prod, ngKg);
+          totalShots += (fg + ngPcs);
+        }
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({status: "success", machine: machine, totalShots: totalShots})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === "UPDATE_PARTS_LIFE") {
+    // ปรับอายุการใช้งาน (Life_Shots) ของอะไหล่ที่ติดตั้งอยู่
+    let sheet = ss.getSheetByName("Parts_Installation");
+    if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Sheet not found"})).setMimeType(ContentService.MimeType.JSON);
+    const rows = sheet.getDataRange().getValues();
+    const headers = rows[0].map(h => String(h).trim());
+    const colIdx = (name) => headers.indexOf(name);
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][colIdx("Install_ID")]).trim() === data.installId) {
+        sheet.getRange(i + 1, colIdx("Life_Shots") + 1).setValue(parseInt(data.lifeShots) || 0);
+        SpreadsheetApp.flush();
+        return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Life updated"})).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Install_ID not found"})).setMimeType(ContentService.MimeType.JSON);
+  }
+
   if (action === "SAVE_RTV") {
     let sheet = ss.getSheetByName("RTV_Data");
     if (!sheet) {

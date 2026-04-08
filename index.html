@@ -103,6 +103,7 @@
 
             <!-- เมนู แจ้งซ่อมและเคลม RTV -->
             <button onclick="window.openMaintenanceModal(); window.toggleMenu()" id="tab-maint" class="hidden py-4 px-6 text-left text-orange-600 font-bold border-l-4 border-transparent hover:bg-orange-50 transition-colors text-lg border-t border-gray-100">🛠️ แจ้งซ่อมเครื่องจักร</button>
+            <button onclick="window.openPartsManager(); window.toggleMenu()" id="tab-parts" class="hidden py-4 px-6 text-left text-cyan-600 font-bold border-l-4 border-transparent hover:bg-cyan-50 transition-colors text-lg border-t border-gray-100">⚙️ จัดการอะไหล่เครื่องจักร</button>
             <button onclick="window.switchTab('rtv'); window.toggleMenu()" id="tab-rtv" class="hidden py-4 px-6 text-left text-teal-600 font-bold border-l-4 border-transparent hover:bg-teal-50 transition-colors text-lg border-t border-gray-100">📦 บันทึกงานเคลม (RTV)</button>
 
             <!-- [NEW] เมนู งานรอ Sort (Mobile) -->
@@ -852,7 +853,8 @@
                 
                 <div class="flex border-b mb-4">
                     <button onclick="window.switchMachineDetailTab('chart')" id="tab-md-chart" class="py-2 px-4 border-b-2 border-blue-600 text-blue-600 font-bold focus:outline-none">📊 กราฟการผลิต</button>
-                    <button onclick="window.switchMachineDetailTab('maint')" id="tab-md-maint" class="py-2 px-4 border-b-2 border-transparent text-gray-500 font-bold hover:text-gray-700 focus:outline-none">🛠️ ประวัติซ่อมบำรุง (Downtime)</button>
+                    <button onclick="window.switchMachineDetailTab('maint')" id="tab-md-maint" class="py-2 px-4 border-b-2 border-transparent text-gray-500 font-bold hover:text-gray-700 focus:outline-none">🛠️ ซ่อมบำรุง</button>
+                    <button onclick="window.switchMachineDetailTab('parts')" id="tab-md-parts" class="py-2 px-4 border-b-2 border-transparent text-gray-500 font-bold hover:text-gray-700 focus:outline-none">⚙️ อะไหล่</button>
                 </div>
 
                 <div id="md-section-chart" class="flex flex-col flex-1">
@@ -885,6 +887,10 @@
                         <div class="text-center text-gray-400 py-4 text-sm">ไม่พบประวัติการแจ้งซ่อมในช่วงเวลานี้</div>
                     </div>
                 </div>
+
+                <div id="md-section-parts" class="flex flex-col flex-1 hidden">
+                    <div class="text-center text-gray-400 py-8">⏳ กำลังโหลดข้อมูลอะไหล่...</div>
+                </div>
             </div>
         </div>
     </div>
@@ -896,6 +902,80 @@
         </div>
         <img id="viewer-img" src="" class="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl">
         <p id="viewer-caption" class="text-white mt-4 text-center text-sm font-medium"></p>
+    </div>
+
+    <!-- 🌟 MODAL: จัดการอะไหล่เครื่องจักร (Parts Manager) 🌟 -->
+    <div id="modal-parts-manager" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 print-hide">
+        <div class="bg-white w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-cyan-600 p-4 flex justify-between items-center text-white flex-none">
+                <h3 class="text-lg font-bold flex items-center gap-2">⚙️ จัดการอะไหล่เครื่องจักร</h3>
+                <button onclick="document.getElementById('modal-parts-manager').classList.add('hidden')" class="text-white hover:text-gray-200 text-2xl font-bold">&times;</button>
+            </div>
+
+            <!-- ฟอร์มเพิ่ม/แก้ไขอะไหล่ -->
+            <div class="p-4 border-b bg-gray-50 flex-none">
+                <form id="parts-form" class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <input type="hidden" id="parts-edit-id">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-0.5">ชื่ออะไหล่ *</label>
+                        <input type="text" id="parts-name" required class="w-full p-2 border rounded text-sm" placeholder="เช่น Guide Roller">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-0.5">หมวดหมู่</label>
+                        <select id="parts-category" class="w-full p-2 border rounded text-sm bg-white">
+                            <option value="Winding">Winding</option>
+                            <option value="Tension">Tension</option>
+                            <option value="Cutting">Cutting</option>
+                            <option value="Motor">Motor</option>
+                            <option value="Sensor">Sensor</option>
+                            <option value="Bearing">Bearing</option>
+                            <option value="Belt">Belt</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-0.5">อายุใช้งาน (Shot)</label>
+                        <input type="number" id="parts-life" class="w-full p-2 border rounded text-sm" placeholder="500000" min="0">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-0.5">ราคา/ชิ้น (฿)</label>
+                        <input type="number" id="parts-cost" class="w-full p-2 border rounded text-sm" placeholder="0" min="0" step="0.01">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-0.5">Supplier</label>
+                        <input type="text" id="parts-supplier" class="w-full p-2 border rounded text-sm" placeholder="ผู้จำหน่าย">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-0.5">หมายเหตุ</label>
+                        <input type="text" id="parts-remark" class="w-full p-2 border rounded text-sm" placeholder="รายละเอียดเพิ่มเติม">
+                    </div>
+                    <div class="flex items-end gap-1 col-span-2 md:col-span-2">
+                        <button type="submit" id="btn-save-part" class="flex-1 bg-cyan-600 text-white py-2 rounded font-bold hover:bg-cyan-700 text-sm">+ เพิ่มอะไหล่</button>
+                        <button type="button" id="btn-cancel-part" onclick="window.cancelPartEdit()" class="hidden px-4 py-2 bg-gray-300 text-gray-700 rounded font-bold hover:bg-gray-400 text-sm">ยกเลิก</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ตารางรายการอะไหล่ -->
+            <div class="p-4 overflow-y-auto flex-1">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-100 sticky top-0">
+                        <tr>
+                            <th class="p-2 text-left">ID</th>
+                            <th class="p-2 text-left">ชื่ออะไหล่</th>
+                            <th class="p-2 text-left">หมวด</th>
+                            <th class="p-2 text-right">อายุ (Shot)</th>
+                            <th class="p-2 text-right">ราคา (฿)</th>
+                            <th class="p-2 text-left">Supplier</th>
+                            <th class="p-2 text-center">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="parts-table-body">
+                        <tr><td colspan="7" class="text-center text-gray-400 py-4">กำลังโหลด...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <div id="modal-daily-ng-breakdown" class="fixed inset-0 bg-black bg-opacity-40 z-50 hidden flex items-center justify-center p-4 print-hide">
@@ -1091,7 +1171,8 @@
     <script src="js/charts/table-machine.js?v=4.0"></script>
     <script src="js/charts/popups.js?v=4.0"></script>
     <script src="js/charts/audit.js?v=4.0"></script>
-    <script src="js/packing.js?v=3.56"></script> 
+    <script src="js/packing.js?v=3.56"></script>
+    <script src="js/parts.js?v=4.0"></script> 
 
     <!-- Script ทั่วไปสำหรับ UI ย่อยๆ -->
     <script>
@@ -1147,21 +1228,30 @@
         };
 
         window.switchMachineDetailTab = function(tabName) {
-            const chartTab = document.getElementById('tab-md-chart');
-            const maintTab = document.getElementById('tab-md-maint');
-            const chartSection = document.getElementById('md-section-chart');
-            const maintSection = document.getElementById('md-section-maint');
+            const tabs = { chart: 'tab-md-chart', maint: 'tab-md-maint', parts: 'tab-md-parts' };
+            const sections = { chart: 'md-section-chart', maint: 'md-section-maint', parts: 'md-section-parts' };
+            const colors = { chart: 'blue', maint: 'orange', parts: 'cyan' };
+            const inactive = "py-2 px-4 border-b-2 border-transparent text-gray-500 font-bold hover:text-gray-700 focus:outline-none";
 
-            if(tabName === 'chart') {
-                chartTab.className = "py-2 px-4 border-b-2 border-blue-600 text-blue-600 font-bold focus:outline-none";
-                maintTab.className = "py-2 px-4 border-b-2 border-transparent text-gray-500 font-bold hover:text-gray-700 focus:outline-none";
-                chartSection.classList.remove('hidden');
-                maintSection.classList.add('hidden');
-            } else {
-                maintTab.className = "py-2 px-4 border-b-2 border-orange-600 text-orange-600 font-bold focus:outline-none";
-                chartTab.className = "py-2 px-4 border-b-2 border-transparent text-gray-500 font-bold hover:text-gray-700 focus:outline-none";
-                maintSection.classList.remove('hidden');
-                chartSection.classList.add('hidden');
+            Object.keys(tabs).forEach(key => {
+                const tabEl = document.getElementById(tabs[key]);
+                const secEl = document.getElementById(sections[key]);
+                if (key === tabName) {
+                    if (tabEl) tabEl.className = `py-2 px-4 border-b-2 border-${colors[key]}-600 text-${colors[key]}-600 font-bold focus:outline-none`;
+                    if (secEl) secEl.classList.remove('hidden');
+                } else {
+                    if (tabEl) tabEl.className = inactive;
+                    if (secEl) secEl.classList.add('hidden');
+                }
+            });
+
+            // โหลดอะไหล่เมื่อสลับไป tab parts
+            if (tabName === 'parts') {
+                const macTitle = document.getElementById('machine-detail-title');
+                if (macTitle) {
+                    const mac = macTitle.innerText.match(/CWM-\d+/);
+                    if (mac) window.loadMachineParts(mac[0]);
+                }
             }
         };
 

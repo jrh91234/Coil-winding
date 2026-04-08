@@ -385,7 +385,7 @@ function applyPermissions() {
     const mobileSortIds = ['tab-sort', 'tab-sort-mobile'];
 
     // 1. ซ่อนเมนูทั้งหมดก่อน รวมถึงปุ่ม Sort ทุกแบบที่อาจมี
-    const allMenus = ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-rtv', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
+    const allMenus = ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-parts', 'tab-rtv', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
     
     allMenus.forEach(id => {
         const el = document.getElementById(id);
@@ -400,7 +400,7 @@ function applyPermissions() {
 
     // 2. กำหนดว่า Role ไหนเห็นเมนูไหนบ้าง
     if (role === 'Production') {
-        allowedMenus = ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-rtv', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
+        allowedMenus = ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-parts', 'tab-rtv', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
         defaultTab = 'form';
     } 
     else if (role === 'QC') {
