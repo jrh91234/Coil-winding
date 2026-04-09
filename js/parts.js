@@ -70,7 +70,8 @@ function renderPartsTable() {
             <td class="p-2 text-right font-mono">${cost > 0 ? cost.toLocaleString(undefined, {minimumFractionDigits: 0}) : '-'}</td>
             <td class="p-2 text-xs text-gray-600">${p.Supplier || '-'}</td>
             <td class="p-2">${locationHtml}</td>
-            <td class="p-2 text-center">
+            <td class="p-2 text-center whitespace-nowrap">
+                <button onclick="window.openInstallPartDialog('${p.Part_ID}', '${(p.Part_Name || '').replace(/'/g, "\\'")}', ${life})" class="text-cyan-600 hover:underline text-xs mr-2">🔧 ติดตั้ง</button>
                 <button onclick="window.editPart('${p.Part_ID}')" class="text-blue-600 hover:underline text-xs mr-2">✏️ แก้ไข</button>
                 <button onclick="window.deletePart('${p.Part_ID}', '${(p.Part_Name || '').replace(/'/g, "\\'")}')" class="text-red-600 hover:underline text-xs">🗑️ ลบ</button>
             </td>
@@ -328,5 +329,62 @@ window.promptUpdateLife = async function(installId, currentLife) {
         }
     } catch (err) {
         alert('เกิดข้อผิดพลาด: ' + err.message);
+    }
+};
+
+// === Dialog: ติดตั้งอะไหล่กับเครื่อง (เรียกจากตาราง Parts Master) ===
+window.openInstallPartDialog = function(partId, partName, lifeShots) {
+    const modal = document.getElementById('modal-install-part');
+    if (!modal) return;
+    document.getElementById('install-part-id').value = partId;
+    document.getElementById('install-part-life-val').value = lifeShots || 0;
+    document.getElementById('install-part-name').innerText = partName || partId;
+    document.getElementById('install-part-life').innerText = (parseInt(lifeShots) || 0).toLocaleString();
+    document.getElementById('install-maint-job').value = '';
+
+    // populate machine dropdown จาก machineMapping (fallback: localStorage)
+    const sel = document.getElementById('install-machine-select');
+    let mapping = (typeof machineMapping !== 'undefined' && machineMapping) ? machineMapping : {};
+    if (Object.keys(mapping).length === 0) {
+        try {
+            const cached = localStorage.getItem('CWM_MACHINE_MAPPING');
+            if (cached) mapping = JSON.parse(cached) || {};
+        } catch (e) { /* ignore */ }
+    }
+    const machines = Object.keys(mapping).sort();
+    sel.innerHTML = '<option value="">-- เลือกเครื่อง --</option>' +
+        machines.map(m => `<option value="${m}">${m}</option>`).join('');
+
+    modal.classList.remove('hidden');
+};
+
+window.confirmInstallPart = async function() {
+    const partId = document.getElementById('install-part-id').value;
+    const partName = document.getElementById('install-part-name').innerText;
+    const lifeShots = parseInt(document.getElementById('install-part-life-val').value) || 0;
+    const machine = document.getElementById('install-machine-select').value;
+    const maintJobId = document.getElementById('install-maint-job').value.trim();
+
+    if (!machine) { alert('กรุณาเลือกเครื่อง'); return; }
+    if (!partId) { alert('ไม่พบรหัสอะไหล่'); return; }
+
+    const btn = document.getElementById('btn-confirm-install');
+    const origText = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = '⏳ กำลังติดตั้ง...';
+    try {
+        const result = await window.installPartToMachine(machine, partId, partName, lifeShots, maintJobId);
+        if (result && result.status === 'success') {
+            document.getElementById('modal-install-part').classList.add('hidden');
+            alert(`✅ ติดตั้ง "${partName}" กับ ${machine} สำเร็จ`);
+            window.loadPartsMaster();
+        } else {
+            alert('ติดตั้งไม่สำเร็จ: ' + ((result && result.message) || ''));
+        }
+    } catch (err) {
+        alert('เกิดข้อผิดพลาด: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = origText;
     }
 };
