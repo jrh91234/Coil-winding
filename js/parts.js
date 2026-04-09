@@ -16,8 +16,9 @@ window.loadPartsMaster = async function() {
     tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-4">กำลังโหลด...</td></tr>';
     try {
         // โหลด Parts_Master + Parts_Installation พร้อมกัน
+        // หมายเหตุ: ใช้ POST ทั้งคู่ เพราะ action อยู่ใน doPost ของ backend.gs
         const [masterRes, instRes] = await Promise.all([
-            fetch(`${SCRIPT_URL}?action=GET_PARTS_MASTER&_t=${Date.now()}`),
+            fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_PARTS_MASTER' }) }),
             fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_PARTS_INSTALLATION' }) })
         ]);
         const masterResult = await masterRes.json();
