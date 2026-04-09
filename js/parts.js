@@ -1,6 +1,7 @@
 // ⚙️ ระบบจัดการอะไหล่เครื่องจักร (Parts Tracking)
 
 let partsCache = [];
+let partLocationsCache = {}; // { Part_ID: ['CWM-01', 'CWM-05', ...] }
 
 window.openPartsManager = function() {
     document.getElementById('modal-parts-manager').classList.remove('hidden');
@@ -9,27 +10,55 @@ window.openPartsManager = function() {
 
 window.loadPartsMaster = async function() {
     const tbody = document.getElementById('parts-table-body');
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-4">กำลังโหลด...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-4">กำลังโหลด...</td></tr>';
     try {
-        const res = await fetch(`${SCRIPT_URL}?action=GET_PARTS_MASTER&_t=${Date.now()}`);
-        const result = await res.json();
-        partsCache = result.data || [];
+        // โหลด Parts_Master + Parts_Installation พร้อมกัน
+        const [masterRes, instRes] = await Promise.all([
+            fetch(`${SCRIPT_URL}?action=GET_PARTS_MASTER&_t=${Date.now()}`),
+            fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_PARTS_INSTALLATION' }) })
+        ]);
+        const masterResult = await masterRes.json();
+        const instResult = await instRes.json();
+        partsCache = masterResult.data || [];
+
+        // สร้าง map: Part_ID → [machines] (เฉพาะ Active)
+        partLocationsCache = {};
+        (instResult.data || []).forEach(inst => {
+            if (inst.Status !== 'Active') return;
+            const pid = inst.Part_ID;
+            if (!pid) return;
+            if (!partLocationsCache[pid]) partLocationsCache[pid] = [];
+            if (inst.Machine && !partLocationsCache[pid].includes(inst.Machine)) {
+                partLocationsCache[pid].push(inst.Machine);
+            }
+        });
+
         renderPartsTable();
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-red-500 py-4">โหลดข้อมูลไม่สำเร็จ</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-red-500 py-4">โหลดข้อมูลไม่สำเร็จ</td></tr>';
     }
 };
 
 function renderPartsTable() {
     const tbody = document.getElementById('parts-table-body');
     if (partsCache.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-4">ยังไม่มีข้อมูลอะไหล่ กรุณาเพิ่มรายการ</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-4">ยังไม่มีข้อมูลอะไหล่ กรุณาเพิ่มรายการ</td></tr>';
         return;
     }
     let html = '';
     partsCache.forEach(p => {
         const life = parseInt(p.Life_Shots) || 0;
         const cost = parseFloat(p.Unit_Cost) || 0;
+        const locations = partLocationsCache[p.Part_ID] || [];
+        let locationHtml;
+        if (locations.length === 0) {
+            locationHtml = '<span class="text-gray-300 text-xs">-</span>';
+        } else {
+            locationHtml = locations.map(m =>
+                `<span class="inline-block bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full mr-1 mb-0.5 font-mono">${m}</span>`
+            ).join('');
+            locationHtml = `<div class="flex flex-wrap max-w-[180px]">${locationHtml}<span class="text-xs text-gray-500 ml-1">(${locations.length})</span></div>`;
+        }
         html += `<tr class="border-b hover:bg-gray-50">
             <td class="p-2 font-mono text-xs text-gray-500">${p.Part_ID}</td>
             <td class="p-2 font-bold">${p.Part_Name || '-'}</td>
@@ -37,6 +66,7 @@ function renderPartsTable() {
             <td class="p-2 text-right font-mono">${life > 0 ? life.toLocaleString() : '-'}</td>
             <td class="p-2 text-right font-mono">${cost > 0 ? cost.toLocaleString(undefined, {minimumFractionDigits: 0}) : '-'}</td>
             <td class="p-2 text-xs text-gray-600">${p.Supplier || '-'}</td>
+            <td class="p-2">${locationHtml}</td>
             <td class="p-2 text-center">
                 <button onclick="window.editPart('${p.Part_ID}')" class="text-blue-600 hover:underline text-xs mr-2">✏️ แก้ไข</button>
                 <button onclick="window.deletePart('${p.Part_ID}', '${(p.Part_Name || '').replace(/'/g, "\\'")}')" class="text-red-600 hover:underline text-xs">🗑️ ลบ</button>
