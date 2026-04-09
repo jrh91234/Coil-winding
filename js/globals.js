@@ -353,27 +353,28 @@ window.switchTab = function(tab) {
 
     // จำกัดสิทธิ์
     if (role === 'Production' && (tab === 'planning' || tab === 'admin')) return;
-    if (role === 'QC' && (tab === 'planning' || tab === 'admin' || tab === 'packing')) return;
-    if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin' || tab === 'maint' || tab === 'rtv' || tab === 'packing' || tab === 'sort')) return;
+    if (role === 'QC' && (tab === 'planning' || tab === 'admin' || tab === 'packing' || tab === 'parts')) return;
+    if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin' || tab === 'maint' || tab === 'rtv' || tab === 'packing' || tab === 'sort' || tab === 'parts')) return;
     if (role === 'Viewer' && tab !== 'dashboard') return;
 
     // สลับหน้าจอ Section (แยกเมนูที่เป็นลิงก์ออก ไม่ต้องนำมาจัดการในนี้)
-    ['form', 'planning', 'dashboard', 'admin', 'rtv', 'packing'].forEach(t => {
+    ['form', 'planning', 'dashboard', 'admin', 'rtv', 'packing', 'parts'].forEach(t => {
         const el = document.getElementById('section-'+t);
         if(el) el.classList.toggle('hidden', t !== tab);
-        
+
         const btn = document.getElementById('tab-'+t);
         if(btn) {
-            if(t === tab) { 
-                btn.classList.add('tab-active','text-blue-600'); 
-                btn.classList.remove('text-gray-500'); 
-            } else { 
-                btn.classList.remove('tab-active','text-blue-600'); 
-                btn.classList.add('text-gray-500'); 
+            if(t === tab) {
+                btn.classList.add('tab-active','text-blue-600');
+                btn.classList.remove('text-gray-500');
+            } else {
+                btn.classList.remove('tab-active','text-blue-600');
+                btn.classList.add('text-gray-500');
             }
         }
     });
     if(tab === 'dashboard' && typeof window.loadDashboard === 'function') window.loadDashboard();
+    if(tab === 'parts' && typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
 };
 
 function applyPermissions() {

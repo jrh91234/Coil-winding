@@ -4,8 +4,11 @@ let partsCache = [];
 let partLocationsCache = {}; // { Part_ID: ['CWM-01', 'CWM-05', ...] }
 
 window.openPartsManager = function() {
-    document.getElementById('modal-parts-manager').classList.remove('hidden');
-    window.loadPartsMaster();
+    if (typeof window.switchTab === 'function') {
+        window.switchTab('parts');
+    } else {
+        window.loadPartsMaster();
+    }
 };
 
 window.loadPartsMaster = async function() {
