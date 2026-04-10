@@ -180,18 +180,9 @@ window.deletePart = async function(partId, partName) {
 };
 
 // === ระบบติดตั้งอะไหล่ (Installation) ===
-window.installPartToMachine = async function(machine, partId, partName, lifeShots, maintJobId) {
-    // คำนวณ Shot ปัจจุบันของเครื่อง
-    let currentShot = 0;
-    try {
-        const res = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'GET_MACHINE_SHOTS', machine: machine, sinceDate: '2020-01-01' })
-        });
-        const result = await res.json();
-        currentShot = result.totalShots || 0;
-    } catch (e) { /* ใช้ 0 */ }
-
+// installDate: "yyyy-MM-dd HH:mm" (optional, ถ้าไม่ส่ง backend จะใช้เวลาปัจจุบัน)
+// Install_Shot ถูกคำนวณฝั่ง backend ตามวันที่ติดตั้ง
+window.installPartToMachine = async function(machine, partId, partName, lifeShots, maintJobId, installDate) {
     const recorder = (window.currentUser && window.currentUser.name) || 'System';
     const payload = {
         action: 'SAVE_PARTS_INSTALLATION',
@@ -200,10 +191,10 @@ window.installPartToMachine = async function(machine, partId, partName, lifeShot
             Machine: machine,
             Part_ID: partId,
             Part_Name: partName,
-            Current_Shot: currentShot,
             Life_Shots: lifeShots,
             Maint_Job_ID: maintJobId || '',
-            Recorder: recorder
+            Recorder: recorder,
+            Install_Date: installDate || ''
         }
     };
 
@@ -211,17 +202,7 @@ window.installPartToMachine = async function(machine, partId, partName, lifeShot
     return await res.json();
 };
 
-window.replacePartOnMachine = async function(installId, machine, partId, partName, lifeShots, maintJobId) {
-    let currentShot = 0;
-    try {
-        const res = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'GET_MACHINE_SHOTS', machine: machine, sinceDate: '2020-01-01' })
-        });
-        const result = await res.json();
-        currentShot = result.totalShots || 0;
-    } catch (e) { /* ใช้ 0 */ }
-
+window.replacePartOnMachine = async function(installId, machine, partId, partName, lifeShots, maintJobId, installDate) {
     const recorder = (window.currentUser && window.currentUser.name) || 'System';
     const payload = {
         action: 'SAVE_PARTS_INSTALLATION',
@@ -231,10 +212,10 @@ window.replacePartOnMachine = async function(installId, machine, partId, partNam
             Machine: machine,
             Part_ID: partId,
             Part_Name: partName,
-            Current_Shot: currentShot,
             Life_Shots: lifeShots,
             Maint_Job_ID: maintJobId || '',
-            Recorder: recorder
+            Recorder: recorder,
+            Install_Date: installDate || ''
         }
     };
 
@@ -312,8 +293,15 @@ window.loadMachineParts = async function(machine) {
 
 window.promptReplacepart = async function(installId, machine, partId, partName, lifeShots) {
     if (!confirm(`เปลี่ยนอะไหล่ "${partName}" ของ ${machine}?\nระบบจะบันทึก Shot ปัจจุบันและสร้างรายการใหม่`)) return;
+    // ถามวัน-เวลาที่เปลี่ยน (default = ตอนนี้)
+    const now = new Date();
+    const defaultDt = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+        .toISOString().slice(0, 16).replace('T', ' ');
+    const dtInput = prompt('วัน-เวลาที่เปลี่ยน (รูปแบบ YYYY-MM-DD HH:MM) ปล่อยว่าง = ตอนนี้', defaultDt);
+    if (dtInput === null) return; // ผู้ใช้กด Cancel
+    const installDate = (dtInput || '').trim();
     try {
-        const result = await window.replacePartOnMachine(installId, machine, partId, partName, lifeShots, '');
+        const result = await window.replacePartOnMachine(installId, machine, partId, partName, lifeShots, '', installDate);
         if (result.status === 'success') {
             alert('✅ เปลี่ยนอะไหล่สำเร็จ');
             window.loadMachineParts(machine);
@@ -362,6 +350,16 @@ window.openInstallPartDialog = function(partId, partName, lifeShots) {
     document.getElementById('install-part-life').innerText = (parseInt(lifeShots) || 0).toLocaleString();
     document.getElementById('install-maint-job').value = '';
 
+    // ตั้งค่า datetime-local เป็นเวลาปัจจุบัน (local timezone)
+    const dtInput = document.getElementById('install-datetime');
+    if (dtInput) {
+        const now = new Date();
+        const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+            .toISOString()
+            .slice(0, 16);
+        dtInput.value = localIso;
+    }
+
     // populate machine dropdown จาก machineMapping (fallback: localStorage)
     const sel = document.getElementById('install-machine-select');
     let mapping = (typeof machineMapping !== 'undefined' && machineMapping) ? machineMapping : {};
@@ -384,19 +382,24 @@ window.confirmInstallPart = async function() {
     const lifeShots = parseInt(document.getElementById('install-part-life-val').value) || 0;
     const machine = document.getElementById('install-machine-select').value;
     const maintJobId = document.getElementById('install-maint-job').value.trim();
+    // แปลง datetime-local ("yyyy-MM-ddTHH:mm") -> "yyyy-MM-dd HH:mm"
+    const dtRaw = (document.getElementById('install-datetime') || {}).value || '';
+    const installDate = dtRaw ? dtRaw.replace('T', ' ') : '';
 
     if (!machine) { alert('กรุณาเลือกเครื่อง'); return; }
     if (!partId) { alert('ไม่พบรหัสอะไหล่'); return; }
+    if (!installDate) { alert('กรุณาเลือกวัน-เวลาติดตั้ง'); return; }
 
     const btn = document.getElementById('btn-confirm-install');
     const origText = btn.innerText;
     btn.disabled = true;
     btn.innerText = '⏳ กำลังติดตั้ง...';
     try {
-        const result = await window.installPartToMachine(machine, partId, partName, lifeShots, maintJobId);
+        const result = await window.installPartToMachine(machine, partId, partName, lifeShots, maintJobId, installDate);
         if (result && result.status === 'success') {
             document.getElementById('modal-install-part').classList.add('hidden');
-            alert(`✅ ติดตั้ง "${partName}" กับ ${machine} สำเร็จ`);
+            const shotInfo = (result.installShot !== undefined) ? ` (เริ่มนับจาก ${Number(result.installShot).toLocaleString()} shot)` : '';
+            alert(`✅ ติดตั้ง "${partName}" กับ ${machine} สำเร็จ${shotInfo}`);
             window.loadPartsMaster();
         } else {
             alert('ติดตั้งไม่สำเร็จ: ' + ((result && result.message) || ''));
