@@ -824,6 +824,14 @@ function doPost(e) {
     const d = data.installation;
     const now = new Date();
 
+    // รับ Install_Date จาก frontend ได้ (format: "yyyy-MM-dd" หรือ "yyyy-MM-dd HH:mm")
+    // ถ้าไม่ส่งมาให้ใช้เวลาปัจจุบัน
+    let installDateFull = String(d.Install_Date || "").trim();
+    if (!installDateFull) {
+      installDateFull = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm");
+    }
+    const installDateOnly = installDateFull.substring(0, 10); // "yyyy-MM-dd"
+
     if (data.mode === "replace" && d.Install_ID) {
       // เปลี่ยน/ย้ายอะไหล่: ปิดตัวเก่า + คำนวณ carry-over + สร้างตัวใหม่
       const rows = sheet.getDataRange().getValues();
@@ -836,17 +844,18 @@ function doPost(e) {
           oldInstallShot = parseInt(rows[i][colIdx("Install_Shot")]) || 0;
           oldMachine = String(rows[i][colIdx("Machine")] || "").trim();
           sheet.getRange(i + 1, colIdx("Status") + 1).setValue("Replaced");
-          sheet.getRange(i + 1, colIdx("Replaced_Date") + 1).setValue(Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd"));
+          sheet.getRange(i + 1, colIdx("Replaced_Date") + 1).setValue(installDateOnly);
           break;
         }
       }
-      // คำนวณ Shot ที่ใช้ไปบนเครื่องเก่า แล้ว carry ไปยังรายการใหม่
-      const oldMachineShots = oldMachine ? calcMachineShots(ss, oldMachine) : 0;
+      // คำนวณ Shot ที่ใช้ไปบนเครื่องเก่า (ถึงวันที่ถอดอะไหล่) แล้ว carry ไปยังรายการใหม่
+      const oldMachineShots = oldMachine ? calcMachineShots(ss, oldMachine, "2020-01-01", installDateOnly) : 0;
       const shotsOnOld = Math.max(0, oldMachineShots - oldInstallShot);
       const newCarried = oldCarried + shotsOnOld;
 
       const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
-      const newInstallShot = parseInt(d.Current_Shot) || 0;
+      // คำนวณ Install_Shot ของเครื่องใหม่ ณ วันที่ติดตั้ง (shot สะสมถึงวันนั้น)
+      const newInstallShot = calcMachineShots(ss, d.Machine, "2020-01-01", installDateOnly);
       // appendRow ตาม header order
       const rowData = headers.map(function(h) {
         switch(h) {
@@ -854,7 +863,7 @@ function doPost(e) {
           case "Machine": return d.Machine;
           case "Part_ID": return d.Part_ID;
           case "Part_Name": return d.Part_Name || "";
-          case "Install_Date": return Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+          case "Install_Date": return installDateFull;
           case "Install_Shot": return newInstallShot;
           case "Life_Shots": return parseInt(d.Life_Shots) || 0;
           case "Status": return "Active";
@@ -867,19 +876,21 @@ function doPost(e) {
       });
       sheet.appendRow(rowData);
       SpreadsheetApp.flush();
-      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId, carriedShots: newCarried})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId, carriedShots: newCarried, installShot: newInstallShot})).setMimeType(ContentService.MimeType.JSON);
     } else {
       // ติดตั้งอะไหล่ใหม่ (Carried_Shots = 0)
       const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
       const hdr = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      // คำนวณ Install_Shot ณ วันที่ติดตั้ง (shot สะสมถึงวันนั้น)
+      const newInstallShot = calcMachineShots(ss, d.Machine, "2020-01-01", installDateOnly);
       const rowData = hdr.map(function(h) {
         switch(h) {
           case "Install_ID": return newId;
           case "Machine": return d.Machine;
           case "Part_ID": return d.Part_ID;
           case "Part_Name": return d.Part_Name || "";
-          case "Install_Date": return Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
-          case "Install_Shot": return parseInt(d.Current_Shot) || 0;
+          case "Install_Date": return installDateFull;
+          case "Install_Shot": return newInstallShot;
           case "Life_Shots": return parseInt(d.Life_Shots) || 0;
           case "Status": return "Active";
           case "Maint_Job_ID": return d.Maint_Job_ID || "";
@@ -891,7 +902,7 @@ function doPost(e) {
       });
       sheet.appendRow(rowData);
       SpreadsheetApp.flush();
-      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Installed", installId: newId})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Installed", installId: newId, installShot: newInstallShot})).setMimeType(ContentService.MimeType.JSON);
     }
   }
 
@@ -1714,8 +1725,10 @@ function getPcsFromKg(productName, kg) {
 }
 
 // คำนวณ Shot สะสมของเครื่อง (FG + NG pcs) ตั้งแต่วันที่ระบุ
-function calcMachineShots(ss, machine, sinceDate) {
+// sinceDate / upToDate: "yyyy-MM-dd" (inclusive ทั้งคู่)
+function calcMachineShots(ss, machine, sinceDate, upToDate) {
   sinceDate = sinceDate || "2020-01-01";
+  upToDate = upToDate || "";
   let totalShots = 0;
   const prodSheet = ss.getSheetByName("Production_Data");
   if (!prodSheet || prodSheet.getLastRow() <= 1) return 0;
@@ -1738,6 +1751,7 @@ function calcMachineShots(ss, machine, sinceDate) {
       pDateStr = String(pDateRaw || "").trim().substring(0, 10);
     }
     if (pDateStr < sinceDate) continue;
+    if (upToDate && pDateStr > upToDate) continue;
     var fg = parseInt(pRows[i][pFgIdx]) || 0;
     var ngKg = parseFloat(pRows[i][pNgIdx]) || 0;
     var prod = String(pRows[i][pProdIdx] || "");
