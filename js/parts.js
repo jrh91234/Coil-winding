@@ -350,14 +350,14 @@ window.openInstallPartDialog = function(partId, partName, lifeShots) {
     document.getElementById('install-part-life').innerText = (parseInt(lifeShots) || 0).toLocaleString();
     document.getElementById('install-maint-job').value = '';
 
-    // ตั้งค่า datetime-local เป็นเวลาปัจจุบัน (local timezone)
-    const dtInput = document.getElementById('install-datetime');
-    if (dtInput) {
+    // ตั้งค่า date + time (24h) เป็นเวลาปัจจุบัน (local timezone)
+    const dateInput = document.getElementById('install-date');
+    const timeInput = document.getElementById('install-time');
+    if (dateInput && timeInput) {
         const now = new Date();
-        const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-            .toISOString()
-            .slice(0, 16);
-        dtInput.value = localIso;
+        const pad = (n) => String(n).padStart(2, '0');
+        dateInput.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        timeInput.value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
     }
 
     // populate machine dropdown จาก machineMapping (fallback: localStorage)
@@ -382,13 +382,18 @@ window.confirmInstallPart = async function() {
     const lifeShots = parseInt(document.getElementById('install-part-life-val').value) || 0;
     const machine = document.getElementById('install-machine-select').value;
     const maintJobId = document.getElementById('install-maint-job').value.trim();
-    // แปลง datetime-local ("yyyy-MM-ddTHH:mm") -> "yyyy-MM-dd HH:mm"
-    const dtRaw = (document.getElementById('install-datetime') || {}).value || '';
-    const installDate = dtRaw ? dtRaw.replace('T', ' ') : '';
+    // รวม date + time (24h HH:MM) -> "yyyy-MM-dd HH:mm"
+    const dateVal = (document.getElementById('install-date') || {}).value || '';
+    const timeVal = ((document.getElementById('install-time') || {}).value || '').trim();
+    const installDate = (dateVal && timeVal) ? `${dateVal} ${timeVal}` : '';
 
     if (!machine) { alert('กรุณาเลือกเครื่อง'); return; }
     if (!partId) { alert('ไม่พบรหัสอะไหล่'); return; }
-    if (!installDate) { alert('กรุณาเลือกวัน-เวลาติดตั้ง'); return; }
+    if (!dateVal) { alert('กรุณาเลือกวันติดตั้ง'); return; }
+    if (!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(timeVal)) {
+        alert('กรุณากรอกเวลาเป็นรูปแบบ 24 ชม. เช่น 14:30');
+        return;
+    }
 
     const btn = document.getElementById('btn-confirm-install');
     const origText = btn.innerText;
