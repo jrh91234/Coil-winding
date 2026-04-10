@@ -66,10 +66,10 @@ function renderPartsTable() {
         if (installations.length === 0) {
             locationHtml = '<span class="text-gray-300 text-xs">-</span>';
         } else {
-            locationHtml = '<div class="space-y-0.5">' + installations.map(inst => {
+            locationHtml = '<div class="flex flex-wrap gap-1">' + installations.map(inst => {
                 const pct = inst.lifeShots > 0 ? Math.min((inst.actualShots / inst.lifeShots) * 100, 100) : 0;
                 const color = pct >= 95 ? 'bg-red-100 text-red-700' : pct >= 80 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700';
-                return `<div class="flex items-center gap-1"><span class="inline-block ${color} text-xs px-1.5 py-0.5 rounded font-mono">${inst.machine}</span><span class="text-xs text-gray-500 font-mono">${inst.actualShots.toLocaleString()}</span></div>`;
+                return `<span class="inline-block ${color} text-xs px-1.5 py-0.5 rounded font-mono">${inst.machine}</span>`;
             }).join('') + '</div>';
         }
         // Actual Shot รวมทุกเครื่อง
