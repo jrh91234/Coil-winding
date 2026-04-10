@@ -66,10 +66,11 @@ function renderPartsTable() {
         if (installations.length === 0) {
             locationHtml = '<span class="text-gray-300 text-xs">-</span>';
         } else {
+            const escName = (p.Part_Name || '').replace(/'/g, "\\'");
             locationHtml = '<div class="flex flex-wrap gap-1">' + installations.map(inst => {
                 const pct = inst.lifeShots > 0 ? Math.min((inst.actualShots / inst.lifeShots) * 100, 100) : 0;
-                const color = pct >= 95 ? 'bg-red-100 text-red-700' : pct >= 80 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700';
-                return `<span class="inline-block ${color} text-xs px-1.5 py-0.5 rounded font-mono">${inst.machine}</span>`;
+                const color = pct >= 95 ? 'bg-red-100 text-red-700 hover:bg-red-200' : pct >= 80 ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200';
+                return `<button type="button" onclick="window.promptReplacepart('${inst.installId}', '${inst.machine}', '${p.Part_ID}', '${escName}', ${inst.lifeShots || 0})" title="คลิกเพื่อเปลี่ยน / ย้ายอะไหล่ตัวนี้" class="inline-block ${color} text-xs px-1.5 py-0.5 rounded font-mono cursor-pointer transition">${inst.machine}</button>`;
             }).join('') + '</div>';
         }
         // Actual Shot รวมทุกเครื่อง
