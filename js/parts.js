@@ -1,7 +1,7 @@
 // ⚙️ ระบบจัดการอะไหล่เครื่องจักร (Parts Tracking)
 
 let partsCache = [];
-let partLocationsCache = {}; // { Part_ID: ['CWM-01', 'CWM-05', ...] }
+let partLocationsCache = {};  // { Part_ID: [{machine, actualShots, installId, lifeShots, carried}] }
 
 window.openPartsManager = function() {
     if (typeof window.switchTab === 'function') {
@@ -13,10 +13,8 @@ window.openPartsManager = function() {
 
 window.loadPartsMaster = async function() {
     const tbody = document.getElementById('parts-table-body');
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-4">กำลังโหลด...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-4">กำลังโหลด...</td></tr>';
     try {
-        // โหลด Parts_Master + Parts_Installation พร้อมกัน
-        // หมายเหตุ: ใช้ POST ทั้งคู่ เพราะ action อยู่ใน doPost ของ backend.gs
         const [masterRes, instRes] = await Promise.all([
             fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_PARTS_MASTER' }) }),
             fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_PARTS_INSTALLATION' }) })
@@ -24,50 +22,70 @@ window.loadPartsMaster = async function() {
         const masterResult = await masterRes.json();
         const instResult = await instRes.json();
         partsCache = masterResult.data || [];
+        const machineShots = instResult.machineShots || {};
 
-        // สร้าง map: Part_ID → [machines] (เฉพาะ Active)
+        // สร้าง map: Part_ID → [{ machine, actualShots, ... }] (เฉพาะ Active)
         partLocationsCache = {};
         (instResult.data || []).forEach(inst => {
             if (inst.Status !== 'Active') return;
             const pid = inst.Part_ID;
             if (!pid) return;
             if (!partLocationsCache[pid]) partLocationsCache[pid] = [];
-            if (inst.Machine && !partLocationsCache[pid].includes(inst.Machine)) {
-                partLocationsCache[pid].push(inst.Machine);
-            }
+            const carried = parseInt(inst.Carried_Shots) || 0;
+            const installShot = parseInt(inst.Install_Shot) || 0;
+            const macShots = machineShots[inst.Machine] || 0;
+            const actualShots = carried + Math.max(0, macShots - installShot);
+            partLocationsCache[pid].push({
+                machine: inst.Machine,
+                actualShots: actualShots,
+                installId: inst.Install_ID,
+                lifeShots: parseInt(inst.Life_Shots) || 0,
+                carried: carried
+            });
         });
 
         renderPartsTable();
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-red-500 py-4">โหลดข้อมูลไม่สำเร็จ</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-red-500 py-4">โหลดข้อมูลไม่สำเร็จ</td></tr>';
     }
 };
 
 function renderPartsTable() {
     const tbody = document.getElementById('parts-table-body');
     if (partsCache.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-4">ยังไม่มีข้อมูลอะไหล่ กรุณาเพิ่มรายการ</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-4">ยังไม่มีข้อมูลอะไหล่ กรุณาเพิ่มรายการ</td></tr>';
         return;
     }
     let html = '';
     partsCache.forEach(p => {
         const life = parseInt(p.Life_Shots) || 0;
         const cost = parseFloat(p.Unit_Cost) || 0;
-        const locations = partLocationsCache[p.Part_ID] || [];
+        const installations = partLocationsCache[p.Part_ID] || [];
+        // สร้าง Location HTML — แสดง machine + actual shots ต่อ installation
         let locationHtml;
-        if (locations.length === 0) {
+        if (installations.length === 0) {
             locationHtml = '<span class="text-gray-300 text-xs">-</span>';
         } else {
-            locationHtml = locations.map(m =>
-                `<span class="inline-block bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full mr-1 mb-0.5 font-mono">${m}</span>`
-            ).join('');
-            locationHtml = `<div class="flex flex-wrap max-w-[180px]">${locationHtml}<span class="text-xs text-gray-500 ml-1">(${locations.length})</span></div>`;
+            locationHtml = '<div class="space-y-0.5">' + installations.map(inst => {
+                const pct = inst.lifeShots > 0 ? Math.min((inst.actualShots / inst.lifeShots) * 100, 100) : 0;
+                const color = pct >= 95 ? 'bg-red-100 text-red-700' : pct >= 80 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700';
+                return `<div class="flex items-center gap-1"><span class="inline-block ${color} text-xs px-1.5 py-0.5 rounded font-mono">${inst.machine}</span><span class="text-xs text-gray-500 font-mono">${inst.actualShots.toLocaleString()}</span></div>`;
+            }).join('') + '</div>';
         }
+        // Actual Shot รวมทุกเครื่อง
+        const totalActualShots = installations.reduce((sum, inst) => sum + inst.actualShots, 0);
+        const pctTotal = life > 0 && installations.length === 1 ? Math.min((totalActualShots / life) * 100, 100) : 0;
+        const shotColor = pctTotal >= 95 ? 'text-red-600 font-bold' : pctTotal >= 80 ? 'text-yellow-600 font-bold' : 'text-gray-700';
+        const shotHtml = installations.length > 0
+            ? `<span class="${shotColor} font-mono">${totalActualShots.toLocaleString()}</span>`
+            : '<span class="text-gray-300">-</span>';
+
         html += `<tr class="border-b hover:bg-gray-50">
             <td class="p-2 font-mono text-xs text-gray-500">${p.Part_ID}</td>
             <td class="p-2 font-bold">${p.Part_Name || '-'}</td>
             <td class="p-2"><span class="bg-cyan-100 text-cyan-700 text-xs px-2 py-0.5 rounded-full">${p.Category || '-'}</span></td>
             <td class="p-2 text-right font-mono">${life > 0 ? life.toLocaleString() : '-'}</td>
+            <td class="p-2 text-right text-xs">${shotHtml}</td>
             <td class="p-2 text-right font-mono">${cost > 0 ? cost.toLocaleString(undefined, {minimumFractionDigits: 0}) : '-'}</td>
             <td class="p-2 text-xs text-gray-600">${p.Supplier || '-'}</td>
             <td class="p-2">${locationHtml}</td>
@@ -254,7 +272,8 @@ window.loadMachineParts = async function(machine) {
         installations.forEach(inst => {
             const installShot = parseInt(inst.Install_Shot) || 0;
             const lifeShots = parseInt(inst.Life_Shots) || 0;
-            const usedShots = totalShots - installShot;
+            const carried = parseInt(inst.Carried_Shots) || 0;
+            const usedShots = carried + Math.max(0, totalShots - installShot);
             const pct = lifeShots > 0 ? Math.min((usedShots / lifeShots) * 100, 100) : 0;
             const remaining = lifeShots > 0 ? Math.max(lifeShots - usedShots, 0) : 0;
 
@@ -269,7 +288,7 @@ window.loadMachineParts = async function(machine) {
                 </div>
                 <div class="flex justify-between text-xs text-gray-500 mb-1">
                     <span>ติดตั้ง: ${inst.Install_Date || '-'}</span>
-                    <span>ใช้ไป: <b>${usedShots.toLocaleString()}</b> / ${lifeShots > 0 ? lifeShots.toLocaleString() : '∞'} shot</span>
+                    <span>Actual: <b>${usedShots.toLocaleString()}</b>${carried > 0 ? ` (สะสม ${carried.toLocaleString()})` : ''} / ${lifeShots > 0 ? lifeShots.toLocaleString() : '∞'} shot</span>
                 </div>
                 ${lifeShots > 0 ? `<div class="w-full bg-gray-200 rounded-full h-2 mb-1">
                     <div class="${statusColor} h-2 rounded-full transition-all" style="width: ${pct.toFixed(1)}%"></div>

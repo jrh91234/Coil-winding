@@ -736,9 +736,17 @@ function doPost(e) {
       }
       return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Part_ID not found"})).setMimeType(ContentService.MimeType.JSON);
     } else {
-      // เพิ่มอะไหล่ใหม่ — สร้าง Part_ID อัตโนมัติ
-      const prefix = (d.Category || "PART").substring(0, 3).toUpperCase();
-      const newId = prefix + "-" + String(rows.length).padStart(3, "0");
+      // เพิ่มอะไหล่ใหม่ — สร้าง Part_ID จากตัวย่อชื่อ (เช่น "Guide Roller" → "GR-001")
+      const words = (d.Part_Name || "PART").trim().split(/\s+/);
+      const prefix = words.map(function(w) { return w.charAt(0).toUpperCase(); }).join("");
+      const pidCol = colIdx("Part_ID");
+      let maxNum = 0;
+      for (let i = 1; i < rows.length; i++) {
+        const pid = String(rows[i][pidCol] || "");
+        const match = pid.match(new RegExp("^" + prefix + "-(\\d+)$"));
+        if (match) maxNum = Math.max(maxNum, parseInt(match[1]));
+      }
+      const newId = prefix + "-" + String(maxNum + 1).padStart(3, "0");
       sheet.appendRow([newId, d.Part_Name || "", d.Category || "", parseInt(d.Life_Shots) || 0, parseFloat(d.Unit_Cost) || 0, d.Supplier || "", d.Remark || ""]);
       SpreadsheetApp.flush();
       return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Added", partId: newId})).setMimeType(ContentService.MimeType.JSON);
@@ -774,78 +782,114 @@ function doPost(e) {
       if (filterMachine && obj.Machine !== filterMachine) continue;
       results.push(obj);
     }
-    return ContentService.createTextOutput(JSON.stringify({status: "success", data: results})).setMimeType(ContentService.MimeType.JSON);
+    // ถ้าไม่ระบุ machine filter → คำนวณ machineShots สำหรับ Active records ทั้งหมด (ใช้ใน Parts Master table)
+    let machineShots = null;
+    if (!filterMachine) {
+      const activeMachines = [];
+      results.forEach(function(r) {
+        if (r.Status === "Active" && r.Machine && activeMachines.indexOf(r.Machine) === -1) {
+          activeMachines.push(r.Machine);
+        }
+      });
+      if (activeMachines.length > 0) {
+        machineShots = calcMultiMachineShots(ss, activeMachines);
+      }
+    }
+    const response = {status: "success", data: results};
+    if (machineShots) response.machineShots = machineShots;
+    return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
   }
 
   if (action === "SAVE_PARTS_INSTALLATION") {
     let sheet = ss.getSheetByName("Parts_Installation");
     if (!sheet) {
       sheet = ss.insertSheet("Parts_Installation");
-      sheet.appendRow(["Install_ID", "Machine", "Part_ID", "Part_Name", "Install_Date", "Install_Shot", "Life_Shots", "Status", "Maint_Job_ID", "Recorder", "Replaced_Date"]);
+      sheet.appendRow(["Install_ID", "Machine", "Part_ID", "Part_Name", "Install_Date", "Install_Shot", "Life_Shots", "Status", "Maint_Job_ID", "Recorder", "Replaced_Date", "Carried_Shots"]);
     }
+    // ตรวจสอบว่ามีคอลัมน์ Carried_Shots หรือยัง (backward compat)
+    const existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    if (existingHeaders.indexOf("Carried_Shots") === -1) {
+      sheet.getRange(1, existingHeaders.length + 1).setValue("Carried_Shots");
+    }
+
     const d = data.installation;
     const now = new Date();
 
     if (data.mode === "replace" && d.Install_ID) {
-      // เปลี่ยนอะไหล่: ปิดตัวเก่า + สร้างตัวใหม่
+      // เปลี่ยน/ย้ายอะไหล่: ปิดตัวเก่า + คำนวณ carry-over + สร้างตัวใหม่
       const rows = sheet.getDataRange().getValues();
       const headers = rows[0].map(h => String(h).trim());
       const colIdx = (name) => headers.indexOf(name);
+      let oldCarried = 0, oldInstallShot = 0, oldMachine = "";
       for (let i = 1; i < rows.length; i++) {
         if (String(rows[i][colIdx("Install_ID")]).trim() === d.Install_ID) {
+          oldCarried = parseInt(rows[i][colIdx("Carried_Shots")]) || 0;
+          oldInstallShot = parseInt(rows[i][colIdx("Install_Shot")]) || 0;
+          oldMachine = String(rows[i][colIdx("Machine")] || "").trim();
           sheet.getRange(i + 1, colIdx("Status") + 1).setValue("Replaced");
           sheet.getRange(i + 1, colIdx("Replaced_Date") + 1).setValue(Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd"));
           break;
         }
       }
-      // สร้าง Installation ใหม่
+      // คำนวณ Shot ที่ใช้ไปบนเครื่องเก่า แล้ว carry ไปยังรายการใหม่
+      const oldMachineShots = oldMachine ? calcMachineShots(ss, oldMachine) : 0;
+      const shotsOnOld = Math.max(0, oldMachineShots - oldInstallShot);
+      const newCarried = oldCarried + shotsOnOld;
+
       const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
-      sheet.appendRow([newId, d.Machine, d.Part_ID, d.Part_Name || "", Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd"), parseInt(d.Current_Shot) || 0, parseInt(d.Life_Shots) || 0, "Active", d.Maint_Job_ID || "", d.Recorder || "", ""]);
+      const newInstallShot = parseInt(d.Current_Shot) || 0;
+      // appendRow ตาม header order
+      const rowData = headers.map(function(h) {
+        switch(h) {
+          case "Install_ID": return newId;
+          case "Machine": return d.Machine;
+          case "Part_ID": return d.Part_ID;
+          case "Part_Name": return d.Part_Name || "";
+          case "Install_Date": return Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+          case "Install_Shot": return newInstallShot;
+          case "Life_Shots": return parseInt(d.Life_Shots) || 0;
+          case "Status": return "Active";
+          case "Maint_Job_ID": return d.Maint_Job_ID || "";
+          case "Recorder": return d.Recorder || "";
+          case "Replaced_Date": return "";
+          case "Carried_Shots": return newCarried;
+          default: return "";
+        }
+      });
+      sheet.appendRow(rowData);
       SpreadsheetApp.flush();
-      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId, carriedShots: newCarried})).setMimeType(ContentService.MimeType.JSON);
     } else {
-      // ติดตั้งอะไหล่ใหม่
+      // ติดตั้งอะไหล่ใหม่ (Carried_Shots = 0)
       const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
-      sheet.appendRow([newId, d.Machine, d.Part_ID, d.Part_Name || "", Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd"), parseInt(d.Current_Shot) || 0, parseInt(d.Life_Shots) || 0, "Active", d.Maint_Job_ID || "", d.Recorder || "", ""]);
+      const hdr = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      const rowData = hdr.map(function(h) {
+        switch(h) {
+          case "Install_ID": return newId;
+          case "Machine": return d.Machine;
+          case "Part_ID": return d.Part_ID;
+          case "Part_Name": return d.Part_Name || "";
+          case "Install_Date": return Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+          case "Install_Shot": return parseInt(d.Current_Shot) || 0;
+          case "Life_Shots": return parseInt(d.Life_Shots) || 0;
+          case "Status": return "Active";
+          case "Maint_Job_ID": return d.Maint_Job_ID || "";
+          case "Recorder": return d.Recorder || "";
+          case "Replaced_Date": return "";
+          case "Carried_Shots": return 0;
+          default: return "";
+        }
+      });
+      sheet.appendRow(rowData);
       SpreadsheetApp.flush();
       return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Installed", installId: newId})).setMimeType(ContentService.MimeType.JSON);
     }
   }
 
   if (action === "GET_MACHINE_SHOTS") {
-    // คำนวณ Shot สะสมของเครื่องตั้งแต่วันที่ระบุ (FG + NG pcs)
     const machine = data.machine;
     const sinceDate = data.sinceDate || "2020-01-01";
-    let totalShots = 0;
-    const prodSheet = ss.getSheetByName("Production_Data");
-    if (prodSheet && prodSheet.getLastRow() > 1) {
-      const pRows = prodSheet.getDataRange().getValues();
-      const pH = pRows[0].map(h => String(h).trim().toLowerCase());
-      const pDateIdx = pH.indexOf("date");
-      const pMachIdx = pH.indexOf("machine");
-      const pFgIdx = pH.indexOf("fg");
-      const pNgIdx = pH.indexOf("ng_total");
-      const pProdIdx = pH.indexOf("product");
-      if (pDateIdx !== -1 && pMachIdx !== -1 && pFgIdx !== -1) {
-        for (let i = 1; i < pRows.length; i++) {
-          const pMach = String(pRows[i][pMachIdx] || "").trim();
-          if (pMach !== machine) continue;
-          const pDateRaw = pRows[i][pDateIdx];
-          let pDateStr = "";
-          if (pDateRaw instanceof Date && !isNaN(pDateRaw.getTime())) {
-            pDateStr = Utilities.formatDate(pDateRaw, "GMT+7", "yyyy-MM-dd");
-          } else {
-            pDateStr = String(pDateRaw || "").trim().substring(0, 10);
-          }
-          if (pDateStr < sinceDate) continue;
-          const fg = parseInt(pRows[i][pFgIdx]) || 0;
-          const ngKg = parseFloat(pRows[i][pNgIdx]) || 0;
-          const prod = String(pRows[i][pProdIdx] || "");
-          const ngPcs = getPcsFromKg(prod, ngKg);
-          totalShots += (fg + ngPcs);
-        }
-      }
-    }
+    const totalShots = calcMachineShots(ss, machine, sinceDate);
     return ContentService.createTextOutput(JSON.stringify({status: "success", machine: machine, totalShots: totalShots})).setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -1658,6 +1702,65 @@ function getWeightPerPc(productName) {
 function getPcsFromKg(productName, kg) {
     if (!kg || kg <= 0) return 0;
     return Math.round(kg / getWeightPerPc(productName));
+}
+
+// คำนวณ Shot สะสมของเครื่อง (FG + NG pcs) ตั้งแต่วันที่ระบุ
+function calcMachineShots(ss, machine, sinceDate) {
+  sinceDate = sinceDate || "2020-01-01";
+  let totalShots = 0;
+  const prodSheet = ss.getSheetByName("Production_Data");
+  if (!prodSheet || prodSheet.getLastRow() <= 1) return 0;
+  const pRows = prodSheet.getDataRange().getValues();
+  const pH = pRows[0].map(function(h) { return String(h).trim().toLowerCase(); });
+  const pDateIdx = pH.indexOf("date");
+  const pMachIdx = pH.indexOf("machine");
+  const pFgIdx = pH.indexOf("fg");
+  const pNgIdx = pH.indexOf("ng_total");
+  const pProdIdx = pH.indexOf("product");
+  if (pDateIdx === -1 || pMachIdx === -1 || pFgIdx === -1) return 0;
+  for (var i = 1; i < pRows.length; i++) {
+    var pMach = String(pRows[i][pMachIdx] || "").trim();
+    if (pMach !== machine) continue;
+    var pDateRaw = pRows[i][pDateIdx];
+    var pDateStr = "";
+    if (pDateRaw instanceof Date && !isNaN(pDateRaw.getTime())) {
+      pDateStr = Utilities.formatDate(pDateRaw, "GMT+7", "yyyy-MM-dd");
+    } else {
+      pDateStr = String(pDateRaw || "").trim().substring(0, 10);
+    }
+    if (pDateStr < sinceDate) continue;
+    var fg = parseInt(pRows[i][pFgIdx]) || 0;
+    var ngKg = parseFloat(pRows[i][pNgIdx]) || 0;
+    var prod = String(pRows[i][pProdIdx] || "");
+    var ngPcs = getPcsFromKg(prod, ngKg);
+    totalShots += (fg + ngPcs);
+  }
+  return totalShots;
+}
+
+// คำนวณ Shot สะสมของหลายเครื่องพร้อมกัน (อ่าน Production_Data ครั้งเดียว)
+function calcMultiMachineShots(ss, machineList) {
+  var result = {};
+  machineList.forEach(function(m) { result[m] = 0; });
+  var prodSheet = ss.getSheetByName("Production_Data");
+  if (!prodSheet || prodSheet.getLastRow() <= 1) return result;
+  var pRows = prodSheet.getDataRange().getValues();
+  var pH = pRows[0].map(function(h) { return String(h).trim().toLowerCase(); });
+  var pMachIdx = pH.indexOf("machine");
+  var pFgIdx = pH.indexOf("fg");
+  var pNgIdx = pH.indexOf("ng_total");
+  var pProdIdx = pH.indexOf("product");
+  if (pMachIdx === -1 || pFgIdx === -1) return result;
+  for (var i = 1; i < pRows.length; i++) {
+    var mac = String(pRows[i][pMachIdx] || "").trim();
+    if (result[mac] === undefined) continue;
+    var fg = parseInt(pRows[i][pFgIdx]) || 0;
+    var ngKg = parseFloat(pRows[i][pNgIdx]) || 0;
+    var prod = String(pRows[i][pProdIdx] || "");
+    var ngPcs = getPcsFromKg(prod, ngKg);
+    result[mac] += (fg + ngPcs);
+  }
+  return result;
 }
 
 function getUniqueOptionsFromHistory() {
