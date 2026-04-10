@@ -1,6 +1,6 @@
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec";
         
-let ngSymptoms = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "อื่นๆ (Others)"];
+let ngSymptoms = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "Setup", "อื่นๆ (Others)"];
 let productList = ["S1B29288-JR (10A)", "S1B71819-JR (16A)", "S1B29292-JR (20A)", "51207080HC-JR (25/32A)"];
 let recorderList = ["พนักงาน 1", "พนักงาน 2"];
 
@@ -102,6 +102,30 @@ function normalizeSymptomList(list) {
     return unique;
 }
 
+function normalizeNgSymptomName(raw) {
+    const text = (raw || '').trim();
+    if (!text) return '';
+    const setupMatch = text.match(/^setup\s*-\s*(.+)$/i);
+    if (setupMatch) return capitalizeFirst(setupMatch[1]);
+    if (text.toLowerCase() === 'setup') return 'Setup';
+    return capitalizeFirst(text);
+}
+
+function normalizeNgSymptomMasterList(list) {
+    const unique = [];
+    (list || []).forEach(item => {
+        const normalized = normalizeNgSymptomName(item);
+        if (!normalized) return;
+        if (!unique.some(u => u.toLowerCase() === normalized.toLowerCase())) {
+            unique.push(normalized);
+        }
+    });
+    if (!unique.some(s => s.toLowerCase() === 'setup')) {
+        unique.push('Setup');
+    }
+    return unique;
+}
+
 function getShiftDateStr() {
     const now = new Date();
     if (now.getHours() < 8) {
@@ -120,7 +144,6 @@ window.fetchOptions = async function() {
         
         if (data.recorders && data.recorders.length > 0) {
             recorderList = data.recorders; 
-            localStorage.setItem('CWM_RECORDERS', JSON.stringify(recorderList)); 
         }
         
         if(typeof window.renderRecorderOptions === 'function') {
@@ -128,18 +151,12 @@ window.fetchOptions = async function() {
         }
         
         if (data.ngTypes && data.ngTypes.length > 0) {
-           data.ngTypes.forEach(t => {
-               const stdStr = capitalizeFirst(t);
-               if(!ngSymptoms.some(s => s.toLowerCase() === stdStr.toLowerCase())) {
-                   ngSymptoms.push(stdStr);
-               }
-           });
-           ngSymptoms = normalizeSymptomList(ngSymptoms);
-           localStorage.setItem('CWM_CUSTOM_NG', JSON.stringify(ngSymptoms));
-           
-           if (typeof window.renderRtvSymptomsOptions === 'function') {
-               window.renderRtvSymptomsOptions();
-           }
+            ngSymptoms = normalizeNgSymptomMasterList([...ngSymptoms, ...data.ngTypes]);
+            if (typeof window.renderRtvSymptomsOptions === 'function') {
+                window.renderRtvSymptomsOptions();
+            }
+        } else {
+            ngSymptoms = normalizeNgSymptomMasterList(ngSymptoms);
         }
         
         if (data.machineMapping) {
