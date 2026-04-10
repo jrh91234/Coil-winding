@@ -279,7 +279,7 @@ window.loadMachineParts = async function(machine) {
                     <span>เหลือ: ${remaining.toLocaleString()} shot</span>
                 </div>` : ''}
                 <div class="flex gap-2 mt-2">
-                    <button onclick="window.promptReplacepart('${inst.Install_ID}', '${machine}', '${inst.Part_ID}', '${(inst.Part_Name || '').replace(/'/g, "\\'")}', ${lifeShots})" class="text-xs text-orange-600 hover:underline">🔄 เปลี่ยนอะไหล่</button>
+                    <button onclick="window.promptReplacepart('${inst.Install_ID}', '${machine}', '${inst.Part_ID}', '${(inst.Part_Name || '').replace(/'/g, "\\'")}', ${lifeShots})" class="text-xs text-orange-600 hover:underline">🔄 เปลี่ยน / ย้าย</button>
                     <button onclick="window.promptUpdateLife('${inst.Install_ID}', ${lifeShots})" class="text-xs text-blue-600 hover:underline">📏 ปรับอายุ</button>
                 </div>
             </div>`;
@@ -291,26 +291,12 @@ window.loadMachineParts = async function(machine) {
     }
 };
 
-window.promptReplacepart = async function(installId, machine, partId, partName, lifeShots) {
-    if (!confirm(`เปลี่ยนอะไหล่ "${partName}" ของ ${machine}?\nระบบจะบันทึก Shot ปัจจุบันและสร้างรายการใหม่`)) return;
-    // ถามวัน-เวลาที่เปลี่ยน (default = ตอนนี้)
-    const now = new Date();
-    const defaultDt = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-        .toISOString().slice(0, 16).replace('T', ' ');
-    const dtInput = prompt('วัน-เวลาที่เปลี่ยน (รูปแบบ YYYY-MM-DD HH:MM) ปล่อยว่าง = ตอนนี้', defaultDt);
-    if (dtInput === null) return; // ผู้ใช้กด Cancel
-    const installDate = (dtInput || '').trim();
-    try {
-        const result = await window.replacePartOnMachine(installId, machine, partId, partName, lifeShots, '', installDate);
-        if (result.status === 'success') {
-            alert('✅ เปลี่ยนอะไหล่สำเร็จ');
-            window.loadMachineParts(machine);
-        } else {
-            alert('เกิดข้อผิดพลาด: ' + (result.message || ''));
-        }
-    } catch (err) {
-        alert('เกิดข้อผิดพลาด: ' + err.message);
-    }
+// เปิด dialog สำหรับเปลี่ยน/ย้ายอะไหล่ (ใช้ modal เดียวกับ install ใหม่)
+window.promptReplacepart = function(installId, machine, partId, partName, lifeShots) {
+    window.openInstallPartDialog(partId, partName, lifeShots, {
+        prevInstallId: installId,
+        currentMachine: machine
+    });
 };
 
 window.promptUpdateLife = async function(installId, currentLife) {
@@ -340,15 +326,39 @@ window.promptUpdateLife = async function(installId, currentLife) {
     }
 };
 
-// === Dialog: ติดตั้งอะไหล่กับเครื่อง (เรียกจากตาราง Parts Master) ===
-window.openInstallPartDialog = function(partId, partName, lifeShots) {
+// === Dialog: ติดตั้ง / เปลี่ยน / ย้ายอะไหล่ ===
+// options: { prevInstallId, currentMachine } — ถ้าส่งมา = เปลี่ยน/ย้าย (mode=replace)
+window.openInstallPartDialog = function(partId, partName, lifeShots, options) {
+    options = options || {};
     const modal = document.getElementById('modal-install-part');
     if (!modal) return;
+
+    const prevInstallId = options.prevInstallId || '';
+    const currentMachine = options.currentMachine || '';
+    const isReplaceMode = !!prevInstallId;
+
     document.getElementById('install-part-id').value = partId;
     document.getElementById('install-part-life-val').value = lifeShots || 0;
+    document.getElementById('install-prev-id').value = prevInstallId;
     document.getElementById('install-part-name').innerText = partName || partId;
     document.getElementById('install-part-life').innerText = (parseInt(lifeShots) || 0).toLocaleString();
     document.getElementById('install-maint-job').value = '';
+
+    // ปรับ title + ปุ่ม + hint ตาม mode
+    const titleEl = document.getElementById('install-modal-title');
+    const btnEl = document.getElementById('btn-confirm-install');
+    const hintEl = document.getElementById('install-move-hint');
+    const prevMacEl = document.getElementById('install-prev-machine');
+    if (isReplaceMode) {
+        if (titleEl) titleEl.innerText = '🔄 เปลี่ยน / ย้ายอะไหล่';
+        if (btnEl) btnEl.innerText = '✅ ยืนยัน';
+        if (prevMacEl) prevMacEl.innerText = currentMachine || '-';
+        if (hintEl) hintEl.classList.remove('hidden');
+    } else {
+        if (titleEl) titleEl.innerText = '🔧 ติดตั้งอะไหล่กับเครื่อง';
+        if (btnEl) btnEl.innerText = '✅ ยืนยันติดตั้ง';
+        if (hintEl) hintEl.classList.add('hidden');
+    }
 
     // ตั้งค่า date + time (24h) เป็นเวลาปัจจุบัน (local timezone)
     const dateInput = document.getElementById('install-date');
@@ -371,7 +381,12 @@ window.openInstallPartDialog = function(partId, partName, lifeShots) {
     }
     const machines = Object.keys(mapping).sort();
     sel.innerHTML = '<option value="">-- เลือกเครื่อง --</option>' +
-        machines.map(m => `<option value="${m}">${m}</option>`).join('');
+        machines.map(m => {
+            const label = (isReplaceMode && m === currentMachine) ? `${m} (เครื่องเดิม)` : m;
+            return `<option value="${m}">${label}</option>`;
+        }).join('');
+    // ถ้าเป็น replace/move mode: default เลือกเครื่องเดิมไว้ก่อน (ผู้ใช้เปลี่ยนได้)
+    if (isReplaceMode && currentMachine) sel.value = currentMachine;
 
     modal.classList.remove('hidden');
 };
@@ -382,6 +397,7 @@ window.confirmInstallPart = async function() {
     const lifeShots = parseInt(document.getElementById('install-part-life-val').value) || 0;
     const machine = document.getElementById('install-machine-select').value;
     const maintJobId = document.getElementById('install-maint-job').value.trim();
+    const prevInstallId = document.getElementById('install-prev-id').value;
     // รวม date + time (24h HH:MM) -> "yyyy-MM-dd HH:mm"
     const dateVal = (document.getElementById('install-date') || {}).value || '';
     const timeVal = ((document.getElementById('install-time') || {}).value || '').trim();
@@ -398,16 +414,30 @@ window.confirmInstallPart = async function() {
     const btn = document.getElementById('btn-confirm-install');
     const origText = btn.innerText;
     btn.disabled = true;
-    btn.innerText = '⏳ กำลังติดตั้ง...';
+    btn.innerText = prevInstallId ? '⏳ กำลังบันทึก...' : '⏳ กำลังติดตั้ง...';
     try {
-        const result = await window.installPartToMachine(machine, partId, partName, lifeShots, maintJobId, installDate);
+        const result = prevInstallId
+            ? await window.replacePartOnMachine(prevInstallId, machine, partId, partName, lifeShots, maintJobId, installDate)
+            : await window.installPartToMachine(machine, partId, partName, lifeShots, maintJobId, installDate);
         if (result && result.status === 'success') {
             document.getElementById('modal-install-part').classList.add('hidden');
             const shotInfo = (result.installShot !== undefined) ? ` (เริ่มนับจาก ${Number(result.installShot).toLocaleString()} shot)` : '';
-            alert(`✅ ติดตั้ง "${partName}" กับ ${machine} สำเร็จ${shotInfo}`);
-            window.loadPartsMaster();
+            const carriedInfo = (result.carriedShots !== undefined && result.carriedShots > 0)
+                ? `\n📊 ยอด shot สะสมยกมา: ${Number(result.carriedShots).toLocaleString()}`
+                : '';
+            const actionTxt = prevInstallId ? 'บันทึกการเปลี่ยน/ย้ายอะไหล่' : 'ติดตั้ง';
+            alert(`✅ ${actionTxt} "${partName}" กับ ${machine} สำเร็จ${shotInfo}${carriedInfo}`);
+            // refresh view ที่เกี่ยวข้อง
+            if (typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
+            if (prevInstallId && typeof window.loadMachineParts === 'function') {
+                const macTitle = document.getElementById('machine-detail-title');
+                if (macTitle) {
+                    const mac = macTitle.innerText.match(/CWM-\d+/);
+                    if (mac) window.loadMachineParts(mac[0]);
+                }
+            }
         } else {
-            alert('ติดตั้งไม่สำเร็จ: ' + ((result && result.message) || ''));
+            alert('ไม่สำเร็จ: ' + ((result && result.message) || ''));
         }
     } catch (err) {
         alert('เกิดข้อผิดพลาด: ' + err.message);
