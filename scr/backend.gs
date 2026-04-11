@@ -813,12 +813,16 @@ function doPost(e) {
     let sheet = ss.getSheetByName("Parts_Installation");
     if (!sheet) {
       sheet = ss.insertSheet("Parts_Installation");
-      sheet.appendRow(["Install_ID", "Machine", "Part_ID", "Part_Name", "Install_Date", "Install_Shot", "Life_Shots", "Status", "Maint_Job_ID", "Recorder", "Replaced_Date", "Carried_Shots"]);
+      sheet.appendRow(["Install_ID", "Machine", "Part_ID", "Part_Name", "Install_Date", "Install_Shot", "Life_Shots", "Status", "Maint_Job_ID", "Recorder", "Replaced_Date", "Carried_Shots", "Carried_Days"]);
     }
-    // ตรวจสอบว่ามีคอลัมน์ Carried_Shots หรือยัง (backward compat)
-    const existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    // ตรวจสอบว่ามีคอลัมน์ Carried_Shots / Carried_Days หรือยัง (backward compat)
+    let existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
     if (existingHeaders.indexOf("Carried_Shots") === -1) {
       sheet.getRange(1, existingHeaders.length + 1).setValue("Carried_Shots");
+      existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    }
+    if (existingHeaders.indexOf("Carried_Days") === -1) {
+      sheet.getRange(1, existingHeaders.length + 1).setValue("Carried_Days");
     }
 
     const d = data.installation;
@@ -838,11 +842,20 @@ function doPost(e) {
       const headers = rows[0].map(h => String(h).trim());
       const colIdx = (name) => headers.indexOf(name);
       let oldCarried = 0, oldInstallShot = 0, oldMachine = "";
+      let oldCarriedDays = 0, oldInstallDateStr = "";
       for (let i = 1; i < rows.length; i++) {
         if (String(rows[i][colIdx("Install_ID")]).trim() === d.Install_ID) {
           oldCarried = parseInt(rows[i][colIdx("Carried_Shots")]) || 0;
           oldInstallShot = parseInt(rows[i][colIdx("Install_Shot")]) || 0;
           oldMachine = String(rows[i][colIdx("Machine")] || "").trim();
+          const cdIdx = colIdx("Carried_Days");
+          oldCarriedDays = (cdIdx !== -1) ? (parseInt(rows[i][cdIdx]) || 0) : 0;
+          const oldInstDateRaw = rows[i][colIdx("Install_Date")];
+          if (oldInstDateRaw instanceof Date && !isNaN(oldInstDateRaw.getTime())) {
+            oldInstallDateStr = Utilities.formatDate(oldInstDateRaw, "GMT+7", "yyyy-MM-dd");
+          } else {
+            oldInstallDateStr = String(oldInstDateRaw || "").trim().substring(0, 10);
+          }
           sheet.getRange(i + 1, colIdx("Status") + 1).setValue("Replaced");
           sheet.getRange(i + 1, colIdx("Replaced_Date") + 1).setValue(installDateOnly);
           break;
@@ -852,6 +865,11 @@ function doPost(e) {
       const oldMachineShots = oldMachine ? calcMachineShots(ss, oldMachine, "2020-01-01", installDateOnly) : 0;
       const shotsOnOld = Math.max(0, oldMachineShots - oldInstallShot);
       const newCarried = oldCarried + shotsOnOld;
+      // คำนวณจำนวนวันที่ใช้บนเครื่องเก่า แล้ว carry ไปยังรายการใหม่
+      const daysOnOld = (oldInstallDateStr && installDateOnly)
+        ? Math.max(0, daysBetween(oldInstallDateStr, installDateOnly))
+        : 0;
+      const newCarriedDays = oldCarriedDays + daysOnOld;
 
       const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
       // คำนวณ Install_Shot ของเครื่องใหม่ ณ วันที่ติดตั้ง (shot สะสมถึงวันนั้น)
@@ -871,14 +889,15 @@ function doPost(e) {
           case "Recorder": return d.Recorder || "";
           case "Replaced_Date": return "";
           case "Carried_Shots": return newCarried;
+          case "Carried_Days": return newCarriedDays;
           default: return "";
         }
       });
       sheet.appendRow(rowData);
       SpreadsheetApp.flush();
-      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId, carriedShots: newCarried, installShot: newInstallShot})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId, carriedShots: newCarried, carriedDays: newCarriedDays, installShot: newInstallShot})).setMimeType(ContentService.MimeType.JSON);
     } else {
-      // ติดตั้งอะไหล่ใหม่ (Carried_Shots = 0)
+      // ติดตั้งอะไหล่ใหม่ (Carried_Shots = 0, Carried_Days = 0)
       const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
       const hdr = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
       // คำนวณ Install_Shot ณ วันที่ติดตั้ง (shot สะสมถึงวันนั้น)
@@ -897,6 +916,7 @@ function doPost(e) {
           case "Recorder": return d.Recorder || "";
           case "Replaced_Date": return "";
           case "Carried_Shots": return 0;
+          case "Carried_Days": return 0;
           default: return "";
         }
       });
@@ -1722,6 +1742,20 @@ function getWeightPerPc(productName) {
 function getPcsFromKg(productName, kg) {
     if (!kg || kg <= 0) return 0;
     return Math.round(kg / getWeightPerPc(productName));
+}
+
+// คำนวณจำนวนวันระหว่างวันที่ 2 ตัว (inclusive, format "yyyy-MM-dd")
+function daysBetween(startStr, endStr) {
+  if (!startStr || !endStr) return 0;
+  try {
+    var s = new Date(startStr + "T00:00:00+07:00");
+    var e = new Date(endStr + "T00:00:00+07:00");
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
+    var diffMs = e.getTime() - s.getTime();
+    return Math.max(0, Math.round(diffMs / 86400000));
+  } catch (err) {
+    return 0;
+  }
 }
 
 // คำนวณ Shot สะสมของเครื่อง (FG + NG pcs) ตั้งแต่วันที่ระบุ
