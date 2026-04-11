@@ -945,7 +945,11 @@
                         <label class="block text-xs font-bold text-gray-600 mb-0.5">Supplier</label>
                         <input type="text" id="parts-supplier" class="w-full p-2 border rounded text-sm" placeholder="ผู้จำหน่าย">
                     </div>
-                    <div class="md:col-span-2">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-0.5" title="ตรวจเช็คทุกๆ N shot (0 = ไม่ตรวจ)">🔍 Check ทุกๆ (Shot)</label>
+                        <input type="number" id="parts-check-interval" class="w-full p-2 border rounded text-sm" placeholder="0 = ไม่ตรวจ" min="0">
+                    </div>
+                    <div>
                         <label class="block text-xs font-bold text-gray-600 mb-0.5">หมายเหตุ</label>
                         <input type="text" id="parts-remark" class="w-full p-2 border rounded text-sm" placeholder="รายละเอียดเพิ่มเติม">
                     </div>
@@ -1219,7 +1223,90 @@
     <script src="js/charts/popups.js?v=4.0"></script>
     <script src="js/charts/audit.js?v=4.0"></script>
     <script src="js/packing.js?v=3.56"></script>
-    <script src="js/parts.js?v=5.2"></script> 
+    <!-- 🔍 MODAL: ตรวจเช็คอะไหล่ (Parts Inspection) -->
+    <div id="modal-check-part" class="fixed inset-0 bg-black bg-opacity-50 z-[70] hidden flex items-center justify-center p-4 print-hide">
+        <div class="bg-white w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div class="bg-orange-500 p-3 flex justify-between items-center text-white flex-none">
+                <h3 class="font-bold text-base flex items-center gap-2">🔍 ตรวจเช็คอะไหล่: <span id="check-title-name">-</span></h3>
+                <button onclick="window.closeCheckDialog()" class="text-white hover:text-gray-200 text-2xl font-bold leading-none">&times;</button>
+            </div>
+            <div class="p-4 space-y-3 overflow-y-auto flex-1 bg-gray-50">
+                <!-- Hidden fields -->
+                <input type="hidden" id="check-install-id">
+                <input type="hidden" id="check-part-id">
+                <input type="hidden" id="check-part-name">
+                <input type="hidden" id="check-machine">
+                <input type="hidden" id="check-actual-shot">
+                <input type="hidden" id="check-life-shot">
+                <input type="hidden" id="check-interval">
+
+                <!-- Info card -->
+                <div class="bg-orange-50 border border-orange-200 rounded p-2 text-xs grid grid-cols-2 gap-1">
+                    <div>เครื่อง: <span id="check-info-machine" class="font-mono font-bold text-orange-800">-</span></div>
+                    <div>Actual: <span id="check-info-actual" class="font-mono font-bold text-orange-800">-</span> shot</div>
+                    <div>Life: <span id="check-info-life" class="font-mono font-bold text-gray-700">-</span> shot</div>
+                    <div>%: <span id="check-info-pct" class="font-mono font-bold text-gray-700">-</span></div>
+                </div>
+
+                <!-- Result radio -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">ผลการตรวจเช็ค *</label>
+                    <div class="flex flex-col gap-2">
+                        <label class="flex items-center gap-2 p-2 bg-white border border-green-200 rounded cursor-pointer hover:bg-green-50">
+                            <input type="radio" name="check-result" id="check-result-passed" value="Passed" onchange="window.toggleCheckResultFields()" checked>
+                            <span class="text-sm">✅ <b>ใช้ต่อได้</b> — ยังไม่ต้องเปลี่ยน</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-2 bg-white border border-red-200 rounded cursor-pointer hover:bg-red-50">
+                            <input type="radio" name="check-result" id="check-result-replaced" value="Replaced" onchange="window.toggleCheckResultFields()">
+                            <span class="text-sm">❌ <b>ต้องเปลี่ยน</b> — อะไหล่เสื่อมสภาพ (จะเปิด dialog เปลี่ยนอะไหล่ให้)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Note -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">หมายเหตุ / สภาพที่พบ</label>
+                    <textarea id="check-note" rows="2" class="w-full p-2 border rounded text-sm" placeholder="เช่น มีรอยสึกเล็กน้อย, ยางยังแข็ง, ไม่มีรอยแตก..."></textarea>
+                </div>
+
+                <!-- Next Check Shot (hidden when Replaced) -->
+                <div id="check-next-shot-section">
+                    <label class="block text-xs font-bold text-gray-700 mb-1">ตรวจเช็คครั้งถัดไปที่ (Shot)</label>
+                    <input type="number" id="check-next-shot" class="w-full p-2 border rounded text-sm font-mono" min="0">
+                    <div class="text-[11px] text-gray-500 mt-1">💡 ค่าเริ่มต้น = Actual + Check Interval · ปรับเพิ่มได้ถ้าอะไหล่ยังอยู่ในสภาพดี</div>
+                </div>
+
+                <!-- Photos -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">📸 แนบรูปสภาพอะไหล่ (สูงสุด 5 รูป)</label>
+                    <input type="file" id="check-photo-input" accept="image/*" multiple capture="environment" onchange="window.handleCheckPhotoSelect(event)" class="w-full p-2 border rounded text-xs bg-white">
+                    <div id="check-photo-status" class="text-xs text-orange-600 mt-1"></div>
+                    <div id="check-photo-preview" class="mt-2"></div>
+                    <div class="text-[11px] text-gray-500 mt-1">💡 รูปจะถูกย่อ 1280px JPEG q75 ก่อนส่ง เพื่อประหยัดพื้นที่</div>
+                </div>
+            </div>
+            <div class="p-3 border-t bg-white flex-none flex gap-2">
+                <button type="button" id="btn-confirm-check" onclick="window.submitPartCheck()" class="flex-1 bg-orange-600 text-white py-2 rounded font-bold hover:bg-orange-700 text-sm">💾 บันทึกผลตรวจเช็ค</button>
+                <button type="button" onclick="window.closeCheckDialog()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded font-bold hover:bg-gray-400 text-sm">ยกเลิก</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 📋 MODAL: ประวัติการตรวจเช็ค -->
+    <div id="modal-check-history" class="fixed inset-0 bg-black bg-opacity-50 z-[70] hidden flex items-center justify-center p-4 print-hide">
+        <div class="bg-white w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div class="bg-gray-700 p-3 flex justify-between items-center text-white flex-none">
+                <h3 id="check-history-title" class="font-bold text-base">📋 ประวัติการตรวจเช็ค</h3>
+                <button onclick="window.closeCheckHistory()" class="text-white hover:text-gray-200 text-2xl font-bold leading-none">&times;</button>
+            </div>
+            <div id="check-history-body" class="p-4 overflow-y-auto flex-1 bg-gray-50"></div>
+            <div class="p-3 border-t bg-white flex-none flex justify-end">
+                <button onclick="window.closeCheckHistory()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded font-bold hover:bg-gray-400 text-sm">ปิด</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/parts.js?v=5.3"></script> 
 
     <!-- Script ทั่วไปสำหรับ UI ย่อยๆ -->
     <script>

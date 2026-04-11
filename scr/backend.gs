@@ -50,12 +50,84 @@ function saveImageToDrive(base64Data, filename) {
 
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    
-    return file.getUrl(); 
+
+    return file.getUrl();
   } catch (e) {
     console.error("Save image error: " + e);
     return "";
   }
+}
+
+// ==================================================
+// 🌟 โฟลเดอร์แยกสำหรับรูปการตรวจเช็คอะไหล่
+// ==================================================
+function getOrCreateCheckPhotosFolder() {
+  const props = PropertiesService.getScriptProperties();
+  let folderId = props.getProperty("PARTS_CHECK_PHOTOS_FOLDER_ID");
+  if (folderId) {
+    try { return DriveApp.getFolderById(folderId); } catch (e) { /* fall through */ }
+  }
+  // สร้างเป็น sibling ของโฟลเดอร์ NG เดิม (หา parent ของ folder NG)
+  try {
+    const ngFolder = DriveApp.getFolderById("1GcY_XvQTaBTE75dkrWdh8SnABXfUc6G4");
+    const parents = ngFolder.getParents();
+    const parent = parents.hasNext() ? parents.next() : DriveApp.getRootFolder();
+    const newFolder = parent.createFolder("Parts_Check_Photos");
+    newFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    props.setProperty("PARTS_CHECK_PHOTOS_FOLDER_ID", newFolder.getId());
+    return newFolder;
+  } catch (e) {
+    console.error("Create check folder error: " + e);
+    // Fallback: ใช้โฟลเดอร์ NG เดิม
+    return DriveApp.getFolderById("1GcY_XvQTaBTE75dkrWdh8SnABXfUc6G4");
+  }
+}
+
+function saveCheckImageToDrive(base64Data, filename) {
+  if (!base64Data) return "";
+  try {
+    const splitBase = base64Data.split(',');
+    const type = splitBase[0].split(';')[0].replace('data:', '');
+    const byteCharacters = Utilities.base64Decode(splitBase[1]);
+    const blob = Utilities.newBlob(byteCharacters, type, filename);
+    const folder = getOrCreateCheckPhotosFolder();
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return file.getUrl();
+  } catch (e) {
+    console.error("Save check image error: " + e);
+    return "";
+  }
+}
+
+// เพิ่ม column ที่ขาดหายไปใน sheet (backward compat helper)
+function ensureColumns(sheet, requiredCols) {
+  let headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  requiredCols.forEach(function(col) {
+    if (headers.indexOf(col) === -1) {
+      sheet.getRange(1, sheet.getLastColumn() + 1).setValue(col);
+      headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    }
+  });
+}
+
+// ค้น Check_Interval_Shots default จาก Parts_Master
+function lookupPartsMasterCheckInterval(ss, partId) {
+  if (!partId) return 0;
+  const sheet = ss.getSheetByName("Parts_Master");
+  if (!sheet) return 0;
+  const rows = sheet.getDataRange().getValues();
+  if (rows.length <= 1) return 0;
+  const headers = rows[0].map(h => String(h).trim());
+  const pidIdx = headers.indexOf("Part_ID");
+  const ciIdx = headers.indexOf("Check_Interval_Shots");
+  if (pidIdx === -1 || ciIdx === -1) return 0;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][pidIdx] || "").trim() === partId) {
+      return parseInt(rows[i][ciIdx]) || 0;
+    }
+  }
+  return 0;
 }
 
 // ==================================================
@@ -729,10 +801,18 @@ function doPost(e) {
     const headers = rows[0].map(h => String(h).trim());
     const colIdx = (name) => headers.indexOf(name);
 
+    // เพิ่ม column Check_Interval_Shots ใน Parts_Master ถ้ายังไม่มี (backward compat)
+    if (headers.indexOf("Check_Interval_Shots") === -1) {
+      sheet.getRange(1, sheet.getLastColumn() + 1).setValue("Check_Interval_Shots");
+    }
+
     if (data.mode === "edit" && d.Part_ID) {
       // แก้ไขอะไหล่เดิม
       const newLife = parseInt(d.Life_Shots) || 0;
       const newName = d.Part_Name || "";
+      const newCheckInterval = parseInt(d.Check_Interval_Shots) || 0;
+      const freshHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      const checkCol = freshHeaders.indexOf("Check_Interval_Shots");
       for (let i = 1; i < rows.length; i++) {
         if (String(rows[i][colIdx("Part_ID")]).trim() === d.Part_ID) {
           sheet.getRange(i + 1, colIdx("Part_Name") + 1).setValue(newName);
@@ -741,7 +821,8 @@ function doPost(e) {
           sheet.getRange(i + 1, colIdx("Unit_Cost") + 1).setValue(parseFloat(d.Unit_Cost) || 0);
           sheet.getRange(i + 1, colIdx("Supplier") + 1).setValue(d.Supplier || "");
           sheet.getRange(i + 1, colIdx("Remark") + 1).setValue(d.Remark || "");
-          // Sync: อัพเดต Life_Shots + Part_Name ของ Active installation ทั้งหมดของ Part_ID นี้
+          if (checkCol !== -1) sheet.getRange(i + 1, checkCol + 1).setValue(newCheckInterval);
+          // Sync: อัพเดต Life_Shots + Part_Name + Check_Interval ของ Active installation ทั้งหมดของ Part_ID นี้
           const instSheet = ss.getSheetByName("Parts_Installation");
           if (instSheet) {
             const iRows = instSheet.getDataRange().getValues();
@@ -751,12 +832,16 @@ function doPost(e) {
               const iStatus = iHdr.indexOf("Status");
               const iLife = iHdr.indexOf("Life_Shots");
               const iName = iHdr.indexOf("Part_Name");
+              const iCheckInterval = iHdr.indexOf("Check_Interval_Shots");
               if (iPid !== -1 && iLife !== -1) {
                 for (let j = 1; j < iRows.length; j++) {
                   if (String(iRows[j][iPid] || "").trim() === d.Part_ID
                       && String(iRows[j][iStatus] || "").trim() === "Active") {
                     instSheet.getRange(j + 1, iLife + 1).setValue(newLife);
                     if (iName !== -1) instSheet.getRange(j + 1, iName + 1).setValue(newName);
+                    if (iCheckInterval !== -1 && newCheckInterval > 0) {
+                      instSheet.getRange(j + 1, iCheckInterval + 1).setValue(newCheckInterval);
+                    }
                   }
                 }
               }
@@ -779,7 +864,22 @@ function doPost(e) {
         if (match) maxNum = Math.max(maxNum, parseInt(match[1]));
       }
       const newId = prefix + "-" + String(maxNum + 1).padStart(3, "0");
-      sheet.appendRow([newId, d.Part_Name || "", d.Category || "", parseInt(d.Life_Shots) || 0, parseFloat(d.Unit_Cost) || 0, d.Supplier || "", d.Remark || ""]);
+      // Build row ตาม header order (รองรับ Check_Interval_Shots)
+      const freshHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      const rowData = freshHeaders.map(function(h) {
+        switch(h) {
+          case "Part_ID": return newId;
+          case "Part_Name": return d.Part_Name || "";
+          case "Category": return d.Category || "";
+          case "Life_Shots": return parseInt(d.Life_Shots) || 0;
+          case "Unit_Cost": return parseFloat(d.Unit_Cost) || 0;
+          case "Supplier": return d.Supplier || "";
+          case "Remark": return d.Remark || "";
+          case "Check_Interval_Shots": return parseInt(d.Check_Interval_Shots) || 0;
+          default: return "";
+        }
+      });
+      sheet.appendRow(rowData);
       SpreadsheetApp.flush();
       return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Added", partId: newId})).setMimeType(ContentService.MimeType.JSON);
     }
@@ -836,20 +936,19 @@ function doPost(e) {
     let sheet = ss.getSheetByName("Parts_Installation");
     if (!sheet) {
       sheet = ss.insertSheet("Parts_Installation");
-      sheet.appendRow(["Install_ID", "Machine", "Part_ID", "Part_Name", "Install_Date", "Install_Shot", "Life_Shots", "Status", "Maint_Job_ID", "Recorder", "Replaced_Date", "Carried_Shots", "Carried_Days"]);
+      sheet.appendRow(["Install_ID", "Machine", "Part_ID", "Part_Name", "Install_Date", "Install_Shot", "Life_Shots", "Status", "Maint_Job_ID", "Recorder", "Replaced_Date", "Carried_Shots", "Carried_Days", "Check_Interval_Shots", "Next_Check_Shot", "Last_Check_Date", "Check_Count"]);
     }
-    // ตรวจสอบว่ามีคอลัมน์ Carried_Shots / Carried_Days หรือยัง (backward compat)
-    let existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
-    if (existingHeaders.indexOf("Carried_Shots") === -1) {
-      sheet.getRange(1, existingHeaders.length + 1).setValue("Carried_Shots");
-      existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
-    }
-    if (existingHeaders.indexOf("Carried_Days") === -1) {
-      sheet.getRange(1, existingHeaders.length + 1).setValue("Carried_Days");
-    }
+    // ตรวจสอบว่ามีคอลัมน์ที่จำเป็นหรือยัง (backward compat)
+    ensureColumns(sheet, ["Carried_Shots", "Carried_Days", "Check_Interval_Shots", "Next_Check_Shot", "Last_Check_Date", "Check_Count"]);
 
     const d = data.installation;
     const now = new Date();
+
+    // หา Check_Interval_Shots default: frontend → Parts_Master → 0
+    let checkInterval = parseInt(d.Check_Interval_Shots);
+    if (!checkInterval || checkInterval < 0) {
+      checkInterval = lookupPartsMasterCheckInterval(ss, d.Part_ID);
+    }
 
     // รับ Install_Date จาก frontend ได้ (format: "yyyy-MM-dd" หรือ "yyyy-MM-dd HH:mm")
     // ถ้าไม่ส่งมาให้ใช้เวลาปัจจุบัน
@@ -897,8 +996,11 @@ function doPost(e) {
       const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
       // คำนวณ Install_Shot ของเครื่องใหม่ ณ วันที่ติดตั้ง (shot สะสมถึงวันนั้น)
       const newInstallShot = calcMachineShots(ss, d.Machine, "2020-01-01", installDateOnly);
-      // appendRow ตาม header order
-      const rowData = headers.map(function(h) {
+      // Next_Check_Shot = shot สะสมตัวอะไหล่ ณ ปัจจุบัน + interval
+      const newNextCheckShot = (checkInterval > 0) ? (newCarried + checkInterval) : 0;
+      // appendRow ตาม header order (re-read headers เผื่อเพิ่ม columns ใหม่)
+      const newHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      const rowData = newHeaders.map(function(h) {
         switch(h) {
           case "Install_ID": return newId;
           case "Machine": return d.Machine;
@@ -913,18 +1015,23 @@ function doPost(e) {
           case "Replaced_Date": return "";
           case "Carried_Shots": return newCarried;
           case "Carried_Days": return newCarriedDays;
+          case "Check_Interval_Shots": return checkInterval;
+          case "Next_Check_Shot": return newNextCheckShot;
+          case "Last_Check_Date": return "";
+          case "Check_Count": return 0;
           default: return "";
         }
       });
       sheet.appendRow(rowData);
       SpreadsheetApp.flush();
-      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId, carriedShots: newCarried, carriedDays: newCarriedDays, installShot: newInstallShot})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId, carriedShots: newCarried, carriedDays: newCarriedDays, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot})).setMimeType(ContentService.MimeType.JSON);
     } else {
       // ติดตั้งอะไหล่ใหม่ (Carried_Shots = 0, Carried_Days = 0)
       const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
       const hdr = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
       // คำนวณ Install_Shot ณ วันที่ติดตั้ง (shot สะสมถึงวันนั้น)
       const newInstallShot = calcMachineShots(ss, d.Machine, "2020-01-01", installDateOnly);
+      const newNextCheckShot = (checkInterval > 0) ? checkInterval : 0;
       const rowData = hdr.map(function(h) {
         switch(h) {
           case "Install_ID": return newId;
@@ -940,12 +1047,16 @@ function doPost(e) {
           case "Replaced_Date": return "";
           case "Carried_Shots": return 0;
           case "Carried_Days": return 0;
+          case "Check_Interval_Shots": return checkInterval;
+          case "Next_Check_Shot": return newNextCheckShot;
+          case "Last_Check_Date": return "";
+          case "Check_Count": return 0;
           default: return "";
         }
       });
       sheet.appendRow(rowData);
       SpreadsheetApp.flush();
-      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Installed", installId: newId, installShot: newInstallShot})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Installed", installId: newId, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot})).setMimeType(ContentService.MimeType.JSON);
     }
   }
 
@@ -1009,6 +1120,100 @@ function doPost(e) {
     }
     SpreadsheetApp.flush();
     return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Life updated", partId: targetPartId, lifeShots: newLife})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === "SAVE_PARTS_CHECK") {
+    // บันทึกการตรวจเช็คอะไหล่ + upload รูป + อัพเดต Parts_Installation
+    let sheet = ss.getSheetByName("Parts_Checks");
+    if (!sheet) {
+      sheet = ss.insertSheet("Parts_Checks");
+      sheet.appendRow(["Check_ID", "Install_ID", "Part_ID", "Part_Name", "Machine", "Check_Date", "Machine_Shot", "Actual_Part_Shot", "Result", "Note", "Photo_URLs", "Next_Check_Shot", "Recorder"]);
+    }
+    ensureColumns(sheet, ["Check_ID", "Install_ID", "Part_ID", "Part_Name", "Machine", "Check_Date", "Machine_Shot", "Actual_Part_Shot", "Result", "Note", "Photo_URLs", "Next_Check_Shot", "Recorder"]);
+
+    const c = data.check || {};
+    const now = new Date();
+    let checkDate = String(c.Check_Date || "").trim();
+    if (!checkDate) checkDate = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm");
+
+    // 1) Upload รูปทีละไฟล์ (รับ array ของ base64)
+    const urls = [];
+    if (Array.isArray(data.photos)) {
+      for (let idx = 0; idx < data.photos.length; idx++) {
+        const b64 = data.photos[idx];
+        if (!b64) continue;
+        const fname = "CHK_" + (c.Install_ID || "NA") + "_" + Utilities.formatDate(now, "GMT+7", "yyMMdd_HHmmss") + "_" + (idx + 1) + ".jpg";
+        const url = saveCheckImageToDrive(b64, fname);
+        if (url) urls.push(url);
+      }
+    }
+
+    // 2) Append row ใน Parts_Checks
+    const checkId = "CHK-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
+    const hdr = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const rowData = hdr.map(function(h) {
+      switch(h) {
+        case "Check_ID": return checkId;
+        case "Install_ID": return c.Install_ID || "";
+        case "Part_ID": return c.Part_ID || "";
+        case "Part_Name": return c.Part_Name || "";
+        case "Machine": return c.Machine || "";
+        case "Check_Date": return checkDate;
+        case "Machine_Shot": return parseInt(c.Machine_Shot) || 0;
+        case "Actual_Part_Shot": return parseInt(c.Actual_Part_Shot) || 0;
+        case "Result": return c.Result || "Passed";
+        case "Note": return c.Note || "";
+        case "Photo_URLs": return urls.join(",");
+        case "Next_Check_Shot": return parseInt(c.Next_Check_Shot) || 0;
+        case "Recorder": return c.Recorder || "";
+        default: return "";
+      }
+    });
+    sheet.appendRow(rowData);
+
+    // 3) อัพเดต Parts_Installation: Next_Check_Shot, Last_Check_Date, Check_Count
+    const instSheet = ss.getSheetByName("Parts_Installation");
+    if (instSheet && c.Install_ID) {
+      ensureColumns(instSheet, ["Check_Interval_Shots", "Next_Check_Shot", "Last_Check_Date", "Check_Count"]);
+      const iRows = instSheet.getDataRange().getValues();
+      const iHdr = iRows[0].map(h => String(h).trim());
+      const iIdIdx = iHdr.indexOf("Install_ID");
+      const iNextIdx = iHdr.indexOf("Next_Check_Shot");
+      const iLastIdx = iHdr.indexOf("Last_Check_Date");
+      const iCountIdx = iHdr.indexOf("Check_Count");
+      for (let i = 1; i < iRows.length; i++) {
+        if (String(iRows[i][iIdIdx] || "").trim() === c.Install_ID) {
+          if (iNextIdx !== -1) instSheet.getRange(i + 1, iNextIdx + 1).setValue(parseInt(c.Next_Check_Shot) || 0);
+          if (iLastIdx !== -1) instSheet.getRange(i + 1, iLastIdx + 1).setValue(checkDate.substring(0, 10));
+          if (iCountIdx !== -1) instSheet.getRange(i + 1, iCountIdx + 1).setValue((parseInt(iRows[i][iCountIdx]) || 0) + 1);
+          break;
+        }
+      }
+    }
+    SpreadsheetApp.flush();
+    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Check saved", checkId: checkId, photoUrls: urls})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === "GET_PARTS_CHECKS") {
+    const sheet = ss.getSheetByName("Parts_Checks");
+    if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "success", data: []})).setMimeType(ContentService.MimeType.JSON);
+    const rows = sheet.getDataRange().getValues();
+    if (rows.length <= 1) return ContentService.createTextOutput(JSON.stringify({status: "success", data: []})).setMimeType(ContentService.MimeType.JSON);
+    const headers = rows[0].map(h => String(h).trim());
+    const filterInstall = data.installId || "";
+    const filterMachine = data.machine || "";
+    const results = [];
+    for (let i = 1; i < rows.length; i++) {
+      const obj = {};
+      headers.forEach((h, idx) => { obj[h] = rows[i][idx] !== undefined ? rows[i][idx] : ""; });
+      if (!obj.Check_ID) continue;
+      if (filterInstall && obj.Install_ID !== filterInstall) continue;
+      if (filterMachine && obj.Machine !== filterMachine) continue;
+      results.push(obj);
+    }
+    // Sort by Check_Date desc
+    results.sort(function(a, b) { return String(b.Check_Date).localeCompare(String(a.Check_Date)); });
+    return ContentService.createTextOutput(JSON.stringify({status: "success", data: results})).setMimeType(ContentService.MimeType.JSON);
   }
 
   if (action === "SAVE_RTV") {

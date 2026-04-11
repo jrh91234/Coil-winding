@@ -95,6 +95,9 @@ window.loadPartsMaster = async function() {
             const installDateStr = extractInstallDateStr(inst.Install_Date);
             const daysOnMachine = daysFromInstall(installDateStr);
             const actualDays = carriedDays + daysOnMachine;
+            const checkInterval = parseInt(inst.Check_Interval_Shots) || 0;
+            const nextCheckShot = parseInt(inst.Next_Check_Shot) || 0;
+            const needsCheck = (nextCheckShot > 0 && actualShots >= nextCheckShot);
             partLocationsCache[pid].push({
                 machine: inst.Machine,
                 actualShots: actualShots,
@@ -102,7 +105,11 @@ window.loadPartsMaster = async function() {
                 installId: inst.Install_ID,
                 lifeShots: parseInt(inst.Life_Shots) || 0,
                 carried: carried,
-                carriedDays: carriedDays
+                carriedDays: carriedDays,
+                checkInterval: checkInterval,
+                nextCheckShot: nextCheckShot,
+                needsCheck: needsCheck,
+                partName: inst.Part_Name || ''
             });
         });
 
@@ -131,18 +138,37 @@ function renderPartsTable() {
             const escName = (p.Part_Name || '').replace(/'/g, "\\'");
             locationHtml = '<div class="flex flex-wrap gap-1">' + installations.map(inst => {
                 const pct = inst.lifeShots > 0 ? Math.min((inst.actualShots / inst.lifeShots) * 100, 100) : 0;
-                const color = pct >= 95 ? 'bg-red-100 text-red-700 hover:bg-red-200' : pct >= 80 ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200';
-                return `<button type="button" onclick="window.promptReplacepart('${inst.installId}', '${inst.machine}', '${p.Part_ID}', '${escName}', ${inst.lifeShots || 0})" title="คลิกเพื่อเปลี่ยน / ย้ายอะไหล่ตัวนี้" class="inline-block ${color} text-xs px-1.5 py-0.5 rounded font-mono cursor-pointer transition">${inst.machine}</button>`;
+                // สี: 🔴 ≥95% / 🟠 needsCheck (แต่ยังไม่ถึง 80%) / 🟡 ≥80% / 🟢 ปกติ
+                let color;
+                if (pct >= 95) color = 'bg-red-100 text-red-700 hover:bg-red-200';
+                else if (pct >= 80) color = 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200';
+                else if (inst.needsCheck) color = 'bg-orange-100 text-orange-700 hover:bg-orange-200';
+                else color = 'bg-green-100 text-green-700 hover:bg-green-200';
+                const checkMark = inst.needsCheck ? ' 🔍' : '';
+                return `<button type="button" onclick="window.promptReplacepart('${inst.installId}', '${inst.machine}', '${p.Part_ID}', '${escName}', ${inst.lifeShots || 0})" title="คลิกเพื่อเปลี่ยน / ย้ายอะไหล่ตัวนี้${inst.needsCheck ? ' (ต้องตรวจเช็ค)' : ''}" class="inline-block ${color} text-xs px-1.5 py-0.5 rounded font-mono cursor-pointer transition">${inst.machine}${checkMark}</button>`;
             }).join('') + '</div>';
         }
         // Actual Shot + Actual Days รวมทุกเครื่อง
         const totalActualShots = installations.reduce((sum, inst) => sum + inst.actualShots, 0);
         const maxActualDays = installations.reduce((mx, inst) => Math.max(mx, inst.actualDays || 0), 0);
         const pctTotal = life > 0 && installations.length === 1 ? Math.min((totalActualShots / life) * 100, 100) : 0;
-        const shotColor = pctTotal >= 95 ? 'text-red-600 font-bold' : pctTotal >= 80 ? 'text-yellow-600 font-bold' : 'text-gray-700';
+        const anyNeedsCheck = installations.some(i => i.needsCheck);
+        let shotColor;
+        if (pctTotal >= 95) shotColor = 'text-red-600 font-bold';
+        else if (pctTotal >= 80) shotColor = 'text-yellow-600 font-bold';
+        else if (anyNeedsCheck) shotColor = 'text-orange-600 font-bold';
+        else shotColor = 'text-gray-700';
         const shotHtml = installations.length > 0
-            ? `<div><span class="${shotColor} font-mono">${totalActualShots.toLocaleString()}</span><div class="text-[10px] text-gray-500 font-mono">${maxActualDays.toLocaleString()} วัน</div></div>`
+            ? `<div><span class="${shotColor} font-mono">${totalActualShots.toLocaleString()}</span><div class="text-[10px] text-gray-500 font-mono">${maxActualDays.toLocaleString()} วัน</div>${anyNeedsCheck ? '<div class="text-[10px] text-orange-600 font-bold">🔍 ต้องตรวจเช็ค</div>' : ''}</div>`
             : '<span class="text-gray-300">-</span>';
+
+        // ปุ่ม 🔍 ตรวจเช็ค — แสดงเฉพาะกรณีมี active installation
+        const checkBtnHtml = installations.length > 0
+            ? installations.map(inst => {
+                const highlight = inst.needsCheck ? 'text-orange-600 font-bold' : 'text-orange-500';
+                return `<button onclick="window.openCheckPartDialog('${inst.installId}', '${p.Part_ID}', '${(p.Part_Name || '').replace(/'/g, "\\'")}', '${inst.machine}', ${inst.actualShots}, ${inst.lifeShots}, ${inst.nextCheckShot}, ${inst.checkInterval})" class="${highlight} hover:underline text-xs mr-2" title="ตรวจเช็คอะไหล่ที่ติดตั้งบน ${inst.machine}">🔍 เช็ค(${inst.machine})</button>`;
+            }).join('')
+            : '';
 
         html += `<tr class="border-b hover:bg-gray-50">
             <td class="p-2 font-mono text-xs text-gray-500">${p.Part_ID}</td>
@@ -154,6 +180,7 @@ function renderPartsTable() {
             <td class="p-2 text-xs text-gray-600">${p.Supplier || '-'}</td>
             <td class="p-2">${locationHtml}</td>
             <td class="p-2 text-center whitespace-nowrap">
+                ${checkBtnHtml}
                 <button onclick="window.openInstallPartDialog('${p.Part_ID}', '${(p.Part_Name || '').replace(/'/g, "\\'")}', ${life})" class="text-cyan-600 hover:underline text-xs mr-2">🔧 ติดตั้ง</button>
                 <button onclick="window.editPart('${p.Part_ID}')" class="text-blue-600 hover:underline text-xs mr-2">✏️ แก้ไข</button>
                 <button onclick="window.deletePart('${p.Part_ID}', '${(p.Part_Name || '').replace(/'/g, "\\'")}')" class="text-red-600 hover:underline text-xs">🗑️ ลบ</button>
@@ -172,6 +199,7 @@ document.getElementById('parts-form').addEventListener('submit', async function(
     btn.innerText = '⏳ กำลังบันทึก...';
 
     const editId = document.getElementById('parts-edit-id').value;
+    const checkIntervalEl = document.getElementById('parts-check-interval');
     const payload = {
         action: editId ? 'SAVE_PARTS_MASTER' : 'SAVE_PARTS_MASTER',
         mode: editId ? 'edit' : 'new',
@@ -182,7 +210,8 @@ document.getElementById('parts-form').addEventListener('submit', async function(
             Life_Shots: document.getElementById('parts-life').value || 0,
             Unit_Cost: document.getElementById('parts-cost').value || 0,
             Supplier: document.getElementById('parts-supplier').value.trim(),
-            Remark: document.getElementById('parts-remark').value.trim()
+            Remark: document.getElementById('parts-remark').value.trim(),
+            Check_Interval_Shots: checkIntervalEl ? (checkIntervalEl.value || 0) : 0
         }
     };
 
@@ -213,6 +242,8 @@ window.editPart = function(partId) {
     document.getElementById('parts-cost').value = p.Unit_Cost || '';
     document.getElementById('parts-supplier').value = p.Supplier || '';
     document.getElementById('parts-remark').value = p.Remark || '';
+    const ci = document.getElementById('parts-check-interval');
+    if (ci) ci.value = p.Check_Interval_Shots || '';
     document.getElementById('btn-save-part').innerText = '💾 บันทึกแก้ไข';
     document.getElementById('btn-cancel-part').classList.remove('hidden');
     document.getElementById('parts-name').focus();
@@ -326,16 +357,27 @@ window.loadMachineParts = async function(machine) {
             const installDateStr = extractInstallDateStr(inst.Install_Date);
             const daysOnMachine = daysFromInstall(installDateStr);
             const actualDays = carriedDays + daysOnMachine;
+            // Check fields
+            const checkInterval = parseInt(inst.Check_Interval_Shots) || 0;
+            const nextCheckShot = parseInt(inst.Next_Check_Shot) || 0;
+            const checkCount = parseInt(inst.Check_Count) || 0;
+            const lastCheckDate = inst.Last_Check_Date ? extractInstallDateStr(inst.Last_Check_Date) : '';
+            const needsCheck = (nextCheckShot > 0 && usedShots >= nextCheckShot);
+            const shotsToNextCheck = nextCheckShot > 0 ? Math.max(0, nextCheckShot - usedShots) : 0;
 
-            let statusColor = 'bg-green-500'; let statusText = '🟢 ปกติ';
-            if (pct >= 95) { statusColor = 'bg-red-500'; statusText = '🔴 ต้องเปลี่ยน'; }
-            else if (pct >= 80) { statusColor = 'bg-yellow-500'; statusText = '🟡 ใกล้หมดอายุ'; }
+            // สถานะ: 🔴 (≥95%) > 🟡 (≥80%) > 🟠 (needsCheck) > 🟢
+            let statusColor = 'bg-green-500'; let statusText = '🟢 ปกติ'; let statusTextColor = 'text-green-600';
+            if (pct >= 95) { statusColor = 'bg-red-500'; statusText = '🔴 ต้องเปลี่ยน'; statusTextColor = 'text-red-600 font-bold'; }
+            else if (pct >= 80) { statusColor = 'bg-yellow-500'; statusText = '🟡 ใกล้หมดอายุ'; statusTextColor = 'text-yellow-600 font-bold'; }
+            else if (needsCheck) { statusColor = 'bg-orange-500'; statusText = '🟠 ต้องตรวจเช็ค'; statusTextColor = 'text-orange-600 font-bold'; }
 
             const installDateDisplay = formatInstallDateTime(inst.Install_Date);
-            html += `<div class="border rounded-lg p-3 bg-white">
+            const escName = (inst.Part_Name || '').replace(/'/g, "\\'");
+            const checkBtnClass = needsCheck ? 'text-orange-600 font-bold animate-pulse' : 'text-orange-500';
+            html += `<div class="border rounded-lg p-3 bg-white ${needsCheck ? 'border-orange-400 bg-orange-50' : ''}">
                 <div class="flex justify-between items-center mb-1">
                     <span class="font-bold text-sm">${inst.Part_Name || inst.Part_ID}${inst.Part_ID ? ` <span class="text-[10px] text-gray-400 font-mono font-normal">(${inst.Part_ID})</span>` : ''}</span>
-                    <span class="text-xs ${pct >= 95 ? 'text-red-600 font-bold' : pct >= 80 ? 'text-yellow-600 font-bold' : 'text-green-600'}">${statusText}</span>
+                    <span class="text-xs ${statusTextColor}">${statusText}</span>
                 </div>
                 <div class="flex justify-between text-xs text-gray-500 mb-1">
                     <span>ติดตั้ง: ${installDateDisplay}</span>
@@ -345,6 +387,10 @@ window.loadMachineParts = async function(machine) {
                     <span>&nbsp;</span>
                     <span>ระยะเวลาใช้งาน: <b>${actualDays.toLocaleString()}</b> วัน${carriedDays > 0 ? ` (สะสม ${carriedDays.toLocaleString()} วัน)` : ''}</span>
                 </div>
+                ${nextCheckShot > 0 ? `<div class="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>ตรวจเช็คครั้งล่าสุด: ${lastCheckDate || '-'} (ตรวจแล้ว ${checkCount} ครั้ง)</span>
+                    <span class="${needsCheck ? 'text-orange-600 font-bold' : ''}">Next check: <b>${nextCheckShot.toLocaleString()}</b>${needsCheck ? ' (ถึงเกณฑ์แล้ว)' : ` (อีก ${shotsToNextCheck.toLocaleString()} shot)`}</span>
+                </div>` : ''}
                 ${lifeShots > 0 ? `<div class="w-full bg-gray-200 rounded-full h-2 mb-1">
                     <div class="${statusColor} h-2 rounded-full transition-all" style="width: ${pct.toFixed(1)}%"></div>
                 </div>
@@ -352,8 +398,10 @@ window.loadMachineParts = async function(machine) {
                     <span>${pct.toFixed(1)}%</span>
                     <span>เหลือ: ${remaining.toLocaleString()} shot</span>
                 </div>` : ''}
-                <div class="flex gap-2 mt-2">
-                    <button onclick="window.promptReplacepart('${inst.Install_ID}', '${machine}', '${inst.Part_ID}', '${(inst.Part_Name || '').replace(/'/g, "\\'")}', ${lifeShots})" class="text-xs text-orange-600 hover:underline">🔄 เปลี่ยน / ย้าย</button>
+                <div class="flex gap-2 mt-2 flex-wrap">
+                    <button onclick="window.openCheckPartDialog('${inst.Install_ID}', '${inst.Part_ID}', '${escName}', '${machine}', ${usedShots}, ${lifeShots}, ${nextCheckShot}, ${checkInterval})" class="text-xs ${checkBtnClass} hover:underline">🔍 ตรวจเช็ค</button>
+                    <button onclick="window.showCheckHistory('${inst.Install_ID}', '${escName}')" class="text-xs text-gray-600 hover:underline">📋 ประวัติ${checkCount > 0 ? ` (${checkCount})` : ''}</button>
+                    <button onclick="window.promptReplacepart('${inst.Install_ID}', '${machine}', '${inst.Part_ID}', '${escName}', ${lifeShots})" class="text-xs text-orange-600 hover:underline">🔄 เปลี่ยน / ย้าย</button>
                     <button onclick="window.promptUpdateLife('${inst.Install_ID}', ${lifeShots})" class="text-xs text-blue-600 hover:underline">📏 ปรับอายุ</button>
                 </div>
             </div>`;
@@ -523,4 +571,293 @@ window.confirmInstallPart = async function() {
         btn.disabled = false;
         btn.innerText = origText;
     }
+};
+
+// ==========================================
+// 🔍 Parts Check / Inspection
+// ==========================================
+
+// Client-side image resize (Canvas) → base64 JPEG
+// maxWidth: width เป้าหมาย (max 1280), quality: 0.75
+async function resizeImageToBase64(file, maxWidth = 1280, quality = 0.75) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('FileReader error'));
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onerror = () => reject(new Error('Image load error'));
+            img.onload = () => {
+                const ratio = Math.min(maxWidth / img.width, 1);
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.round(img.width * ratio);
+                canvas.height = Math.round(img.height * ratio);
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const base64 = canvas.toDataURL('image/jpeg', quality);
+                resolve(base64);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+// Store selected photos' base64 during check dialog session
+let checkPhotosStore = [];  // array of { name, size, base64 }
+
+window.openCheckPartDialog = async function(installId, partId, partName, machine, actualShots, lifeShots, nextCheckShot, checkInterval) {
+    const modal = document.getElementById('modal-check-part');
+    if (!modal) { alert('ไม่พบ modal ฟอร์มตรวจเช็ค'); return; }
+
+    // Reset state
+    checkPhotosStore = [];
+    document.getElementById('check-install-id').value = installId;
+    document.getElementById('check-part-id').value = partId;
+    document.getElementById('check-part-name').value = partName;
+    document.getElementById('check-machine').value = machine;
+    document.getElementById('check-actual-shot').value = actualShots;
+    document.getElementById('check-life-shot').value = lifeShots;
+    document.getElementById('check-interval').value = checkInterval || 0;
+
+    // Header info
+    document.getElementById('check-title-name').innerText = `${partName} (${partId})`;
+    document.getElementById('check-info-machine').innerText = machine;
+    document.getElementById('check-info-actual').innerText = Number(actualShots).toLocaleString();
+    document.getElementById('check-info-life').innerText = lifeShots > 0 ? Number(lifeShots).toLocaleString() : '∞';
+    const pct = lifeShots > 0 ? Math.min((actualShots / lifeShots) * 100, 100) : 0;
+    document.getElementById('check-info-pct').innerText = pct.toFixed(1) + '%';
+
+    // Default: Passed, Next_Check_Shot = actualShots + checkInterval
+    const passedRadio = document.getElementById('check-result-passed');
+    const replacedRadio = document.getElementById('check-result-replaced');
+    if (passedRadio) passedRadio.checked = true;
+    if (replacedRadio) replacedRadio.checked = false;
+    document.getElementById('check-note').value = '';
+    const nextInput = document.getElementById('check-next-shot');
+    const defaultNext = (checkInterval > 0) ? (actualShots + checkInterval) : (nextCheckShot || 0);
+    if (nextInput) nextInput.value = defaultNext;
+
+    // Reset file input + preview
+    const fileInput = document.getElementById('check-photo-input');
+    if (fileInput) fileInput.value = '';
+    window.renderCheckPhotoPreview();
+
+    // แสดง/ซ่อน next check shot section ตาม radio
+    window.toggleCheckResultFields();
+
+    modal.classList.remove('hidden');
+};
+
+window.toggleCheckResultFields = function() {
+    const passed = document.getElementById('check-result-passed');
+    const nextSection = document.getElementById('check-next-shot-section');
+    if (!passed || !nextSection) return;
+    if (passed.checked) nextSection.classList.remove('hidden');
+    else nextSection.classList.add('hidden');
+};
+
+window.closeCheckDialog = function() {
+    const modal = document.getElementById('modal-check-part');
+    if (modal) modal.classList.add('hidden');
+    checkPhotosStore = [];
+};
+
+// เลือกรูป → resize แล้วเก็บใน store
+window.handleCheckPhotoSelect = async function(event) {
+    const files = Array.from(event.target.files || []);
+    const MAX_PHOTOS = 5;
+    if (checkPhotosStore.length + files.length > MAX_PHOTOS) {
+        alert(`เลือกรูปได้สูงสุด ${MAX_PHOTOS} รูป (เลือกแล้ว ${checkPhotosStore.length} รูป)`);
+        event.target.value = '';
+        return;
+    }
+
+    const statusEl = document.getElementById('check-photo-status');
+    if (statusEl) statusEl.innerText = `⏳ กำลังย่อรูป ${files.length} รูป...`;
+
+    for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        try {
+            const base64 = await resizeImageToBase64(file, 1280, 0.75);
+            // Estimate size: base64 length * 0.75 bytes
+            const sizeKB = Math.round((base64.length * 0.75) / 1024);
+            checkPhotosStore.push({ name: file.name, size: sizeKB, base64: base64 });
+        } catch (err) {
+            console.error('Resize error:', err);
+            alert('ไม่สามารถย่อรูป ' + file.name + ' ได้');
+        }
+    }
+
+    event.target.value = '';
+    if (statusEl) statusEl.innerText = '';
+    window.renderCheckPhotoPreview();
+};
+
+window.renderCheckPhotoPreview = function() {
+    const container = document.getElementById('check-photo-preview');
+    if (!container) return;
+    if (checkPhotosStore.length === 0) {
+        container.innerHTML = '<div class="text-xs text-gray-400 p-2">ยังไม่มีรูป — กดเลือกรูป (สูงสุด 5 รูป)</div>';
+        return;
+    }
+    let html = '<div class="grid grid-cols-3 sm:grid-cols-5 gap-2">';
+    checkPhotosStore.forEach((p, idx) => {
+        html += `<div class="relative border rounded bg-gray-50">
+            <img src="${p.base64}" class="w-full h-20 object-cover rounded" />
+            <button type="button" onclick="window.removeCheckPhoto(${idx})" class="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 text-xs leading-5" title="ลบ">×</button>
+            <div class="text-[9px] text-gray-500 text-center p-0.5">${p.size} KB</div>
+        </div>`;
+    });
+    html += '</div>';
+    html += `<div class="text-xs text-gray-500 mt-1">รวม ${checkPhotosStore.length} รูป (${checkPhotosStore.reduce((s,p)=>s+p.size,0)} KB)</div>`;
+    container.innerHTML = html;
+};
+
+window.removeCheckPhoto = function(idx) {
+    checkPhotosStore.splice(idx, 1);
+    window.renderCheckPhotoPreview();
+};
+
+window.submitPartCheck = async function() {
+    const installId = document.getElementById('check-install-id').value;
+    const partId = document.getElementById('check-part-id').value;
+    const partName = document.getElementById('check-part-name').value;
+    const machine = document.getElementById('check-machine').value;
+    const actualShot = parseInt(document.getElementById('check-actual-shot').value) || 0;
+    const lifeShots = parseInt(document.getElementById('check-life-shot').value) || 0;
+    const result = document.getElementById('check-result-passed').checked ? 'Passed' : 'Replaced';
+    const note = document.getElementById('check-note').value.trim();
+    const nextCheckShot = result === 'Passed' ? (parseInt(document.getElementById('check-next-shot').value) || 0) : 0;
+
+    if (result === 'Passed' && nextCheckShot > 0 && nextCheckShot <= actualShot) {
+        alert('Next Check Shot ต้องมากกว่า Actual Shot ปัจจุบัน (' + actualShot.toLocaleString() + ')');
+        return;
+    }
+
+    const btn = document.getElementById('btn-confirm-check');
+    const origText = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = '⏳ กำลังอัพโหลด...';
+
+    try {
+        // หา machine shot ปัจจุบัน จาก backend (เพื่อ snapshot)
+        const shotRes = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'GET_MACHINE_SHOTS', machine: machine, sinceDate: '2020-01-01' })
+        });
+        const shotData = await shotRes.json();
+        const machineShot = shotData.totalShots || 0;
+
+        const recorder = (window.currentUser && window.currentUser.name) || 'System';
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const checkDate = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+        const payload = {
+            action: 'SAVE_PARTS_CHECK',
+            check: {
+                Install_ID: installId,
+                Part_ID: partId,
+                Part_Name: partName,
+                Machine: machine,
+                Check_Date: checkDate,
+                Machine_Shot: machineShot,
+                Actual_Part_Shot: actualShot,
+                Result: result,
+                Note: note,
+                Next_Check_Shot: nextCheckShot,
+                Recorder: recorder
+            },
+            photos: checkPhotosStore.map(p => p.base64)
+        };
+
+        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (data.status !== 'success') {
+            alert('บันทึกไม่สำเร็จ: ' + (data.message || ''));
+            return;
+        }
+
+        alert(`✅ บันทึกการตรวจเช็คสำเร็จ\nCheck ID: ${data.checkId}\nรูป: ${(data.photoUrls || []).length} รูป`);
+        window.closeCheckDialog();
+
+        // Refresh Machine Detail + Parts Master
+        if (typeof window.loadMachineParts === 'function' && machine) window.loadMachineParts(machine);
+        if (typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
+
+        // ถ้า result=Replaced → เปิด dialog เปลี่ยน/ย้ายอะไหล่ต่อ
+        if (result === 'Replaced') {
+            setTimeout(() => {
+                if (typeof window.promptReplacepart === 'function') {
+                    window.promptReplacepart(installId, machine, partId, partName, lifeShots);
+                }
+            }, 300);
+        }
+    } catch (err) {
+        alert('เกิดข้อผิดพลาด: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = origText;
+    }
+};
+
+// ประวัติการตรวจเช็ค
+window.showCheckHistory = async function(installId, partName) {
+    const modal = document.getElementById('modal-check-history');
+    if (!modal) { alert('ไม่พบ modal ประวัติ'); return; }
+    const titleEl = document.getElementById('check-history-title');
+    const bodyEl = document.getElementById('check-history-body');
+    if (titleEl) titleEl.innerText = `📋 ประวัติการตรวจเช็ค: ${partName}`;
+    if (bodyEl) bodyEl.innerHTML = '<div class="text-center text-gray-400 py-4">⏳ กำลังโหลด...</div>';
+    modal.classList.remove('hidden');
+
+    try {
+        const res = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'GET_PARTS_CHECKS', installId: installId })
+        });
+        const data = await res.json();
+        const list = data.data || [];
+        if (list.length === 0) {
+            bodyEl.innerHTML = '<div class="text-center text-gray-400 py-6">ยังไม่มีประวัติการตรวจเช็ค</div>';
+            return;
+        }
+        let html = '<div class="space-y-3">';
+        list.forEach(c => {
+            const resultBadge = c.Result === 'Passed'
+                ? '<span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">✅ ใช้ต่อได้</span>'
+                : '<span class="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full">❌ ต้องเปลี่ยน</span>';
+            const urls = String(c.Photo_URLs || '').split(',').filter(u => u.trim());
+            let photoHtml = '';
+            if (urls.length > 0) {
+                photoHtml = '<div class="flex flex-wrap gap-1 mt-1">' + urls.map(u => {
+                    // Google Drive URL transform: /file/d/ID/view → thumbnail
+                    const m = u.match(/[-\w]{25,}/);
+                    const thumbUrl = m ? `https://drive.google.com/thumbnail?id=${m[0]}&sz=w200` : u;
+                    return `<a href="${u}" target="_blank"><img src="${thumbUrl}" class="w-16 h-16 object-cover border rounded hover:opacity-80" loading="lazy" /></a>`;
+                }).join('') + '</div>';
+            }
+            html += `<div class="border rounded p-2 bg-gray-50">
+                <div class="flex justify-between items-center text-xs text-gray-500 mb-1">
+                    <span>${formatInstallDateTime(c.Check_Date)}</span>
+                    ${resultBadge}
+                </div>
+                <div class="text-xs text-gray-700 mb-1">Actual: <b>${Number(c.Actual_Part_Shot || 0).toLocaleString()}</b> shot${c.Next_Check_Shot > 0 ? ` → Next: <b>${Number(c.Next_Check_Shot).toLocaleString()}</b>` : ''}</div>
+                ${c.Note ? `<div class="text-xs text-gray-600 italic">"${c.Note}"</div>` : ''}
+                ${photoHtml}
+                <div class="text-[10px] text-gray-400 mt-1">โดย ${c.Recorder || '-'}</div>
+            </div>`;
+        });
+        html += '</div>';
+        bodyEl.innerHTML = html;
+    } catch (err) {
+        bodyEl.innerHTML = '<div class="text-center text-red-500 py-4">โหลดประวัติไม่สำเร็จ: ' + err.message + '</div>';
+    }
+};
+
+window.closeCheckHistory = function() {
+    const modal = document.getElementById('modal-check-history');
+    if (modal) modal.classList.add('hidden');
 };
