@@ -1,7 +1,37 @@
 // ⚙️ ระบบจัดการอะไหล่เครื่องจักร (Parts Tracking)
 
 let partsCache = [];
-let partLocationsCache = {};  // { Part_ID: [{machine, actualShots, installId, lifeShots, carried}] }
+let partLocationsCache = {};  // { Part_ID: [{machine, actualShots, actualDays, installId, lifeShots, carried, carriedDays}] }
+
+// แปลงค่า Install_Date (อาจเป็น Date object, ISO string, "yyyy-MM-dd", หรือ "yyyy-MM-dd HH:mm") → "yyyy-MM-dd"
+function extractInstallDateStr(raw) {
+    if (!raw) return '';
+    if (raw instanceof Date && !isNaN(raw.getTime())) {
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${raw.getFullYear()}-${pad(raw.getMonth() + 1)}-${pad(raw.getDate())}`;
+    }
+    const s = String(raw).trim();
+    // ISO like 2026-04-11T07:00:00.000Z → ใช้เฉพาะส่วนวันที่
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
+    // d/m/yyyy format fallback
+    const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (m) {
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+    }
+    return '';
+}
+
+// คำนวณจำนวนวันที่ผ่านไปนับจาก installDateStr ถึงวันนี้ (ไม่ติดลบ)
+function daysFromInstall(installDateStr) {
+    if (!installDateStr) return 0;
+    const installD = new Date(installDateStr + 'T00:00:00');
+    if (isNaN(installD.getTime())) return 0;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diff = today.getTime() - installD.getTime();
+    return Math.max(0, Math.floor(diff / 86400000));
+}
 
 window.openPartsManager = function() {
     if (typeof window.switchTab === 'function') {
@@ -35,12 +65,18 @@ window.loadPartsMaster = async function() {
             const installShot = parseInt(inst.Install_Shot) || 0;
             const macShots = machineShots[inst.Machine] || 0;
             const actualShots = carried + Math.max(0, macShots - installShot);
+            const carriedDays = parseInt(inst.Carried_Days) || 0;
+            const installDateStr = extractInstallDateStr(inst.Install_Date);
+            const daysOnMachine = daysFromInstall(installDateStr);
+            const actualDays = carriedDays + daysOnMachine;
             partLocationsCache[pid].push({
                 machine: inst.Machine,
                 actualShots: actualShots,
+                actualDays: actualDays,
                 installId: inst.Install_ID,
                 lifeShots: parseInt(inst.Life_Shots) || 0,
-                carried: carried
+                carried: carried,
+                carriedDays: carriedDays
             });
         });
 
@@ -73,12 +109,13 @@ function renderPartsTable() {
                 return `<button type="button" onclick="window.promptReplacepart('${inst.installId}', '${inst.machine}', '${p.Part_ID}', '${escName}', ${inst.lifeShots || 0})" title="คลิกเพื่อเปลี่ยน / ย้ายอะไหล่ตัวนี้" class="inline-block ${color} text-xs px-1.5 py-0.5 rounded font-mono cursor-pointer transition">${inst.machine}</button>`;
             }).join('') + '</div>';
         }
-        // Actual Shot รวมทุกเครื่อง
+        // Actual Shot + Actual Days รวมทุกเครื่อง
         const totalActualShots = installations.reduce((sum, inst) => sum + inst.actualShots, 0);
+        const maxActualDays = installations.reduce((mx, inst) => Math.max(mx, inst.actualDays || 0), 0);
         const pctTotal = life > 0 && installations.length === 1 ? Math.min((totalActualShots / life) * 100, 100) : 0;
         const shotColor = pctTotal >= 95 ? 'text-red-600 font-bold' : pctTotal >= 80 ? 'text-yellow-600 font-bold' : 'text-gray-700';
         const shotHtml = installations.length > 0
-            ? `<span class="${shotColor} font-mono">${totalActualShots.toLocaleString()}</span>`
+            ? `<div><span class="${shotColor} font-mono">${totalActualShots.toLocaleString()}</span><div class="text-[10px] text-gray-500 font-mono">${maxActualDays.toLocaleString()} วัน</div></div>`
             : '<span class="text-gray-300">-</span>';
 
         html += `<tr class="border-b hover:bg-gray-50">
@@ -258,6 +295,11 @@ window.loadMachineParts = async function(machine) {
             const usedShots = carried + Math.max(0, totalShots - installShot);
             const pct = lifeShots > 0 ? Math.min((usedShots / lifeShots) * 100, 100) : 0;
             const remaining = lifeShots > 0 ? Math.max(lifeShots - usedShots, 0) : 0;
+            // Actual Days = Carried_Days + จำนวนวันที่อยู่บนเครื่องปัจจุบัน
+            const carriedDays = parseInt(inst.Carried_Days) || 0;
+            const installDateStr = extractInstallDateStr(inst.Install_Date);
+            const daysOnMachine = daysFromInstall(installDateStr);
+            const actualDays = carriedDays + daysOnMachine;
 
             let statusColor = 'bg-green-500'; let statusText = '🟢 ปกติ';
             if (pct >= 95) { statusColor = 'bg-red-500'; statusText = '🔴 ต้องเปลี่ยน'; }
@@ -271,6 +313,10 @@ window.loadMachineParts = async function(machine) {
                 <div class="flex justify-between text-xs text-gray-500 mb-1">
                     <span>ติดตั้ง: ${inst.Install_Date || '-'}</span>
                     <span>Actual: <b>${usedShots.toLocaleString()}</b>${carried > 0 ? ` (สะสม ${carried.toLocaleString()})` : ''} / ${lifeShots > 0 ? lifeShots.toLocaleString() : '∞'} shot</span>
+                </div>
+                <div class="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>&nbsp;</span>
+                    <span>ระยะเวลาใช้งาน: <b>${actualDays.toLocaleString()}</b> วัน${carriedDays > 0 ? ` (สะสม ${carriedDays.toLocaleString()} วัน)` : ''}</span>
                 </div>
                 ${lifeShots > 0 ? `<div class="w-full bg-gray-200 rounded-full h-2 mb-1">
                     <div class="${statusColor} h-2 rounded-full transition-all" style="width: ${pct.toFixed(1)}%"></div>
@@ -426,8 +472,11 @@ window.confirmInstallPart = async function() {
             const carriedInfo = (result.carriedShots !== undefined && result.carriedShots > 0)
                 ? `\n📊 ยอด shot สะสมยกมา: ${Number(result.carriedShots).toLocaleString()}`
                 : '';
+            const carriedDaysInfo = (result.carriedDays !== undefined && result.carriedDays > 0)
+                ? `\n📅 จำนวนวันใช้งานสะสมยกมา: ${Number(result.carriedDays).toLocaleString()} วัน`
+                : '';
             const actionTxt = prevInstallId ? 'บันทึกการเปลี่ยน/ย้ายอะไหล่' : 'ติดตั้ง';
-            alert(`✅ ${actionTxt} "${partName}" กับ ${machine} สำเร็จ${shotInfo}${carriedInfo}`);
+            alert(`✅ ${actionTxt} "${partName}" กับ ${machine} สำเร็จ${shotInfo}${carriedInfo}${carriedDaysInfo}`);
             // refresh view ที่เกี่ยวข้อง
             if (typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
             if (prevInstallId && typeof window.loadMachineParts === 'function') {
