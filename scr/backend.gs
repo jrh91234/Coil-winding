@@ -731,14 +731,37 @@ function doPost(e) {
 
     if (data.mode === "edit" && d.Part_ID) {
       // แก้ไขอะไหล่เดิม
+      const newLife = parseInt(d.Life_Shots) || 0;
+      const newName = d.Part_Name || "";
       for (let i = 1; i < rows.length; i++) {
         if (String(rows[i][colIdx("Part_ID")]).trim() === d.Part_ID) {
-          sheet.getRange(i + 1, colIdx("Part_Name") + 1).setValue(d.Part_Name || "");
+          sheet.getRange(i + 1, colIdx("Part_Name") + 1).setValue(newName);
           sheet.getRange(i + 1, colIdx("Category") + 1).setValue(d.Category || "");
-          sheet.getRange(i + 1, colIdx("Life_Shots") + 1).setValue(parseInt(d.Life_Shots) || 0);
+          sheet.getRange(i + 1, colIdx("Life_Shots") + 1).setValue(newLife);
           sheet.getRange(i + 1, colIdx("Unit_Cost") + 1).setValue(parseFloat(d.Unit_Cost) || 0);
           sheet.getRange(i + 1, colIdx("Supplier") + 1).setValue(d.Supplier || "");
           sheet.getRange(i + 1, colIdx("Remark") + 1).setValue(d.Remark || "");
+          // Sync: อัพเดต Life_Shots + Part_Name ของ Active installation ทั้งหมดของ Part_ID นี้
+          const instSheet = ss.getSheetByName("Parts_Installation");
+          if (instSheet) {
+            const iRows = instSheet.getDataRange().getValues();
+            if (iRows.length > 1) {
+              const iHdr = iRows[0].map(h => String(h).trim());
+              const iPid = iHdr.indexOf("Part_ID");
+              const iStatus = iHdr.indexOf("Status");
+              const iLife = iHdr.indexOf("Life_Shots");
+              const iName = iHdr.indexOf("Part_Name");
+              if (iPid !== -1 && iLife !== -1) {
+                for (let j = 1; j < iRows.length; j++) {
+                  if (String(iRows[j][iPid] || "").trim() === d.Part_ID
+                      && String(iRows[j][iStatus] || "").trim() === "Active") {
+                    instSheet.getRange(j + 1, iLife + 1).setValue(newLife);
+                    if (iName !== -1) instSheet.getRange(j + 1, iName + 1).setValue(newName);
+                  }
+                }
+              }
+            }
+          }
           SpreadsheetApp.flush();
           return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Updated"})).setMimeType(ContentService.MimeType.JSON);
         }
@@ -934,20 +957,58 @@ function doPost(e) {
   }
 
   if (action === "UPDATE_PARTS_LIFE") {
-    // ปรับอายุการใช้งาน (Life_Shots) ของอะไหล่ที่ติดตั้งอยู่
+    // ปรับอายุการใช้งาน (Life_Shots) — sync ทั้ง Parts_Installation + Parts_Master
     let sheet = ss.getSheetByName("Parts_Installation");
     if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Sheet not found"})).setMimeType(ContentService.MimeType.JSON);
+    const newLife = parseInt(data.lifeShots) || 0;
     const rows = sheet.getDataRange().getValues();
     const headers = rows[0].map(h => String(h).trim());
     const colIdx = (name) => headers.indexOf(name);
+    let targetPartId = "";
+    let targetRowFound = false;
+    // 1) หา row ที่ Install_ID ตรง → เก็บ Part_ID + อัพเดต Life_Shots
     for (let i = 1; i < rows.length; i++) {
       if (String(rows[i][colIdx("Install_ID")]).trim() === data.installId) {
-        sheet.getRange(i + 1, colIdx("Life_Shots") + 1).setValue(parseInt(data.lifeShots) || 0);
-        SpreadsheetApp.flush();
-        return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Life updated"})).setMimeType(ContentService.MimeType.JSON);
+        sheet.getRange(i + 1, colIdx("Life_Shots") + 1).setValue(newLife);
+        targetPartId = String(rows[i][colIdx("Part_ID")] || "").trim();
+        targetRowFound = true;
+        break;
       }
     }
-    return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Install_ID not found"})).setMimeType(ContentService.MimeType.JSON);
+    if (!targetRowFound) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Install_ID not found"})).setMimeType(ContentService.MimeType.JSON);
+    }
+    // 2) Sync: อัพเดต Active installation อื่นของ Part_ID เดียวกัน (กรณีมีหลายตัว)
+    if (targetPartId) {
+      const statusIdx = colIdx("Status");
+      const partIdIdx = colIdx("Part_ID");
+      const lifeIdx = colIdx("Life_Shots");
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][partIdIdx] || "").trim() === targetPartId
+            && String(rows[i][statusIdx] || "").trim() === "Active"
+            && String(rows[i][colIdx("Install_ID")]).trim() !== data.installId) {
+          sheet.getRange(i + 1, lifeIdx + 1).setValue(newLife);
+        }
+      }
+      // 3) Sync: อัพเดต Parts_Master.Life_Shots ของ Part_ID นั้นด้วย
+      const masterSheet = ss.getSheetByName("Parts_Master");
+      if (masterSheet) {
+        const mRows = masterSheet.getDataRange().getValues();
+        const mHdr = mRows[0].map(h => String(h).trim());
+        const mPidIdx = mHdr.indexOf("Part_ID");
+        const mLifeIdx = mHdr.indexOf("Life_Shots");
+        if (mPidIdx !== -1 && mLifeIdx !== -1) {
+          for (let i = 1; i < mRows.length; i++) {
+            if (String(mRows[i][mPidIdx] || "").trim() === targetPartId) {
+              masterSheet.getRange(i + 1, mLifeIdx + 1).setValue(newLife);
+              break;
+            }
+          }
+        }
+      }
+    }
+    SpreadsheetApp.flush();
+    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Life updated", partId: targetPartId, lifeShots: newLife})).setMimeType(ContentService.MimeType.JSON);
   }
 
   if (action === "SAVE_RTV") {

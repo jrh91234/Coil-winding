@@ -33,6 +33,32 @@ function daysFromInstall(installDateStr) {
     return Math.max(0, Math.floor(diff / 86400000));
 }
 
+// Format Install_Date เป็น "yyyy-MM-dd HH:mm" (24 ชม., +07:00, ไม่มี TZ suffix)
+function formatInstallDateTime(raw) {
+    if (!raw) return '-';
+    const pad = (n) => String(n).padStart(2, '0');
+    // ISO string with TZ (e.g. "2026-04-09T06:24:00.000Z") — convert to +07:00
+    if (raw instanceof Date && !isNaN(raw.getTime())) {
+        const utcMs = raw.getTime() + (7 * 60 * 60 * 1000);
+        const d = new Date(utcMs);
+        return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+    }
+    const s = String(raw).trim();
+    if (!s) return '-';
+    // ISO with T + timezone → parse + shift to +07:00
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) {
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) {
+            const utcMs = d.getTime() + (7 * 60 * 60 * 1000);
+            const d2 = new Date(utcMs);
+            return `${d2.getUTCFullYear()}-${pad(d2.getUTCMonth() + 1)}-${pad(d2.getUTCDate())} ${pad(d2.getUTCHours())}:${pad(d2.getUTCMinutes())}`;
+        }
+    }
+    // "yyyy-MM-dd HH:mm" หรือ "yyyy-MM-dd" — ใช้ได้เลย
+    if (/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?/.test(s)) return s.substring(0, 16);
+    return s;
+}
+
 window.openPartsManager = function() {
     if (typeof window.switchTab === 'function') {
         window.switchTab('parts');
@@ -305,13 +331,14 @@ window.loadMachineParts = async function(machine) {
             if (pct >= 95) { statusColor = 'bg-red-500'; statusText = '🔴 ต้องเปลี่ยน'; }
             else if (pct >= 80) { statusColor = 'bg-yellow-500'; statusText = '🟡 ใกล้หมดอายุ'; }
 
+            const installDateDisplay = formatInstallDateTime(inst.Install_Date);
             html += `<div class="border rounded-lg p-3 bg-white">
                 <div class="flex justify-between items-center mb-1">
-                    <span class="font-bold text-sm">${inst.Part_Name || inst.Part_ID}</span>
+                    <span class="font-bold text-sm">${inst.Part_Name || inst.Part_ID}${inst.Part_ID ? ` <span class="text-[10px] text-gray-400 font-mono font-normal">(${inst.Part_ID})</span>` : ''}</span>
                     <span class="text-xs ${pct >= 95 ? 'text-red-600 font-bold' : pct >= 80 ? 'text-yellow-600 font-bold' : 'text-green-600'}">${statusText}</span>
                 </div>
                 <div class="flex justify-between text-xs text-gray-500 mb-1">
-                    <span>ติดตั้ง: ${inst.Install_Date || '-'}</span>
+                    <span>ติดตั้ง: ${installDateDisplay}</span>
                     <span>Actual: <b>${usedShots.toLocaleString()}</b>${carried > 0 ? ` (สะสม ${carried.toLocaleString()})` : ''} / ${lifeShots > 0 ? lifeShots.toLocaleString() : '∞'} shot</span>
                 </div>
                 <div class="flex justify-between text-xs text-gray-500 mb-1">
@@ -358,13 +385,14 @@ window.promptUpdateLife = async function(installId, currentLife) {
         });
         const result = await res.json();
         if (result.status === 'success') {
-            alert('✅ ปรับอายุสำเร็จ');
-            // reload the tab
+            alert('✅ ปรับอายุสำเร็จ (sync Parts Master + Installation เรียบร้อย)');
+            // reload ทั้ง Machine Detail tab + Parts Master table
             const macTitle = document.getElementById('machine-detail-title');
             if (macTitle) {
                 const mac = macTitle.innerText.match(/CWM-\d+/);
                 if (mac) window.loadMachineParts(mac[0]);
             }
+            if (typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
         } else {
             alert('เกิดข้อผิดพลาด: ' + (result.message || ''));
         }
