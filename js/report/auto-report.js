@@ -124,7 +124,8 @@ window.renderAutoReportContent = async function() {
         const summary = (sortJson && sortJson.summaryData) || [];
         summary.forEach(job => {
             if (job.status !== 'Completed') return; // เฉพาะงานที่ QC อนุมัติแล้ว (ข้าม Wait QC, Rejected)
-            const model = String(job.product || 'ไม่ระบุรุ่น').trim();
+            let model = String(job.product || 'ไม่ระบุรุ่น').trim();
+            if (model.includes(' : ')) model = model.split(' : ').slice(1).join(' : ').trim();
             const fg = parseInt(job.fgQty) || 0;
             const ng = parseInt(job.ngQty) || 0;
             if (fg === 0 && ng === 0) return;
