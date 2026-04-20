@@ -108,7 +108,7 @@ window.renderAutoReportContent = async function() {
         console.warn("Failed to fetch past pending jobs", e);
     }
 
-    // 🌟 ดึงข้อมูลงาน Sorting ในช่วงวันที่ตรวจสอบ → สรุปแยกตามรุ่น 🌟
+    // 🌟 ดึงข้อมูลงาน Sorting จาก Production_Data (filter ตามวันที่ QC อนุมัติ) → สรุปแยกตามรุ่น 🌟
     let sortingSummaryByModel = {};  // { modelName: { fg, ng, jobs } }
     let sortingTotalFG = 0, sortingTotalNG = 0, sortingJobCount = 0;
     try {
@@ -116,29 +116,19 @@ window.renderAutoReportContent = async function() {
             <div class="flex flex-col items-center justify-center h-[50vh] text-gray-600 bg-white shadow-xl rounded-xl mt-10 border border-gray-200">
                 <div class="text-5xl mb-4 animate-spin">🗂️</div>
                 <div class="text-xl font-bold text-blue-700 mb-2">กำลังดึงข้อมูลงานคัดแยก (Sorting)...</div>
-                <div class="text-sm font-medium">รวบรวมผลงานคัดแยกตามรุ่นสินค้า</div>
+                <div class="text-sm font-medium">อ่านจาก Production_Data (ตามวันที่ QC อนุมัติ)</div>
             </div>
         `;
-        const sortRes = await fetch(`${SCRIPT_URL}?action=GET_SORTING&start=${sDate}&end=${eDate}&filterBy=closed`);
-        const sortJson = await sortRes.json();
-        const summary = (sortJson && sortJson.summaryData) || [];
-        summary.forEach(job => {
-            if (job.status !== 'Completed') return; // เฉพาะงานที่ QC อนุมัติแล้ว (ข้าม Wait QC, Rejected)
-            let model = String(job.product || 'ไม่ระบุรุ่น').trim();
-            if (model.includes(' : ')) model = model.split(' : ').slice(1).join(' : ').trim();
-            const fg = parseInt(job.fgQty) || 0;
-            const ng = parseInt(job.ngQty) || 0;
-            if (fg === 0 && ng === 0) return;
-            if (!sortingSummaryByModel[model]) {
-                sortingSummaryByModel[model] = { fg: 0, ng: 0, jobs: 0 };
-            }
-            sortingSummaryByModel[model].fg += fg;
-            sortingSummaryByModel[model].ng += ng;
-            sortingSummaryByModel[model].jobs += 1;
-            sortingTotalFG += fg;
-            sortingTotalNG += ng;
-            sortingJobCount += 1;
+        const sortRes = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'GET_SORTING_PROD_SUMMARY', start: sDate, end: eDate })
         });
+        const sortJson = await sortRes.json();
+        sortingSummaryByModel = (sortJson && sortJson.summary) || {};
+        const totals = (sortJson && sortJson.totals) || { fg: 0, ng: 0, jobs: 0 };
+        sortingTotalFG = totals.fg || 0;
+        sortingTotalNG = totals.ng || 0;
+        sortingJobCount = totals.jobs || 0;
     } catch(e) {
         console.warn("Failed to fetch sorting summary", e);
     }
