@@ -108,6 +108,40 @@ window.renderAutoReportContent = async function() {
         console.warn("Failed to fetch past pending jobs", e);
     }
 
+    // 🌟 ดึงข้อมูลงาน Sorting ในช่วงวันที่ตรวจสอบ → สรุปแยกตามรุ่น 🌟
+    let sortingSummaryByModel = {};  // { modelName: { fg, ng, jobs } }
+    let sortingTotalFG = 0, sortingTotalNG = 0, sortingJobCount = 0;
+    try {
+        content.innerHTML = `
+            <div class="flex flex-col items-center justify-center h-[50vh] text-gray-600 bg-white shadow-xl rounded-xl mt-10 border border-gray-200">
+                <div class="text-5xl mb-4 animate-spin">🗂️</div>
+                <div class="text-xl font-bold text-blue-700 mb-2">กำลังดึงข้อมูลงานคัดแยก (Sorting)...</div>
+                <div class="text-sm font-medium">รวบรวมผลงานคัดแยกตามรุ่นสินค้า</div>
+            </div>
+        `;
+        const sortRes = await fetch(`${SCRIPT_URL}?action=GET_SORTING&start=${sDate}&end=${eDate}&filterBy=closed`);
+        const sortJson = await sortRes.json();
+        const summary = (sortJson && sortJson.summaryData) || [];
+        summary.forEach(job => {
+            if (job.status !== 'Completed' && job.status !== 'Wait QC') return; // ข้าม Rejected
+            const model = String(job.product || 'ไม่ระบุรุ่น').trim();
+            const fg = parseInt(job.fgQty) || 0;
+            const ng = parseInt(job.ngQty) || 0;
+            if (fg === 0 && ng === 0) return;
+            if (!sortingSummaryByModel[model]) {
+                sortingSummaryByModel[model] = { fg: 0, ng: 0, jobs: 0 };
+            }
+            sortingSummaryByModel[model].fg += fg;
+            sortingSummaryByModel[model].ng += ng;
+            sortingSummaryByModel[model].jobs += 1;
+            sortingTotalFG += fg;
+            sortingTotalNG += ng;
+            sortingJobCount += 1;
+        });
+    } catch(e) {
+        console.warn("Failed to fetch sorting summary", e);
+    }
+
     // อัปเดตสถานะเป็นกำลังแปลภาษา
     content.innerHTML = `
         <div class="flex flex-col items-center justify-center h-[50vh] text-gray-600 bg-white shadow-xl rounded-xl mt-10 border border-gray-200">
@@ -274,6 +308,61 @@ window.renderAutoReportContent = async function() {
         productBreakdownHtml += `<tr><td colspan="5" class="px-4 py-4 text-center text-gray-400 text-xs">ไม่มีข้อมูลการผลิตแยกตามรุ่น</td></tr>`;
     }
     productBreakdownHtml += `</tbody></table></div>`;
+
+    // 🌟 ส่วนเสริม: สรุปงานคัดแยก (Sorting) แยกตามรุ่น 🌟
+    let sortingBreakdownHtml = '';
+    const sortingKeys = Object.keys(sortingSummaryByModel);
+    if (sortingKeys.length > 0) {
+        const orderedForSort = [
+            "S1B29288-JR (10A)",
+            "S1B71819-JR (16A)",
+            "S1B29292-JR (20A)",
+            "51207080HC-JR (25/32A)"
+        ];
+        sortingKeys.sort((a, b) => {
+            let idxA = orderedForSort.indexOf(a);
+            let idxB = orderedForSort.indexOf(b);
+            if (idxA === -1) idxA = 999;
+            if (idxB === -1) idxB = 999;
+            return idxA - idxB;
+        });
+        const totalSortQty = sortingTotalFG + sortingTotalNG;
+        const totalSortNgPct = totalSortQty > 0 ? ((sortingTotalNG / totalSortQty) * 100).toFixed(2) : "0.00";
+
+        sortingBreakdownHtml = `
+        <div class="mt-6 bg-white border border-pink-200 rounded-lg shadow-sm overflow-hidden page-break-inside-avoid">
+            <div class="bg-pink-50 border-b border-pink-200 px-4 py-2 flex justify-between items-center">
+                <h4 class="text-sm font-bold text-pink-800 flex items-center gap-2">🗂️ สรุปงานคัดแยก (Sorting) แยกตามรุ่น</h4>
+                <span class="text-[11px] text-pink-700">รวม ${sortingJobCount.toLocaleString()} จ๊อบ · FG ${sortingTotalFG.toLocaleString()} / NG ${sortingTotalNG.toLocaleString()} (${totalSortNgPct}%)</span>
+            </div>
+            <table class="w-full text-sm text-left">
+                <thead class="bg-gray-100 text-gray-700 font-bold uppercase text-[11px] border-b">
+                    <tr>
+                        <th class="px-4 py-2 text-left">รุ่นสินค้า (Model)</th>
+                        <th class="px-4 py-2 text-right">จ๊อบ</th>
+                        <th class="px-4 py-2 text-right">ดี (FG)</th>
+                        <th class="px-4 py-2 text-right">เสีย (NG)</th>
+                        <th class="px-4 py-2 text-right">% NG</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">`;
+        sortingKeys.forEach(m => {
+            const s = sortingSummaryByModel[m];
+            const total = s.fg + s.ng;
+            const ngPct = total > 0 ? ((s.ng / total) * 100).toFixed(2) : "0.00";
+            const isHighNg = parseFloat(ngPct) > 5;
+            sortingBreakdownHtml += `<tr>
+                <td class="px-4 py-2.5 font-bold text-gray-800">${m}</td>
+                <td class="px-4 py-2.5 text-right text-gray-600 text-xs">${s.jobs.toLocaleString()}</td>
+                <td class="px-4 py-2.5 text-right text-blue-700 font-bold">${s.fg.toLocaleString()}</td>
+                <td class="px-4 py-2.5 text-right text-red-600 font-medium">${s.ng.toLocaleString()}</td>
+                <td class="px-4 py-2.5 text-right font-black ${isHighNg ? 'text-red-700 bg-red-50/70' : 'text-green-700 bg-green-50/50'}">${ngPct}%</td>
+            </tr>`;
+        });
+        sortingBreakdownHtml += `</tbody></table></div>`;
+    } else {
+        sortingBreakdownHtml = `<div class="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center">🗂️ ไม่มีข้อมูลงานคัดแยก (Sorting) ในช่วงวันที่เลือก</div>`;
+    }
 
     // 🌟 ส่วนที่ 2: บทวิเคราะห์อัตราการผลิต 🌟
     const getChartImg = (id) => {
@@ -930,6 +1019,7 @@ window.renderAutoReportContent = async function() {
                     </div>
                 </div>
                 ${productBreakdownHtml}
+                ${sortingBreakdownHtml}
             </div>
 
             <!-- เพิ่มคลาส page-break-inside-avoid ครอบไว้เพื่อไม่ให้หัวข้อขาดจากกราฟ -->
