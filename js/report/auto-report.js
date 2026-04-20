@@ -123,7 +123,7 @@ window.renderAutoReportContent = async function() {
         const sortJson = await sortRes.json();
         const summary = (sortJson && sortJson.summaryData) || [];
         summary.forEach(job => {
-            if (job.status !== 'Completed' && job.status !== 'Wait QC') return; // ข้าม Rejected
+            if (job.status !== 'Completed') return; // เฉพาะงานที่ QC อนุมัติแล้ว (ข้าม Wait QC, Rejected)
             const model = String(job.product || 'ไม่ระบุรุ่น').trim();
             const fg = parseInt(job.fgQty) || 0;
             const ng = parseInt(job.ngQty) || 0;
