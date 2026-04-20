@@ -177,6 +177,8 @@ function doGet(e) {
       let closedDateCol = getCol("Closed_Date");
       let sorterCol = getCol("Sorter");
       let rejectTargetCol = getCol("Reject_Target");
+      let qcFgApprovedCol = getCol("QC_FG_Approved");
+      let qcNgApprovedCol = getCol("QC_NG_Approved");
 
       if (jobCol === -1 || statCol === -1) return ContentService.createTextOutput(JSON.stringify({status: "success", data: [], summaryData: []})).setMimeType(ContentService.MimeType.JSON);
 
@@ -287,7 +289,9 @@ function doGet(e) {
             closedBy: closedByCol > -1 ? r[closedByCol] : "",
             closedDate: cDate,
             sorter: sorterCol > -1 ? r[sorterCol] : "",
-            rejectTarget: rejectTargetCol > -1 ? r[rejectTargetCol] : ""
+            rejectTarget: rejectTargetCol > -1 ? r[rejectTargetCol] : "",
+            qcFgApproved: qcFgApprovedCol > -1 ? String(r[qcFgApprovedCol] || "").toUpperCase() === "TRUE" : false,
+            qcNgApproved: qcNgApprovedCol > -1 ? String(r[qcNgApprovedCol] || "").toUpperCase() === "TRUE" : false
           });
         }
 
@@ -1216,83 +1220,6 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({status: "success", data: results})).setMimeType(ContentService.MimeType.JSON);
   }
 
-  // === สรุปงาน Sorting จาก Production_Data (Batch_ID เริ่มด้วย "SORT-") ===
-  // กรองตามวันที่ QC อนุมัติ (Timestamp) ที่ตกในช่วง start~end
-  // Group ตามรุ่น (Product หลังตัดชื่อเครื่อง " : ") → รวม FG (pcs) + NG (kg→pcs)
-  if (action === "GET_SORTING_PROD_SUMMARY") {
-    const prodSheet = ss.getSheetByName("Production_Data");
-    if (!prodSheet) return ContentService.createTextOutput(JSON.stringify({status: "success", summary: {}, totals: {fg: 0, ng: 0, jobs: 0}})).setMimeType(ContentService.MimeType.JSON);
-    const startDateStr = data.start || e.parameter.start || "";
-    const endDateStr = data.end || e.parameter.end || "";
-    const rows = prodSheet.getDataRange().getValues();
-    if (rows.length <= 1) return ContentService.createTextOutput(JSON.stringify({status: "success", summary: {}, totals: {fg: 0, ng: 0, jobs: 0}})).setMimeType(ContentService.MimeType.JSON);
-
-    const hdr = rows[0].map(h => String(h).trim());
-    const tsIdx = hdr.indexOf("Timestamp");
-    const prodIdx = hdr.indexOf("Product");
-    const fgIdx = hdr.indexOf("FG");
-    const ngIdx = hdr.indexOf("NG_Total");
-    const batchIdx = hdr.indexOf("Batch_ID");
-    if (batchIdx === -1 || prodIdx === -1) {
-      return ContentService.createTextOutput(JSON.stringify({status: "success", summary: {}, totals: {fg: 0, ng: 0, jobs: 0}})).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    // แปลง Timestamp "20/4/2026, 14:30:15" หรือ Date → yyyy-MM-dd
-    const toISO = (val) => {
-      if (!val) return "";
-      if (val instanceof Date && !isNaN(val.getTime())) {
-        let y = val.getFullYear(); if (y > 2500) y -= 543;
-        return y + "-" + String(val.getMonth() + 1).padStart(2, '0') + "-" + String(val.getDate()).padStart(2, '0');
-      }
-      const s = String(val).trim();
-      // รูปแบบ "d/M/yyyy[, HH:mm:ss]" (th-TH locale)
-      const m1 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-      if (m1) {
-        let y = parseInt(m1[3]); if (y > 2500) y -= 543;
-        return y + "-" + String(parseInt(m1[2])).padStart(2, '0') + "-" + String(parseInt(m1[1])).padStart(2, '0');
-      }
-      // รูปแบบ "yyyy-MM-dd..."
-      const m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (m2) return m2[1] + "-" + m2[2] + "-" + m2[3];
-      return "";
-    };
-
-    const summary = {};  // { modelName: { fg, ng, jobs } }
-    let totalFg = 0, totalNg = 0, totalJobs = 0;
-
-    for (let i = 1; i < rows.length; i++) {
-      const r = rows[i];
-      const batch = String(r[batchIdx] || "").trim();
-      if (!batch.startsWith("SORT-")) continue;
-
-      const tsISO = tsIdx !== -1 ? toISO(r[tsIdx]) : "";
-      if (startDateStr && endDateStr) {
-        if (!tsISO || tsISO < startDateStr || tsISO > endDateStr) continue;
-      }
-
-      let product = String(r[prodIdx] || "ไม่ระบุรุ่น").trim();
-      if (product.includes(" : ")) product = product.split(" : ").slice(1).join(" : ").trim();
-
-      const fgPcs = parseInt(r[fgIdx]) || 0;
-      const ngKg = parseFloat(r[ngIdx]) || 0;
-      const ngPcs = ngKg > 0 ? getPcsFromKg(product, ngKg) : 0;
-
-      if (!summary[product]) summary[product] = { fg: 0, ng: 0, jobs: 0 };
-      summary[product].fg += fgPcs;
-      summary[product].ng += ngPcs;
-      summary[product].jobs += 1;
-      totalFg += fgPcs;
-      totalNg += ngPcs;
-      totalJobs += 1;
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "success",
-      summary: summary,
-      totals: { fg: totalFg, ng: totalNg, jobs: totalJobs }
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-
   if (action === "SAVE_RTV") {
     let sheet = ss.getSheetByName("RTV_Data");
     if (!sheet) {
@@ -1421,6 +1348,12 @@ function doPost(e) {
           let rejectTargetColIdx = getCol("Reject_Target");
           if (rejectTargetColIdx === -1) { rejectTargetColIdx = headers.length; sheet.getRange(1, rejectTargetColIdx + 1).setValue("Reject_Target"); headers.push("Reject_Target"); }
 
+          let qcFgApprovedColIdx = getCol("QC_FG_Approved");
+          if (qcFgApprovedColIdx === -1) { qcFgApprovedColIdx = headers.length; sheet.getRange(1, qcFgApprovedColIdx + 1).setValue("QC_FG_Approved"); headers.push("QC_FG_Approved"); }
+
+          let qcNgApprovedColIdx = getCol("QC_NG_Approved");
+          if (qcNgApprovedColIdx === -1) { qcNgApprovedColIdx = headers.length; sheet.getRange(1, qcNgApprovedColIdx + 1).setValue("QC_NG_Approved"); headers.push("QC_NG_Approved"); }
+
           let jobCol = getCol("Job_ID");
           let statCol = getCol("Status") + 1;
           let remCol = getCol("Remark") + 1;
@@ -1432,6 +1365,8 @@ function doPost(e) {
           let closedDateCol = closedDateColIdx + 1;
           let sorterCol = sorterColIdx + 1;
           let rejectTargetCol = rejectTargetColIdx + 1;
+          let qcFgApprovedCol = qcFgApprovedColIdx + 1;
+          let qcNgApprovedCol = qcNgApprovedColIdx + 1;
 
           let foundRow = -1;
           for (let i = 1; i < rows.length; i++) { 
@@ -1455,26 +1390,58 @@ function doPost(e) {
               const cellUpdates = []; // เก็บ {row, col, value} แล้วเขียนรวมทีเดียว
               const queueWrite = (row, col, value) => cellUpdates.push({row, col, value});
 
-              queueWrite(foundRow, statCol, data.status);
+              const isPartialApprove = !!data.partialApprove;
+              const approveTargets = Array.isArray(data.approveTargets) ? data.approveTargets : [];
+              let finalStatus = data.status;
 
               if (data.status === "Wait QC") {
-                  // 2. ผู้คัด (Sorter) คัดเสร็จ ส่งยอดให้ QC
-                  if (data.fgQty) queueWrite(foundRow, fgCol, data.fgQty);
-                  if (data.ngQty) queueWrite(foundRow, ngCol, data.ngQty);
-                  queueWrite(foundRow, sorterCol, data.closedBy);
-                  queueWrite(foundRow, closedDateCol, now.toLocaleString('th-TH'));
-                  queueWrite(foundRow, rejectTargetCol, "");
+                  if (isPartialApprove) {
+                      // QC อนุมัติบางส่วน: งานยังคงอยู่ Wait QC
+                      const oldFgApproved = String(rows[foundRow - 1][qcFgApprovedColIdx] || "").toUpperCase() === "TRUE";
+                      const oldNgApproved = String(rows[foundRow - 1][qcNgApprovedColIdx] || "").toUpperCase() === "TRUE";
+                      const newFgApproved = oldFgApproved || approveTargets.indexOf("FG") > -1;
+                      const newNgApproved = oldNgApproved || approveTargets.indexOf("NG") > -1;
 
-                  // Batch write ทั้งหมดในครั้งเดียว
-                  cellUpdates.forEach(u => sheet.getRange(u.row, u.col).setValue(u.value));
-                  SpreadsheetApp.flush();
+                      queueWrite(foundRow, qcFgApprovedCol, newFgApproved);
+                      queueWrite(foundRow, qcNgApprovedCol, newNgApproved);
+                      queueWrite(foundRow, closedByCol, data.closedBy || "");
+                      queueWrite(foundRow, closedDateCol, now.toLocaleString('th-TH'));
+                      queueWrite(foundRow, rejectTargetCol, "");
 
-                  logUserAction(data.closedBy, "System", "SUBMIT_QC", `ส่งงาน ${data.jobId} ให้ QC ตรวจ`);
+                      // ถ้าอนุมัติครบทั้ง FG และ NG แล้ว ให้ปิดงานทันที
+                      if (newFgApproved && newNgApproved) {
+                          finalStatus = "Completed";
+                      } else {
+                          finalStatus = "Wait QC";
+                          queueWrite(foundRow, statCol, finalStatus);
+                          cellUpdates.forEach(u => sheet.getRange(u.row, u.col).setValue(u.value));
+                          SpreadsheetApp.flush();
+                          logUserAction(data.closedBy, "System", "QC_PARTIAL_APPROVE", `QC อนุมัติบางส่วนงาน: ${data.jobId} (${approveTargets.join(",")})`);
+                      }
+                  } else {
+                      // 2. ผู้คัด (Sorter) คัดเสร็จ ส่งยอดให้ QC
+                      queueWrite(foundRow, statCol, "Wait QC");
+                      if (data.fgQty) queueWrite(foundRow, fgCol, data.fgQty);
+                      if (data.ngQty) queueWrite(foundRow, ngCol, data.ngQty);
+                      queueWrite(foundRow, sorterCol, data.closedBy);
+                      queueWrite(foundRow, closedDateCol, now.toLocaleString('th-TH'));
+                      queueWrite(foundRow, rejectTargetCol, "");
+                      queueWrite(foundRow, qcFgApprovedCol, false);
+                      queueWrite(foundRow, qcNgApprovedCol, false);
+
+                      // Batch write ทั้งหมดในครั้งเดียว
+                      cellUpdates.forEach(u => sheet.getRange(u.row, u.col).setValue(u.value));
+                      SpreadsheetApp.flush();
+                      logUserAction(data.closedBy, "System", "SUBMIT_QC", `ส่งงาน ${data.jobId} ให้ QC ตรวจ`);
+                  }
               }
-              else if (data.status === "Completed") {
+              if (finalStatus === "Completed") {
                   // 3. QC อนุมัติผ่าน (เก็บชื่อ QC ลงคอลัมน์ Closed_By)
+                  queueWrite(foundRow, statCol, "Completed");
                   queueWrite(foundRow, closedByCol, data.closedBy);
                   queueWrite(foundRow, closedDateCol, now.toLocaleString('th-TH'));
+                  queueWrite(foundRow, qcFgApprovedCol, true);
+                  queueWrite(foundRow, qcNgApprovedCol, true);
 
                   // Batch write Sorting_Data ก่อน — ให้ QC เห็นผลทันที
                   cellUpdates.forEach(u => sheet.getRange(u.row, u.col).setValue(u.value));
@@ -1689,6 +1656,9 @@ function doPost(e) {
               }
               else if (data.status === "Rejected") {
                   // 3. QC ตีกลับ
+                  queueWrite(foundRow, statCol, data.status);
+                  queueWrite(foundRow, qcFgApprovedCol, false);
+                  queueWrite(foundRow, qcNgApprovedCol, false);
                   let oldRemark = sheet.getRange(foundRow, remCol).getValue();
                   let rejectNote = `[QC ${data.closedBy} ตีกลับ ${data.rejectTarget}: ${data.rejectReason}]`;
                   queueWrite(foundRow, remCol, `${rejectNote} | ${oldRemark}`);
