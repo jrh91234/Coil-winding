@@ -527,48 +527,63 @@ function doPost(e) {
       const fgCol = getCol("FG");
       const ngKgCol = getCol("NG_Total");
       const batchIdCol = getCol("Batch_ID");
-      const dateCol = getCol("Date");
+      const timestampCol = getCol("Timestamp");
 
-      if (productCol === -1 || fgCol === -1 || ngKgCol === -1 || batchIdCol === -1 || dateCol === -1) {
+      if (productCol === -1 || fgCol === -1 || ngKgCol === -1 || batchIdCol === -1 || timestampCol === -1) {
         return ContentService.createTextOutput(JSON.stringify({ status: "success", summary: {}, totals: { fg: 0, ng: 0, jobs: 0 } })).setMimeType(ContentService.MimeType.JSON);
       }
 
       const start = String(data.start || "").trim();
       const end = String(data.end || "").trim();
 
-      const toISO = (rawVal) => {
+      const toShiftDateISO = (rawVal) => {
         if (!rawVal) return "";
+
+        const formatYmd = (dObj) => {
+          return dObj.getFullYear() + "-" + String(dObj.getMonth() + 1).padStart(2, "0") + "-" + String(dObj.getDate()).padStart(2, "0");
+        };
+
         if (rawVal instanceof Date) {
-          let yyyy = rawVal.getFullYear();
-          if (yyyy > 2500) yyyy -= 543;
-          const mm = String(rawVal.getMonth() + 1).padStart(2, "0");
-          const dd = String(rawVal.getDate()).padStart(2, "0");
-          return `${yyyy}-${mm}-${dd}`;
+          const dObj = new Date(rawVal.getTime());
+          const hour = parseInt(Utilities.formatDate(dObj, "GMT+7", "HH"), 10) || 0;
+          if (hour < 8) dObj.setDate(dObj.getDate() - 1); // cutoff 08:00-07:59
+          return formatYmd(dObj);
         }
+
         const text = String(rawVal).trim();
         if (!text) return "";
-        const d = text.split(" ")[0];
+        const parts = text.split(" ");
+        const d = parts[0];
+        const t = parts.length > 1 ? parts[1] : "";
+        const hour = t ? (parseInt(t.split(":")[0], 10) || 0) : null;
+        const hasTime = hour !== null;
 
+        let yyyy = "";
+        let mm = "";
+        let dd = "";
         if (d.includes("/")) {
-          const parts = d.split("/");
-          if (parts.length === 3) {
-            let yyyy = String(parts[2]).trim();
+          const dParts = d.split("/");
+          if (dParts.length === 3) {
+            yyyy = String(dParts[2]).trim();
             if (yyyy.length === 2) yyyy = "20" + yyyy;
             if (parseInt(yyyy, 10) > 2500) yyyy = String(parseInt(yyyy, 10) - 543);
-            return `${yyyy}-${String(parts[1]).padStart(2, "0")}-${String(parts[0]).padStart(2, "0")}`;
+            mm = String(dParts[1]).padStart(2, "0");
+            dd = String(dParts[0]).padStart(2, "0");
           }
-        }
-
-        if (d.includes("-")) {
-          const parts = d.split("-");
-          if (parts.length === 3) {
-            let yyyy = String(parts[0]).trim();
+        } else if (d.includes("-")) {
+          const dParts = d.split("-");
+          if (dParts.length === 3) {
+            yyyy = String(dParts[0]).trim();
             if (parseInt(yyyy, 10) > 2500) yyyy = String(parseInt(yyyy, 10) - 543);
-            return `${yyyy}-${String(parts[1]).padStart(2, "0")}-${String(parts[2]).padStart(2, "0")}`;
+            mm = String(dParts[1]).padStart(2, "0");
+            dd = String(dParts[2]).padStart(2, "0");
           }
         }
 
-        return d.substring(0, 10);
+        if (!yyyy || !mm || !dd) return d.substring(0, 10);
+        const dObj = new Date(parseInt(yyyy, 10), parseInt(mm, 10) - 1, parseInt(dd, 10));
+        if (hasTime && hour < 8) dObj.setDate(dObj.getDate() - 1); // cutoff 08:00-07:59
+        return formatYmd(dObj);
       };
 
       const getWppStrict = (productName) => {
@@ -595,8 +610,9 @@ function doPost(e) {
         if (seenBatchIds[batchId]) continue;
         seenBatchIds[batchId] = true;
 
-        const targetDateRaw = row[dateCol];
-        const targetDateISO = toISO(targetDateRaw);
+        // ใช้วันที่จากเวลาที่บันทึกจริงลง Production_Data
+        const targetDateRaw = row[timestampCol];
+        const targetDateISO = toShiftDateISO(targetDateRaw);
         if (!targetDateISO) continue;
         if (start && targetDateISO < start) continue;
         if (end && targetDateISO > end) continue;
