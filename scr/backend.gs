@@ -1216,6 +1216,83 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({status: "success", data: results})).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // === สรุปงาน Sorting จาก Production_Data (Batch_ID เริ่มด้วย "SORT-") ===
+  // กรองตามวันที่ QC อนุมัติ (Timestamp) ที่ตกในช่วง start~end
+  // Group ตามรุ่น (Product หลังตัดชื่อเครื่อง " : ") → รวม FG (pcs) + NG (kg→pcs)
+  if (action === "GET_SORTING_PROD_SUMMARY") {
+    const prodSheet = ss.getSheetByName("Production_Data");
+    if (!prodSheet) return ContentService.createTextOutput(JSON.stringify({status: "success", summary: {}, totals: {fg: 0, ng: 0, jobs: 0}})).setMimeType(ContentService.MimeType.JSON);
+    const startDateStr = data.start || e.parameter.start || "";
+    const endDateStr = data.end || e.parameter.end || "";
+    const rows = prodSheet.getDataRange().getValues();
+    if (rows.length <= 1) return ContentService.createTextOutput(JSON.stringify({status: "success", summary: {}, totals: {fg: 0, ng: 0, jobs: 0}})).setMimeType(ContentService.MimeType.JSON);
+
+    const hdr = rows[0].map(h => String(h).trim());
+    const tsIdx = hdr.indexOf("Timestamp");
+    const prodIdx = hdr.indexOf("Product");
+    const fgIdx = hdr.indexOf("FG");
+    const ngIdx = hdr.indexOf("NG_Total");
+    const batchIdx = hdr.indexOf("Batch_ID");
+    if (batchIdx === -1 || prodIdx === -1) {
+      return ContentService.createTextOutput(JSON.stringify({status: "success", summary: {}, totals: {fg: 0, ng: 0, jobs: 0}})).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // แปลง Timestamp "20/4/2026, 14:30:15" หรือ Date → yyyy-MM-dd
+    const toISO = (val) => {
+      if (!val) return "";
+      if (val instanceof Date && !isNaN(val.getTime())) {
+        let y = val.getFullYear(); if (y > 2500) y -= 543;
+        return y + "-" + String(val.getMonth() + 1).padStart(2, '0') + "-" + String(val.getDate()).padStart(2, '0');
+      }
+      const s = String(val).trim();
+      // รูปแบบ "d/M/yyyy[, HH:mm:ss]" (th-TH locale)
+      const m1 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (m1) {
+        let y = parseInt(m1[3]); if (y > 2500) y -= 543;
+        return y + "-" + String(parseInt(m1[2])).padStart(2, '0') + "-" + String(parseInt(m1[1])).padStart(2, '0');
+      }
+      // รูปแบบ "yyyy-MM-dd..."
+      const m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m2) return m2[1] + "-" + m2[2] + "-" + m2[3];
+      return "";
+    };
+
+    const summary = {};  // { modelName: { fg, ng, jobs } }
+    let totalFg = 0, totalNg = 0, totalJobs = 0;
+
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const batch = String(r[batchIdx] || "").trim();
+      if (!batch.startsWith("SORT-")) continue;
+
+      const tsISO = tsIdx !== -1 ? toISO(r[tsIdx]) : "";
+      if (startDateStr && endDateStr) {
+        if (!tsISO || tsISO < startDateStr || tsISO > endDateStr) continue;
+      }
+
+      let product = String(r[prodIdx] || "ไม่ระบุรุ่น").trim();
+      if (product.includes(" : ")) product = product.split(" : ").slice(1).join(" : ").trim();
+
+      const fgPcs = parseInt(r[fgIdx]) || 0;
+      const ngKg = parseFloat(r[ngIdx]) || 0;
+      const ngPcs = ngKg > 0 ? getPcsFromKg(product, ngKg) : 0;
+
+      if (!summary[product]) summary[product] = { fg: 0, ng: 0, jobs: 0 };
+      summary[product].fg += fgPcs;
+      summary[product].ng += ngPcs;
+      summary[product].jobs += 1;
+      totalFg += fgPcs;
+      totalNg += ngPcs;
+      totalJobs += 1;
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      summary: summary,
+      totals: { fg: totalFg, ng: totalNg, jobs: totalJobs }
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
   if (action === "SAVE_RTV") {
     let sheet = ss.getSheetByName("RTV_Data");
     if (!sheet) {
