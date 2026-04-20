@@ -509,6 +509,128 @@ function doPost(e) {
 
   const action = data.action;
 
+  if (action === "GET_SORTING_PROD_SUMMARY") {
+    try {
+      const sheet = ss.getSheetByName("Production_Data");
+      if (!sheet) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", summary: {}, totals: { fg: 0, ng: 0, jobs: 0 } })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const rows = sheet.getDataRange().getValues();
+      if (rows.length <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", summary: {}, totals: { fg: 0, ng: 0, jobs: 0 } })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const headers = rows[0].map(h => String(h || "").trim());
+      const getCol = (name) => headers.findIndex(h => h.toLowerCase() === String(name).toLowerCase());
+      const productCol = getCol("Product");
+      const fgCol = getCol("FG");
+      const ngKgCol = getCol("NG_Total");
+      const batchIdCol = getCol("Batch_ID");
+      const dateCol = getCol("Date");
+
+      if (productCol === -1 || fgCol === -1 || ngKgCol === -1 || batchIdCol === -1 || dateCol === -1) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", summary: {}, totals: { fg: 0, ng: 0, jobs: 0 } })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const start = String(data.start || "").trim();
+      const end = String(data.end || "").trim();
+
+      const toISO = (rawVal) => {
+        if (!rawVal) return "";
+        if (rawVal instanceof Date) {
+          let yyyy = rawVal.getFullYear();
+          if (yyyy > 2500) yyyy -= 543;
+          const mm = String(rawVal.getMonth() + 1).padStart(2, "0");
+          const dd = String(rawVal.getDate()).padStart(2, "0");
+          return `${yyyy}-${mm}-${dd}`;
+        }
+        const text = String(rawVal).trim();
+        if (!text) return "";
+        const d = text.split(" ")[0];
+
+        if (d.includes("/")) {
+          const parts = d.split("/");
+          if (parts.length === 3) {
+            let yyyy = String(parts[2]).trim();
+            if (yyyy.length === 2) yyyy = "20" + yyyy;
+            if (parseInt(yyyy, 10) > 2500) yyyy = String(parseInt(yyyy, 10) - 543);
+            return `${yyyy}-${String(parts[1]).padStart(2, "0")}-${String(parts[0]).padStart(2, "0")}`;
+          }
+        }
+
+        if (d.includes("-")) {
+          const parts = d.split("-");
+          if (parts.length === 3) {
+            let yyyy = String(parts[0]).trim();
+            if (parseInt(yyyy, 10) > 2500) yyyy = String(parseInt(yyyy, 10) - 543);
+            return `${yyyy}-${String(parts[1]).padStart(2, "0")}-${String(parts[2]).padStart(2, "0")}`;
+          }
+        }
+
+        return d.substring(0, 10);
+      };
+
+      const getWppStrict = (productName) => {
+        const p = String(productName || "");
+        if (p.includes("10A")) return 0.00228;
+        if (p.includes("16A")) return 0.00279;
+        if (p.includes("20A")) return 0.00357;
+        if (p.includes("25/32A")) return 0.005335;
+        return null;
+      };
+
+      const summary = {};
+      let totalFg = 0;
+      let totalNg = 0;
+      let totalJobs = 0;
+      const seenBatchIds = {};
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const batchId = String(row[batchIdCol] || "").trim();
+        if (!batchId || batchId.indexOf("SORT-") !== 0) continue;
+
+        // กันนับซ้ำกรณีมีแถว Batch_ID เดิมซ้ำใน Production_Data
+        if (seenBatchIds[batchId]) continue;
+        seenBatchIds[batchId] = true;
+
+        const targetDateRaw = row[dateCol];
+        const targetDateISO = toISO(targetDateRaw);
+        if (!targetDateISO) continue;
+        if (start && targetDateISO < start) continue;
+        if (end && targetDateISO > end) continue;
+
+        const model = String(row[productCol] || "").trim();
+        if (!model) continue;
+
+        const wpp = getWppStrict(model);
+        if (!wpp) continue; // strict no-fallback
+
+        const fg = parseFloat(row[fgCol]) || 0;
+        const ngKg = parseFloat(row[ngKgCol]) || 0;
+        const ng = ngKg > 0 ? Math.round(ngKg / wpp) : 0;
+
+        if (!summary[model]) summary[model] = { fg: 0, ng: 0, jobs: 0 };
+        summary[model].fg += fg;
+        summary[model].ng += ng;
+        summary[model].jobs += 1;
+
+        totalFg += fg;
+        totalNg += ng;
+        totalJobs += 1;
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        summary: summary,
+        totals: { fg: totalFg, ng: totalNg, jobs: totalJobs }
+      })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
   // --- ส่วนที่ 1: ระบบ Authentication & Admin ---
   if (action === "LOGIN") {
     const sheet = ss.getSheetByName("Users");
