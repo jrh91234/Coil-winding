@@ -509,6 +509,154 @@ function doPost(e) {
 
   const action = data.action;
 
+  if (action === "GET_SORTING_PROD_SUMMARY") {
+    try {
+      const sheet = ss.getSheetByName("Production_Data");
+      if (!sheet) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", summary: {}, totals: { fg: 0, ng: 0, jobs: 0 } })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const rows = sheet.getDataRange().getValues();
+      if (rows.length <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", summary: {}, totals: { fg: 0, ng: 0, jobs: 0 } })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const headers = rows[0].map(h => String(h || "").trim());
+      const getCol = (name) => headers.findIndex(h => h.toLowerCase() === String(name).toLowerCase());
+      const productCol = getCol("Product");
+      const machineCol = getCol("Machine");
+      const fgCol = getCol("FG");
+      const ngKgCol = getCol("NG_Total");
+      const batchIdCol = getCol("Batch_ID");
+      const timestampCol = getCol("Timestamp");
+
+      if (productCol === -1 || machineCol === -1 || fgCol === -1 || ngKgCol === -1 || batchIdCol === -1 || timestampCol === -1) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", summary: {}, totals: { fg: 0, ng: 0, jobs: 0 } })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const start = String(data.start || "").trim();
+      const end = String(data.end || "").trim();
+
+      const toShiftDateISO = (rawVal) => {
+        if (!rawVal) return "";
+
+        const formatYmd = (dObj) => {
+          return dObj.getFullYear() + "-" + String(dObj.getMonth() + 1).padStart(2, "0") + "-" + String(dObj.getDate()).padStart(2, "0");
+        };
+
+        if (rawVal instanceof Date) {
+          const dObj = new Date(rawVal.getTime());
+          const hour = parseInt(Utilities.formatDate(dObj, "GMT+7", "HH"), 10) || 0;
+          if (hour < 8) dObj.setDate(dObj.getDate() - 1); // cutoff 08:00-07:59
+          return formatYmd(dObj);
+        }
+
+        const text = String(rawVal).trim();
+        if (!text) return "";
+        const parts = text.split(" ");
+        const d = parts[0];
+        const t = parts.length > 1 ? parts[1] : "";
+        const hour = t ? (parseInt(t.split(":")[0], 10) || 0) : null;
+        const hasTime = hour !== null;
+
+        let yyyy = "";
+        let mm = "";
+        let dd = "";
+        if (d.includes("/")) {
+          const dParts = d.split("/");
+          if (dParts.length === 3) {
+            yyyy = String(dParts[2]).trim();
+            if (yyyy.length === 2) yyyy = "20" + yyyy;
+            if (parseInt(yyyy, 10) > 2500) yyyy = String(parseInt(yyyy, 10) - 543);
+            mm = String(dParts[1]).padStart(2, "0");
+            dd = String(dParts[0]).padStart(2, "0");
+          }
+        } else if (d.includes("-")) {
+          const dParts = d.split("-");
+          if (dParts.length === 3) {
+            yyyy = String(dParts[0]).trim();
+            if (parseInt(yyyy, 10) > 2500) yyyy = String(parseInt(yyyy, 10) - 543);
+            mm = String(dParts[1]).padStart(2, "0");
+            dd = String(dParts[2]).padStart(2, "0");
+          }
+        }
+
+        if (!yyyy || !mm || !dd) return d.substring(0, 10);
+        const dObj = new Date(parseInt(yyyy, 10), parseInt(mm, 10) - 1, parseInt(dd, 10));
+        if (hasTime && hour < 8) dObj.setDate(dObj.getDate() - 1); // cutoff 08:00-07:59
+        return formatYmd(dObj);
+      };
+
+      const getWppStrict = (productName) => {
+        const p = String(productName || "");
+        if (p.includes("10A")) return 0.00228;
+        if (p.includes("16A")) return 0.00279;
+        if (p.includes("20A")) return 0.00357;
+        if (p.includes("25/32A")) return 0.005335;
+        return null;
+      };
+
+      const summary = {};
+      const machineSummary = {};
+      let totalFg = 0;
+      let totalNg = 0;
+      let totalJobs = 0;
+      const seenBatchIds = {};
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const batchId = String(row[batchIdCol] || "").trim();
+        if (!batchId || batchId.indexOf("SORT-") !== 0) continue;
+
+        // กันนับซ้ำกรณีมีแถว Batch_ID เดิมซ้ำใน Production_Data
+        if (seenBatchIds[batchId]) continue;
+        seenBatchIds[batchId] = true;
+
+        // ใช้วันที่จากเวลาที่บันทึกจริงลง Production_Data
+        const targetDateRaw = row[timestampCol];
+        const targetDateISO = toShiftDateISO(targetDateRaw);
+        if (!targetDateISO) continue;
+        if (start && targetDateISO < start) continue;
+        if (end && targetDateISO > end) continue;
+
+        const model = String(row[productCol] || "").trim();
+        const machine = String(row[machineCol] || "").trim();
+        if (!model) continue;
+        if (!machine) continue;
+
+        const wpp = getWppStrict(model);
+        if (!wpp) continue; // strict no-fallback
+
+        const fg = parseFloat(row[fgCol]) || 0;
+        const ngKg = parseFloat(row[ngKgCol]) || 0;
+        const ng = ngKg > 0 ? Math.round(ngKg / wpp) : 0;
+
+        if (!summary[model]) summary[model] = { fg: 0, ng: 0, jobs: 0 };
+        summary[model].fg += fg;
+        summary[model].ng += ng;
+        summary[model].jobs += 1;
+
+        if (!machineSummary[machine]) machineSummary[machine] = { fg: 0, ng: 0, jobs: 0 };
+        machineSummary[machine].fg += fg;
+        machineSummary[machine].ng += ng;
+        machineSummary[machine].jobs += 1;
+
+        totalFg += fg;
+        totalNg += ng;
+        totalJobs += 1;
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        summary: summary,
+        machineSummary: machineSummary,
+        totals: { fg: totalFg, ng: totalNg, jobs: totalJobs }
+      })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
   // --- ส่วนที่ 1: ระบบ Authentication & Admin ---
   if (action === "LOGIN") {
     const sheet = ss.getSheetByName("Users");
