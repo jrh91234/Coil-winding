@@ -110,7 +110,6 @@ window.renderAutoReportContent = async function() {
 
     // 🌟 ดึงข้อมูลงาน Sorting จาก Production_Data (filter ตามวันที่ QC อนุมัติ) → สรุปแยกตามรุ่น 🌟
     let sortingSummaryByModel = {};  // { modelName: { fg, ng, jobs } }
-    let sortingSummaryByMachine = {}; // { machine: { fg, ng, jobs } }
     let sortingTotalFG = 0, sortingTotalNG = 0, sortingJobCount = 0;
     try {
         content.innerHTML = `
@@ -126,7 +125,6 @@ window.renderAutoReportContent = async function() {
         });
         const sortJson = await sortRes.json();
         sortingSummaryByModel = (sortJson && sortJson.summary) || {};
-        sortingSummaryByMachine = (sortJson && sortJson.machineSummary) || {};
         const totals = (sortJson && sortJson.totals) || { fg: 0, ng: 0, jobs: 0 };
         sortingTotalFG = totals.fg || 0;
         sortingTotalNG = totals.ng || 0;
@@ -198,12 +196,6 @@ window.renderAutoReportContent = async function() {
         if (!text || text.trim() === '-' || text.trim() === '') return { th: '-', en: '-', ch: '-' };
         return translatedRemarks[text] || { th: text, en: text, ch: text };
     };
-    const escapeHtml = (text) => String(text || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
 
     // uses shared getKgFromPcs from helpers.js (strict, no fallback)
     
@@ -308,10 +300,9 @@ window.renderAutoReportContent = async function() {
     }
     productBreakdownHtml += `</tbody></table></div>`;
 
-    // 🌟 ส่วนเสริม: สรุปงานคัดแยก (Sorting) แยกตามรุ่น + แยกตามเครื่อง 🌟
+    // 🌟 ส่วนเสริม: สรุปงานคัดแยก (Sorting) แยกตามรุ่น 🌟
     let sortingBreakdownHtml = '';
     const sortingKeys = Object.keys(sortingSummaryByModel);
-    const sortingMachineKeys = Object.keys(sortingSummaryByMachine);
     if (sortingKeys.length > 0) {
         const orderedForSort = [
             "S1B29288-JR (10A)",
@@ -360,40 +351,6 @@ window.renderAutoReportContent = async function() {
             </tr>`;
         });
         sortingBreakdownHtml += `</tbody></table></div>`;
-
-        if (sortingMachineKeys.length > 0) {
-            sortingMachineKeys.sort();
-            sortingBreakdownHtml += `
-            <div class="mt-4 bg-white border border-indigo-200 rounded-lg shadow-sm overflow-hidden page-break-inside-avoid">
-                <div class="bg-indigo-50 border-b border-indigo-200 px-4 py-2">
-                    <h4 class="text-sm font-bold text-indigo-800 flex items-center gap-2">🏭 สรุปงานคัดแยก (Sorting) แยกตามเครื่อง</h4>
-                </div>
-                <table class="w-full text-sm text-left">
-                    <thead class="bg-gray-100 text-gray-700 font-bold uppercase text-[11px] border-b">
-                        <tr>
-                            <th class="px-4 py-2 text-left">เครื่องจักร (Machine)</th>
-                            <th class="px-4 py-2 text-right">จ๊อบ</th>
-                            <th class="px-4 py-2 text-right">ดี (FG)</th>
-                            <th class="px-4 py-2 text-right">เสีย (NG)</th>
-                            <th class="px-4 py-2 text-right">% NG</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100">`;
-            sortingMachineKeys.forEach(mac => {
-                const s = sortingSummaryByMachine[mac];
-                const total = s.fg + s.ng;
-                const ngPct = total > 0 ? ((s.ng / total) * 100).toFixed(2) : "0.00";
-                const isHighNg = parseFloat(ngPct) > 5;
-                sortingBreakdownHtml += `<tr>
-                    <td class="px-4 py-2.5 font-bold text-gray-800">${mac}</td>
-                    <td class="px-4 py-2.5 text-right text-gray-600 text-xs">${s.jobs.toLocaleString()}</td>
-                    <td class="px-4 py-2.5 text-right text-blue-700 font-bold">${s.fg.toLocaleString()}</td>
-                    <td class="px-4 py-2.5 text-right text-red-600 font-medium">${s.ng.toLocaleString()}</td>
-                    <td class="px-4 py-2.5 text-right font-black ${isHighNg ? 'text-red-700 bg-red-50/70' : 'text-green-700 bg-green-50/50'}">${ngPct}%</td>
-                </tr>`;
-            });
-            sortingBreakdownHtml += `</tbody></table></div>`;
-        }
     } else {
         sortingBreakdownHtml = `<div class="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center">🗂️ ไม่มีข้อมูลงานคัดแยก (Sorting) ในช่วงวันที่เลือก</div>`;
     }
@@ -689,9 +646,9 @@ window.renderAutoReportContent = async function() {
                                     <td class="px-2 py-2 text-blue-700 align-top whitespace-nowrap">${log.issueType}</td>
                                     <td class="px-2 py-2 align-top">
                                         <div class="space-y-0.5">
-                                            <p class="text-[10px] text-gray-800" style="font-family:'Sarabun','Noto Sans Thai','Tahoma',sans-serif;"><span class="font-bold text-blue-600 mr-1">[TH]</span>${escapeHtml(remarkTrans.th)}</p>
-                                            <p class="text-[9px] text-gray-600" style="font-family:'Sarabun','Noto Sans Thai','Tahoma',sans-serif;"><span class="font-bold text-red-600 mr-1">[EN]</span>${escapeHtml(remarkTrans.en)}</p>
-                                            <p class="text-[9px] text-gray-500" style="font-family:'Sarabun','Noto Sans Thai','Tahoma',sans-serif;"><span class="font-bold text-gray-700 mr-1">[CH]</span>${escapeHtml(remarkTrans.ch)}</p>
+                                            <p class="text-[10px] text-gray-800"><span class="font-bold text-blue-600 mr-1">[TH]</span>${remarkTrans.th}</p>
+                                            <p class="text-[9px] text-gray-600"><span class="font-bold text-red-600 mr-1">[EN]</span>${remarkTrans.en}</p>
+                                            <p class="text-[9px] text-gray-500"><span class="font-bold text-gray-700 mr-1">[CH]</span>${remarkTrans.ch}</p>
                                         </div>
                                     </td>
                                 </tr>`;
@@ -949,9 +906,9 @@ window.renderAutoReportContent = async function() {
                                         <td class="px-2 py-2 text-blue-700 align-top whitespace-nowrap">${pLog.issueType}</td>
                                         <td class="px-2 py-2 align-top">
                                             <div class="space-y-0.5">
-                                                <p class="text-[10px] text-gray-800" style="font-family:'Sarabun','Noto Sans Thai','Tahoma',sans-serif;"><span class="font-bold text-blue-600 mr-1">[TH]</span>${escapeHtml(remarkTrans.th)}</p>
-                                                <p class="text-[9px] text-gray-600" style="font-family:'Sarabun','Noto Sans Thai','Tahoma',sans-serif;"><span class="font-bold text-red-600 mr-1">[EN]</span>${escapeHtml(remarkTrans.en)}</p>
-                                                <p class="text-[9px] text-gray-500" style="font-family:'Sarabun','Noto Sans Thai','Tahoma',sans-serif;"><span class="font-bold text-gray-700 mr-1">[CH]</span>${escapeHtml(remarkTrans.ch)}</p>
+                                                <p class="text-[10px] text-gray-800"><span class="font-bold text-blue-600 mr-1">[TH]</span>${remarkTrans.th}</p>
+                                                <p class="text-[9px] text-gray-600"><span class="font-bold text-red-600 mr-1">[EN]</span>${remarkTrans.en}</p>
+                                                <p class="text-[9px] text-gray-500"><span class="font-bold text-gray-700 mr-1">[CH]</span>${remarkTrans.ch}</p>
                                             </div>
                                         </td>
                                     </tr>`;
