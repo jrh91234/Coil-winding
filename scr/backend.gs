@@ -524,13 +524,12 @@ function doPost(e) {
       const headers = rows[0].map(h => String(h || "").trim());
       const getCol = (name) => headers.findIndex(h => h.toLowerCase() === String(name).toLowerCase());
       const productCol = getCol("Product");
-      const machineCol = getCol("Machine");
       const fgCol = getCol("FG");
       const ngKgCol = getCol("NG_Total");
       const batchIdCol = getCol("Batch_ID");
       const timestampCol = getCol("Timestamp");
 
-      if (productCol === -1 || machineCol === -1 || fgCol === -1 || ngKgCol === -1 || batchIdCol === -1 || timestampCol === -1) {
+      if (productCol === -1 || fgCol === -1 || ngKgCol === -1 || batchIdCol === -1 || timestampCol === -1) {
         return ContentService.createTextOutput(JSON.stringify({ status: "success", summary: {}, totals: { fg: 0, ng: 0, jobs: 0 } })).setMimeType(ContentService.MimeType.JSON);
       }
 
@@ -597,7 +596,6 @@ function doPost(e) {
       };
 
       const summary = {};
-      const machineSummary = {};
       let totalFg = 0;
       let totalNg = 0;
       let totalJobs = 0;
@@ -620,9 +618,7 @@ function doPost(e) {
         if (end && targetDateISO > end) continue;
 
         const model = String(row[productCol] || "").trim();
-        const machine = String(row[machineCol] || "").trim();
         if (!model) continue;
-        if (!machine) continue;
 
         const wpp = getWppStrict(model);
         if (!wpp) continue; // strict no-fallback
@@ -636,11 +632,6 @@ function doPost(e) {
         summary[model].ng += ng;
         summary[model].jobs += 1;
 
-        if (!machineSummary[machine]) machineSummary[machine] = { fg: 0, ng: 0, jobs: 0 };
-        machineSummary[machine].fg += fg;
-        machineSummary[machine].ng += ng;
-        machineSummary[machine].jobs += 1;
-
         totalFg += fg;
         totalNg += ng;
         totalJobs += 1;
@@ -649,7 +640,6 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
         summary: summary,
-        machineSummary: machineSummary,
         totals: { fg: totalFg, ng: totalNg, jobs: totalJobs }
       })).setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
