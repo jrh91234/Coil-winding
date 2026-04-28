@@ -2233,8 +2233,7 @@ function doPost(e) {
           };
           if (autoNextCheck > 0 && actualShots >= autoNextCheck) {
             result.partsCheck.push(item);
-          }
-          if (lifeShots > 0 && pct >= 90) {
+          } else if (lifeShots > 0 && pct >= 90) {
             result.partsNearEnd.push(item);
           }
         });
