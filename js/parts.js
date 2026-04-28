@@ -400,7 +400,7 @@ window.loadMachineParts = async function(machine) {
                 </div>` : ''}
                 <div class="flex gap-2 mt-2 flex-wrap">
                     <button onclick="window.openCheckPartDialog('${inst.Install_ID}', '${inst.Part_ID}', '${escName}', '${machine}', ${usedShots}, ${lifeShots}, ${nextCheckShot}, ${checkInterval})" class="text-xs ${checkBtnClass} hover:underline">🔍 ตรวจเช็ค</button>
-                    <button onclick="window.showCheckHistory('${inst.Install_ID}', '${escName}')" class="text-xs text-gray-600 hover:underline">📋 ประวัติ${checkCount > 0 ? ` (${checkCount})` : ''}</button>
+                    <button onclick="window.showCheckHistory('${inst.Install_ID}', '${escName}', '${inst.Part_ID}')" class="text-xs text-gray-600 hover:underline">📋 ประวัติ${checkCount > 0 ? ` (${checkCount})` : ''}</button>
                     <button onclick="window.promptReplacepart('${inst.Install_ID}', '${machine}', '${inst.Part_ID}', '${escName}', ${lifeShots})" class="text-xs text-orange-600 hover:underline">🔄 เปลี่ยน / ย้าย</button>
                     <button onclick="window.promptUpdateLife('${inst.Install_ID}', ${lifeShots})" class="text-xs text-blue-600 hover:underline">📏 ปรับอายุ</button>
                 </div>
@@ -804,7 +804,7 @@ window.submitPartCheck = async function() {
 };
 
 // ประวัติการตรวจเช็ค
-window.showCheckHistory = async function(installId, partName) {
+window.showCheckHistory = async function(installId, partName, partId) {
     const modal = document.getElementById('modal-check-history');
     if (!modal) { alert('ไม่พบ modal ประวัติ'); return; }
     const titleEl = document.getElementById('check-history-title');
@@ -814,9 +814,11 @@ window.showCheckHistory = async function(installId, partName) {
     modal.classList.remove('hidden');
 
     try {
+        const payload = { action: 'GET_PARTS_CHECKS' };
+        if (partId) { payload.partId = partId; } else { payload.installId = installId; }
         const res = await fetch(SCRIPT_URL, {
             method: 'POST',
-            body: JSON.stringify({ action: 'GET_PARTS_CHECKS', installId: installId })
+            body: JSON.stringify(payload)
         });
         const data = await res.json();
         const list = data.data || [];

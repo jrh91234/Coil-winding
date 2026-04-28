@@ -154,7 +154,7 @@ function renderPartsCheckItem(d) {
             </div>
             <div class="flex flex-col gap-1 ml-3 shrink-0">
                 <button onclick="window.openCheckPartDialog('${d.installId}', '${d.partId}', '${escName}', '${d.machine}', ${d.actualShots}, ${d.lifeShots}, ${d.nextCheckShot}, 0)" class="text-xs bg-amber-600 text-white px-3 py-1 rounded hover:bg-amber-700 font-bold">🔍 ตรวจเช็ค</button>
-                <button onclick="window.showCheckHistory('${d.installId}', '${escName}')" class="text-xs text-gray-500 hover:underline">📋 ประวัติ</button>
+                <button onclick="window.showCheckHistory('${d.installId}', '${escName}', '${d.partId}')" class="text-xs text-gray-500 hover:underline">📋 ประวัติ</button>
             </div>
         </div>
     </div>`;
