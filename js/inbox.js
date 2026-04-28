@@ -174,7 +174,7 @@ function renderPartsNearEndItem(d) {
                     <span class="text-[10px] text-gray-400 font-mono">(${d.partId})</span>
                     <span class="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-mono">${d.machine}</span>
                 </div>
-                <div class="text-xs text-gray-600">Actual: <b class="${pctColor}">${Number(d.actualShots).toLocaleString()}</b> / Life: <b>${Number(d.lifeShots).toLocaleString()}</b> shot</div>
+                <div class="text-xs text-gray-600">Actual: <b class="${pctColor}">${Number(d.actualShots).toLocaleString()}</b> / Life: <b>${Number(d.effectiveLife || d.lifeShots).toLocaleString()}</b> shot${d.checkCount > 0 ? ` <span class="text-green-600">(ตรวจผ่าน ${d.checkCount} ครั้ง)</span>` : ''}</div>
                 <div class="mt-1 w-full bg-gray-200 rounded-full h-2">
                     <div class="h-2 rounded-full ${isOver95 ? 'bg-red-600' : 'bg-yellow-500'}" style="width: ${Math.min(d.pct, 100)}%"></div>
                 </div>
