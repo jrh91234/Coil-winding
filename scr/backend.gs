@@ -2184,7 +2184,7 @@ function doPost(e) {
             remark: String(mRows[i][mi("Remark")] || ""),
             recorder: String(mRows[i][mi("Recorder")] || ""),
             date: dateStr,
-            startTime: String(mRows[i][mi("Start_Time")] || ""),
+            startTime: (mRows[i][mi("Start_Time")] instanceof Date) ? Utilities.formatDate(mRows[i][mi("Start_Time")], "GMT+7", "HH:mm") : String(mRows[i][mi("Start_Time")] || ""),
             daysAgo: daysAgo
           });
         }
