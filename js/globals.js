@@ -358,7 +358,7 @@ window.switchTab = function(tab) {
     if (role === 'Viewer' && tab !== 'dashboard') return;
 
     // สลับหน้าจอ Section (แยกเมนูที่เป็นลิงก์ออก ไม่ต้องนำมาจัดการในนี้)
-    ['form', 'planning', 'dashboard', 'admin', 'rtv', 'packing', 'parts'].forEach(t => {
+    ['inbox', 'form', 'planning', 'dashboard', 'admin', 'rtv', 'packing', 'parts'].forEach(t => {
         const el = document.getElementById('section-'+t);
         if(el) el.classList.toggle('hidden', t !== tab);
 
@@ -373,6 +373,7 @@ window.switchTab = function(tab) {
             }
         }
     });
+    if(tab === 'inbox' && typeof window.loadInbox === 'function') window.loadInbox();
     if(tab === 'dashboard' && typeof window.loadDashboard === 'function') window.loadDashboard();
     if(tab === 'parts' && typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
 };
@@ -386,7 +387,7 @@ function applyPermissions() {
     const mobileSortIds = ['tab-sort', 'tab-sort-mobile'];
 
     // 1. ซ่อนเมนูทั้งหมดก่อน รวมถึงปุ่ม Sort ทุกแบบที่อาจมี
-    const allMenus = ['tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-parts', 'tab-rtv', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
+    const allMenus = ['tab-inbox', 'tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-parts', 'tab-rtv', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
     
     allMenus.forEach(id => {
         const el = document.getElementById(id);
@@ -401,19 +402,19 @@ function applyPermissions() {
 
     // 2. กำหนดว่า Role ไหนเห็นเมนูไหนบ้าง
     if (role === 'Production') {
-        allowedMenus = ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-parts', 'tab-rtv', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
+        allowedMenus = ['tab-inbox', 'tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-parts', 'tab-rtv', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
         defaultTab = 'form';
-    } 
+    }
     else if (role === 'QC') {
-        allowedMenus = ['tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv', ...desktopSortIds, ...mobileSortIds];
+        allowedMenus = ['tab-inbox', 'tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv', ...desktopSortIds, ...mobileSortIds];
         defaultTab = 'form';
     }
     else if (role === 'Planning') {
-        allowedMenus = ['tab-planning', 'tab-dashboard'];
+        allowedMenus = ['tab-inbox', 'tab-planning', 'tab-dashboard'];
         defaultTab = 'planning';
-    } 
+    }
     else if (role === 'Viewer') {
-        allowedMenus = ['tab-dashboard'];
+        allowedMenus = ['tab-inbox', 'tab-dashboard'];
         defaultTab = 'dashboard';
     } 
     else if (role === 'Admin') {

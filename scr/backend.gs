@@ -2150,6 +2150,125 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({status: "success", countId: countId, saved: newRows.length})).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // === 📬 Inbox: รวบรวมงานค้างจากหลาย sheet ส่งให้ frontend แสดงแบบ Email ===
+  if (action === "GET_INBOX") {
+    const role = data.role || "";
+    const userName = data.userName || "";
+    const todayISO = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+    const result = { maintenance: [], partsCheck: [], partsNearEnd: [], sortingWaitQC: [] };
+
+    // 1) งานซ่อมค้าง (Maintenance_Data: End_Time ว่าง)
+    try {
+      const mSheet = ss.getSheetByName("Maintenance_Data");
+      if (mSheet && mSheet.getLastRow() > 1) {
+        const mRows = mSheet.getDataRange().getValues();
+        const mH = mRows[0].map(h => String(h).trim());
+        const mi = (n) => mH.indexOf(n);
+        for (let i = 1; i < mRows.length; i++) {
+          const endTime = String(mRows[i][mi("End_Time")] || "").trim();
+          if (endTime && endTime !== "-") continue;
+          const dateRaw = mRows[i][mi("Date")];
+          let dateStr = "";
+          if (dateRaw instanceof Date) dateStr = Utilities.formatDate(dateRaw, "GMT+7", "yyyy-MM-dd");
+          else dateStr = String(dateRaw || "").trim().substring(0, 10);
+          const daysAgo = dateStr ? daysBetween(dateStr, todayISO) : 0;
+          result.maintenance.push({
+            jobId: String(mRows[i][mi("Job_ID")] || ""),
+            machine: String(mRows[i][mi("Machine")] || ""),
+            issueType: String(mRows[i][mi("Issue_Type")] || ""),
+            remark: String(mRows[i][mi("Remark")] || ""),
+            recorder: String(mRows[i][mi("Recorder")] || ""),
+            date: dateStr,
+            startTime: String(mRows[i][mi("Start_Time")] || ""),
+            daysAgo: daysAgo
+          });
+        }
+      }
+    } catch (e) { console.error("Inbox maint err: " + e); }
+
+    // 2) อะไหล่ถึงรอบเช็ค + ใกล้หมดอายุ (Parts_Installation: Active only)
+    try {
+      const pSheet = ss.getSheetByName("Parts_Installation");
+      if (pSheet && pSheet.getLastRow() > 1) {
+        const pRows = pSheet.getDataRange().getValues();
+        const pH = pRows[0].map(h => String(h).trim());
+        const pi = (n) => pH.indexOf(n);
+        const activeMachines = [];
+        const activeRows = [];
+        for (let i = 1; i < pRows.length; i++) {
+          if (String(pRows[i][pi("Status")] || "").trim() !== "Active") continue;
+          const mac = String(pRows[i][pi("Machine")] || "").trim();
+          if (mac && activeMachines.indexOf(mac) === -1) activeMachines.push(mac);
+          activeRows.push(pRows[i]);
+        }
+        const macShots = activeMachines.length > 0 ? calcMultiMachineShots(ss, activeMachines) : {};
+        activeRows.forEach(r => {
+          const mac = String(r[pi("Machine")] || "").trim();
+          const installShot = parseInt(r[pi("Install_Shot")]) || 0;
+          const carried = parseInt(r[pi("Carried_Shots")]) || 0;
+          const lifeShots = parseInt(r[pi("Life_Shots")]) || 0;
+          const machineShot = macShots[mac] || 0;
+          const actualShots = carried + Math.max(0, machineShot - installShot);
+          const nextCheck = parseInt(r[pi("Next_Check_Shot")]) || 0;
+          const checkCount = parseInt(r[pi("Check_Count")]) || 0;
+          const pct = lifeShots > 0 ? (actualShots / lifeShots) * 100 : 0;
+          const item = {
+            installId: String(r[pi("Install_ID")] || ""),
+            machine: mac,
+            partId: String(r[pi("Part_ID")] || ""),
+            partName: String(r[pi("Part_Name")] || ""),
+            actualShots: actualShots,
+            lifeShots: lifeShots,
+            pct: Math.round(pct * 10) / 10,
+            nextCheckShot: nextCheck,
+            checkCount: checkCount
+          };
+          if (nextCheck > 0 && actualShots >= nextCheck) {
+            result.partsCheck.push(item);
+          }
+          if (lifeShots > 0 && pct >= 90) {
+            result.partsNearEnd.push(item);
+          }
+        });
+      }
+    } catch (e) { console.error("Inbox parts err: " + e); }
+
+    // 3) งาน Sort รอ QC (Sorting_Data: status = "Wait QC")
+    if (role === "QC" || role === "Admin") {
+      try {
+        const sSheet = ss.getSheetByName("Sorting_Data");
+        if (sSheet && sSheet.getLastRow() > 1) {
+          const sRows = sSheet.getDataRange().getValues();
+          const sH = sRows[0].map(h => String(h).trim());
+          const si = (n) => sH.indexOf(n);
+          for (let i = 1; i < sRows.length; i++) {
+            if (String(sRows[i][si("Status")] || "").trim() !== "Wait QC") continue;
+            let product = String(sRows[i][si("Product")] || "").trim();
+            if (product.includes(" : ")) product = product.split(" : ").slice(1).join(" : ").trim();
+            result.sortingWaitQC.push({
+              jobId: String(sRows[i][si("Job_ID")] || ""),
+              product: product,
+              symptom: String(sRows[i][si("Symptom")] || ""),
+              qty: String(sRows[i][si("Qty")] || ""),
+              sorter: String(sRows[i][si("Sorter")] || ""),
+              fgQty: String(sRows[i][si("FG_Qty")] || ""),
+              ngQty: String(sRows[i][si("NG_Qty")] || "")
+            });
+          }
+        }
+      } catch (e) { console.error("Inbox sort err: " + e); }
+    }
+
+    const counts = {
+      maintenance: result.maintenance.length,
+      partsCheck: result.partsCheck.length,
+      partsNearEnd: result.partsNearEnd.length,
+      sortingWaitQC: result.sortingWaitQC.length,
+      total: result.maintenance.length + result.partsCheck.length + result.partsNearEnd.length + result.sortingWaitQC.length
+    };
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", categories: result, counts: counts })).setMimeType(ContentService.MimeType.JSON);
+  }
+
   return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Unknown Action"})).setMimeType(ContentService.MimeType.JSON);
 }
 
