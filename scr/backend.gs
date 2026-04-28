@@ -2211,9 +2211,9 @@ function doPost(e) {
           const actualShots = carried + Math.max(0, machineShot - installShot);
           const nextCheck = parseInt(r[pi("Next_Check_Shot")]) || 0;
           const checkCount = parseInt(r[pi("Check_Count")]) || 0;
-          const checkInterval = parseInt(r[pi("Check_Interval_Shots")]) || 0;
-          const effectiveLife = lifeShots + (checkCount * checkInterval);
+          const effectiveLife = lifeShots * (checkCount + 1);
           const pct = effectiveLife > 0 ? (actualShots / effectiveLife) * 100 : 0;
+          const autoNextCheck = (nextCheck > 0) ? nextCheck : (lifeShots > 0 ? installShot + lifeShots * (checkCount + 1) : 0);
           const item = {
             installId: String(r[pi("Install_ID")] || ""),
             machine: mac,
@@ -2223,10 +2223,10 @@ function doPost(e) {
             lifeShots: lifeShots,
             effectiveLife: effectiveLife,
             pct: Math.round(pct * 10) / 10,
-            nextCheckShot: nextCheck,
+            nextCheckShot: autoNextCheck,
             checkCount: checkCount
           };
-          if (nextCheck > 0 && actualShots >= nextCheck) {
+          if (autoNextCheck > 0 && actualShots >= autoNextCheck) {
             result.partsCheck.push(item);
           }
           if (lifeShots > 0 && pct >= 90) {
