@@ -2211,7 +2211,9 @@ function doPost(e) {
           const actualShots = carried + Math.max(0, machineShot - installShot);
           const nextCheck = parseInt(r[pi("Next_Check_Shot")]) || 0;
           const checkCount = parseInt(r[pi("Check_Count")]) || 0;
-          const pct = lifeShots > 0 ? (actualShots / lifeShots) * 100 : 0;
+          const checkInterval = parseInt(r[pi("Check_Interval_Shots")]) || 0;
+          const effectiveLife = lifeShots + (checkCount * checkInterval);
+          const pct = effectiveLife > 0 ? (actualShots / effectiveLife) * 100 : 0;
           const item = {
             installId: String(r[pi("Install_ID")] || ""),
             machine: mac,
@@ -2219,6 +2221,7 @@ function doPost(e) {
             partName: String(r[pi("Part_Name")] || ""),
             actualShots: actualShots,
             lifeShots: lifeShots,
+            effectiveLife: effectiveLife,
             pct: Math.round(pct * 10) / 10,
             nextCheckShot: nextCheck,
             checkCount: checkCount
