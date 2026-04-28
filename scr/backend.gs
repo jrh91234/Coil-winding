@@ -1343,13 +1343,18 @@ function doPost(e) {
     if (rows.length <= 1) return ContentService.createTextOutput(JSON.stringify({status: "success", data: []})).setMimeType(ContentService.MimeType.JSON);
     const headers = rows[0].map(h => String(h).trim());
     const filterInstall = data.installId || "";
+    const filterPartId = data.partId || "";
     const filterMachine = data.machine || "";
     const results = [];
     for (let i = 1; i < rows.length; i++) {
       const obj = {};
       headers.forEach((h, idx) => { obj[h] = rows[i][idx] !== undefined ? rows[i][idx] : ""; });
       if (!obj.Check_ID) continue;
-      if (filterInstall && obj.Install_ID !== filterInstall) continue;
+      if (filterPartId) {
+        if (obj.Part_ID !== filterPartId) continue;
+      } else if (filterInstall) {
+        if (obj.Install_ID !== filterInstall) continue;
+      }
       if (filterMachine && obj.Machine !== filterMachine) continue;
       results.push(obj);
     }
