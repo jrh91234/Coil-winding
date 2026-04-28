@@ -2213,7 +2213,7 @@ function doPost(e) {
           const checkCount = parseInt(r[pi("Check_Count")]) || 0;
           const effectiveLife = lifeShots * (checkCount + 1);
           const pct = effectiveLife > 0 ? (actualShots / effectiveLife) * 100 : 0;
-          const autoNextCheck = (nextCheck > 0) ? nextCheck : (lifeShots > 0 ? installShot + lifeShots * (checkCount + 1) : 0);
+          const autoNextCheck = (nextCheck > 0) ? nextCheck : (lifeShots > 0 ? lifeShots * (checkCount + 1) : 0);
           const item = {
             installId: String(r[pi("Install_ID")] || ""),
             machine: mac,
