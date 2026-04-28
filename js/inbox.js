@@ -2,6 +2,13 @@
 let inboxData = null;
 let inboxActiveCategory = 'all';
 
+window.inboxCloseJob = function(jobId) {
+    const job = inboxData && inboxData.categories.maintenance.find(m => m.jobId === jobId);
+    if (!job) { alert('ไม่พบข้อมูลงาน ' + jobId); return; }
+    if (typeof window.openMaintenanceModal === 'function') window.openMaintenanceModal();
+    if (typeof window.loadPendingJob === 'function') window.loadPendingJob(job);
+};
+
 window.loadInbox = async function() {
     const container = document.getElementById('inbox-content');
     const sidebar = document.getElementById('inbox-sidebar');
@@ -132,7 +139,7 @@ function renderMaintenanceItem(d) {
                 <div class="text-[10px] text-gray-400 mt-1">แจ้งโดย: ${d.recorder} · ${d.date} ${d.startTime}</div>
             </div>
             <div class="flex flex-col gap-1 ml-3 shrink-0">
-                <button onclick="window.openMaintenanceModal('${d.jobId}')" class="text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 font-bold">✅ ปิดงาน</button>
+                <button onclick="window.inboxCloseJob('${d.jobId}')" class="text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 font-bold">✅ ปิดงาน</button>
             </div>
         </div>
     </div>`;
