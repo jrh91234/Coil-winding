@@ -1681,9 +1681,6 @@ function doPost(e) {
                               const lastRow = prodSheet.getLastRow();
                               const totalCols = prodSheet.getLastColumn();
                               const prodHeaders = prodSheet.getRange(1, 1, 1, totalCols).getValues()[0].map(h => h.toString().trim().toLowerCase());
-                              const lookbackRows = Math.min(500, lastRow - 1);
-                              const startRow = lastRow - lookbackRows + 1;
-                              const prodRows = prodSheet.getRange(startRow, 1, lookbackRows, totalCols).getValues();
                               const pDateIdx = prodHeaders.indexOf("date");
                               const pMachIdx = prodHeaders.indexOf("machine");
                               const pShiftIdx = prodHeaders.indexOf("shift");
@@ -1697,14 +1694,29 @@ function doPost(e) {
                                   return String(val || "").trim();
                               };
 
-                              if (pDateIdx !== -1 && pMachIdx !== -1 && pShiftIdx !== -1) {
-                                  // ลูปเดียว: หาทั้ง exact match (Machine+Date+Hour) และ fallback (Machine+Date)
+                              // ขั้น 1: อ่านเฉพาะคอลัมน์ Date เพื่อหาแถวเป้าหมาย
+                              let rowStart = -1, rowEnd = -1;
+                              if (pDateIdx !== -1) {
+                                  const dateCol = prodSheet.getRange(2, pDateIdx + 1, lastRow - 1, 1).getValues();
+                                  for (let i = dateCol.length - 1; i >= 0; i--) {
+                                      const d = formatProdDate(dateCol[i][0]);
+                                      if (d === dateStr) {
+                                          if (rowEnd === -1) rowEnd = i;
+                                          rowStart = i;
+                                      } else if (rowEnd !== -1 && d < dateStr) {
+                                          break;
+                                      }
+                                  }
+                              }
+
+                              // ขั้น 2: อ่านเฉพาะแถวที่ตรงวันที่ ทุกคอลัมน์
+                              if (rowStart !== -1 && pMachIdx !== -1 && pShiftIdx !== -1) {
+                                  const count = rowEnd - rowStart + 1;
+                                  const prodRows = prodSheet.getRange(rowStart + 2, 1, count, totalCols).getValues();
                                   for (let p = prodRows.length - 1; p >= 0; p--) {
-                                      const pDate = formatProdDate(prodRows[p][pDateIdx]);
                                       const pMach = String(prodRows[p][pMachIdx] || "").trim();
                                       const pShift = String(prodRows[p][pShiftIdx] || "").trim();
-                                      if (pDate === dateStr && pMach === baseMachine && (pShift === "A" || pShift === "B")) {
-                                          // เก็บ fallback ไว้เผื่อ exact match ไม่เจอ
+                                      if (pMach === baseMachine && (pShift === "A" || pShift === "B")) {
                                           if (fallbackShift === "-") fallbackShift = pShift;
                                           if (pHourIdx !== -1) {
                                               const pHour = String(prodRows[p][pHourIdx] || "").trim();
@@ -1726,11 +1738,10 @@ function doPost(e) {
                                           }
                                       }
                                   }
-                                  // ใช้ fallback ถ้า exact match ไม่เจอ
                                   if (matchedShift === "-") matchedShift = fallbackShift;
-                                  // fallback สุดท้าย: ใช้เวลาตัดสินกะ
-                                  if (matchedShift === "-") matchedShift = shiftType === "Day" ? "A" : "B";
                               }
+                              // fallback สุดท้าย: ใช้เวลาตัดสินกะ
+                              if (matchedShift === "-") matchedShift = shiftType === "Day" ? "A" : "B";
 
                               // === เขียน/อัปเดต Production_Data — รองรับ Recall ===
                               syncHeaders(prodSheet);
