@@ -2177,7 +2177,7 @@ function doPost(e) {
     const role = data.role || "";
     const userName = data.userName || "";
     const todayISO = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
-    const result = { maintenance: [], partsCheck: [], partsNearEnd: [], sortingWaitQC: [] };
+    const result = { maintenance: [], partsCheck: [], partsNearEnd: [], sortingWaitQC: [], pmTasks: [], pmApprovals: [] };
 
     // 1) งานซ่อมค้าง (Maintenance_Data: End_Time ว่าง)
     try {
@@ -2283,14 +2283,249 @@ function doPost(e) {
       } catch (e) { console.error("Inbox sort err: " + e); }
     }
 
+    // 4) แผน PM ที่ถึงกำหนด (Maintenance_Plan: Active + Next_Due_Date <= today + Assigned_To = user)
+    try {
+      const pmSheet = ss.getSheetByName("Maintenance_Plan");
+      if (pmSheet && pmSheet.getLastRow() > 1) {
+        const pmRows = pmSheet.getDataRange().getValues();
+        const pmH = pmRows[0].map(h => String(h).trim());
+        const pi = (n) => pmH.indexOf(n);
+        for (let i = 1; i < pmRows.length; i++) {
+          const status = String(pmRows[i][pi("Status")] || "").trim();
+          if (status !== "Active") continue;
+          const assignedTo = String(pmRows[i][pi("Assigned_To")] || "").trim();
+          if (assignedTo && assignedTo !== userName && role !== "Admin") continue;
+          const dueDateRaw = pmRows[i][pi("Next_Due_Date")];
+          let dueDate = "";
+          if (dueDateRaw instanceof Date) dueDate = Utilities.formatDate(dueDateRaw, "GMT+7", "yyyy-MM-dd");
+          else dueDate = String(dueDateRaw || "").trim().substring(0, 10);
+          if (!dueDate || dueDate > todayISO) continue;
+          const daysOverdue = dueDate ? daysBetween(dueDate, todayISO) : 0;
+          result.pmTasks.push({
+            planId: String(pmRows[i][pi("Plan_ID")] || ""),
+            machine: String(pmRows[i][pi("Machine")] || ""),
+            planType: String(pmRows[i][pi("Plan_Type")] || ""),
+            taskName: String(pmRows[i][pi("Task_Name")] || ""),
+            frequency: String(pmRows[i][pi("Frequency")] || ""),
+            assignedTo: assignedTo,
+            dueDate: dueDate,
+            daysOverdue: daysOverdue,
+            note: String(pmRows[i][pi("Note")] || "")
+          });
+        }
+      }
+    } catch (e) { console.error("Inbox PM err: " + e); }
+
+    // 5) งาน PM รออนุมัติ (Maintenance_Log: Status = "Wait Approve") — สำหรับหัวหน้า/Admin
+    if (role === "Admin" || role === "Production") {
+      try {
+        const logSheet = ss.getSheetByName("Maintenance_Log");
+        if (logSheet && logSheet.getLastRow() > 1) {
+          const logRows = logSheet.getDataRange().getValues();
+          const lH = logRows[0].map(h => String(h).trim());
+          const li = (n) => lH.indexOf(n);
+          for (let i = 1; i < logRows.length; i++) {
+            if (String(logRows[i][li("Status")] || "").trim() !== "Wait Approve") continue;
+            result.pmApprovals.push({
+              logId: String(logRows[i][li("Log_ID")] || ""),
+              planId: String(logRows[i][li("Plan_ID")] || ""),
+              machine: String(logRows[i][li("Machine")] || ""),
+              taskName: String(logRows[i][li("Task_Name")] || ""),
+              doneDate: String(logRows[i][li("Done_Date")] || "").substring(0, 10),
+              doneBy: String(logRows[i][li("Done_By")] || ""),
+              dueDate: String(logRows[i][li("Due_Date")] || "").substring(0, 10),
+              photoUrls: String(logRows[i][li("Photo_URLs")] || ""),
+              note: String(logRows[i][li("Note")] || "")
+            });
+          }
+        }
+      } catch (e) { console.error("Inbox PM approve err: " + e); }
+    }
+
     const counts = {
       maintenance: result.maintenance.length,
       partsCheck: result.partsCheck.length,
       partsNearEnd: result.partsNearEnd.length,
       sortingWaitQC: result.sortingWaitQC.length,
-      total: result.maintenance.length + result.partsCheck.length + result.partsNearEnd.length + result.sortingWaitQC.length
+      pmTasks: result.pmTasks.length,
+      pmApprovals: result.pmApprovals.length,
+      total: result.maintenance.length + result.partsCheck.length + result.partsNearEnd.length + result.sortingWaitQC.length + result.pmTasks.length + result.pmApprovals.length
     };
     return ContentService.createTextOutput(JSON.stringify({ status: "success", categories: result, counts: counts })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // === COMPLETE_PM_TASK — ช่างกดทำเสร็จ + แนบรูป ===
+  if (action === "COMPLETE_PM_TASK") {
+    const planId = data.planId;
+    const note = data.note || "";
+    const now = new Date();
+    const doneDate = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+    const doneBy = data.username || "Unknown";
+
+    let photoUrl = "";
+    if (data.imageBase64) {
+      photoUrl = saveImageToDrive(data.imageBase64, "PM_" + planId + "_" + Utilities.formatDate(now, "GMT+7", "yyyyMMdd_HHmmss") + ".jpg");
+    }
+
+    const pmSheet = ss.getSheetByName("Maintenance_Plan");
+    if (!pmSheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบชีท Maintenance_Plan"})).setMimeType(ContentService.MimeType.JSON);
+    const pmRows = pmSheet.getDataRange().getValues();
+    const pmH = pmRows[0].map(h => String(h).trim());
+    const pi = (n) => pmH.indexOf(n);
+    let planRow = -1, machine = "", taskName = "", dueDate = "";
+    for (let i = 1; i < pmRows.length; i++) {
+      if (String(pmRows[i][pi("Plan_ID")] || "").trim() === planId) {
+        planRow = i + 1;
+        machine = String(pmRows[i][pi("Machine")] || "");
+        taskName = String(pmRows[i][pi("Task_Name")] || "");
+        const dd = pmRows[i][pi("Next_Due_Date")];
+        dueDate = (dd instanceof Date) ? Utilities.formatDate(dd, "GMT+7", "yyyy-MM-dd") : String(dd || "").substring(0, 10);
+        break;
+      }
+    }
+    if (planRow === -1) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบแผน " + planId})).setMimeType(ContentService.MimeType.JSON);
+
+    let logSheet = ss.getSheetByName("Maintenance_Log");
+    if (!logSheet) {
+      logSheet = ss.insertSheet("Maintenance_Log");
+      logSheet.appendRow(["Log_ID", "Plan_ID", "Machine", "Task_Name", "Due_Date", "Done_Date", "Done_By", "Status", "Approved_By", "Approved_Date", "Photo_URLs", "Note", "Days_Diff"]);
+    }
+    const logId = "PML-" + Utilities.formatDate(now, "GMT+7", "yyMMddHHmmss") + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+    const daysDiff = dueDate ? daysBetween(dueDate, doneDate) : 0;
+    logSheet.appendRow([logId, planId, machine, taskName, dueDate, doneDate, doneBy, "Wait Approve", "", "", photoUrl, note, daysDiff]);
+
+    logUserAction(doneBy, data.role || "Production", "COMPLETE_PM_TASK", "แผน " + planId + " เครื่อง " + machine);
+    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "บันทึกเสร็จ รอหัวหน้าอนุมัติ", logId: logId})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // === APPROVE_PM_TASK — หัวหน้าอนุมัติ ===
+  if (action === "APPROVE_PM_TASK") {
+    const logId = data.logId;
+    const approved = data.approved !== false;
+    const approver = data.username || "Unknown";
+    const now = new Date();
+    const approveDate = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+
+    const logSheet = ss.getSheetByName("Maintenance_Log");
+    if (!logSheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบชีท Maintenance_Log"})).setMimeType(ContentService.MimeType.JSON);
+    const logRows = logSheet.getDataRange().getValues();
+    const lH = logRows[0].map(h => String(h).trim());
+    const li = (n) => lH.indexOf(n);
+    let logRow = -1, planId = "";
+    for (let i = 1; i < logRows.length; i++) {
+      if (String(logRows[i][li("Log_ID")] || "").trim() === logId) {
+        logRow = i + 1;
+        planId = String(logRows[i][li("Plan_ID")] || "");
+        break;
+      }
+    }
+    if (logRow === -1) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบ Log " + logId})).setMimeType(ContentService.MimeType.JSON);
+
+    const statusCol = li("Status") + 1;
+    const approverCol = li("Approved_By") + 1;
+    const appDateCol = li("Approved_Date") + 1;
+    logSheet.getRange(logRow, statusCol).setValue(approved ? "Approved" : "Rejected");
+    if (approverCol > 0) logSheet.getRange(logRow, approverCol).setValue(approver);
+    if (appDateCol > 0) logSheet.getRange(logRow, appDateCol).setValue(approveDate);
+
+    // อัพเดต Next_Due_Date ใน Maintenance_Plan (เฉพาะ Approved)
+    if (approved && planId) {
+      const pmSheet = ss.getSheetByName("Maintenance_Plan");
+      if (pmSheet) {
+        const pmRows = pmSheet.getDataRange().getValues();
+        const pmH = pmRows[0].map(h => String(h).trim());
+        const pi = (n) => pmH.indexOf(n);
+        for (let i = 1; i < pmRows.length; i++) {
+          if (String(pmRows[i][pi("Plan_ID")] || "").trim() === planId) {
+            const freq = String(pmRows[i][pi("Frequency")] || "").trim().toLowerCase();
+            const interval = parseInt(pmRows[i][pi("Interval_Value")]) || 30;
+            const lastDoneCol = pi("Last_Done_Date") + 1;
+            const nextDueCol = pi("Next_Due_Date") + 1;
+            if (lastDoneCol > 0) pmSheet.getRange(i + 1, lastDoneCol).setValue(approveDate);
+            if (nextDueCol > 0) {
+              let nextDate = new Date(approveDate + "T00:00:00+07:00");
+              if (freq === "daily") nextDate.setDate(nextDate.getDate() + 1);
+              else if (freq === "weekly") nextDate.setDate(nextDate.getDate() + 7);
+              else if (freq === "monthly") nextDate.setMonth(nextDate.getMonth() + 1);
+              else if (freq === "quarterly") nextDate.setMonth(nextDate.getMonth() + 3);
+              else if (freq === "yearly") nextDate.setFullYear(nextDate.getFullYear() + 1);
+              else nextDate.setDate(nextDate.getDate() + interval);
+              pmSheet.getRange(i + 1, nextDueCol).setValue(Utilities.formatDate(nextDate, "GMT+7", "yyyy-MM-dd"));
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    SpreadsheetApp.flush();
+    logUserAction(approver, data.role || "Admin", "APPROVE_PM_TASK", (approved ? "อนุมัติ" : "ปฏิเสธ") + " Log " + logId);
+    return ContentService.createTextOutput(JSON.stringify({status: "success", message: approved ? "อนุมัติแล้ว" : "ปฏิเสธแล้ว"})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // === GET_PM_SUMMARY — ข้อมูลสำหรับ Gantt Chart ===
+  if (action === "GET_PM_SUMMARY") {
+    const plans = [];
+    const logs = [];
+    try {
+      const pmSheet = ss.getSheetByName("Maintenance_Plan");
+      if (pmSheet && pmSheet.getLastRow() > 1) {
+        const pmRows = pmSheet.getDataRange().getValues();
+        const pmH = pmRows[0].map(h => String(h).trim());
+        const pi = (n) => pmH.indexOf(n);
+        for (let i = 1; i < pmRows.length; i++) {
+          if (String(pmRows[i][pi("Status")] || "").trim() !== "Active") continue;
+          const dd = pmRows[i][pi("Next_Due_Date")];
+          const ld = pmRows[i][pi("Last_Done_Date")];
+          plans.push({
+            planId: String(pmRows[i][pi("Plan_ID")] || ""),
+            machine: String(pmRows[i][pi("Machine")] || ""),
+            planType: String(pmRows[i][pi("Plan_Type")] || ""),
+            taskName: String(pmRows[i][pi("Task_Name")] || ""),
+            frequency: String(pmRows[i][pi("Frequency")] || ""),
+            intervalValue: parseInt(pmRows[i][pi("Interval_Value")]) || 0,
+            assignedTo: String(pmRows[i][pi("Assigned_To")] || ""),
+            nextDueDate: (dd instanceof Date) ? Utilities.formatDate(dd, "GMT+7", "yyyy-MM-dd") : String(dd || "").substring(0, 10),
+            lastDoneDate: (ld instanceof Date) ? Utilities.formatDate(ld, "GMT+7", "yyyy-MM-dd") : String(ld || "").substring(0, 10)
+          });
+        }
+      }
+    } catch (e) { console.error("PM summary plans err: " + e); }
+    try {
+      const logSheet = ss.getSheetByName("Maintenance_Log");
+      if (logSheet && logSheet.getLastRow() > 1) {
+        const logRows = logSheet.getDataRange().getValues();
+        const lH = logRows[0].map(h => String(h).trim());
+        const li = (n) => lH.indexOf(n);
+        for (let i = 1; i < logRows.length; i++) {
+          const dd = logRows[i][li("Due_Date")];
+          const done = logRows[i][li("Done_Date")];
+          logs.push({
+            logId: String(logRows[i][li("Log_ID")] || ""),
+            planId: String(logRows[i][li("Plan_ID")] || ""),
+            machine: String(logRows[i][li("Machine")] || ""),
+            taskName: String(logRows[i][li("Task_Name")] || ""),
+            dueDate: (dd instanceof Date) ? Utilities.formatDate(dd, "GMT+7", "yyyy-MM-dd") : String(dd || "").substring(0, 10),
+            doneDate: (done instanceof Date) ? Utilities.formatDate(done, "GMT+7", "yyyy-MM-dd") : String(done || "").substring(0, 10),
+            doneBy: String(logRows[i][li("Done_By")] || ""),
+            status: String(logRows[i][li("Status")] || ""),
+            daysDiff: parseInt(logRows[i][li("Days_Diff")]) || 0
+          });
+        }
+      }
+    } catch (e) { console.error("PM summary logs err: " + e); }
+
+    // คำนวณสถิติ
+    const approved = logs.filter(l => l.status === "Approved");
+    const onTime = approved.filter(l => l.daysDiff <= 0).length;
+    const late = approved.filter(l => l.daysDiff > 0).length;
+    const overdue = plans.filter(p => p.nextDueDate && p.nextDueDate <= Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd")).length;
+    const avgLateDays = late > 0 ? Math.round(approved.filter(l => l.daysDiff > 0).reduce((s, l) => s + l.daysDiff, 0) / late * 10) / 10 : 0;
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success", plans: plans, logs: logs,
+      stats: { total: approved.length, onTime: onTime, late: late, overdue: overdue, avgLateDays: avgLateDays, adherencePct: approved.length > 0 ? Math.round(onTime / approved.length * 1000) / 10 : 100 }
+    })).setMimeType(ContentService.MimeType.JSON);
   }
 
   return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Unknown Action"})).setMimeType(ContentService.MimeType.JSON);
