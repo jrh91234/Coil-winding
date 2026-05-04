@@ -1678,8 +1678,12 @@ function doPost(e) {
                       try {
                           let prodSheet = ss.getSheetByName("Production_Data");
                           if (prodSheet && prodSheet.getLastRow() > 1) {
-                              const prodRows = prodSheet.getDataRange().getValues();
-                              const prodHeaders = prodRows[0].map(h => h.toString().trim().toLowerCase());
+                              const lastRow = prodSheet.getLastRow();
+                              const totalCols = prodSheet.getLastColumn();
+                              const prodHeaders = prodSheet.getRange(1, 1, 1, totalCols).getValues()[0].map(h => h.toString().trim().toLowerCase());
+                              const lookbackRows = Math.min(500, lastRow - 1);
+                              const startRow = lastRow - lookbackRows + 1;
+                              const prodRows = prodSheet.getRange(startRow, 1, lookbackRows, totalCols).getValues();
                               const pDateIdx = prodHeaders.indexOf("date");
                               const pMachIdx = prodHeaders.indexOf("machine");
                               const pShiftIdx = prodHeaders.indexOf("shift");
@@ -1695,7 +1699,7 @@ function doPost(e) {
 
                               if (pDateIdx !== -1 && pMachIdx !== -1 && pShiftIdx !== -1) {
                                   // ลูปเดียว: หาทั้ง exact match (Machine+Date+Hour) และ fallback (Machine+Date)
-                                  for (let p = prodRows.length - 1; p >= 1; p--) {
+                                  for (let p = prodRows.length - 1; p >= 0; p--) {
                                       const pDate = formatProdDate(prodRows[p][pDateIdx]);
                                       const pMach = String(prodRows[p][pMachIdx] || "").trim();
                                       const pShift = String(prodRows[p][pShiftIdx] || "").trim();
