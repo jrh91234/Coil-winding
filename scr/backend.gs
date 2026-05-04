@@ -2177,7 +2177,7 @@ function doPost(e) {
     const role = data.role || "";
     const userName = data.userName || "";
     const todayISO = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
-    const result = { maintenance: [], partsCheck: [], partsNearEnd: [], sortingWaitQC: [], pmTasks: [], pmApprovals: [] };
+    const result = { maintenance: [], partsCheck: [], partsNearEnd: [], sortingWaitQC: [], pmTasks: [] };
 
     // 1) งานซ่อมค้าง (Maintenance_Data: End_Time ว่าง)
     try {
@@ -2316,40 +2316,13 @@ function doPost(e) {
       }
     } catch (e) { console.error("Inbox PM err: " + e); }
 
-    // 5) งาน PM รออนุมัติ (Maintenance_Log: Status = "Wait Approve") — สำหรับหัวหน้า/Admin
-    if (role === "Admin" || role === "Production") {
-      try {
-        const logSheet = ss.getSheetByName("Maintenance_Log");
-        if (logSheet && logSheet.getLastRow() > 1) {
-          const logRows = logSheet.getDataRange().getValues();
-          const lH = logRows[0].map(h => String(h).trim());
-          const li = (n) => lH.indexOf(n);
-          for (let i = 1; i < logRows.length; i++) {
-            if (String(logRows[i][li("Status")] || "").trim() !== "Wait Approve") continue;
-            result.pmApprovals.push({
-              logId: String(logRows[i][li("Log_ID")] || ""),
-              planId: String(logRows[i][li("Plan_ID")] || ""),
-              machine: String(logRows[i][li("Machine")] || ""),
-              taskName: String(logRows[i][li("Task_Name")] || ""),
-              doneDate: String(logRows[i][li("Done_Date")] || "").substring(0, 10),
-              doneBy: String(logRows[i][li("Done_By")] || ""),
-              dueDate: String(logRows[i][li("Due_Date")] || "").substring(0, 10),
-              photoUrls: String(logRows[i][li("Photo_URLs")] || ""),
-              note: String(logRows[i][li("Note")] || "")
-            });
-          }
-        }
-      } catch (e) { console.error("Inbox PM approve err: " + e); }
-    }
-
     const counts = {
       maintenance: result.maintenance.length,
       partsCheck: result.partsCheck.length,
       partsNearEnd: result.partsNearEnd.length,
       sortingWaitQC: result.sortingWaitQC.length,
       pmTasks: result.pmTasks.length,
-      pmApprovals: result.pmApprovals.length,
-      total: result.maintenance.length + result.partsCheck.length + result.partsNearEnd.length + result.sortingWaitQC.length + result.pmTasks.length + result.pmApprovals.length
+      total: result.maintenance.length + result.partsCheck.length + result.partsNearEnd.length + result.sortingWaitQC.length + result.pmTasks.length
     };
     return ContentService.createTextOutput(JSON.stringify({ status: "success", categories: result, counts: counts })).setMimeType(ContentService.MimeType.JSON);
   }
@@ -2392,10 +2365,30 @@ function doPost(e) {
     }
     const logId = "PML-" + Utilities.formatDate(now, "GMT+7", "yyMMddHHmmss") + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
     const daysDiff = dueDate ? daysBetween(dueDate, doneDate) : 0;
-    logSheet.appendRow([logId, planId, machine, taskName, dueDate, doneDate, doneBy, "Wait Approve", "", "", photoUrl, note, daysDiff]);
+    logSheet.appendRow([logId, planId, machine, taskName, dueDate, doneDate, doneBy, "Approved", doneBy, doneDate, photoUrl, note, daysDiff]);
+
+    // อัพเดต Next_Due_Date ใน Maintenance_Plan ทันที
+    const pmH2 = pmRows[0].map(h => String(h).trim());
+    const pi2 = (n) => pmH2.indexOf(n);
+    const freq = String(pmRows[planRow - 1][pi2("Frequency")] || "").trim().toLowerCase();
+    const interval = parseInt(pmRows[planRow - 1][pi2("Interval_Value")]) || 30;
+    const lastDoneCol = pi2("Last_Done_Date") + 1;
+    const nextDueCol = pi2("Next_Due_Date") + 1;
+    if (lastDoneCol > 0) pmSheet.getRange(planRow, lastDoneCol).setValue(doneDate);
+    if (nextDueCol > 0) {
+      let nextDate = new Date(doneDate + "T00:00:00+07:00");
+      if (freq === "daily") nextDate.setDate(nextDate.getDate() + 1);
+      else if (freq === "weekly") nextDate.setDate(nextDate.getDate() + 7);
+      else if (freq === "monthly") nextDate.setMonth(nextDate.getMonth() + 1);
+      else if (freq === "quarterly") nextDate.setMonth(nextDate.getMonth() + 3);
+      else if (freq === "yearly") nextDate.setFullYear(nextDate.getFullYear() + 1);
+      else nextDate.setDate(nextDate.getDate() + interval);
+      pmSheet.getRange(planRow, nextDueCol).setValue(Utilities.formatDate(nextDate, "GMT+7", "yyyy-MM-dd"));
+    }
+    SpreadsheetApp.flush();
 
     logUserAction(doneBy, data.role || "Production", "COMPLETE_PM_TASK", "แผน " + planId + " เครื่อง " + machine);
-    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "บันทึกเสร็จ รอหัวหน้าอนุมัติ", logId: logId})).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "บันทึกเสร็จเรียบร้อย", logId: logId})).setMimeType(ContentService.MimeType.JSON);
   }
 
   // === APPROVE_PM_TASK — หัวหน้าอนุมัติ ===

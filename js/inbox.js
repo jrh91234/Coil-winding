@@ -67,9 +67,6 @@ function renderInboxSidebar() {
     if (role === 'QC' || role === 'Admin') {
         cats.push({ key: 'sortingWaitQC', icon: '🗂️', label: 'Sort รอ QC', count: c.sortingWaitQC, color: 'pink' });
     }
-    if (role === 'Admin' || role === 'Production') {
-        cats.push({ key: 'pmApprovals', icon: '✅', label: 'PM รออนุมัติ', count: c.pmApprovals, color: 'green' });
-    }
 
     sidebar.innerHTML = cats.map(cat => {
         const active = inboxActiveCategory === cat.key;
@@ -102,7 +99,6 @@ function renderInboxList(category) {
     if (category === 'all') {
         cats.maintenance.forEach(m => items.push({ type: 'maintenance', data: m, priority: m.daysAgo >= 3 ? 1 : 2 }));
         (cats.pmTasks || []).forEach(p => items.push({ type: 'pmTasks', data: p, priority: p.daysOverdue >= 3 ? 1 : 2 }));
-        (cats.pmApprovals || []).forEach(p => items.push({ type: 'pmApprovals', data: p, priority: 1 }));
         cats.partsCheck.forEach(p => items.push({ type: 'partsCheck', data: p, priority: 1 }));
         cats.partsNearEnd.forEach(p => items.push({ type: 'partsNearEnd', data: p, priority: p.pct >= 95 ? 1 : 3 }));
         cats.sortingWaitQC.forEach(s => items.push({ type: 'sortingWaitQC', data: s, priority: 2 }));
@@ -128,7 +124,6 @@ function renderInboxItem(item, idx) {
     switch (item.type) {
         case 'maintenance': return renderMaintenanceItem(d, idx);
         case 'pmTasks': return renderPmTaskItem(d, idx);
-        case 'pmApprovals': return renderPmApprovalItem(d, idx);
         case 'partsCheck': return renderPartsCheckItem(d, idx);
         case 'partsNearEnd': return renderPartsNearEndItem(d, idx);
         case 'sortingWaitQC': return renderSortingItem(d, idx);
@@ -249,28 +244,6 @@ function renderPmTaskItem(d) {
     </div>`;
 }
 
-function renderPmApprovalItem(d) {
-    const photoUrls = String(d.photoUrls || '').split(',').filter(u => u.trim());
-    return `<div class="border-l-4 border-l-green-500 bg-white rounded-r-lg shadow-sm p-4 mb-2 hover:shadow-md transition-shadow">
-        <div class="flex items-start justify-between">
-            <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="text-lg">✅</span>
-                    <span class="font-bold text-gray-800 text-sm">${d.taskName}</span>
-                    <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded-full font-mono">${d.machine}</span>
-                </div>
-                <div class="text-xs text-gray-600">ทำเสร็จโดย: <b>${d.doneBy}</b> · วันที่: ${d.doneDate} · กำหนด: ${d.dueDate}</div>
-                ${d.note ? `<div class="text-xs text-gray-500 mt-0.5">${d.note}</div>` : ''}
-                ${photoUrls.length > 0 ? `<div class="flex gap-1 mt-1">${photoUrls.map(u => `<a href="${u}" target="_blank" class="text-blue-500 text-[10px] hover:underline">📷 ดูรูป</a>`).join('')}</div>` : ''}
-            </div>
-            <div class="flex flex-col gap-1 ml-3 shrink-0">
-                <button onclick="window.approvePmTask('${d.logId}', true)" class="text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 font-bold">✅ อนุมัติ</button>
-                <button onclick="window.approvePmTask('${d.logId}', false)" class="text-xs bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 font-bold">❌ ปฏิเสธ</button>
-            </div>
-        </div>
-    </div>`;
-}
-
 window.openPmCompleteModal = function(planId) {
     const task = inboxData && inboxData.categories.pmTasks.find(t => t.planId === planId);
     if (!task) { alert('ไม่พบแผน ' + planId); return; }
@@ -347,25 +320,6 @@ window.submitPmComplete = async function(planId) {
             btn.disabled = false; btn.innerHTML = '📸 ยืนยัน';
         }
     } catch (e) { alert('บันทึกไม่สำเร็จ: ' + e.message); btn.disabled = false; btn.innerHTML = '📸 ยืนยัน'; }
-};
-
-window.approvePmTask = async function(logId, approved) {
-    if (!confirm(approved ? 'อนุมัติงาน PM นี้?' : 'ปฏิเสธงาน PM นี้?')) return;
-    try {
-        const res = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify({
-                action: 'APPROVE_PM_TASK',
-                logId: logId,
-                approved: approved,
-                username: window.currentUser?.name || window.currentUser?.username || 'Unknown',
-                role: window.currentUser?.role || ''
-            })
-        });
-        const result = await res.json();
-        alert(result.message);
-        if (result.status === 'success') window.loadInbox();
-    } catch (e) { alert('Error: ' + e.message); }
 };
 
 // === Gantt Chart ===
