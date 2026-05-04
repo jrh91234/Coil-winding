@@ -96,18 +96,24 @@ window.loadPartsMaster = async function() {
             const daysOnMachine = daysFromInstall(installDateStr);
             const actualDays = carriedDays + daysOnMachine;
             const checkInterval = parseInt(inst.Check_Interval_Shots) || 0;
+            const lifeShots = parseInt(inst.Life_Shots) || 0;
+            const checkCount = parseInt(inst.Check_Count) || 0;
             const nextCheckShot = parseInt(inst.Next_Check_Shot) || 0;
-            const needsCheck = (nextCheckShot > 0 && actualShots >= nextCheckShot);
+            const effectiveLife = lifeShots * (checkCount + 1);
+            const autoNextCheck = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
+            const needsCheck = (autoNextCheck > 0 && actualShots >= autoNextCheck);
             partLocationsCache[pid].push({
                 machine: inst.Machine,
                 actualShots: actualShots,
                 actualDays: actualDays,
                 installId: inst.Install_ID,
-                lifeShots: parseInt(inst.Life_Shots) || 0,
+                lifeShots: lifeShots,
+                effectiveLife: effectiveLife,
                 carried: carried,
                 carriedDays: carriedDays,
                 checkInterval: checkInterval,
-                nextCheckShot: nextCheckShot,
+                checkCount: checkCount,
+                nextCheckShot: autoNextCheck,
                 needsCheck: needsCheck,
                 partName: inst.Part_Name || ''
             });
@@ -137,29 +143,37 @@ function renderPartsTable() {
         } else {
             const escName = (p.Part_Name || '').replace(/'/g, "\\'");
             locationHtml = '<div class="flex flex-wrap gap-1">' + installations.map(inst => {
-                const pct = inst.lifeShots > 0 ? Math.min((inst.actualShots / inst.lifeShots) * 100, 100) : 0;
-                // สี: 🔴 ≥95% / 🟠 needsCheck (แต่ยังไม่ถึง 80%) / 🟡 ≥80% / 🟢 ปกติ
+                const effLife = inst.effectiveLife || inst.lifeShots;
+                const pct = effLife > 0 ? Math.min((inst.actualShots / effLife) * 100, 100) : 0;
                 let color;
-                if (pct >= 95) color = 'bg-red-100 text-red-700 hover:bg-red-200';
+                if (inst.needsCheck) color = 'bg-orange-100 text-orange-700 hover:bg-orange-200';
+                else if (pct >= 95) color = 'bg-red-100 text-red-700 hover:bg-red-200';
                 else if (pct >= 80) color = 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200';
-                else if (inst.needsCheck) color = 'bg-orange-100 text-orange-700 hover:bg-orange-200';
                 else color = 'bg-green-100 text-green-700 hover:bg-green-200';
-                const checkMark = inst.needsCheck ? ' 🔍' : '';
+                const checkMark = inst.needsCheck ? ' 🔍' : (inst.checkCount > 0 ? ' ✅' : '');
                 return `<button type="button" onclick="window.promptReplacepart('${inst.installId}', '${inst.machine}', '${p.Part_ID}', '${escName}', ${inst.lifeShots || 0})" title="คลิกเพื่อเปลี่ยน / ย้ายอะไหล่ตัวนี้${inst.needsCheck ? ' (ต้องตรวจเช็ค)' : ''}" class="inline-block ${color} text-xs px-1.5 py-0.5 rounded font-mono cursor-pointer transition">${inst.machine}${checkMark}</button>`;
             }).join('') + '</div>';
         }
         // Actual Shot + Actual Days รวมทุกเครื่อง
         const totalActualShots = installations.reduce((sum, inst) => sum + inst.actualShots, 0);
         const maxActualDays = installations.reduce((mx, inst) => Math.max(mx, inst.actualDays || 0), 0);
-        const pctTotal = life > 0 && installations.length === 1 ? Math.min((totalActualShots / life) * 100, 100) : 0;
+        const totalEffectiveLife = installations.length === 1 ? (installations[0].effectiveLife || life) : life;
+        const pctTotal = totalEffectiveLife > 0 && installations.length === 1 ? Math.min((totalActualShots / totalEffectiveLife) * 100, 100) : 0;
         const anyNeedsCheck = installations.some(i => i.needsCheck);
+        const totalCheckCount = installations.reduce((mx, i) => Math.max(mx, i.checkCount || 0), 0);
         let shotColor;
-        if (pctTotal >= 95) shotColor = 'text-red-600 font-bold';
+        if (anyNeedsCheck) shotColor = 'text-orange-600 font-bold';
+        else if (pctTotal >= 95) shotColor = 'text-red-600 font-bold';
         else if (pctTotal >= 80) shotColor = 'text-yellow-600 font-bold';
-        else if (anyNeedsCheck) shotColor = 'text-orange-600 font-bold';
         else shotColor = 'text-gray-700';
+        let checkBadge = '';
+        if (anyNeedsCheck) {
+            checkBadge = '<div class="text-[10px] text-orange-600 font-bold">🔍 ต้องตรวจเช็ค</div>';
+        } else if (totalCheckCount > 0) {
+            checkBadge = `<div class="text-[10px] text-green-600 font-bold">✅ ตรวจผ่าน ${totalCheckCount} ครั้ง</div>`;
+        }
         const shotHtml = installations.length > 0
-            ? `<div><span class="${shotColor} font-mono">${totalActualShots.toLocaleString()}</span><div class="text-[10px] text-gray-500 font-mono">${maxActualDays.toLocaleString()} วัน</div>${anyNeedsCheck ? '<div class="text-[10px] text-orange-600 font-bold">🔍 ต้องตรวจเช็ค</div>' : ''}</div>`
+            ? `<div><span class="${shotColor} font-mono">${totalActualShots.toLocaleString()}</span><div class="text-[10px] text-gray-500 font-mono">${maxActualDays.toLocaleString()} วัน</div>${checkBadge}</div>`
             : '<span class="text-gray-300">-</span>';
 
         // ปุ่ม 🔍 ตรวจเช็ค — แสดงเฉพาะกรณีมี active installation
