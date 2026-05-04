@@ -1724,6 +1724,8 @@ function doPost(e) {
                                   }
                                   // ใช้ fallback ถ้า exact match ไม่เจอ
                                   if (matchedShift === "-") matchedShift = fallbackShift;
+                                  // fallback สุดท้าย: ใช้เวลาตัดสินกะ
+                                  if (matchedShift === "-") matchedShift = shiftType === "Day" ? "A" : "B";
                               }
 
                               // === เขียน/อัปเดต Production_Data — รองรับ Recall ===
