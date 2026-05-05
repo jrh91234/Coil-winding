@@ -346,11 +346,28 @@ function renderGanttChart(container, data) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // หาช่วงเวลา: 30 วันย้อนหลัง — 30 วันข้างหน้า
-    const daysBefore = 30, daysAfter = 30;
-    const startDate = new Date(today); startDate.setDate(startDate.getDate() - daysBefore);
-    const endDate = new Date(today); endDate.setDate(endDate.getDate() + daysAfter);
-    const totalDays = daysBefore + daysAfter + 1;
+    // หาช่วงเวลาอัตโนมัติจากข้อมูลจริง (minimum ±14 วัน)
+    const toDateEarly = (s) => { const d = new Date(s + 'T00:00:00'); return isNaN(d.getTime()) ? null : d; };
+    let minDate = new Date(today), maxDate = new Date(today);
+    plans.forEach(p => {
+        const nd = toDateEarly(p.nextDueDate);
+        const ld = toDateEarly(p.lastDoneDate);
+        if (nd && nd < minDate) minDate = new Date(nd);
+        if (nd && nd > maxDate) maxDate = new Date(nd);
+        if (ld && ld < minDate) minDate = new Date(ld);
+        if (ld && ld > maxDate) maxDate = new Date(ld);
+    });
+    logs.forEach(l => {
+        const dd = toDateEarly(l.doneDate);
+        if (dd && dd < minDate) minDate = new Date(dd);
+        if (dd && dd > maxDate) maxDate = new Date(dd);
+    });
+    const padBefore = Math.max(14, Math.round((today - minDate) / 86400000) + 7);
+    const padAfter = Math.max(14, Math.round((maxDate - today) / 86400000) + 7);
+    const startDate = new Date(today); startDate.setDate(startDate.getDate() - padBefore);
+    const endDate = new Date(today); endDate.setDate(endDate.getDate() + padAfter);
+    const totalDays = padBefore + padAfter + 1;
+    const todayIndex = padBefore;
 
     const toDate = (s) => { const d = new Date(s + 'T00:00:00'); return isNaN(d.getTime()) ? null : d; };
     const dayIndex = (d) => Math.round((d - startDate) / 86400000);
@@ -434,7 +451,7 @@ function renderGanttChart(container, data) {
 
     container.innerHTML = `
         ${statsHtml}
-        <div class="bg-white rounded-lg shadow-sm border overflow-x-auto">
+        <div class="bg-white rounded-lg shadow-sm border overflow-x-auto" id="gantt-scroll-container">
             <div class="min-w-max">
                 <div class="flex border-b bg-gray-50 sticky top-0 z-20">
                     <div class="shrink-0 w-48 p-2 border-r font-bold text-xs text-gray-600 sticky left-0 bg-gray-50 z-30">แผน PM</div>
@@ -448,4 +465,13 @@ function renderGanttChart(container, data) {
         </div>
         ${legendHtml}
     `;
+
+    // Auto-scroll ให้วันปัจจุบันอยู่กลางจอ
+    const scrollEl = container.querySelector('#gantt-scroll-container');
+    if (scrollEl) {
+        const labelWidth = 192; // w-48 = 192px
+        const todayPx = todayIndex * 20;
+        const visibleWidth = scrollEl.clientWidth - labelWidth;
+        scrollEl.scrollLeft = Math.max(0, todayPx - visibleWidth / 2);
+    }
 }
