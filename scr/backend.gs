@@ -527,22 +527,32 @@ function doPost(e) {
       const fgCol = getCol("FG");
       const ngKgCol = getCol("NG_Total");
       const batchIdCol = getCol("Batch_ID");
-      const dateCol = getCol("Date");
+      const timestampCol = getCol("Timestamp");
 
-      if (productCol === -1 || fgCol === -1 || ngKgCol === -1 || batchIdCol === -1 || dateCol === -1) {
+      if (productCol === -1 || fgCol === -1 || ngKgCol === -1 || batchIdCol === -1 || timestampCol === -1) {
         return ContentService.createTextOutput(JSON.stringify({ status: "success", summary: {}, totals: { fg: 0, ng: 0, jobs: 0 } })).setMimeType(ContentService.MimeType.JSON);
       }
 
       const start = String(data.start || "").trim();
       const end = String(data.end || "").trim();
 
-      const toDateISO = (rawVal) => {
+      // แปลง Timestamp (Date object หรือ Thai locale "d/m/พ.ศ. HH:mm:ss") → yyyy-MM-dd
+      const toCalendarDate = (rawVal) => {
         if (!rawVal) return "";
         if (rawVal instanceof Date && !isNaN(rawVal.getTime())) {
           return Utilities.formatDate(rawVal, "GMT+7", "yyyy-MM-dd");
         }
         const text = String(rawVal).trim();
-        if (text.includes("-") && text.length >= 10) return text.substring(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.substring(0, 10);
+        const datePart = text.split(/[\s,]+/)[0] || "";
+        if (datePart.includes("/")) {
+          const dp = datePart.split("/");
+          if (dp.length === 3) {
+            let year = parseInt(dp[2]) || 0;
+            if (year > 2500) year -= 543;
+            return year + "-" + String(parseInt(dp[1]) || 1).padStart(2, "0") + "-" + String(parseInt(dp[0]) || 1).padStart(2, "0");
+          }
+        }
         return "";
       };
 
@@ -570,8 +580,8 @@ function doPost(e) {
         if (seenBatchIds[batchId]) continue;
         seenBatchIds[batchId] = true;
 
-        // ใช้คอลัมน์ Date (yyyy-MM-dd) ที่บันทึกไว้ตอนเขียนลง Production_Data
-        const targetDateISO = toDateISO(row[dateCol]);
+        // ใช้ Timestamp (วันที่อนุมัติ/เขียนลง Production_Data) เป็นตัว filter
+        const targetDateISO = toCalendarDate(row[timestampCol]);
         if (!targetDateISO) continue;
         if (start && targetDateISO < start) continue;
         if (end && targetDateISO > end) continue;
