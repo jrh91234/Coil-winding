@@ -536,14 +536,21 @@ function doPost(e) {
       const start = String(data.start || "").trim();
       const end = String(data.end || "").trim();
 
-      // แปลง Timestamp (Date object หรือ Thai locale "d/m/พ.ศ. HH:mm:ss") → yyyy-MM-dd
+      // แปลง Timestamp (Date object หรือ Thai locale "d/m/พ.ศ. HH:mm:ss") → yyyy-MM-dd (ค.ศ.)
       const toCalendarDate = (rawVal) => {
         if (!rawVal) return "";
         if (rawVal instanceof Date && !isNaN(rawVal.getTime())) {
-          return Utilities.formatDate(rawVal, "GMT+7", "yyyy-MM-dd");
+          const formatted = Utilities.formatDate(rawVal, "GMT+7", "yyyy-MM-dd");
+          const y = parseInt(formatted.substring(0, 4)) || 0;
+          if (y > 2500) return (y - 543) + formatted.substring(4);
+          return formatted;
         }
         const text = String(rawVal).trim();
-        if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.substring(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+          const y = parseInt(text.substring(0, 4)) || 0;
+          if (y > 2500) return (y - 543) + text.substring(4, 10);
+          return text.substring(0, 10);
+        }
         const datePart = text.split(/[\s,]+/)[0] || "";
         if (datePart.includes("/")) {
           const dp = datePart.split("/");
