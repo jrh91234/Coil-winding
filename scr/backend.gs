@@ -527,63 +527,23 @@ function doPost(e) {
       const fgCol = getCol("FG");
       const ngKgCol = getCol("NG_Total");
       const batchIdCol = getCol("Batch_ID");
-      const timestampCol = getCol("Timestamp");
+      const dateCol = getCol("Date");
 
-      if (productCol === -1 || fgCol === -1 || ngKgCol === -1 || batchIdCol === -1 || timestampCol === -1) {
+      if (productCol === -1 || fgCol === -1 || ngKgCol === -1 || batchIdCol === -1 || dateCol === -1) {
         return ContentService.createTextOutput(JSON.stringify({ status: "success", summary: {}, totals: { fg: 0, ng: 0, jobs: 0 } })).setMimeType(ContentService.MimeType.JSON);
       }
 
       const start = String(data.start || "").trim();
       const end = String(data.end || "").trim();
 
-      const toShiftDateISO = (rawVal) => {
+      const toDateISO = (rawVal) => {
         if (!rawVal) return "";
-
-        const formatYmd = (dObj) => {
-          return dObj.getFullYear() + "-" + String(dObj.getMonth() + 1).padStart(2, "0") + "-" + String(dObj.getDate()).padStart(2, "0");
-        };
-
-        if (rawVal instanceof Date) {
-          const dObj = new Date(rawVal.getTime());
-          const hour = parseInt(Utilities.formatDate(dObj, "GMT+7", "HH"), 10) || 0;
-          if (hour < 8) dObj.setDate(dObj.getDate() - 1); // cutoff 08:00-07:59
-          return formatYmd(dObj);
+        if (rawVal instanceof Date && !isNaN(rawVal.getTime())) {
+          return Utilities.formatDate(rawVal, "GMT+7", "yyyy-MM-dd");
         }
-
         const text = String(rawVal).trim();
-        if (!text) return "";
-        const parts = text.split(" ");
-        const d = parts[0];
-        const t = parts.length > 1 ? parts[1] : "";
-        const hour = t ? (parseInt(t.split(":")[0], 10) || 0) : null;
-        const hasTime = hour !== null;
-
-        let yyyy = "";
-        let mm = "";
-        let dd = "";
-        if (d.includes("/")) {
-          const dParts = d.split("/");
-          if (dParts.length === 3) {
-            yyyy = String(dParts[2]).trim();
-            if (yyyy.length === 2) yyyy = "20" + yyyy;
-            if (parseInt(yyyy, 10) > 2500) yyyy = String(parseInt(yyyy, 10) - 543);
-            mm = String(dParts[1]).padStart(2, "0");
-            dd = String(dParts[0]).padStart(2, "0");
-          }
-        } else if (d.includes("-")) {
-          const dParts = d.split("-");
-          if (dParts.length === 3) {
-            yyyy = String(dParts[0]).trim();
-            if (parseInt(yyyy, 10) > 2500) yyyy = String(parseInt(yyyy, 10) - 543);
-            mm = String(dParts[1]).padStart(2, "0");
-            dd = String(dParts[2]).padStart(2, "0");
-          }
-        }
-
-        if (!yyyy || !mm || !dd) return d.substring(0, 10);
-        const dObj = new Date(parseInt(yyyy, 10), parseInt(mm, 10) - 1, parseInt(dd, 10));
-        if (hasTime && hour < 8) dObj.setDate(dObj.getDate() - 1); // cutoff 08:00-07:59
-        return formatYmd(dObj);
+        if (text.includes("-") && text.length >= 10) return text.substring(0, 10);
+        return "";
       };
 
       const getWppStrict = (productName) => {
@@ -610,9 +570,8 @@ function doPost(e) {
         if (seenBatchIds[batchId]) continue;
         seenBatchIds[batchId] = true;
 
-        // ใช้วันที่จากเวลาที่บันทึกจริงลง Production_Data
-        const targetDateRaw = row[timestampCol];
-        const targetDateISO = toShiftDateISO(targetDateRaw);
+        // ใช้คอลัมน์ Date (yyyy-MM-dd) ที่บันทึกไว้ตอนเขียนลง Production_Data
+        const targetDateISO = toDateISO(row[dateCol]);
         if (!targetDateISO) continue;
         if (start && targetDateISO < start) continue;
         if (end && targetDateISO > end) continue;
@@ -621,11 +580,9 @@ function doPost(e) {
         if (!model) continue;
 
         const wpp = getWppStrict(model);
-        if (!wpp) continue; // strict no-fallback
-
         const fg = parseFloat(row[fgCol]) || 0;
         const ngKg = parseFloat(row[ngKgCol]) || 0;
-        const ng = ngKg > 0 ? Math.round(ngKg / wpp) : 0;
+        const ng = (ngKg > 0 && wpp) ? Math.round(ngKg / wpp) : 0;
 
         if (!summary[model]) summary[model] = { fg: 0, ng: 0, jobs: 0 };
         summary[model].fg += fg;
@@ -1762,11 +1719,10 @@ function doPost(e) {
                                   }
                               }
 
-                              if (ngKg > 0) {
-                                  const ngDetails = [{ type: symptom, qty: parseFloat(ngKg.toFixed(4)), unit: "kg" }];
+                              if (ngKg > 0 || fgPcs !== 0) {
+                                  const ngDetails = ngKg > 0 ? [{ type: symptom, qty: parseFloat(ngKg.toFixed(4)), unit: "kg" }] : [];
 
                                   if (existingProdRow > 0) {
-                                      // === Recall: อัปเดตแถวเดิมแทนการ append ===
                                       const updateCell = (colName, value) => {
                                           const idx = getProdCol(colName);
                                           if (idx !== -1) prodSheet.getRange(existingProdRow, idx + 1).setValue(value);
@@ -1783,7 +1739,6 @@ function doPost(e) {
                                       updateCell("NG_Details_JSON", JSON.stringify(ngDetails));
                                       updateCell("Shift_Type", shiftType);
                                   } else {
-                                      // === งานปกติ: append แถวใหม่ ===
                                       const newRow = new Array(freshHeaders.length).fill("");
                                       const mapData = (colName, value) => { const idx = getProdCol(colName); if (idx !== -1) newRow[idx] = value; };
 
@@ -1803,7 +1758,6 @@ function doPost(e) {
                                       prodSheet.appendRow(newRow);
                                   }
                               } else if (existingProdRow > 0) {
-                                  // Recall แล้วคัดใหม่ได้ NG = 0 → ลบแถวเดิมออกจาก Production_Data
                                   prodSheet.deleteRow(existingProdRow);
                               }
                           }
