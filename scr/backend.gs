@@ -3348,6 +3348,65 @@ function debugSheetData() {
     }
   }
 
+  // ===================== DL Staff Management =====================
+
+  if (action === "GET_DL_STAFF") {
+    try {
+      const sheet = ss.getSheetByName("DL_Staff");
+      if (!sheet || sheet.getLastRow() <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", data: [] })).setMimeType(ContentService.MimeType.JSON);
+      }
+      const rows = sheet.getDataRange().getValues();
+      const headers = rows[0].map(h => String(h || "").trim());
+      const result = [];
+      for (let i = 1; i < rows.length; i++) {
+        const obj = {};
+        headers.forEach((h, j) => { obj[h] = rows[i][j]; });
+        obj._row = i + 1;
+        result.push(obj);
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", data: result })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  if (action === "SAVE_DL_STAFF") {
+    try {
+      const dlHeaders = ["Name","Position","Count","Salary","Category","Active"];
+      let sheet = ss.getSheetByName("DL_Staff");
+      if (!sheet) {
+        sheet = ss.insertSheet("DL_Staff");
+        sheet.appendRow(dlHeaders);
+      }
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      const getCol = (name) => headers.findIndex(h => h === name);
+
+      const items = data.items || [];
+      // ลบข้อมูลเก่าทั้งหมดแล้วเขียนใหม่ (batch replace)
+      if (sheet.getLastRow() > 1) {
+        sheet.deleteRows(2, sheet.getLastRow() - 1);
+      }
+      items.forEach(item => {
+        const row = headers.map(h => {
+          if (h === "Name") return String(item.name || "").trim();
+          if (h === "Position") return String(item.position || "").trim();
+          if (h === "Count") return parseInt(item.count) || 0;
+          if (h === "Salary") return parseFloat(item.salary) || 0;
+          if (h === "Category") return String(item.category || "DL").trim();
+          if (h === "Active") return item.active !== false ? "Yes" : "No";
+          return "";
+        });
+        sheet.appendRow(row);
+      });
+
+      logUserAction(data.updatedBy || "Admin", "Admin", "SAVE_DL_STAFF", "บันทึกข้อมูลพนักงาน DL " + items.length + " รายการ");
+      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
 
   return { status: "DEBUG_V3.55_Auth", summary: stats, last10Rows: detailedAnalysis };
 }

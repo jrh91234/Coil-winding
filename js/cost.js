@@ -1,8 +1,9 @@
-// js/cost.js — Cost Management Module (Admin Only) v1.0
+// js/cost.js — Cost Management Module (Admin Only) v1.1
 (function () {
     'use strict';
 
     let costData = [];
+    let dlStaffData = [];
     let costChartInstances = {};
 
     const COST_FIELDS = [
@@ -76,11 +77,17 @@
         container.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-4xl animate-spin">💰</div><div class="ml-4 text-lg text-gray-600">กำลังโหลดข้อมูลต้นทุน...</div></div>`;
 
         try {
-            const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_COST_DATA' }) });
-            const json = await res.json();
-            costData = (json.data || []).sort((a, b) => String(a.Month || '').localeCompare(String(b.Month || '')));
+            const [costRes, dlRes] = await Promise.all([
+                fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_COST_DATA' }) }),
+                fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_DL_STAFF' }) })
+            ]);
+            const costJson = await costRes.json();
+            const dlJson = await dlRes.json();
+            costData = (costJson.data || []).sort((a, b) => String(a.Month || '').localeCompare(String(b.Month || '')));
+            dlStaffData = dlJson.data || [];
         } catch (e) {
             costData = [];
+            dlStaffData = [];
         }
 
         renderCostPage(container);
@@ -104,6 +111,8 @@
 
             <div id="cost-pl-table"></div>
 
+            <div id="cost-dl-staff-section" class="mt-6"></div>
+
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
                 <div class="bg-white rounded-xl shadow-sm border p-4">
                     <h3 class="text-sm font-bold text-gray-700 mb-2">โครงสร้างต้นทุน (% of Sale)</h3>
@@ -122,6 +131,7 @@
         `;
 
         renderPLTable(latestMonth);
+        renderDLStaffSection();
         renderCharts(latestMonth);
     }
 
@@ -374,11 +384,22 @@
             <input type="month" id="cost-form-month" value="${defaultMonth}" class="border rounded-lg px-3 py-2 w-full" ${existing ? 'readonly' : ''}>
         </div>`;
 
+        const dlAuto = getDLAutoValues();
+        const dlKeys = ['DL', 'OT', 'DL_Sup', 'OT_Sup'];
+        const hasDLStaff = dlStaffData.filter(s => String(s.Active) !== 'No').length > 0;
+
         groups.forEach(g => {
-            formHtml += `<div class="mb-3"><div class="text-xs font-bold text-blue-700 mb-1 border-b pb-1">${g.title}</div><div class="grid grid-cols-2 gap-2">`;
+            const isDLGroup = g.title.includes('DL');
+            formHtml += `<div class="mb-3"><div class="text-xs font-bold text-blue-700 mb-1 border-b pb-1">${g.title}`;
+            if (isDLGroup && hasDLStaff) formHtml += ` <span class="text-[10px] text-orange-600 font-normal ml-2">⚡ คำนวณจากข้อมูลบุคลากรอัตโนมัติ</span>`;
+            formHtml += `</div><div class="grid grid-cols-2 gap-2">`;
             g.fields.forEach(f => {
-                const val = existing ? (parseFloat(existing[f.key]) || 0) : 0;
-                formHtml += `<div><label class="text-[11px] text-gray-500">${f.label}</label><input type="number" step="0.01" id="cost-f-${f.key}" value="${val}" class="border rounded px-2 py-1.5 w-full text-sm"></div>`;
+                const isDLField = dlKeys.includes(f.key);
+                const autoVal = isDLField && hasDLStaff ? dlAuto[f.key] : null;
+                const val = autoVal !== null ? autoVal : (existing ? (parseFloat(existing[f.key]) || 0) : 0);
+                const readonlyAttr = (isDLField && hasDLStaff) ? 'readonly' : '';
+                const bgClass = (isDLField && hasDLStaff) ? 'bg-orange-50' : '';
+                formHtml += `<div><label class="text-[11px] text-gray-500">${f.label}${isDLField && hasDLStaff ? ' ⚡' : ''}</label><input type="number" step="0.01" id="cost-f-${f.key}" value="${val}" class="border rounded px-2 py-1.5 w-full text-sm ${bgClass}" ${readonlyAttr}></div>`;
             });
             formHtml += `</div></div>`;
         });
@@ -438,4 +459,208 @@
             window.loadCostModule();
         } catch (e) { alert('Error'); }
     };
+
+    // ========== DL Staff Management ==========
+
+    const DL_CATEGORIES = [
+        { key: 'DL', label: 'DL (แรงงานตรง)' },
+        { key: 'OT', label: 'OT (ค่าล่วงเวลา)' },
+        { key: 'DL_Sup', label: 'DL sup&mini MD' },
+        { key: 'OT_Sup', label: 'OT sup&mini MD' }
+    ];
+
+    function dlStaffSummary() {
+        const summary = { DL: 0, OT: 0, DL_Sup: 0, OT_Sup: 0, totalHeadcount: 0, totalCost: 0 };
+        dlStaffData.forEach(s => {
+            if (String(s.Active) === 'No') return;
+            const count = parseInt(s.Count) || 0;
+            const salary = parseFloat(s.Salary) || 0;
+            const cost = count * salary;
+            const cat = String(s.Category || 'DL');
+            if (summary[cat] !== undefined) summary[cat] += cost;
+            summary.totalHeadcount += count;
+            summary.totalCost += cost;
+        });
+        return summary;
+    }
+
+    function renderDLStaffSection() {
+        const el = document.getElementById('cost-dl-staff-section');
+        if (!el) return;
+
+        const activeStaff = dlStaffData.filter(s => String(s.Active) !== 'No');
+        const summary = dlStaffSummary();
+
+        const catGroups = {};
+        activeStaff.forEach(s => {
+            const cat = String(s.Category || 'DL');
+            if (!catGroups[cat]) catGroups[cat] = [];
+            catGroups[cat].push(s);
+        });
+
+        let tableHtml = '';
+        DL_CATEGORIES.forEach(c => {
+            const items = catGroups[c.key] || [];
+            if (items.length === 0) return;
+            let subtotal = 0;
+            tableHtml += `<tr class="bg-blue-50"><td colspan="5" class="p-2 text-xs font-bold text-blue-800">${c.label}</td></tr>`;
+            items.forEach(s => {
+                const count = parseInt(s.Count) || 0;
+                const salary = parseFloat(s.Salary) || 0;
+                const total = count * salary;
+                subtotal += total;
+                tableHtml += `<tr class="border-b border-gray-100 hover:bg-gray-50">
+                    <td class="p-2 text-sm">${s.Name || '-'}</td>
+                    <td class="p-2 text-sm text-gray-600">${s.Position || '-'}</td>
+                    <td class="p-2 text-sm text-center">${count}</td>
+                    <td class="p-2 text-sm text-right">${salary.toLocaleString()}</td>
+                    <td class="p-2 text-sm text-right font-bold">${total.toLocaleString()}</td>
+                </tr>`;
+            });
+            tableHtml += `<tr class="bg-blue-50/50"><td colspan="4" class="p-1.5 text-xs text-right text-blue-700 font-bold">รวม ${c.label}</td><td class="p-1.5 text-xs text-right text-blue-800 font-bold">${subtotal.toLocaleString()}</td></tr>`;
+        });
+
+        el.innerHTML = `
+        <div class="bg-white rounded-xl shadow-sm border">
+            <div class="p-4 border-b flex justify-between items-center">
+                <div>
+                    <h3 class="text-sm font-bold text-gray-800">👥 บุคลากร Direct Labor (DL)</h3>
+                    <div class="text-xs text-gray-500 mt-1">รวม ${summary.totalHeadcount} คน · ต้นทุนรวม <span class="font-bold text-blue-700">${summary.totalCost.toLocaleString()}</span> บาท/เดือน</div>
+                </div>
+                <button onclick="window.openDLStaffEditor()" class="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-orange-600">✏️ จัดการบุคลากร</button>
+            </div>
+            ${activeStaff.length > 0 ? `
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 text-gray-600 text-xs">
+                        <tr><th class="p-2 text-left">ชื่อ</th><th class="p-2 text-left">ตำแหน่ง</th><th class="p-2 text-center">จำนวน</th><th class="p-2 text-right">เงินเดือน/คน</th><th class="p-2 text-right">รวม</th></tr>
+                    </thead>
+                    <tbody>${tableHtml}</tbody>
+                    <tfoot>
+                        <tr class="bg-gray-100 font-bold text-sm">
+                            <td colspan="2" class="p-2">รวมทั้งหมด</td>
+                            <td class="p-2 text-center">${summary.totalHeadcount}</td>
+                            <td class="p-2"></td>
+                            <td class="p-2 text-right text-blue-700">${summary.totalCost.toLocaleString()}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>` : '<div class="p-8 text-center text-gray-400">ยังไม่มีข้อมูลบุคลากร — กด "จัดการบุคลากร" เพื่อเพิ่ม</div>'}
+            <div class="p-3 bg-gray-50 border-t text-[10px] text-gray-400">
+                DL = ${summary.DL.toLocaleString()} · OT = ${summary.OT.toLocaleString()} · DL sup = ${summary.DL_Sup.toLocaleString()} · OT sup = ${summary.OT_Sup.toLocaleString()}
+            </div>
+        </div>`;
+    }
+
+    // ========== DL Staff Editor Modal ==========
+
+    let dlEditorRows = [];
+
+    window.openDLStaffEditor = function () {
+        dlEditorRows = dlStaffData.filter(s => String(s.Active) !== 'No').map((s, i) => ({
+            id: i, name: s.Name || '', position: s.Position || '', count: parseInt(s.Count) || 1, salary: parseFloat(s.Salary) || 0, category: s.Category || 'DL'
+        }));
+        if (dlEditorRows.length === 0) dlEditorRows.push({ id: 0, name: '', position: '', count: 1, salary: 0, category: 'DL' });
+
+        renderDLEditorModal();
+    };
+
+    function renderDLEditorModal() {
+        document.getElementById('dl-editor-modal')?.remove();
+
+        let rowsHtml = '';
+        dlEditorRows.forEach((r, i) => {
+            const catOptions = DL_CATEGORIES.map(c => `<option value="${c.key}" ${r.category === c.key ? 'selected' : ''}>${c.label}</option>`).join('');
+            rowsHtml += `
+            <tr class="border-b" data-idx="${i}">
+                <td class="p-1"><input type="text" value="${r.name}" onchange="window.dlEditorUpdate(${i},'name',this.value)" class="border rounded px-2 py-1.5 w-full text-sm" placeholder="ชื่อ/กลุ่ม"></td>
+                <td class="p-1"><input type="text" value="${r.position}" onchange="window.dlEditorUpdate(${i},'position',this.value)" class="border rounded px-2 py-1.5 w-full text-sm" placeholder="ตำแหน่ง"></td>
+                <td class="p-1"><input type="number" value="${r.count}" min="0" onchange="window.dlEditorUpdate(${i},'count',this.value)" class="border rounded px-2 py-1.5 w-16 text-sm text-center"></td>
+                <td class="p-1"><input type="number" value="${r.salary}" step="0.01" min="0" onchange="window.dlEditorUpdate(${i},'salary',this.value)" class="border rounded px-2 py-1.5 w-28 text-sm text-right"></td>
+                <td class="p-1 text-right text-sm font-bold text-blue-700">${((parseInt(r.count) || 0) * (parseFloat(r.salary) || 0)).toLocaleString()}</td>
+                <td class="p-1"><select onchange="window.dlEditorUpdate(${i},'category',this.value)" class="border rounded px-1 py-1.5 text-[11px]">${catOptions}</select></td>
+                <td class="p-1 text-center"><button onclick="window.dlEditorRemove(${i})" class="text-red-500 hover:text-red-700 text-lg font-bold">&times;</button></td>
+            </tr>`;
+        });
+
+        const totalCost = dlEditorRows.reduce((sum, r) => sum + (parseInt(r.count) || 0) * (parseFloat(r.salary) || 0), 0);
+        const totalHead = dlEditorRows.reduce((sum, r) => sum + (parseInt(r.count) || 0), 0);
+
+        const modal = document.createElement('div');
+        modal.id = 'dl-editor-modal';
+        modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center bg-black/50';
+        modal.innerHTML = `
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto mx-4">
+            <div class="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-800">👥 จัดการบุคลากร DL</h3>
+                    <div class="text-xs text-gray-500">รวม ${totalHead} คน · ${totalCost.toLocaleString()} บาท/เดือน</div>
+                </div>
+                <button onclick="document.getElementById('dl-editor-modal')?.remove()" class="text-2xl text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <div class="p-4 overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 text-[11px] text-gray-600">
+                        <tr><th class="p-1 text-left">ชื่อ/กลุ่ม</th><th class="p-1 text-left">ตำแหน่ง</th><th class="p-1 text-center">จำนวน</th><th class="p-1 text-right">เงินเดือน/คน</th><th class="p-1 text-right">รวม</th><th class="p-1">หมวด</th><th class="p-1"></th></tr>
+                    </thead>
+                    <tbody id="dl-editor-tbody">${rowsHtml}</tbody>
+                </table>
+                <button onclick="window.dlEditorAddRow()" class="mt-2 text-sm text-blue-600 font-bold hover:text-blue-800">+ เพิ่มแถว</button>
+            </div>
+            <div class="sticky bottom-0 bg-white border-t p-4 flex gap-2 justify-end">
+                <button onclick="document.getElementById('dl-editor-modal')?.remove()" class="bg-gray-200 px-4 py-2 rounded-lg text-sm">ยกเลิก</button>
+                <button onclick="window.saveDLStaff()" class="bg-orange-500 text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-orange-600">💾 บันทึก</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+    }
+
+    window.dlEditorUpdate = function (idx, field, value) {
+        if (dlEditorRows[idx]) {
+            dlEditorRows[idx][field] = value;
+            renderDLEditorModal();
+        }
+    };
+
+    window.dlEditorRemove = function (idx) {
+        dlEditorRows.splice(idx, 1);
+        renderDLEditorModal();
+    };
+
+    window.dlEditorAddRow = function () {
+        dlEditorRows.push({ id: dlEditorRows.length, name: '', position: '', count: 1, salary: 0, category: 'DL' });
+        renderDLEditorModal();
+    };
+
+    window.saveDLStaff = async function () {
+        const items = dlEditorRows.filter(r => r.name || r.position || (parseInt(r.count) > 0 && parseFloat(r.salary) > 0));
+        const btn = document.querySelector('#dl-editor-modal button:last-child');
+        if (btn) { btn.disabled = true; btn.textContent = 'กำลังบันทึก...'; }
+
+        try {
+            const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({
+                action: 'SAVE_DL_STAFF',
+                items: items.map(r => ({ name: r.name, position: r.position, count: r.count, salary: r.salary, category: r.category, active: true })),
+                updatedBy: window.currentUser?.name || window.currentUser?.username || 'Admin'
+            })});
+            const json = await res.json();
+            if (json.status === 'success') {
+                document.getElementById('dl-editor-modal')?.remove();
+                window.loadCostModule();
+            } else {
+                alert('Error: ' + (json.message || 'Unknown'));
+                if (btn) { btn.disabled = false; btn.textContent = '💾 บันทึก'; }
+            }
+        } catch (e) {
+            alert('Network error');
+            if (btn) { btn.disabled = false; btn.textContent = '💾 บันทึก'; }
+        }
+    };
+
+    // ========== Auto-fill DL from staff data ==========
+
+    function getDLAutoValues() {
+        const summary = dlStaffSummary();
+        return { DL: summary.DL, OT: summary.OT, DL_Sup: summary.DL_Sup, OT_Sup: summary.OT_Sup };
+    }
 })();
