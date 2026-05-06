@@ -110,6 +110,9 @@
             <!-- [NEW] เมนู งานรอ Sort (Mobile) -->
             <button onclick="window.toggleMenu(); window.open('https://jrh91234.github.io/CWM-sorting-system-/', '_blank');" id="tab-sort" class="hidden py-4 px-6 text-left text-pink-600 font-bold border-l-4 border-transparent hover:bg-pink-50 transition-colors text-lg border-t border-gray-100 w-full">🔍 ระบบงานรอ Sort ↗️</button>
             
+            <!-- เมนู Cost Management (Admin Only) -->
+            <button onclick="window.switchTab('cost'); window.toggleMenu()" id="tab-cost" class="hidden py-4 px-6 text-left text-emerald-600 font-bold border-l-4 border-transparent hover:bg-emerald-50 transition-colors text-lg border-t border-gray-100">💰 บริหารต้นทุน</button>
+
             <!-- เมนู Admin -->
             <button onclick="window.openAdminPanel(); window.toggleMenu()" id="tab-admin" class="hidden py-4 px-6 text-left text-purple-600 font-bold border-l-4 border-transparent hover:bg-purple-50 transition-colors text-lg border-t border-gray-100">🛡️ จัดการระบบ (Admin)</button>
             
@@ -921,6 +924,11 @@
         </div>
     </main>
 
+    <!-- SECTION: COST MANAGEMENT (บริหารต้นทุน) -->
+    <main id="section-cost" class="max-w-6xl mx-auto p-4 space-y-4 hidden print-hide">
+        <div id="cost-content"></div>
+    </main>
+
     <!-- SECTION: PARTS MANAGER (จัดการอะไหล่เครื่องจักร) -->
     <main id="section-parts" class="max-w-6xl mx-auto p-4 space-y-4 hidden print-hide">
         <div class="bg-white rounded-xl shadow-lg overflow-hidden border-t-4 border-cyan-500">
@@ -1325,6 +1333,7 @@
 
     <script src="js/parts.js?v=5.3"></script>
     <script src="js/inbox.js?v=2.1"></script>
+    <script src="js/cost.js?v=1.0"></script>
 
     <!-- Script ทั่วไปสำหรับ UI ย่อยๆ -->
     <script>

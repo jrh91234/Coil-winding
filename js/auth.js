@@ -128,7 +128,7 @@ window.openAdminPanel = function() {
         return;
     }
     
-    ['form', 'planning', 'dashboard', 'rtv', 'packing'].forEach(t => {
+    ['form', 'planning', 'dashboard', 'rtv', 'packing', 'inbox', 'parts', 'cost'].forEach(t => {
         const el = document.getElementById('section-'+t);
         if(el) el.classList.add('hidden');
     });

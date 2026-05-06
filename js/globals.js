@@ -352,13 +352,13 @@ window.switchTab = function(tab) {
     const role = window.currentUser.role;
 
     // จำกัดสิทธิ์
-    if (role === 'Production' && (tab === 'planning' || tab === 'admin')) return;
-    if (role === 'QC' && (tab === 'planning' || tab === 'admin' || tab === 'packing' || tab === 'parts')) return;
-    if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin' || tab === 'maint' || tab === 'rtv' || tab === 'packing' || tab === 'sort' || tab === 'parts')) return;
+    if (role === 'Production' && (tab === 'planning' || tab === 'admin' || tab === 'cost')) return;
+    if (role === 'QC' && (tab === 'planning' || tab === 'admin' || tab === 'packing' || tab === 'parts' || tab === 'cost')) return;
+    if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin' || tab === 'maint' || tab === 'rtv' || tab === 'packing' || tab === 'sort' || tab === 'parts' || tab === 'cost')) return;
     if (role === 'Viewer' && tab !== 'dashboard') return;
 
     // สลับหน้าจอ Section (แยกเมนูที่เป็นลิงก์ออก ไม่ต้องนำมาจัดการในนี้)
-    ['inbox', 'form', 'planning', 'dashboard', 'admin', 'rtv', 'packing', 'parts'].forEach(t => {
+    ['inbox', 'form', 'planning', 'dashboard', 'admin', 'rtv', 'packing', 'parts', 'cost'].forEach(t => {
         const el = document.getElementById('section-'+t);
         if(el) el.classList.toggle('hidden', t !== tab);
 
@@ -376,6 +376,7 @@ window.switchTab = function(tab) {
     if(tab === 'inbox' && typeof window.loadInbox === 'function') window.loadInbox();
     if(tab === 'dashboard' && typeof window.loadDashboard === 'function') window.loadDashboard();
     if(tab === 'parts' && typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
+    if(tab === 'cost' && typeof window.loadCostModule === 'function') window.loadCostModule();
 };
 
 function applyPermissions() {
@@ -387,7 +388,7 @@ function applyPermissions() {
     const mobileSortIds = ['tab-sort', 'tab-sort-mobile'];
 
     // 1. ซ่อนเมนูทั้งหมดก่อน รวมถึงปุ่ม Sort ทุกแบบที่อาจมี
-    const allMenus = ['tab-inbox', 'tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-parts', 'tab-rtv', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
+    const allMenus = ['tab-inbox', 'tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-parts', 'tab-rtv', 'tab-packing', 'tab-cost', ...desktopSortIds, ...mobileSortIds];
     
     allMenus.forEach(id => {
         const el = document.getElementById(id);
