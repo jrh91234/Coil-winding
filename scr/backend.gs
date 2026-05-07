@@ -1376,6 +1376,9 @@ function doPost(e) {
               sheet = ss.insertSheet("Sorting_Data");
               // จัดเรียงหัวคอลัมน์ให้ครบ 14 คอลัมน์ (มี Sorter เป็นคนที่ 2 และ Closed_By เป็น QC)
               sheet.appendRow(["Timestamp", "Job_ID", "Date", "Product", "Symptom", "Qty", "Remark", "Recorder", "Status", "Closed_By", "Closed_Date", "FG_Qty", "NG_Qty", "Sorter"]);
+              // ตั้ง format คอลัมน์ Date (C) และ Closed_Date (K) ให้แสดงเวลาแบบ 24 ชม.
+              sheet.getRange("C:C").setNumberFormat("yyyy-MM-dd HH:mm");
+              sheet.getRange("K:K").setNumberFormat("yyyy-MM-dd HH:mm");
           }
 
           const now = new Date();
@@ -1386,6 +1389,9 @@ function doPost(e) {
 
           // 1. ผู้แจ้ง (Recorder) - เติมช่องให้ครบ 14 ช่องเพื่อป้องกันข้อมูลเหลื่อม
           sheet.appendRow([now.toLocaleString('th-TH'), newJobId, finalDate, sortData.product, sortData.symptom, sortData.qty, sortData.remark, sortData.recorder, "Pending", "", "", "", "", ""]);
+          // บังคับ format คอลัมน์ Date ให้แสดง 24 ชม. ป้องกัน Google Sheets แปลงเป็น 12 ชม. (เช่น 14:00 → 2:00)
+          const newRow = sheet.getLastRow();
+          sheet.getRange(newRow, 3).setNumberFormat("yyyy-MM-dd HH:mm");
           SpreadsheetApp.flush();
           logUserAction(sortData.recorder, "System", "SAVE_SORTING", `บันทึกงานรอ Sort ${sortData.product}`);
           return ContentService.createTextOutput(JSON.stringify({status: "success", message: "บันทึกสำเร็จ", jobId: newJobId})).setMimeType(ContentService.MimeType.JSON);
@@ -1421,6 +1427,8 @@ function doPost(e) {
           if (foundRow > -1) {
               const sortData = data.data;
               sheet.getRange(foundRow, dateCol).setValue(sortData.date);
+              // บังคับ format คอลัมน์ Date ให้แสดง 24 ชม. ป้องกัน Google Sheets แปลงเป็น 12 ชม.
+              sheet.getRange(foundRow, dateCol).setNumberFormat("yyyy-MM-dd HH:mm");
               sheet.getRange(foundRow, prodCol).setValue(sortData.product);
               sheet.getRange(foundRow, sympCol).setValue(sortData.symptom);
               sheet.getRange(foundRow, qtyCol).setValue(sortData.qty);
