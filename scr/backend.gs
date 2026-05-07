@@ -2985,28 +2985,16 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
         if (!sDateRaw) continue;
         let sDateStr = "";
         if (sDateRaw instanceof Date && !isNaN(sDateRaw.getTime())) {
-          // ตัดวัน 08:00 — ก่อน 08:00 นับเป็นวันก่อนหน้า
-          let shiftDate = new Date(sDateRaw.getTime());
-          let hourCheck = parseInt(Utilities.formatDate(shiftDate, "GMT+7", "HH")) || 0;
-          if (hourCheck < 8) {
-            shiftDate.setDate(shiftDate.getDate() - 1);
-          }
-          let yyyy = parseInt(Utilities.formatDate(shiftDate, "GMT+7", "yyyy"));
+          // Sorting_Data วันที่ถูก lock ไว้ถูกต้องแล้วจาก frontend — ไม่ต้องตัดวัน 08:00 ซ้ำ
+          let yyyy = parseInt(Utilities.formatDate(sDateRaw, "GMT+7", "yyyy"));
           if (yyyy > 2500) yyyy -= 543;
-          sDateStr = yyyy + "-" + Utilities.formatDate(shiftDate, "GMT+7", "MM") + "-" + Utilities.formatDate(shiftDate, "GMT+7", "dd");
+          sDateStr = yyyy + "-" + Utilities.formatDate(sDateRaw, "GMT+7", "MM") + "-" + Utilities.formatDate(sDateRaw, "GMT+7", "dd");
         } else {
-          // string format: "2026-04-06 02:30" or "2026-04-06"
           const sDateParts = String(sDateRaw).trim().split(" ");
           sDateStr = sDateParts[0].substring(0, 10);
-          // ถ้ามี time component → ตัดวัน 08:00
-          if (sDateParts[1]) {
-            const sHour = parseInt(sDateParts[1].split(":")[0]) || 0;
-            if (sHour < 8) {
-              const tmpDate = new Date(sDateStr + "T00:00:00");
-              tmpDate.setDate(tmpDate.getDate() - 1);
-              sDateStr = tmpDate.getFullYear() + "-" + String(tmpDate.getMonth() + 1).padStart(2, '0') + "-" + String(tmpDate.getDate()).padStart(2, '0');
-            }
-          }
+          // แปลง พ.ศ. ถ้ามี
+          const sYear = parseInt(sDateStr.substring(0, 4)) || 0;
+          if (sYear > 2500) sDateStr = (sYear - 543) + sDateStr.substring(4);
         }
 
         if (sDateStr < startDate || sDateStr > endDate) continue;
