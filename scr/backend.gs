@@ -2492,6 +2492,195 @@ function doPost(e) {
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // ===================== Force Refresh =====================
+
+  if (action === "SET_FORCE_REFRESH") {
+    try {
+      let sheet = ss.getSheetByName("Config");
+      if (!sheet) { sheet = ss.insertSheet("Config"); sheet.appendRow(["Key", "Value"]); }
+      const rows = sheet.getDataRange().getValues();
+      let found = false;
+      const ver = String(Date.now());
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]).trim() === "force_refresh") {
+          sheet.getRange(i + 1, 2).setValue(ver);
+          found = true; break;
+        }
+      }
+      if (!found) sheet.appendRow(["force_refresh", ver]);
+      logUserAction(data.adminUsername || "Admin", "Admin", "FORCE_REFRESH", "บังคับ refresh ทุก user");
+      return ContentService.createTextOutput(JSON.stringify({ success: true, version: ver })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ success: false, message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  if (action === "CHECK_REFRESH") {
+    try {
+      const sheet = ss.getSheetByName("Config");
+      if (!sheet) return ContentService.createTextOutput(JSON.stringify({ success: true, version: "0" })).setMimeType(ContentService.MimeType.JSON);
+      const rows = sheet.getDataRange().getValues();
+      let ver = "0";
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]).trim() === "force_refresh") { ver = String(rows[i][1] || "0"); break; }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ success: true, version: ver })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ success: true, version: "0" })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  // ===================== Cost Management =====================
+
+  if (action === "GET_COST_DATA") {
+    try {
+      const sheet = ss.getSheetByName("Cost_Data");
+      if (!sheet || sheet.getLastRow() <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", data: [] })).setMimeType(ContentService.MimeType.JSON);
+      }
+      const rows = sheet.getDataRange().getValues();
+      const headers = rows[0].map(h => String(h || "").trim());
+      const result = [];
+      for (let i = 1; i < rows.length; i++) {
+        const obj = {};
+        headers.forEach((h, j) => { obj[h] = rows[i][j]; });
+        result.push(obj);
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", data: result })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  if (action === "SAVE_COST_DATA") {
+    try {
+      let sheet = ss.getSheetByName("Cost_Data");
+      const costHeaders = ["Month","Sale","RM","Sub_Con","DL","OT","DL_Sup","OT_Sup","Utilities","Subcontract","Accessories","Repair","Other_OH","OH_FC","Transportation","Staff_Admin","Selling_Other","Admin_Other","Other_Income","Bonus_Admin","Bonus_OH","Mgt_Bonus","Extra","Interest","Tax","Depre","Updated_By","Updated_At"];
+      if (!sheet) {
+        sheet = ss.insertSheet("Cost_Data");
+        sheet.appendRow(costHeaders);
+      }
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      const getCol = (name) => headers.findIndex(h => h === name);
+      const monthCol = getCol("Month");
+      if (monthCol === -1) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Column 'Month' not found" })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const monthVal = String(data.month || "").trim();
+      if (!monthVal) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Month is required" })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      let targetRow = -1;
+      if (sheet.getLastRow() > 1) {
+        const monthData = sheet.getRange(2, monthCol + 1, sheet.getLastRow() - 1, 1).getValues();
+        for (let i = 0; i < monthData.length; i++) {
+          if (String(monthData[i][0]).trim() === monthVal) { targetRow = i + 2; break; }
+        }
+      }
+
+      const now = new Date();
+      const rowData = {};
+      costHeaders.forEach(h => { rowData[h] = ""; });
+      rowData["Month"] = monthVal;
+      rowData["Updated_By"] = data.updatedBy || "";
+      rowData["Updated_At"] = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
+
+      const numFields = ["Sale","RM","Sub_Con","DL","OT","DL_Sup","OT_Sup","Utilities","Subcontract","Accessories","Repair","Other_OH","OH_FC","Transportation","Staff_Admin","Selling_Other","Admin_Other","Other_Income","Bonus_Admin","Bonus_OH","Mgt_Bonus","Extra","Interest","Tax","Depre"];
+      numFields.forEach(f => { rowData[f] = parseFloat(data[f]) || 0; });
+
+      if (targetRow > 0) {
+        const newRow = headers.map(h => rowData[h] !== undefined ? rowData[h] : "");
+        sheet.getRange(targetRow, 1, 1, newRow.length).setValues([newRow]);
+      } else {
+        const newRow = headers.map(h => rowData[h] !== undefined ? rowData[h] : "");
+        sheet.appendRow(newRow);
+      }
+
+      logUserAction(data.updatedBy || "Admin", "Admin", "SAVE_COST_DATA", "บันทึกต้นทุนเดือน " + monthVal);
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Saved" })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  if (action === "DELETE_COST_DATA") {
+    try {
+      const sheet = ss.getSheetByName("Cost_Data");
+      if (!sheet) return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Sheet not found" })).setMimeType(ContentService.MimeType.JSON);
+      const monthVal = String(data.month || "").trim();
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      const monthCol = headers.indexOf("Month");
+      if (monthCol === -1 || !monthVal) return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Invalid" })).setMimeType(ContentService.MimeType.JSON);
+      const monthData = sheet.getRange(2, monthCol + 1, sheet.getLastRow() - 1, 1).getValues();
+      for (let i = monthData.length - 1; i >= 0; i--) {
+        if (String(monthData[i][0]).trim() === monthVal) { sheet.deleteRow(i + 2); break; }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  // ===================== DL Staff Management =====================
+
+  if (action === "GET_DL_STAFF") {
+    try {
+      const sheet = ss.getSheetByName("DL_Staff");
+      if (!sheet || sheet.getLastRow() <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", data: [] })).setMimeType(ContentService.MimeType.JSON);
+      }
+      const rows = sheet.getDataRange().getValues();
+      const headers = rows[0].map(h => String(h || "").trim());
+      const result = [];
+      for (let i = 1; i < rows.length; i++) {
+        const obj = {};
+        headers.forEach((h, j) => { obj[h] = rows[i][j]; });
+        obj._row = i + 1;
+        result.push(obj);
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", data: result })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  if (action === "SAVE_DL_STAFF") {
+    try {
+      const dlHeaders = ["Name","Position","Count","Salary","Category","Active"];
+      let sheet = ss.getSheetByName("DL_Staff");
+      if (!sheet) {
+        sheet = ss.insertSheet("DL_Staff");
+        sheet.appendRow(dlHeaders);
+      }
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      const getCol = (name) => headers.findIndex(h => h === name);
+
+      const items = data.items || [];
+      if (sheet.getLastRow() > 1) {
+        sheet.deleteRows(2, sheet.getLastRow() - 1);
+      }
+      items.forEach(item => {
+        const row = headers.map(h => {
+          if (h === "Name") return String(item.name || "").trim();
+          if (h === "Position") return String(item.position || "").trim();
+          if (h === "Count") return parseInt(item.count) || 0;
+          if (h === "Salary") return parseFloat(item.salary) || 0;
+          if (h === "Category") return String(item.category || "DL").trim();
+          if (h === "Active") return item.active !== false ? "Yes" : "No";
+          return "";
+        });
+        sheet.appendRow(row);
+      });
+
+      logUserAction(data.updatedBy || "Admin", "Admin", "SAVE_DL_STAFF", "บันทึกข้อมูลพนักงาน DL " + items.length + " รายการ");
+      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
   return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Unknown Action"})).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -3243,196 +3432,6 @@ function debugSheetData() {
           row: i + 1, date: dateStr, shift: shift, type: type, fg: row[col["fg"]], ng: row[col["ng_total"]], isMatchToday: dateStr === today
       });
   }
-  // ===================== Force Refresh =====================
-
-  if (action === "SET_FORCE_REFRESH") {
-    try {
-      let sheet = ss.getSheetByName("Config");
-      if (!sheet) { sheet = ss.insertSheet("Config"); sheet.appendRow(["Key", "Value"]); }
-      const rows = sheet.getDataRange().getValues();
-      let found = false;
-      const ver = String(Date.now());
-      for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][0]).trim() === "force_refresh") {
-          sheet.getRange(i + 1, 2).setValue(ver);
-          found = true; break;
-        }
-      }
-      if (!found) sheet.appendRow(["force_refresh", ver]);
-      logUserAction(data.adminUsername || "Admin", "Admin", "FORCE_REFRESH", "บังคับ refresh ทุก user");
-      return ContentService.createTextOutput(JSON.stringify({ success: true, version: ver })).setMimeType(ContentService.MimeType.JSON);
-    } catch (err) {
-      return ContentService.createTextOutput(JSON.stringify({ success: false, message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
-    }
-  }
-
-  if (action === "CHECK_REFRESH") {
-    try {
-      const sheet = ss.getSheetByName("Config");
-      if (!sheet) return ContentService.createTextOutput(JSON.stringify({ success: true, version: "0" })).setMimeType(ContentService.MimeType.JSON);
-      const rows = sheet.getDataRange().getValues();
-      let ver = "0";
-      for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][0]).trim() === "force_refresh") { ver = String(rows[i][1] || "0"); break; }
-      }
-      return ContentService.createTextOutput(JSON.stringify({ success: true, version: ver })).setMimeType(ContentService.MimeType.JSON);
-    } catch (err) {
-      return ContentService.createTextOutput(JSON.stringify({ success: true, version: "0" })).setMimeType(ContentService.MimeType.JSON);
-    }
-  }
-
-  // ===================== Cost Management =====================
-
-  if (action === "GET_COST_DATA") {
-    try {
-      const sheet = ss.getSheetByName("Cost_Data");
-      if (!sheet || sheet.getLastRow() <= 1) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "success", data: [] })).setMimeType(ContentService.MimeType.JSON);
-      }
-      const rows = sheet.getDataRange().getValues();
-      const headers = rows[0].map(h => String(h || "").trim());
-      const result = [];
-      for (let i = 1; i < rows.length; i++) {
-        const obj = {};
-        headers.forEach((h, j) => { obj[h] = rows[i][j]; });
-        result.push(obj);
-      }
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", data: result })).setMimeType(ContentService.MimeType.JSON);
-    } catch (err) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
-    }
-  }
-
-  if (action === "SAVE_COST_DATA") {
-    try {
-      let sheet = ss.getSheetByName("Cost_Data");
-      const costHeaders = ["Month","Sale","RM","Sub_Con","DL","OT","DL_Sup","OT_Sup","Utilities","Subcontract","Accessories","Repair","Other_OH","OH_FC","Transportation","Staff_Admin","Selling_Other","Admin_Other","Other_Income","Bonus_Admin","Bonus_OH","Mgt_Bonus","Extra","Interest","Tax","Depre","Updated_By","Updated_At"];
-      if (!sheet) {
-        sheet = ss.insertSheet("Cost_Data");
-        sheet.appendRow(costHeaders);
-      }
-      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
-      const getCol = (name) => headers.findIndex(h => h === name);
-      const monthCol = getCol("Month");
-      if (monthCol === -1) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Column 'Month' not found" })).setMimeType(ContentService.MimeType.JSON);
-      }
-
-      const monthVal = String(data.month || "").trim();
-      if (!monthVal) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Month is required" })).setMimeType(ContentService.MimeType.JSON);
-      }
-
-      let targetRow = -1;
-      if (sheet.getLastRow() > 1) {
-        const monthData = sheet.getRange(2, monthCol + 1, sheet.getLastRow() - 1, 1).getValues();
-        for (let i = 0; i < monthData.length; i++) {
-          if (String(monthData[i][0]).trim() === monthVal) { targetRow = i + 2; break; }
-        }
-      }
-
-      const now = new Date();
-      const rowData = {};
-      costHeaders.forEach(h => { rowData[h] = ""; });
-      rowData["Month"] = monthVal;
-      rowData["Updated_By"] = data.updatedBy || "";
-      rowData["Updated_At"] = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
-
-      const numFields = ["Sale","RM","Sub_Con","DL","OT","DL_Sup","OT_Sup","Utilities","Subcontract","Accessories","Repair","Other_OH","OH_FC","Transportation","Staff_Admin","Selling_Other","Admin_Other","Other_Income","Bonus_Admin","Bonus_OH","Mgt_Bonus","Extra","Interest","Tax","Depre"];
-      numFields.forEach(f => { rowData[f] = parseFloat(data[f]) || 0; });
-
-      if (targetRow > 0) {
-        const newRow = headers.map(h => rowData[h] !== undefined ? rowData[h] : "");
-        sheet.getRange(targetRow, 1, 1, newRow.length).setValues([newRow]);
-      } else {
-        const newRow = headers.map(h => rowData[h] !== undefined ? rowData[h] : "");
-        sheet.appendRow(newRow);
-      }
-
-      logUserAction(data.updatedBy || "Admin", "Admin", "SAVE_COST_DATA", "บันทึกต้นทุนเดือน " + monthVal);
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Saved" })).setMimeType(ContentService.MimeType.JSON);
-    } catch (err) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
-    }
-  }
-
-  if (action === "DELETE_COST_DATA") {
-    try {
-      const sheet = ss.getSheetByName("Cost_Data");
-      if (!sheet) return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Sheet not found" })).setMimeType(ContentService.MimeType.JSON);
-      const monthVal = String(data.month || "").trim();
-      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
-      const monthCol = headers.indexOf("Month");
-      if (monthCol === -1 || !monthVal) return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Invalid" })).setMimeType(ContentService.MimeType.JSON);
-      const monthData = sheet.getRange(2, monthCol + 1, sheet.getLastRow() - 1, 1).getValues();
-      for (let i = monthData.length - 1; i >= 0; i--) {
-        if (String(monthData[i][0]).trim() === monthVal) { sheet.deleteRow(i + 2); break; }
-      }
-      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
-    } catch (err) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
-    }
-  }
-
-  // ===================== DL Staff Management =====================
-
-  if (action === "GET_DL_STAFF") {
-    try {
-      const sheet = ss.getSheetByName("DL_Staff");
-      if (!sheet || sheet.getLastRow() <= 1) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "success", data: [] })).setMimeType(ContentService.MimeType.JSON);
-      }
-      const rows = sheet.getDataRange().getValues();
-      const headers = rows[0].map(h => String(h || "").trim());
-      const result = [];
-      for (let i = 1; i < rows.length; i++) {
-        const obj = {};
-        headers.forEach((h, j) => { obj[h] = rows[i][j]; });
-        obj._row = i + 1;
-        result.push(obj);
-      }
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", data: result })).setMimeType(ContentService.MimeType.JSON);
-    } catch (err) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
-    }
-  }
-
-  if (action === "SAVE_DL_STAFF") {
-    try {
-      const dlHeaders = ["Name","Position","Count","Salary","Category","Active"];
-      let sheet = ss.getSheetByName("DL_Staff");
-      if (!sheet) {
-        sheet = ss.insertSheet("DL_Staff");
-        sheet.appendRow(dlHeaders);
-      }
-      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
-      const getCol = (name) => headers.findIndex(h => h === name);
-
-      const items = data.items || [];
-      // ลบข้อมูลเก่าทั้งหมดแล้วเขียนใหม่ (batch replace)
-      if (sheet.getLastRow() > 1) {
-        sheet.deleteRows(2, sheet.getLastRow() - 1);
-      }
-      items.forEach(item => {
-        const row = headers.map(h => {
-          if (h === "Name") return String(item.name || "").trim();
-          if (h === "Position") return String(item.position || "").trim();
-          if (h === "Count") return parseInt(item.count) || 0;
-          if (h === "Salary") return parseFloat(item.salary) || 0;
-          if (h === "Category") return String(item.category || "DL").trim();
-          if (h === "Active") return item.active !== false ? "Yes" : "No";
-          return "";
-        });
-        sheet.appendRow(row);
-      });
-
-      logUserAction(data.updatedBy || "Admin", "Admin", "SAVE_DL_STAFF", "บันทึกข้อมูลพนักงาน DL " + items.length + " รายการ");
-      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
-    } catch (err) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
-    }
-  }
-
 
   return { status: "DEBUG_V3.55_Auth", summary: stats, last10Rows: detailedAnalysis };
 }
