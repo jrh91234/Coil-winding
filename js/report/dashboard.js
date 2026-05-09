@@ -5,8 +5,9 @@ window.loadDashboard = async function() {
     const debugPanel = document.getElementById('debug-panel');
     const debugOut = document.getElementById('debug-output');
     
-    const start = document.getElementById('startDate').value.trim(); 
-    const end = document.getElementById('endDate').value.trim();
+    const allTime = typeof window.isAllTimeActive === 'function' && window.isAllTimeActive();
+    const start = allTime ? '2000-01-01' : document.getElementById('startDate').value.trim();
+    const end = allTime ? '2099-12-31' : document.getElementById('endDate').value.trim();
     const shift = document.getElementById('filterShift').value.trim(); 
     const shiftType = document.getElementById('filterShiftType').value.trim();
     
