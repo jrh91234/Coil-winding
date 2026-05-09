@@ -446,6 +446,35 @@ function applyPermissions() {
 }
 
 // ==========================================
+// All Time toggle — Dashboard date range
+// ==========================================
+let _allTimeActive = false;
+
+window.toggleAllTime = function() {
+    _allTimeActive = !_allTimeActive;
+    const btn = document.getElementById('btnAllTime');
+    const startEl = document.getElementById('startDate');
+    const endEl = document.getElementById('endDate');
+    if (_allTimeActive) {
+        btn.classList.remove('bg-white', 'text-gray-600', 'border-gray-300');
+        btn.classList.add('bg-amber-500', 'text-white', 'border-amber-500');
+        startEl.disabled = true;
+        endEl.disabled = true;
+        startEl.classList.add('opacity-50');
+        endEl.classList.add('opacity-50');
+    } else {
+        btn.classList.remove('bg-amber-500', 'text-white', 'border-amber-500');
+        btn.classList.add('bg-white', 'text-gray-600', 'border-gray-300');
+        startEl.disabled = false;
+        endEl.disabled = false;
+        startEl.classList.remove('opacity-50');
+        endEl.classList.remove('opacity-50');
+    }
+};
+
+window.isAllTimeActive = function() { return _allTimeActive; };
+
+// ==========================================
 // Force Refresh — ตรวจสอบเวอร์ชันจาก Config ทุก 60 วินาที
 // ==========================================
 (function initForceRefreshChecker() {
