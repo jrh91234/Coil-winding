@@ -26,6 +26,8 @@ window.renderAutoReportContent = async function() {
     const content = document.getElementById('auto-report-content');
     const sDate = document.getElementById('startDate').value;
     const eDate = document.getElementById('endDate').value;
+    const filterShiftVal = document.getElementById('filterShift').value.trim();
+    const filterShiftTypeVal = document.getElementById('filterShiftType').value.trim();
 
     // 🌟 ฟังก์ชันจัดการสีของเส้นกราฟแต่ละอาการ (Fixed Colors) 🌟
     const getSymptomColor = (symptomName) => {
@@ -121,7 +123,7 @@ window.renderAutoReportContent = async function() {
         `;
         const sortRes = await fetch(SCRIPT_URL, {
             method: 'POST',
-            body: JSON.stringify({ action: 'GET_SORTING_PROD_SUMMARY', start: sDate, end: eDate })
+            body: JSON.stringify({ action: 'GET_SORTING_PROD_SUMMARY', start: sDate, end: eDate, shift: filterShiftVal, shiftType: filterShiftTypeVal })
         });
         const sortJson = await sortRes.json();
         sortingSummaryByModel = (sortJson && sortJson.summary) || {};
