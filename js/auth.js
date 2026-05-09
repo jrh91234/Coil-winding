@@ -242,6 +242,29 @@ document.getElementById('userManageForm').onsubmit = async (e) => {
     }
 };
 
+window.forceRefreshAllUsers = async function() {
+    if (!window.currentUser || window.currentUser.role !== 'Admin') {
+        alert("คุณไม่มีสิทธิ์ใช้งานฟีเจอร์นี้");
+        return;
+    }
+    if (!confirm("ยืนยันบังคับ Refresh ให้ผู้ใช้ทุกคน?\nผู้ใช้ทุกคนจะถูกโหลดหน้าใหม่ภายใน 1 นาที")) return;
+    try {
+        const res = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'SET_FORCE_REFRESH', adminUsername: window.currentUser.username })
+        });
+        const data = await res.json();
+        if (data.success) {
+            sessionStorage.setItem('CWM_REFRESH_VER', String(data.version || Date.now()));
+            alert("สำเร็จ! ผู้ใช้ทุกคนจะถูกบังคับ Refresh ภายใน 1 นาที");
+        } else {
+            alert("ผิดพลาด: " + (data.message || "ไม่สามารถตั้งค่าได้"));
+        }
+    } catch (e) {
+        alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    }
+};
+
 window.deleteUser = async function(username) {
     if (!confirm(`ยืนยันการลบผู้ใช้: ${username} ใช่หรือไม่?\n(การกระทำนี้ไม่สามารถย้อนกลับได้)`)) return;
     

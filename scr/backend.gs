@@ -3251,6 +3251,44 @@ function debugSheetData() {
           row: i + 1, date: dateStr, shift: shift, type: type, fg: row[col["fg"]], ng: row[col["ng_total"]], isMatchToday: dateStr === today
       });
   }
+  // ===================== Force Refresh =====================
+
+  if (action === "SET_FORCE_REFRESH") {
+    try {
+      let sheet = ss.getSheetByName("Config");
+      if (!sheet) { sheet = ss.insertSheet("Config"); sheet.appendRow(["Key", "Value"]); }
+      const rows = sheet.getDataRange().getValues();
+      let found = false;
+      const ver = String(Date.now());
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]).trim() === "force_refresh") {
+          sheet.getRange(i + 1, 2).setValue(ver);
+          found = true; break;
+        }
+      }
+      if (!found) sheet.appendRow(["force_refresh", ver]);
+      logUserAction(data.adminUsername || "Admin", "Admin", "FORCE_REFRESH", "บังคับ refresh ทุก user");
+      return ContentService.createTextOutput(JSON.stringify({ success: true, version: ver })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ success: false, message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  if (action === "CHECK_REFRESH") {
+    try {
+      const sheet = ss.getSheetByName("Config");
+      if (!sheet) return ContentService.createTextOutput(JSON.stringify({ success: true, version: "0" })).setMimeType(ContentService.MimeType.JSON);
+      const rows = sheet.getDataRange().getValues();
+      let ver = "0";
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]).trim() === "force_refresh") { ver = String(rows[i][1] || "0"); break; }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ success: true, version: ver })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ success: true, version: "0" })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
   // ===================== Cost Management =====================
 
   if (action === "GET_COST_DATA") {
