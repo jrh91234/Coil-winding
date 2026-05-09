@@ -444,3 +444,30 @@ function applyPermissions() {
 
     window.switchTab(defaultTab);
 }
+
+// ==========================================
+// Force Refresh — ตรวจสอบเวอร์ชันจาก Config ทุก 60 วินาที
+// ==========================================
+(function initForceRefreshChecker() {
+    async function checkForceRefresh() {
+        try {
+            const res = await fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'CHECK_REFRESH' })
+            });
+            const data = await res.json();
+            if (!data.success) return;
+            const serverVer = String(data.version || "0");
+            const localVer = sessionStorage.getItem('CWM_REFRESH_VER');
+            if (!localVer) {
+                sessionStorage.setItem('CWM_REFRESH_VER', serverVer);
+                return;
+            }
+            if (serverVer !== localVer) {
+                sessionStorage.setItem('CWM_REFRESH_VER', serverVer);
+                location.reload(true);
+            }
+        } catch (e) { /* ignore network errors */ }
+    }
+    setInterval(checkForceRefresh, 60000);
+})();
