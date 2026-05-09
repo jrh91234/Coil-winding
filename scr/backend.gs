@@ -535,6 +535,10 @@ function doPost(e) {
 
       const start = String(data.start || "").trim();
       const end = String(data.end || "").trim();
+      const filterShift = String(data.shift || "All").trim();
+      const filterShiftType = String(data.shiftType || "All").trim();
+      const shiftCol = getCol("Shift");
+      const shiftTypeCol = getCol("Shift_Type");
 
       // แปลง Timestamp (Date object หรือ Thai locale "d/m/พ.ศ. HH:mm:ss") → yyyy-MM-dd (ค.ศ.)
       const toCalendarDate = (rawVal) => {
@@ -592,6 +596,16 @@ function doPost(e) {
         if (!targetDateISO) continue;
         if (start && targetDateISO < start) continue;
         if (end && targetDateISO > end) continue;
+
+        if (filterShift !== "All" && shiftCol !== -1) {
+          const rowShift = String(row[shiftCol] || "").trim();
+          if (rowShift !== filterShift) continue;
+        }
+        if (filterShiftType !== "All" && shiftTypeCol !== -1) {
+          let rowType = String(row[shiftTypeCol] || "").trim();
+          if (rowType === "Morning") rowType = "Day";
+          if (rowType !== filterShiftType) continue;
+        }
 
         const model = String(row[productCol] || "").trim();
         if (!model) continue;
