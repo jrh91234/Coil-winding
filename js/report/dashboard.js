@@ -1,27 +1,34 @@
+let _dashboardAbort = null;
+
 window.loadDashboard = async function() {
     if(!SCRIPT_URL) return;
+
+    if (_dashboardAbort) _dashboardAbort.abort();
+    _dashboardAbort = new AbortController();
+    const signal = _dashboardAbort.signal;
+
     document.getElementById('dashboard-content').classList.add('hidden');
     document.getElementById('dashboard-loader').classList.remove('hidden');
     const debugPanel = document.getElementById('debug-panel');
     const debugOut = document.getElementById('debug-output');
-    
+
     const allTime = typeof window.isAllTimeActive === 'function' && window.isAllTimeActive();
     const start = allTime ? '2000-01-01' : document.getElementById('startDate').value.trim();
     const end = allTime ? '2099-12-31' : document.getElementById('endDate').value.trim();
-    const shift = document.getElementById('filterShift').value.trim(); 
+    const shift = document.getElementById('filterShift').value.trim();
     const shiftType = document.getElementById('filterShiftType').value.trim();
-    
+
     const isPartialView = (shift !== 'All' || shiftType !== 'All');
-    
+
     const ngTrendSel = document.getElementById('ngTrendSelector');
     if(ngTrendSel) ngTrendSel.value = 'percent';
-    
+
     let rawText = "";
     try {
         debugOut.innerText = `[Dashboard] Loading data for ${start} to ${end}...`;
-        
+
         const fetchUrl = `${SCRIPT_URL}?action=GET_DASHBOARD&start=${start}&end=${end}&shift=${shift}&shiftType=${shiftType}&_t=${Date.now()}`;
-        const res = await fetch(fetchUrl);
+        const res = await fetch(fetchUrl, { signal });
         
         rawText = await res.text();
         
@@ -160,13 +167,16 @@ window.loadDashboard = async function() {
             window.renderSimulator(data); 
         }
 
-    } catch(e) { 
-        console.error("Dashboard Load Error: ", e); 
+    } catch(e) {
+        if (e.name === 'AbortError') return;
+        console.error("Dashboard Load Error: ", e);
         debugPanel.classList.remove('hidden');
         debugOut.innerText += `\n[Error Message]\n${e.message}\n\n[Stack Trace]\n${e.stack || "No Stack Trace"}\n\n[Raw Response Text]\n${rawText.substring(0, 500)}`;
         alert("เกิดข้อผิดพลาดในการดึงข้อมูล กรุณาตรวจสอบที่แผง Debug สีแดงด้านบน");
-    } finally { 
-        document.getElementById('dashboard-loader').classList.add('hidden'); 
-        document.getElementById('dashboard-content').classList.remove('hidden'); 
+    } finally {
+        if (!signal.aborted) {
+            document.getElementById('dashboard-loader').classList.add('hidden');
+            document.getElementById('dashboard-content').classList.remove('hidden');
+        }
     }
 };
