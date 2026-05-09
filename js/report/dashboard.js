@@ -1,9 +1,11 @@
 let _dashboardAbort = null;
+let _dashboardTimer = null;
 
 window.loadDashboard = async function() {
     if(!SCRIPT_URL) return;
 
     if (_dashboardAbort) _dashboardAbort.abort();
+    if (_dashboardTimer) clearInterval(_dashboardTimer);
     _dashboardAbort = new AbortController();
     const signal = _dashboardAbort.signal;
 
@@ -19,6 +21,22 @@ window.loadDashboard = async function() {
     const shiftType = document.getElementById('filterShiftType').value.trim();
 
     const isPartialView = (shift !== 'All' || shiftType !== 'All');
+
+    // แสดงเงื่อนไขที่กำลังดึงข้อมูล
+    const infoEl = document.getElementById('loader-query-info');
+    const timerEl = document.getElementById('loader-timer');
+    if (infoEl) {
+        const dateLabel = allTime ? 'All Time (ข้อมูลทั้งหมด)' : `${start} → ${end}`;
+        const filterLabel = (shift === 'All' && shiftType === 'All') ? '' : ` | ${shift !== 'All' ? 'Shift ' + shift : ''} ${shiftType !== 'All' ? shiftType : ''}`.trim();
+        infoEl.textContent = dateLabel + filterLabel;
+    }
+    const t0 = Date.now();
+    if (timerEl) {
+        timerEl.textContent = '0.0 วินาที';
+        _dashboardTimer = setInterval(() => {
+            timerEl.textContent = ((Date.now() - t0) / 1000).toFixed(1) + ' วินาที';
+        }, 100);
+    }
 
     const ngTrendSel = document.getElementById('ngTrendSelector');
     if(ngTrendSel) ngTrendSel.value = 'percent';
@@ -175,6 +193,7 @@ window.loadDashboard = async function() {
         alert("เกิดข้อผิดพลาดในการดึงข้อมูล กรุณาตรวจสอบที่แผง Debug สีแดงด้านบน");
     } finally {
         if (!signal.aborted) {
+            if (_dashboardTimer) { clearInterval(_dashboardTimer); _dashboardTimer = null; }
             document.getElementById('dashboard-loader').classList.add('hidden');
             document.getElementById('dashboard-content').classList.remove('hidden');
         }
