@@ -601,10 +601,17 @@ function doPost(e) {
           const rowShift = String(row[shiftCol] || "").trim();
           if (rowShift !== filterShift) continue;
         }
-        if (filterShiftType !== "All" && shiftTypeCol !== -1) {
-          let rowType = String(row[shiftTypeCol] || "").trim();
-          if (rowType === "Morning") rowType = "Day";
-          if (rowType !== filterShiftType) continue;
+        if (filterShiftType !== "All") {
+          const tsRaw = row[timestampCol];
+          let tsHour = -1;
+          if (tsRaw instanceof Date && !isNaN(tsRaw.getTime())) {
+            tsHour = parseInt(Utilities.formatDate(tsRaw, "GMT+7", "HH")) || 0;
+          } else {
+            const tsParts = String(tsRaw || "").match(/(\d{1,2}):(\d{2})/);
+            if (tsParts) tsHour = parseInt(tsParts[1]) || 0;
+          }
+          const derivedType = (tsHour >= 8 && tsHour < 20) ? "Day" : "Night";
+          if (derivedType !== filterShiftType) continue;
         }
 
         const model = String(row[productCol] || "").trim();
@@ -1638,23 +1645,31 @@ function doPost(e) {
                           }
                       }
 
-                      // === แปลงวันที่จาก Sorting_Data ===
+                      // === แปลงวันที่จาก Sorting_Data (ตัดวัน 08:00) ===
                       let dateStr = "";
+                      let hourNum = 0;
                       if (sortDateRaw instanceof Date && !isNaN(sortDateRaw.getTime())) {
-                          dateStr = Utilities.formatDate(sortDateRaw, "GMT+7", "yyyy-MM-dd");
+                          hourNum = parseInt(Utilities.formatDate(sortDateRaw, "GMT+7", "HH")) || 0;
+                          let shiftD = new Date(sortDateRaw.getTime());
+                          if (hourNum < 8) shiftD.setDate(shiftD.getDate() - 1);
+                          dateStr = Utilities.formatDate(shiftD, "GMT+7", "yyyy-MM-dd");
                       } else if (sortDateRaw) {
                           const dateParts = String(sortDateRaw).split(" ");
                           dateStr = dateParts[0] || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+                          const rawTime = dateParts[1] || "";
+                          hourNum = parseInt(rawTime.split(":")[0]) || 0;
+                          if (hourNum < 8 && rawTime) {
+                              const tmpD = new Date(dateStr + "T00:00:00");
+                              tmpD.setDate(tmpD.getDate() - 1);
+                              dateStr = tmpD.getFullYear() + "-" + String(tmpD.getMonth() + 1).padStart(2, '0') + "-" + String(tmpD.getDate()).padStart(2, '0');
+                          }
                       } else {
                           dateStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
                       }
+                      const shiftType = (hourNum >= 8 && hourNum < 20) ? "Day" : "Night";
 
-                      // ใช้เวลาที่ QC อนุมัติ (now) เป็นตัวกำหนด shiftType
-                      const approvalHour = parseInt(Utilities.formatDate(now, "GMT+7", "HH")) || 0;
-                      const shiftType = (approvalHour >= 8 && approvalHour < 20) ? "Day" : "Night";
-
-                      const hStart = String(approvalHour).padStart(2, '0') + ":00";
-                      const nextHour = (approvalHour + 1) % 24;
+                      const hStart = String(hourNum).padStart(2, '0') + ":00";
+                      const nextHour = (hourNum + 1) % 24;
                       const hEnd = String(nextHour).padStart(2, '0') + ":00";
                       const hourSlot = hStart + "-" + hEnd;
 
@@ -1710,7 +1725,7 @@ function doPost(e) {
                                               if (hParts.length === 2) {
                                                   const rangeStart = parseInt(hParts[0].split(":")[0]) || 0;
                                                   const rangeEnd = parseInt(hParts[1].split(":")[0]) || 0;
-                                                  if (approvalHour >= rangeStart && approvalHour < rangeEnd) {
+                                                  if (hourNum >= rangeStart && hourNum < rangeEnd) {
                                                       matchedShift = pShift;
                                                       break;
                                                   }
