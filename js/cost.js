@@ -527,8 +527,12 @@
                     <h3 class="text-sm font-bold text-gray-800">👥 บุคลากร Direct Labor (DL)</h3>
                     <div class="text-xs text-gray-500 mt-1">รวม ${summary.totalHeadcount} คน · ต้นทุนรวม <span class="font-bold text-blue-700">${summary.totalCost.toLocaleString()}</span> บาท/เดือน</div>
                 </div>
-                <button onclick="window.openDLStaffEditor()" class="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-orange-600">✏️ จัดการบุคลากร</button>
+                <div class="flex gap-2">
+                    <button onclick="window.toggleDLStaffDetail()" id="btn-toggle-dl" class="bg-gray-200 text-gray-600 px-3 py-2 rounded-lg text-xs font-bold hover:bg-gray-300">🔒 แสดงรายละเอียด</button>
+                    <button onclick="window.openDLStaffEditor()" class="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-orange-600">✏️ จัดการบุคลากร</button>
+                </div>
             </div>
+            <div id="dl-staff-detail" class="hidden">
             ${activeStaff.length > 0 ? `
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
@@ -546,11 +550,29 @@
                     </tfoot>
                 </table>
             </div>` : '<div class="p-8 text-center text-gray-400">ยังไม่มีข้อมูลบุคลากร — กด "จัดการบุคลากร" เพื่อเพิ่ม</div>'}
+            </div>
             <div class="p-3 bg-gray-50 border-t text-[10px] text-gray-400">
                 DL = ${summary.DL.toLocaleString()} · OT = ${summary.OT.toLocaleString()} · DL sup = ${summary.DL_Sup.toLocaleString()} · OT sup = ${summary.OT_Sup.toLocaleString()}
             </div>
         </div>`;
     }
+
+    window.toggleDLStaffDetail = function() {
+        const detail = document.getElementById('dl-staff-detail');
+        const btn = document.getElementById('btn-toggle-dl');
+        if (!detail || !btn) return;
+        if (detail.classList.contains('hidden')) {
+            detail.classList.remove('hidden');
+            btn.innerHTML = '🔓 ซ่อนรายละเอียด';
+            btn.classList.remove('bg-gray-200', 'text-gray-600');
+            btn.classList.add('bg-red-100', 'text-red-700');
+        } else {
+            detail.classList.add('hidden');
+            btn.innerHTML = '🔒 แสดงรายละเอียด';
+            btn.classList.remove('bg-red-100', 'text-red-700');
+            btn.classList.add('bg-gray-200', 'text-gray-600');
+        }
+    };
 
     // ========== DL Staff Editor Modal ==========
 
