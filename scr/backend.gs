@@ -2700,6 +2700,117 @@ function doPost(e) {
     }
   }
 
+  // ===================== Sorting by Timestamp (สำหรับ reconcile สต๊อก) =====================
+
+  if (action === "GET_SORTING_BY_TIMESTAMP") {
+    try {
+      const sheet = ss.getSheetByName("Production_Data");
+      if (!sheet || sheet.getLastRow() <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({ success: true, data: [], totals: { fg: 0, ng: 0, jobs: 0 } })).setMimeType(ContentService.MimeType.JSON);
+      }
+      const rows = sheet.getDataRange().getValues();
+      const headers = rows[0].map(h => String(h || "").trim());
+      const getCol = (name) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+      const timestampCol = getCol("Timestamp");
+      const batchIdCol = getCol("Batch_ID");
+      const productCol = getCol("Product");
+      const fgCol = getCol("FG");
+      const ngKgCol = getCol("NG_Total");
+      const dateCol = getCol("Date");
+      const shiftCol = getCol("Shift");
+      const machineCol = getCol("Machine");
+
+      if (timestampCol === -1 || batchIdCol === -1) {
+        return ContentService.createTextOutput(JSON.stringify({ success: true, data: [], totals: { fg: 0, ng: 0, jobs: 0 } })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const start = String(data.start || "").trim();
+      const end = String(data.end || "").trim();
+
+      const toCalendarDate = (rawVal) => {
+        if (!rawVal) return "";
+        if (rawVal instanceof Date && !isNaN(rawVal.getTime())) {
+          const formatted = Utilities.formatDate(rawVal, "GMT+7", "yyyy-MM-dd");
+          const y = parseInt(formatted.substring(0, 4)) || 0;
+          if (y > 2500) return (y - 543) + formatted.substring(4);
+          return formatted;
+        }
+        const text = String(rawVal).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+          const y = parseInt(text.substring(0, 4)) || 0;
+          if (y > 2500) return (y - 543) + text.substring(4, 10);
+          return text.substring(0, 10);
+        }
+        const datePart = text.split(/[\s,]+/)[0] || "";
+        if (datePart.includes("/")) {
+          const dp = datePart.split("/");
+          if (dp.length === 3) {
+            let year = parseInt(dp[2]) || 0;
+            if (year > 2500) year -= 543;
+            return year + "-" + String(parseInt(dp[1]) || 1).padStart(2, "0") + "-" + String(parseInt(dp[0]) || 1).padStart(2, "0");
+          }
+        }
+        return "";
+      };
+
+      const getWppStrict = (productName) => {
+        const p = String(productName || "");
+        if (p.includes("10A")) return 0.00228;
+        if (p.includes("16A")) return 0.00279;
+        if (p.includes("20A")) return 0.00357;
+        if (p.includes("25/32A")) return 0.005335;
+        return null;
+      };
+
+      const result = [];
+      let totalFg = 0, totalNg = 0, totalJobs = 0;
+      const seenBatchIds = {};
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const batchId = String(row[batchIdCol] || "").trim();
+        if (!batchId || batchId.indexOf("SORT-") !== 0) continue;
+        if (seenBatchIds[batchId]) continue;
+        seenBatchIds[batchId] = true;
+
+        const tsDateISO = toCalendarDate(row[timestampCol]);
+        if (!tsDateISO) continue;
+        if (start && tsDateISO < start) continue;
+        if (end && tsDateISO > end) continue;
+
+        const model = String(row[productCol] || "").trim();
+        const wpp = getWppStrict(model);
+        const fg = parseFloat(row[fgCol]) || 0;
+        const ngKg = parseFloat(row[ngKgCol]) || 0;
+        const ngPcs = (ngKg > 0 && wpp) ? Math.round(ngKg / wpp) : 0;
+        const prodDate = (dateCol !== -1 && row[dateCol] instanceof Date) ?
+          Utilities.formatDate(row[dateCol], "GMT+7", "yyyy-MM-dd") :
+          String(row[dateCol] || "").substring(0, 10);
+
+        result.push({
+          batchId: batchId,
+          tsDate: tsDateISO,
+          prodDate: prodDate,
+          model: model,
+          machine: machineCol !== -1 ? String(row[machineCol] || "") : "",
+          shift: shiftCol !== -1 ? String(row[shiftCol] || "") : "",
+          fg: fg,
+          ngKg: ngKg,
+          ngPcs: ngPcs
+        });
+        totalFg += fg;
+        totalNg += ngPcs;
+        totalJobs++;
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true, data: result, totals: { fg: totalFg, ng: totalNg, jobs: totalJobs }
+      })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ success: false, message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
   return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Unknown Action"})).setMimeType(ContentService.MimeType.JSON);
 }
 
