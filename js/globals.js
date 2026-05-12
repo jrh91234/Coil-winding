@@ -480,7 +480,8 @@ window.fetchProductionByTimestamp = async function() {
 
         _sortTsData = json.data || [];
         const t = json.totals || {};
-        const filterLabel = filter === 'sorting' ? 'Sorting' : filter === 'production' ? 'FG' : 'ทั้งหมด';
+        const filterLabels = { all: 'ทั้งหมด', fg_only: 'เฉพาะ FG', ng_only: 'เฉพาะ NG', production: 'งานผลิต', sorting: 'Sorting' };
+        const filterLabel = filterLabels[filter] || 'ทั้งหมด';
         summaryEl.innerHTML = `[${filterLabel}] รวม <b>${t.rows || 0}</b> รายการ · FG <b class="text-green-700">${(t.fg || 0).toLocaleString()}</b> ชิ้น · NG <b class="text-red-600">${(t.ngPcs || 0).toLocaleString()}</b> ชิ้น (<span class="text-gray-600">${(t.ngKg || 0).toLocaleString()} kg</span>)`;
 
         if (_sortTsData.length === 0) {

@@ -742,8 +742,10 @@
                 <div>
                     <label class="text-xs font-bold text-gray-600">ประเภท</label>
                     <select id="sortTs-filter" class="block p-2 border rounded text-sm">
-                        <option value="all">ทั้งหมด (FG + Sorting)</option>
-                        <option value="production">เฉพาะ FG (งานผลิต)</option>
+                        <option value="all">ทั้งหมด</option>
+                        <option value="fg_only">เฉพาะ FG (ไม่มี NG)</option>
+                        <option value="ng_only">เฉพาะ NG (มี NG > 0)</option>
+                        <option value="production">เฉพาะงานผลิต (ไม่รวม Sorting)</option>
                         <option value="sorting">เฉพาะ Sorting (งานคัดแยก)</option>
                     </select>
                 </div>
