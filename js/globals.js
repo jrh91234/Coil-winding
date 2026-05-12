@@ -497,6 +497,7 @@ window.fetchProductionByTimestamp = async function() {
                 <tr>
                     <th class="p-2 text-left">ประเภท</th>
                     <th class="p-2 text-left">Timestamp</th>
+                    <th class="p-2 text-left">เวลา</th>
                     <th class="p-2 text-left">วันที่ผลิต</th>
                     <th class="p-2 text-left">รุ่น</th>
                     <th class="p-2 text-left">เครื่อง</th>
@@ -515,6 +516,7 @@ window.fetchProductionByTimestamp = async function() {
             html += `<tr class="border-b hover:bg-gray-50 ${dateMismatch ? 'bg-yellow-50' : ''}">
                 <td class="p-2"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${typeColor}">${r.type}</span></td>
                 <td class="p-2">${r.tsDate}</td>
+                <td class="p-2 text-[10px] text-gray-500 font-mono">${r.tsTime || '-'}</td>
                 <td class="p-2 ${dateMismatch ? 'text-orange-600 font-bold' : ''}">${r.prodDate}</td>
                 <td class="p-2">${r.model}</td>
                 <td class="p-2">${r.machine}</td>
@@ -536,8 +538,8 @@ window.fetchProductionByTimestamp = async function() {
 
 window.exportProductionTsCsv = function() {
     if (!_sortTsData.length) return;
-    const headers = ['Type','Batch_ID','Timestamp_Date','Production_Date','Model','Machine','Shift','Hour','Recorder','FG','NG_Kg','NG_Pcs'];
-    const rows = _sortTsData.map(r => [r.type, r.batchId, r.tsDate, r.prodDate, r.model, r.machine, r.shift, r.hour, r.recorder, r.fg, r.ngKg, r.ngPcs]);
+    const headers = ['Type','Batch_ID','Timestamp_Date','Timestamp_Time','Production_Date','Model','Machine','Shift','Hour','Recorder','FG','NG_Kg','NG_Pcs'];
+    const rows = _sortTsData.map(r => [r.type, r.batchId, r.tsDate, r.tsTime, r.prodDate, r.model, r.machine, r.shift, r.hour, r.recorder, r.fg, r.ngKg, r.ngPcs]);
     let csv = '﻿' + headers.join(',') + '\n';
     rows.forEach(r => { csv += r.map(v => `"${v}"`).join(',') + '\n'; });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

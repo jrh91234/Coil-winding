@@ -2801,10 +2801,20 @@ function doPost(e) {
           Utilities.formatDate(row[dateCol], "GMT+7", "yyyy-MM-dd") :
           (dateCol !== -1 ? String(row[dateCol] || "").substring(0, 10) : "");
 
+        let tsTime = "";
+        const tsRaw = row[timestampCol];
+        if (tsRaw instanceof Date && !isNaN(tsRaw.getTime())) {
+          tsTime = Utilities.formatDate(tsRaw, "GMT+7", "HH:mm:ss");
+        } else {
+          const m = String(tsRaw || "").match(/(\d{1,2}:\d{2}(:\d{2})?)/);
+          if (m) tsTime = m[1];
+        }
+
         result.push({
           type: isSorting ? "Sorting" : "FG",
           batchId: batchId,
           tsDate: tsDateISO,
+          tsTime: tsTime,
           prodDate: prodDate,
           model: model,
           machine: machineCol !== -1 ? String(row[machineCol] || "") : "",
