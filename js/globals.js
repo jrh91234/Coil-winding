@@ -459,9 +459,10 @@ window.openSortingTimestampQuery = function() {
     modal.classList.remove('hidden');
 };
 
-window.fetchSortingByTimestamp = async function() {
+window.fetchProductionByTimestamp = async function() {
     const start = document.getElementById('sortTs-start').value.trim();
     const end = document.getElementById('sortTs-end').value.trim();
+    const filter = document.getElementById('sortTs-filter').value;
     const resultEl = document.getElementById('sortTs-result');
     const summaryEl = document.getElementById('sortTs-summary');
     if (!start || !end) { alert('กรุณาเลือกวันที่'); return; }
@@ -472,14 +473,15 @@ window.fetchSortingByTimestamp = async function() {
     try {
         const res = await fetch(SCRIPT_URL, {
             method: 'POST',
-            body: JSON.stringify({ action: 'GET_SORTING_BY_TIMESTAMP', start, end })
+            body: JSON.stringify({ action: 'GET_PRODUCTION_BY_TIMESTAMP', start, end, filter })
         });
         const json = await res.json();
         if (!json.success) throw new Error(json.message || 'Error');
 
         _sortTsData = json.data || [];
         const t = json.totals || {};
-        summaryEl.innerHTML = `รวม <b>${t.jobs || 0}</b> จ๊อบ · FG <b class="text-green-700">${(t.fg || 0).toLocaleString()}</b> · NG <b class="text-red-600">${(t.ng || 0).toLocaleString()}</b> ชิ้น`;
+        const filterLabel = filter === 'sorting' ? 'Sorting' : filter === 'production' ? 'FG' : 'ทั้งหมด';
+        summaryEl.innerHTML = `[${filterLabel}] รวม <b>${t.rows || 0}</b> รายการ · FG <b class="text-green-700">${(t.fg || 0).toLocaleString()}</b> ชิ้น · NG <b class="text-red-600">${(t.ngPcs || 0).toLocaleString()}</b> ชิ้น (<span class="text-gray-600">${(t.ngKg || 0).toLocaleString()} kg</span>)`;
 
         if (_sortTsData.length === 0) {
             resultEl.innerHTML = '<p class="text-center text-gray-400 py-8">ไม่พบข้อมูลในช่วงวันที่เลือก</p>';
@@ -492,12 +494,14 @@ window.fetchSortingByTimestamp = async function() {
         let html = `<table class="w-full text-xs border-collapse">
             <thead class="bg-gray-100 sticky top-0">
                 <tr>
-                    <th class="p-2 text-left">Batch ID</th>
-                    <th class="p-2 text-left">วันที่อนุมัติ</th>
+                    <th class="p-2 text-left">ประเภท</th>
+                    <th class="p-2 text-left">Timestamp</th>
                     <th class="p-2 text-left">วันที่ผลิต</th>
                     <th class="p-2 text-left">รุ่น</th>
                     <th class="p-2 text-left">เครื่อง</th>
                     <th class="p-2 text-center">Shift</th>
+                    <th class="p-2 text-left">ชม.</th>
+                    <th class="p-2 text-left">ผู้บันทึก</th>
                     <th class="p-2 text-right">FG</th>
                     <th class="p-2 text-right">NG (kg)</th>
                     <th class="p-2 text-right">NG (ชิ้น)</th>
@@ -506,36 +510,40 @@ window.fetchSortingByTimestamp = async function() {
 
         _sortTsData.forEach(r => {
             const dateMismatch = r.tsDate !== r.prodDate;
+            const typeColor = r.type === 'Sorting' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700';
             html += `<tr class="border-b hover:bg-gray-50 ${dateMismatch ? 'bg-yellow-50' : ''}">
-                <td class="p-2 font-mono">${r.batchId}</td>
+                <td class="p-2"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${typeColor}">${r.type}</span></td>
                 <td class="p-2">${r.tsDate}</td>
                 <td class="p-2 ${dateMismatch ? 'text-orange-600 font-bold' : ''}">${r.prodDate}</td>
                 <td class="p-2">${r.model}</td>
                 <td class="p-2">${r.machine}</td>
                 <td class="p-2 text-center">${r.shift}</td>
+                <td class="p-2 text-[10px]">${r.hour}</td>
+                <td class="p-2 text-[10px]">${r.recorder}</td>
                 <td class="p-2 text-right text-green-700 font-bold">${r.fg.toLocaleString()}</td>
-                <td class="p-2 text-right text-gray-500">${r.ngKg.toFixed(3)}</td>
-                <td class="p-2 text-right text-red-600 font-bold">${r.ngPcs.toLocaleString()}</td>
+                <td class="p-2 text-right text-gray-500">${r.ngKg > 0 ? r.ngKg.toFixed(3) : '-'}</td>
+                <td class="p-2 text-right text-red-600 font-bold">${r.ngPcs > 0 ? r.ngPcs.toLocaleString() : '-'}</td>
             </tr>`;
         });
         html += '</tbody></table>';
-        html += '<p class="text-[10px] text-gray-400 mt-2">* แถวสีเหลือง = วันที่ผลิตไม่ตรงกับวันที่อนุมัติ (บันทึกย้อนหลัง)</p>';
+        html += '<p class="text-[10px] text-gray-400 mt-2">* แถวสีเหลือง = วันที่ผลิตไม่ตรงกับ Timestamp (บันทึกย้อนหลัง) · <span class="px-1 bg-pink-100 text-pink-700 rounded">Sorting</span> = งานคัดแยก · <span class="px-1 bg-blue-100 text-blue-700 rounded">FG</span> = งานผลิตปกติ</p>';
         resultEl.innerHTML = html;
     } catch (e) {
         resultEl.innerHTML = `<p class="text-center text-red-500 py-8">${e.message}</p>`;
     }
 };
 
-window.exportSortingTsCsv = function() {
+window.exportProductionTsCsv = function() {
     if (!_sortTsData.length) return;
-    const headers = ['Batch_ID','Timestamp_Date','Production_Date','Model','Machine','Shift','FG','NG_Kg','NG_Pcs'];
-    const rows = _sortTsData.map(r => [r.batchId, r.tsDate, r.prodDate, r.model, r.machine, r.shift, r.fg, r.ngKg, r.ngPcs]);
+    const headers = ['Type','Batch_ID','Timestamp_Date','Production_Date','Model','Machine','Shift','Hour','Recorder','FG','NG_Kg','NG_Pcs'];
+    const rows = _sortTsData.map(r => [r.type, r.batchId, r.tsDate, r.prodDate, r.model, r.machine, r.shift, r.hour, r.recorder, r.fg, r.ngKg, r.ngPcs]);
     let csv = '﻿' + headers.join(',') + '\n';
     rows.forEach(r => { csv += r.map(v => `"${v}"`).join(',') + '\n'; });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `sorting_by_timestamp_${document.getElementById('sortTs-start').value}_${document.getElementById('sortTs-end').value}.csv`;
+    const filter = document.getElementById('sortTs-filter').value;
+    a.download = `production_by_timestamp_${filter}_${document.getElementById('sortTs-start').value}_${document.getElementById('sortTs-end').value}.csv`;
     a.click();
 };
 

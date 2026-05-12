@@ -308,7 +308,7 @@
                         📗 ดาวน์โหลด Excel
                     </button>
                     <button onclick="window.openSortingTimestampQuery()" class="flex-1 lg:flex-none bg-pink-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-pink-700 transition-colors shadow-sm flex items-center justify-center gap-1">
-                        📦 Sorting by Timestamp
+                        📦 ดึงตาม Timestamp
                     </button>
                 </div>
             </div>
@@ -723,30 +723,38 @@
         </div>
     </div>
 
-    <!-- 🌟 MODAL: Sorting by Timestamp (Reconcile Stock) 🌟 -->
+    <!-- 🌟 MODAL: Production by Timestamp (Reconcile Stock) 🌟 -->
     <div id="modal-sorting-ts" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white w-full max-w-4xl rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
+        <div class="bg-white w-full max-w-5xl rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
             <div class="p-4 border-b flex justify-between items-center bg-pink-600 text-white rounded-t-xl">
-                <h3 class="text-lg font-bold">📦 Sorting by Timestamp (ดึงงานตามวันที่อนุมัติ)</h3>
+                <h3 class="text-lg font-bold">📦 ดึงข้อมูลตาม Timestamp (สำหรับ Reconcile สต๊อก)</h3>
                 <button onclick="document.getElementById('modal-sorting-ts').classList.add('hidden')" class="text-white hover:text-pink-100 text-2xl font-bold">&times;</button>
             </div>
             <div class="p-4 bg-pink-50 border-b flex flex-wrap gap-3 items-end">
                 <div>
-                    <label class="text-xs font-bold text-gray-600">วันที่อนุมัติ (เริ่ม)</label>
+                    <label class="text-xs font-bold text-gray-600">Timestamp เริ่ม</label>
                     <input type="date" id="sortTs-start" class="block p-2 border rounded text-sm">
                 </div>
                 <div>
-                    <label class="text-xs font-bold text-gray-600">วันที่อนุมัติ (สิ้นสุด)</label>
+                    <label class="text-xs font-bold text-gray-600">Timestamp สิ้นสุด</label>
                     <input type="date" id="sortTs-end" class="block p-2 border rounded text-sm">
                 </div>
-                <button onclick="window.fetchSortingByTimestamp()" class="bg-pink-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-pink-700">🔍 ค้นหา</button>
+                <div>
+                    <label class="text-xs font-bold text-gray-600">ประเภท</label>
+                    <select id="sortTs-filter" class="block p-2 border rounded text-sm">
+                        <option value="all">ทั้งหมด (FG + Sorting)</option>
+                        <option value="production">เฉพาะ FG (งานผลิต)</option>
+                        <option value="sorting">เฉพาะ Sorting (งานคัดแยก)</option>
+                    </select>
+                </div>
+                <button onclick="window.fetchProductionByTimestamp()" class="bg-pink-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-pink-700">🔍 ค้นหา</button>
                 <div id="sortTs-summary" class="text-xs text-gray-500 ml-auto"></div>
             </div>
             <div id="sortTs-result" class="flex-1 overflow-y-auto p-4">
                 <p class="text-center text-gray-400 py-8">เลือกวันที่แล้วกด ค้นหา</p>
             </div>
             <div class="p-3 border-t flex justify-end gap-2">
-                <button onclick="window.exportSortingTsCsv()" id="btn-export-sortTs" class="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-700 hidden">📗 Export CSV</button>
+                <button onclick="window.exportProductionTsCsv()" id="btn-export-sortTs" class="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-700 hidden">📗 Export CSV</button>
                 <button onclick="document.getElementById('modal-sorting-ts').classList.add('hidden')" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-bold hover:bg-gray-300">ปิด</button>
             </div>
         </div>

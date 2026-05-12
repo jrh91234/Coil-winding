@@ -2710,11 +2710,11 @@ function doPost(e) {
 
   // ===================== Sorting by Timestamp (สำหรับ reconcile สต๊อก) =====================
 
-  if (action === "GET_SORTING_BY_TIMESTAMP") {
+  if (action === "GET_PRODUCTION_BY_TIMESTAMP") {
     try {
       const sheet = ss.getSheetByName("Production_Data");
       if (!sheet || sheet.getLastRow() <= 1) {
-        return ContentService.createTextOutput(JSON.stringify({ success: true, data: [], totals: { fg: 0, ng: 0, jobs: 0 } })).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ success: true, data: [], totals: { fg: 0, ngPcs: 0, ngKg: 0, rows: 0 } })).setMimeType(ContentService.MimeType.JSON);
       }
       const rows = sheet.getDataRange().getValues();
       const headers = rows[0].map(h => String(h || "").trim());
@@ -2727,13 +2727,16 @@ function doPost(e) {
       const dateCol = getCol("Date");
       const shiftCol = getCol("Shift");
       const machineCol = getCol("Machine");
+      const hourCol = getCol("Hour");
+      const recorderCol = getCol("Recorder");
 
-      if (timestampCol === -1 || batchIdCol === -1) {
-        return ContentService.createTextOutput(JSON.stringify({ success: true, data: [], totals: { fg: 0, ng: 0, jobs: 0 } })).setMimeType(ContentService.MimeType.JSON);
+      if (timestampCol === -1) {
+        return ContentService.createTextOutput(JSON.stringify({ success: true, data: [], totals: { fg: 0, ngPcs: 0, ngKg: 0, rows: 0 } })).setMimeType(ContentService.MimeType.JSON);
       }
 
       const start = String(data.start || "").trim();
       const end = String(data.end || "").trim();
+      const filterType = String(data.filter || "all").trim();
 
       const toCalendarDate = (rawVal) => {
         if (!rawVal) return "";
@@ -2771,15 +2774,15 @@ function doPost(e) {
       };
 
       const result = [];
-      let totalFg = 0, totalNg = 0, totalJobs = 0;
-      const seenBatchIds = {};
+      let totalFg = 0, totalNgPcs = 0, totalNgKg = 0, totalRows = 0;
 
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
-        const batchId = String(row[batchIdCol] || "").trim();
-        if (!batchId || batchId.indexOf("SORT-") !== 0) continue;
-        if (seenBatchIds[batchId]) continue;
-        seenBatchIds[batchId] = true;
+        const batchId = (batchIdCol !== -1) ? String(row[batchIdCol] || "").trim() : "";
+        const isSorting = batchId.indexOf("SORT-") === 0;
+
+        if (filterType === "sorting" && !isSorting) continue;
+        if (filterType === "production" && isSorting) continue;
 
         const tsDateISO = toCalendarDate(row[timestampCol]);
         if (!tsDateISO) continue;
@@ -2793,26 +2796,28 @@ function doPost(e) {
         const ngPcs = (ngKg > 0 && wpp) ? Math.round(ngKg / wpp) : 0;
         const prodDate = (dateCol !== -1 && row[dateCol] instanceof Date) ?
           Utilities.formatDate(row[dateCol], "GMT+7", "yyyy-MM-dd") :
-          String(row[dateCol] || "").substring(0, 10);
+          (dateCol !== -1 ? String(row[dateCol] || "").substring(0, 10) : "");
 
         result.push({
+          type: isSorting ? "Sorting" : "FG",
           batchId: batchId,
           tsDate: tsDateISO,
           prodDate: prodDate,
           model: model,
           machine: machineCol !== -1 ? String(row[machineCol] || "") : "",
           shift: shiftCol !== -1 ? String(row[shiftCol] || "") : "",
+          hour: hourCol !== -1 ? String(row[hourCol] || "") : "",
+          recorder: recorderCol !== -1 ? String(row[recorderCol] || "") : "",
           fg: fg,
           ngKg: ngKg,
           ngPcs: ngPcs
         });
         totalFg += fg;
-        totalNg += ngPcs;
-        totalJobs++;
+        totalRows++;
       }
 
       return ContentService.createTextOutput(JSON.stringify({
-        success: true, data: result, totals: { fg: totalFg, ng: totalNg, jobs: totalJobs }
+        success: true, data: result, totals: { fg: totalFg, ngPcs: totalNgPcs, ngKg: Math.round(totalNgKg * 10000) / 10000, rows: totalRows }
       })).setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
       return ContentService.createTextOutput(JSON.stringify({ success: false, message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
