@@ -2729,6 +2729,7 @@ function doPost(e) {
       const machineCol = getCol("Machine");
       const hourCol = getCol("Hour");
       const recorderCol = getCol("Recorder");
+      const ngJsonCol = getCol("NG_Details_JSON");
 
       if (timestampCol === -1) {
         return ContentService.createTextOutput(JSON.stringify({ success: true, data: [], totals: { fg: 0, ngPcs: 0, ngKg: 0, rows: 0 } })).setMimeType(ContentService.MimeType.JSON);
@@ -2823,8 +2824,15 @@ function doPost(e) {
           recorder: recorderCol !== -1 ? String(row[recorderCol] || "") : "",
           fg: fg,
           ngKg: ngKg,
-          ngPcs: ngPcs
+          ngPcs: ngPcs,
+          ngSymptom: ""
         });
+        if (ngKg > 0 && ngJsonCol !== -1) {
+          try {
+            const details = JSON.parse(String(row[ngJsonCol] || "[]"));
+            result[result.length - 1].ngSymptom = details.map(d => d.type || d.symptom || "").filter(Boolean).join(", ");
+          } catch(e) {}
+        }
         totalFg += fg;
         totalRows++;
       }
