@@ -2785,6 +2785,9 @@ function doPost(e) {
         const wpp = getWppStrict(model);
         const fg = parseFloat(row[fgCol]) || 0;
         const ngKg = parseFloat(row[ngKgCol]) || 0;
+
+        if (filterType === "fg_only" && ngKg > 0) continue;
+        if (filterType === "ng_only" && ngKg <= 0) continue;
         const ngPcs = (ngKg > 0 && wpp) ? Math.round(ngKg / wpp) : 0;
         const prodDate = (dateCol !== -1 && row[dateCol] instanceof Date) ?
           Utilities.formatDate(row[dateCol], "GMT+7", "yyyy-MM-dd") :
