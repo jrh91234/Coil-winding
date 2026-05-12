@@ -507,6 +507,7 @@ window.fetchProductionByTimestamp = async function() {
                     <th class="p-2 text-right">FG</th>
                     <th class="p-2 text-right">NG (kg)</th>
                     <th class="p-2 text-right">NG (ชิ้น)</th>
+                    <th class="p-2 text-left">อาการ NG</th>
                 </tr>
             </thead><tbody>`;
 
@@ -526,6 +527,7 @@ window.fetchProductionByTimestamp = async function() {
                 <td class="p-2 text-right text-green-700 font-bold">${r.fg.toLocaleString()}</td>
                 <td class="p-2 text-right text-gray-500">${r.ngKg > 0 ? r.ngKg.toFixed(3) : '-'}</td>
                 <td class="p-2 text-right text-red-600 font-bold">${r.ngPcs > 0 ? r.ngPcs.toLocaleString() : '-'}</td>
+                <td class="p-2 text-[10px] text-gray-600">${r.ngSymptom || '-'}</td>
             </tr>`;
         });
         html += '</tbody></table>';
@@ -538,8 +540,8 @@ window.fetchProductionByTimestamp = async function() {
 
 window.exportProductionTsCsv = function() {
     if (!_sortTsData.length) return;
-    const headers = ['Type','Batch_ID','Timestamp_Date','Timestamp_Time','Production_Date','Model','Machine','Shift','Hour','Recorder','FG','NG_Kg','NG_Pcs'];
-    const rows = _sortTsData.map(r => [r.type, r.batchId, r.tsDate, r.tsTime, r.prodDate, r.model, r.machine, r.shift, r.hour, r.recorder, r.fg, r.ngKg, r.ngPcs]);
+    const headers = ['Type','Batch_ID','Timestamp_Date','Timestamp_Time','Production_Date','Model','Machine','Shift','Hour','Recorder','FG','NG_Kg','NG_Pcs','NG_Symptom'];
+    const rows = _sortTsData.map(r => [r.type, r.batchId, r.tsDate, r.tsTime, r.prodDate, r.model, r.machine, r.shift, r.hour, r.recorder, r.fg, r.ngKg, r.ngPcs, r.ngSymptom || '']);
     let csv = '﻿' + headers.join(',') + '\n';
     rows.forEach(r => { csv += r.map(v => `"${v}"`).join(',') + '\n'; });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
