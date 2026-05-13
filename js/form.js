@@ -569,9 +569,34 @@ document.getElementById('productionForm').onsubmit = async (e) => {
 
         if (hasError) {
             alert("⚠️ ปฏิเสธการบันทึก!\n\n" + errorMsg + "\nไม่อนุญาตให้บันทึกยอด FG เกิน 2,000 ตัวในชั่วโมงเดียวกัน กรุณาตรวจสอบใหม่อีกครั้ง");
-            btn.disabled = false; 
-            btn.innerText = txt; 
-            return; 
+            btn.disabled = false;
+            btn.innerText = txt;
+            return;
+        }
+
+        // ตรวจสอบ NG ซ้ำ
+        const itemsWithNg = items.filter(it => it.ngDetails && it.ngDetails.length > 0);
+        if (itemsWithNg.length > 0) {
+            try {
+                btn.innerText = "⏳ ตรวจสอบ NG ซ้ำ...";
+                const dupRes = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'CHECK_NG_DUPLICATE', date, hour: hourSlot, items: itemsWithNg })
+                });
+                const dupData = await dupRes.json();
+                if (dupData.duplicates && dupData.duplicates.length > 0) {
+                    let dupMsg = "⚠️ พบข้อมูล NG ที่อาจซ้ำกับที่บันทึกไปแล้ว:\n\n";
+                    dupData.duplicates.forEach(d => {
+                        dupMsg += `• ${d.machine} | ${d.hour} | ${d.symptom} | จำนวน ${d.qty}\n`;
+                    });
+                    dupMsg += "\nต้องการบันทึกซ้ำหรือไม่?";
+                    if (!confirm(dupMsg)) {
+                        btn.disabled = false;
+                        btn.innerText = txt;
+                        return;
+                    }
+                }
+            } catch(e) { /* ถ้าเช็คไม่ได้ ให้ผ่านไปบันทึกตามปกติ */ }
         }
 
         const confirmSave = confirm(validationMsg + "✅ ข้อมูลถูกต้อง ยืนยันที่จะบันทึกใช่หรือไม่?");

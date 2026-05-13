@@ -2700,6 +2700,90 @@ function doPost(e) {
     }
   }
 
+  // ===================== NG Duplicate Check =====================
+
+  if (action === "CHECK_NG_DUPLICATE") {
+    try {
+      const sheet = ss.getSheetByName("Production_Data");
+      if (!sheet || sheet.getLastRow() <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({ success: true, duplicates: [] })).setMimeType(ContentService.MimeType.JSON);
+      }
+      const rows = sheet.getDataRange().getValues();
+      const headers = rows[0].map(h => String(h || "").trim());
+      const getCol = (name) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+      const dateCol = getCol("Date");
+      const machineCol = getCol("Machine");
+      const hourCol = getCol("Hour");
+      const ngKgCol = getCol("NG_Total");
+      const ngJsonCol = getCol("NG_Details_JSON");
+
+      const checkDate = String(data.date || "").trim();
+      const checkItems = data.items || [];
+      if (!checkDate || checkItems.length === 0) {
+        return ContentService.createTextOutput(JSON.stringify({ success: true, duplicates: [] })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const existingRows = [];
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const rowDate = (dateCol !== -1 && row[dateCol] instanceof Date) ?
+          Utilities.formatDate(row[dateCol], "GMT+7", "yyyy-MM-dd") :
+          (dateCol !== -1 ? String(row[dateCol] || "").substring(0, 10) : "");
+        if (rowDate !== checkDate) continue;
+        const ngKg = parseFloat(row[ngKgCol]) || 0;
+        if (ngKg <= 0) continue;
+
+        let symptoms = [];
+        if (ngJsonCol !== -1) {
+          try { symptoms = JSON.parse(String(row[ngJsonCol] || "[]")); } catch(e) {}
+        }
+
+        existingRows.push({
+          machine: machineCol !== -1 ? String(row[machineCol] || "").trim() : "",
+          hour: hourCol !== -1 ? String(row[hourCol] || "").trim() : "",
+          ngKg: ngKg,
+          symptoms: symptoms
+        });
+      }
+
+      const duplicates = [];
+      const checkHour = String(data.hour || "").trim();
+
+      checkItems.forEach(item => {
+        const itemMachine = String(item.machine || "").trim();
+        const itemNgDetails = item.ngDetails || [];
+        if (itemNgDetails.length === 0) return;
+
+        itemNgDetails.forEach(ng => {
+          const ngType = String(ng.type || "").trim().toLowerCase();
+          const ngQty = parseFloat(ng.qty) || 0;
+          if (ngQty <= 0) return;
+
+          existingRows.forEach(ex => {
+            if (ex.machine !== itemMachine) return;
+            if (checkHour && ex.hour !== checkHour) return;
+            ex.symptoms.forEach(s => {
+              const exType = String(s.type || s.symptom || "").trim().toLowerCase();
+              const exQty = parseFloat(s.qty) || 0;
+              if (exType === ngType && Math.abs(exQty - ngQty) < 0.001) {
+                duplicates.push({
+                  machine: itemMachine,
+                  hour: ex.hour,
+                  symptom: ng.type,
+                  qty: ngQty
+                });
+              }
+            });
+          });
+        });
+      });
+
+      return ContentService.createTextOutput(JSON.stringify({ success: true, duplicates: duplicates })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ success: true, duplicates: [] })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
   // ===================== Sorting by Timestamp (สำหรับ reconcile สต๊อก) =====================
 
   if (action === "GET_PRODUCTION_BY_TIMESTAMP") {
