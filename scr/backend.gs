@@ -2921,6 +2921,37 @@ function doPost(e) {
     }
   }
 
+  if (action === "UNINSTALL_PART") {
+    try {
+      var instId = data.installId;
+      if (!instId) throw new Error("Missing installId");
+      var sheet = ss.getSheetByName("Parts_Installation");
+      if (!sheet) throw new Error("Parts_Installation sheet not found");
+      var rows = sheet.getDataRange().getValues();
+      var headers = rows[0].map(function(h) { return String(h).trim(); });
+      var colIdx = function(name) { return headers.indexOf(name); };
+      var found = false;
+      for (var i = 1; i < rows.length; i++) {
+        if (String(rows[i][colIdx("Install_ID")]).trim() === instId) {
+          if (String(rows[i][colIdx("Status")]).trim() !== "Active") {
+            throw new Error("อะไหล่นี้ไม่ได้อยู่ในสถานะ Active");
+          }
+          var now = new Date();
+          var todayStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+          sheet.getRange(i + 1, colIdx("Status") + 1).setValue("Removed");
+          sheet.getRange(i + 1, colIdx("Replaced_Date") + 1).setValue(todayStr);
+          SpreadsheetApp.flush();
+          found = true;
+          break;
+        }
+      }
+      if (!found) throw new Error("ไม่พบ Install_ID: " + instId);
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Uninstalled" })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
   return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Unknown Action"})).setMimeType(ContentService.MimeType.JSON);
 }
 
