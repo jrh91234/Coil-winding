@@ -214,7 +214,7 @@ window.renderNgItem = function(container, label, qty, remark, isCustom=false, se
         <div class="flex justify-between items-center mb-1">
             <div class="flex-1">${typeInput}</div>
             <div class="flex items-center ml-2">
-                <input type="number" class="ng-input-qty w-20 p-1 border rounded text-right" value="${qty}" placeholder="0.00" min="0" step="0.01">
+                <input type="number" class="ng-input-qty w-20 p-1 border rounded text-right" value="${qty}" placeholder="0.00" min="0" step="any">
                 <span class="text-xs text-gray-500 ml-1">Kg</span>
             </div>
         </div>${setupDropdownHtml}
@@ -289,7 +289,7 @@ window.saveCurrentNgInputs = function() {
     const fgInput = document.querySelector(`#${currentRowIdForNg} input[name="fgAmount"]`);
     
     if(total > 0) { 
-        badge.innerText = window.formatNumber ? window.formatNumber(total, 2) : total.toFixed(2); 
+        badge.innerText = total.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 6 });
         badge.classList.remove('hidden'); 
         if (fgInput) {
             fgInput.value = 0;
