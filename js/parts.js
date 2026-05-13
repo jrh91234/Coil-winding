@@ -177,10 +177,11 @@ function renderPartsTable() {
             : '<span class="text-gray-300">-</span>';
 
         // ปุ่ม 🔍 ตรวจเช็ค — แสดงเฉพาะกรณีมี active installation
+        const escNameAction = (p.Part_Name || '').replace(/'/g, "\\'");
         const checkBtnHtml = installations.length > 0
             ? installations.map(inst => {
                 const highlight = inst.needsCheck ? 'text-orange-600 font-bold' : 'text-orange-500';
-                return `<button onclick="window.openCheckPartDialog('${inst.installId}', '${p.Part_ID}', '${(p.Part_Name || '').replace(/'/g, "\\'")}', '${inst.machine}', ${inst.actualShots}, ${inst.lifeShots}, ${inst.nextCheckShot}, ${inst.checkInterval})" class="${highlight} hover:underline text-xs mr-2" title="ตรวจเช็คอะไหล่ที่ติดตั้งบน ${inst.machine}">🔍 เช็ค(${inst.machine})</button>`;
+                return `<button onclick="window.openCheckPartDialog('${inst.installId}', '${p.Part_ID}', '${escNameAction}', '${inst.machine}', ${inst.actualShots}, ${inst.lifeShots}, ${inst.nextCheckShot}, ${inst.checkInterval})" class="${highlight} hover:underline text-xs mr-1" title="ตรวจเช็คอะไหล่ที่ติดตั้งบน ${inst.machine}">🔍 เช็ค(${inst.machine})</button><button onclick="window.uninstallPart('${inst.installId}', '${inst.machine}', '${escNameAction}')" class="text-red-400 hover:text-red-600 hover:underline text-xs mr-2" title="ถอดอะไหล่ออกจาก ${inst.machine}">⏏️ ถอด(${inst.machine})</button>`;
             }).join('')
             : '';
 
