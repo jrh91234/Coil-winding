@@ -416,6 +416,7 @@ window.loadMachineParts = async function(machine) {
                     <button onclick="window.openCheckPartDialog('${inst.Install_ID}', '${inst.Part_ID}', '${escName}', '${machine}', ${usedShots}, ${lifeShots}, ${nextCheckShot}, ${checkInterval})" class="text-xs ${checkBtnClass} hover:underline">🔍 ตรวจเช็ค</button>
                     <button onclick="window.showCheckHistory('${inst.Install_ID}', '${escName}', '${inst.Part_ID}')" class="text-xs text-gray-600 hover:underline">📋 ประวัติ${checkCount > 0 ? ` (${checkCount})` : ''}</button>
                     <button onclick="window.promptReplacepart('${inst.Install_ID}', '${machine}', '${inst.Part_ID}', '${escName}', ${lifeShots})" class="text-xs text-orange-600 hover:underline">🔄 เปลี่ยน / ย้าย</button>
+                    <button onclick="window.uninstallPart('${inst.Install_ID}', '${machine}', '${escName}')" class="text-xs text-red-500 hover:underline">⏏️ ถอดออก</button>
                     <button onclick="window.promptUpdateLife('${inst.Install_ID}', ${lifeShots})" class="text-xs text-blue-600 hover:underline">📏 ปรับอายุ</button>
                 </div>
             </div>`;
@@ -428,6 +429,26 @@ window.loadMachineParts = async function(machine) {
 };
 
 // เปิด dialog สำหรับเปลี่ยน/ย้ายอะไหล่ (ใช้ modal เดียวกับ install ใหม่)
+window.uninstallPart = async function(installId, machine, partName) {
+    if (!confirm(`⚠️ ยืนยันถอดอะไหล่ "${partName}" ออกจากเครื่อง ${machine}?\n\nอะไหล่จะถูกเปลี่ยนสถานะเป็น "Removed" โดยไม่ติดตั้งเครื่องอื่น`)) return;
+    try {
+        const res = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'UNINSTALL_PART', installId: installId })
+        });
+        const result = await res.json();
+        if (result.status === 'success') {
+            alert('✅ ถอดอะไหล่สำเร็จ');
+            window.loadMachineParts(machine);
+            if (typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
+        } else {
+            alert('เกิดข้อผิดพลาด: ' + (result.message || ''));
+        }
+    } catch (err) {
+        alert('เกิดข้อผิดพลาด: ' + err.message);
+    }
+};
+
 window.promptReplacepart = function(installId, machine, partId, partName, lifeShots) {
     window.openInstallPartDialog(partId, partName, lifeShots, {
         prevInstallId: installId,
