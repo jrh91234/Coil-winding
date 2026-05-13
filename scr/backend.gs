@@ -1163,12 +1163,26 @@ function doPost(e) {
       SpreadsheetApp.flush();
       return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId, carriedShots: newCarried, carriedDays: newCarriedDays, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot})).setMimeType(ContentService.MimeType.JSON);
     } else {
-      // ติดตั้งอะไหล่ใหม่ (Carried_Shots = 0, Carried_Days = 0)
+      // ติดตั้งอะไหล่ใหม่ — เช็คว่ามีรายการ "Removed" ของ Part_ID เดียวกันหรือไม่ เพื่อ carry-over shot/days
+      const allRows = sheet.getDataRange().getValues();
+      const allHeaders = allRows[0].map(h => String(h).trim());
+      const ci = (name) => allHeaders.indexOf(name);
+      let carryShots = 0, carryDays = 0, removedRowIdx = -1;
+      for (let r = allRows.length - 1; r >= 1; r--) {
+        if (String(allRows[r][ci("Part_ID")]).trim() === d.Part_ID && String(allRows[r][ci("Status")]).trim() === "Removed") {
+          carryShots = parseInt(allRows[r][ci("Carried_Shots")]) || 0;
+          carryDays = parseInt(allRows[r][ci("Carried_Days")]) || 0;
+          removedRowIdx = r;
+          break;
+        }
+      }
+      if (removedRowIdx > 0) {
+        sheet.getRange(removedRowIdx + 1, ci("Status") + 1).setValue("Reinstalled");
+      }
       const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
       const hdr = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
-      // คำนวณ Install_Shot ณ วันที่ติดตั้ง (shot สะสมถึงวันนั้น)
       const newInstallShot = calcMachineShots(ss, d.Machine, "2020-01-01", installDateOnly);
-      const newNextCheckShot = (checkInterval > 0) ? checkInterval : 0;
+      const newNextCheckShot = (checkInterval > 0) ? (carryShots + checkInterval) : 0;
       const rowData = hdr.map(function(h) {
         switch(h) {
           case "Install_ID": return newId;
@@ -1182,8 +1196,8 @@ function doPost(e) {
           case "Maint_Job_ID": return d.Maint_Job_ID || "";
           case "Recorder": return d.Recorder || "";
           case "Replaced_Date": return "";
-          case "Carried_Shots": return 0;
-          case "Carried_Days": return 0;
+          case "Carried_Shots": return carryShots;
+          case "Carried_Days": return carryDays;
           case "Check_Interval_Shots": return checkInterval;
           case "Next_Check_Shot": return newNextCheckShot;
           case "Last_Check_Date": return "";
@@ -1193,7 +1207,8 @@ function doPost(e) {
       });
       sheet.appendRow(rowData);
       SpreadsheetApp.flush();
-      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Installed", installId: newId, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot})).setMimeType(ContentService.MimeType.JSON);
+      var msg = carryShots > 0 ? "Installed (carry-over " + carryShots + " shots, " + carryDays + " days)" : "Installed";
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: msg, installId: newId, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot, carriedShots: carryShots, carriedDays: carryDays})).setMimeType(ContentService.MimeType.JSON);
     }
   }
 
@@ -2938,8 +2953,26 @@ function doPost(e) {
           }
           var now = new Date();
           var todayStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+          var oldMachine = String(rows[i][colIdx("Machine")] || "").trim();
+          var oldInstallShot = parseInt(rows[i][colIdx("Install_Shot")]) || 0;
+          var oldCarried = parseInt(rows[i][colIdx("Carried_Shots")]) || 0;
+          var oldCarriedDays = parseInt(rows[i][colIdx("Carried_Days")]) || 0;
+          var oldInstDateRaw = rows[i][colIdx("Install_Date")];
+          var oldInstallDateStr = "";
+          if (oldInstDateRaw instanceof Date && !isNaN(oldInstDateRaw.getTime())) {
+            oldInstallDateStr = Utilities.formatDate(oldInstDateRaw, "GMT+7", "yyyy-MM-dd");
+          } else {
+            oldInstallDateStr = String(oldInstDateRaw || "").trim().substring(0, 10);
+          }
+          var machineShots = oldMachine ? calcMachineShots(ss, oldMachine, "2020-01-01", todayStr) : 0;
+          var shotsOnMachine = Math.max(0, machineShots - oldInstallShot);
+          var finalCarried = oldCarried + shotsOnMachine;
+          var daysOnMachine = (oldInstallDateStr && todayStr) ? Math.max(0, daysBetween(oldInstallDateStr, todayStr)) : 0;
+          var finalCarriedDays = oldCarriedDays + daysOnMachine;
           sheet.getRange(i + 1, colIdx("Status") + 1).setValue("Removed");
           sheet.getRange(i + 1, colIdx("Replaced_Date") + 1).setValue(todayStr);
+          sheet.getRange(i + 1, colIdx("Carried_Shots") + 1).setValue(finalCarried);
+          sheet.getRange(i + 1, colIdx("Carried_Days") + 1).setValue(finalCarriedDays);
           SpreadsheetApp.flush();
           found = true;
           break;
