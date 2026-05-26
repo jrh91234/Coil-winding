@@ -354,11 +354,11 @@ window.switchTab = function(tab) {
     // จำกัดสิทธิ์
     if (role === 'Production' && (tab === 'planning' || tab === 'admin' || tab === 'cost')) return;
     if (role === 'QC' && (tab === 'planning' || tab === 'admin' || tab === 'packing' || tab === 'parts' || tab === 'cost')) return;
-    if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin' || tab === 'maint' || tab === 'rtv' || tab === 'packing' || tab === 'sort' || tab === 'parts' || tab === 'cost')) return;
+    if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin' || tab === 'maint' || tab === 'rtv' || tab === 'scrap' || tab === 'packing' || tab === 'sort' || tab === 'parts' || tab === 'cost')) return;
     if (role === 'Viewer' && tab !== 'dashboard') return;
 
     // สลับหน้าจอ Section (แยกเมนูที่เป็นลิงก์ออก ไม่ต้องนำมาจัดการในนี้)
-    ['inbox', 'form', 'planning', 'dashboard', 'admin', 'rtv', 'packing', 'parts', 'cost'].forEach(t => {
+    ['inbox', 'form', 'planning', 'dashboard', 'admin', 'rtv', 'scrap', 'packing', 'parts', 'cost'].forEach(t => {
         const el = document.getElementById('section-'+t);
         if(el) el.classList.toggle('hidden', t !== tab);
 
@@ -377,6 +377,7 @@ window.switchTab = function(tab) {
     if(tab === 'dashboard' && typeof window.loadDashboard === 'function') window.loadDashboard();
     if(tab === 'parts' && typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
     if(tab === 'cost' && typeof window.loadCostModule === 'function') window.loadCostModule();
+    if(tab === 'scrap' && typeof window.refreshScrapRecorder === 'function') window.refreshScrapRecorder();
 };
 
 function applyPermissions() {
@@ -388,7 +389,7 @@ function applyPermissions() {
     const mobileSortIds = ['tab-sort', 'tab-sort-mobile'];
 
     // 1. ซ่อนเมนูทั้งหมดก่อน รวมถึงปุ่ม Sort ทุกแบบที่อาจมี
-    const allMenus = ['tab-inbox', 'tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-parts', 'tab-rtv', 'tab-packing', 'tab-cost', ...desktopSortIds, ...mobileSortIds];
+    const allMenus = ['tab-inbox', 'tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-admin', 'tab-maint', 'tab-parts', 'tab-rtv', 'tab-scrap', 'tab-packing', 'tab-cost', ...desktopSortIds, ...mobileSortIds];
     
     allMenus.forEach(id => {
         const el = document.getElementById(id);
@@ -403,11 +404,11 @@ function applyPermissions() {
 
     // 2. กำหนดว่า Role ไหนเห็นเมนูไหนบ้าง
     if (role === 'Production') {
-        allowedMenus = ['tab-inbox', 'tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-parts', 'tab-rtv', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
+        allowedMenus = ['tab-inbox', 'tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-parts', 'tab-rtv', 'tab-scrap', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
         defaultTab = 'form';
     }
     else if (role === 'QC') {
-        allowedMenus = ['tab-inbox', 'tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv', ...desktopSortIds, ...mobileSortIds];
+        allowedMenus = ['tab-inbox', 'tab-form', 'tab-dashboard', 'tab-rw', 'tab-rtv', 'tab-scrap', ...desktopSortIds, ...mobileSortIds];
         defaultTab = 'form';
     }
     else if (role === 'Planning') {
