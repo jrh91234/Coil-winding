@@ -106,6 +106,7 @@
             <button onclick="window.openMaintenanceModal(); window.toggleMenu()" id="tab-maint" class="hidden py-4 px-6 text-left text-orange-600 font-bold border-l-4 border-transparent hover:bg-orange-50 transition-colors text-lg border-t border-gray-100">🛠️ แจ้งซ่อมเครื่องจักร</button>
             <button onclick="window.switchTab('parts'); window.toggleMenu()" id="tab-parts" class="hidden py-4 px-6 text-left text-cyan-600 font-bold border-l-4 border-transparent hover:bg-cyan-50 transition-colors text-lg border-t border-gray-100">⚙️ จัดการอะไหล่เครื่องจักร</button>
             <button onclick="window.switchTab('rtv'); window.toggleMenu()" id="tab-rtv" class="hidden py-4 px-6 text-left text-teal-600 font-bold border-l-4 border-transparent hover:bg-teal-50 transition-colors text-lg border-t border-gray-100">📦 บันทึกงานเคลม (RTV)</button>
+            <button onclick="window.switchTab('scrap'); window.toggleMenu()" id="tab-scrap" class="hidden py-4 px-6 text-left text-amber-700 font-bold border-l-4 border-transparent hover:bg-amber-50 transition-colors text-lg border-t border-gray-100">🗑️ ทิ้งขยะ (Scrap List)</button>
 
             <!-- [NEW] เมนู งานรอ Sort (Mobile) -->
             <button onclick="window.toggleMenu(); window.open('https://jrh91234.github.io/CWM-sorting-system-/', '_blank');" id="tab-sort" class="hidden py-4 px-6 text-left text-pink-600 font-bold border-l-4 border-transparent hover:bg-pink-50 transition-colors text-lg border-t border-gray-100 w-full">🔍 ระบบงานรอ Sort ↗️</button>
@@ -970,6 +971,46 @@
                 <div id="inbox-sidebar" class="w-full md:w-56 border-b md:border-b-0 md:border-r border-gray-200 bg-gray-50 p-2 space-y-0.5 shrink-0"></div>
                 <!-- Content (items list) -->
                 <div id="inbox-content" class="flex-1 p-3 overflow-y-auto max-h-[75vh] bg-gray-50/50"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- SECTION: SCRAP LIST (ทิ้งขยะ) -->
+    <main id="section-scrap" class="max-w-6xl mx-auto p-4 space-y-4 hidden print-hide">
+        <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 border-t-4 border-amber-500 overflow-x-auto">
+            <div class="min-w-[1000px] border-2 border-black text-black">
+                <div class="grid grid-cols-[120px_1fr] items-center border-b-2 border-black p-4">
+                    <div class="flex justify-center">
+                        <img src="Logo JR.jpg" alt="JR Logo" class="w-20 h-20 object-contain">
+                    </div>
+                    <div class="text-center leading-tight">
+                        <div class="text-[44px] font-bold">ใบนำส่งขยะและวัสดุเหลือใช้ภายในโรงงาน Scrap List</div>
+                        <div class="text-[54px] font-bold">厂内垃圾或边料余料搬运记录表</div>
+                    </div>
+                </div>
+                <div class="p-4 text-sm">
+                    <p>ประเภทของเสีย / 废弃物类别: ☐ ขยะอันตราย 危险垃圾 &nbsp;&nbsp;&nbsp; ☐ ขยะรีไซเคิล 回收垃圾 &nbsp;&nbsp;&nbsp; ☐ ขยะอุตสาหกรรมที่ไม่เป็นอันตราย (เศษเหลือใช้จากการผลิต) 非危险工业垃圾（如生产边料） &nbsp;&nbsp;&nbsp; ☐ อื่น ๆ (ระบุ) Other 其他 ____________</p>
+                    <p class="mt-2">แผนก/ฝ่าย (ผู้นำส่งขยะ) Division/Dept. (Transfer by) 运搬部门: ____________ &nbsp;&nbsp;&nbsp; ประจำเดือน/ปี Monthly/Yearly 月/年: ____________ &nbsp;&nbsp;&nbsp; Page 页: ____</p>
+                </div>
+                <table class="w-full border-t-2 border-black text-sm">
+                    <thead>
+                        <tr class="border-b-2 border-black">
+                            <th class="border-r-2 border-black p-2">วันที่ Date<br><span class="text-3xl">日期</span></th>
+                            <th class="border-r-2 border-black p-2">ลำดับ No.<br><span class="text-3xl">序号</span></th>
+                            <th class="border-r-2 border-black p-2">รายการ / รายละเอียดประเภทขยะ Description/ Rubbish Type<br><span class="text-3xl">项目/种类</span></th>
+                            <th class="border-r-2 border-black p-2">จำนวน q'ty<br><span class="text-3xl">数量</span></th>
+                            <th class="border-r-2 border-black p-2">ผู้นำส่ง Transfered by<br><span class="text-3xl">搬运者</span></th>
+                            <th class="p-2">ผู้รับ Received by<br><span class="text-3xl">接收者</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="h-14 border-b border-black"><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td></td></tr>
+                        <tr class="h-14 border-b border-black"><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td></td></tr>
+                        <tr class="h-14 border-b border-black"><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td></td></tr>
+                        <tr class="h-14 border-b border-black"><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td></td></tr>
+                        <tr class="h-14"><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td></td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </main>
