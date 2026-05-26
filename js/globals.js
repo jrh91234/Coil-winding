@@ -377,6 +377,7 @@ window.switchTab = function(tab) {
     if(tab === 'dashboard' && typeof window.loadDashboard === 'function') window.loadDashboard();
     if(tab === 'parts' && typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
     if(tab === 'cost' && typeof window.loadCostModule === 'function') window.loadCostModule();
+    if(tab === 'scrap' && typeof window.refreshScrapRecorder === 'function') window.refreshScrapRecorder();
 };
 
 function applyPermissions() {
