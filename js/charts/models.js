@@ -375,15 +375,17 @@ window.renderDailyOutputChart = function() {
     let ngData = [];
     let sortFgData = [];
     let sortNgData = [];
+    let totalPcsData = [];   // ยอดรวมจริง (ชิ้น) ต่อช่วงเวลา = ผลิต FG+NG + คัดแยก FG+NG
     order.forEach(k => {
         const fg = grp[k].fg, ng = grp[k].ng, sFg = grp[k].sFg, sNg = grp[k].sNg;
+        const grand = fg + ng + sFg + sNg;
+        totalPcsData.push(grand);
         if (mode === 'percent') {
-            const pTotal = fg + ng;     // สัดส่วนงานผลิต (FG/NG รวม = 100%)
-            const sTotal = sFg + sNg;   // สัดส่วนงานคัดแยก (FG/NG รวม = 100%)
-            fgData.push(pTotal > 0 ? parseFloat(((fg/pTotal)*100).toFixed(1)) : 0);
-            ngData.push(pTotal > 0 ? parseFloat(((ng/pTotal)*100).toFixed(1)) : 0);
-            sortFgData.push(sTotal > 0 ? parseFloat(((sFg/sTotal)*100).toFixed(1)) : 0);
-            sortNgData.push(sTotal > 0 ? parseFloat(((sNg/sTotal)*100).toFixed(1)) : 0);
+            // สแต็กเดียว: ทุกส่วนคิดเป็น % ของยอดรวมทั้งวัน (รวมกัน = 100%)
+            fgData.push(grand > 0 ? parseFloat(((fg/grand)*100).toFixed(1)) : 0);
+            ngData.push(grand > 0 ? parseFloat(((ng/grand)*100).toFixed(1)) : 0);
+            sortFgData.push(grand > 0 ? parseFloat(((sFg/grand)*100).toFixed(1)) : 0);
+            sortNgData.push(grand > 0 ? parseFloat(((sNg/grand)*100).toFixed(1)) : 0);
         } else {
             fgData.push(fg);
             ngData.push(ng);
@@ -414,6 +416,36 @@ window.renderDailyOutputChart = function() {
     const dataLabelsPlugin = typeof window.ChartDataLabels !== 'undefined' ? window.ChartDataLabels : null;
     const activePlugins = dataLabelsPlugin ? [dataLabelsPlugin] : [];
 
+    // วาดยอดรวม (ชิ้น) ไว้บนยอดแท่ง เมื่อขยายการ์ดเต็มจอ
+    const totalLabelPlugin = {
+        id: 'dailyOutputTotalLabel',
+        afterDatasetsDraw(chart) {
+            const card = chart.canvas.closest('.widget-card');
+            const isMax = card ? card.classList.contains('maximized-card') : false;
+            if (!isMax) return;
+            const yScale = chart.scales.y;
+            const meta = chart.getDatasetMeta(0);
+            if (!yScale || !meta) return;
+            const ctx = chart.ctx;
+            ctx.save();
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillStyle = '#1f2937';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            for (let i = 0; i < labels.length; i++) {
+                const totalPcs = totalPcsData[i] || 0;
+                if (totalPcs <= 0) continue;
+                const bar = meta.data[i];
+                if (!bar) continue;
+                const stackTopVal = mode === 'percent'
+                    ? (fgData[i] + ngData[i] + sortFgData[i] + sortNgData[i])
+                    : totalPcs;
+                ctx.fillText(totalPcs.toLocaleString(), bar.x, yScale.getPixelForValue(stackTopVal) - 4);
+            }
+            ctx.restore();
+        }
+    };
+
     let scales = { x: { stacked: true }, y: { stacked: true, beginAtZero: true } };
     if (mode === 'percent') {
         scales.y.max = 100;
@@ -422,21 +454,22 @@ window.renderDailyOutputChart = function() {
         scales.y.title = { display: true, text: 'จำนวน (ชิ้น)' };
     }
 
-    charts.dailyOutput = new Chart(ctxDaily, { 
+    charts.dailyOutput = new Chart(ctxDaily, {
          type: 'bar',
-         plugins: activePlugins,
+         plugins: activePlugins.concat([totalLabelPlugin]),
          data: {
              labels: labels,
              datasets: [
-                 {label:'FG (งานผลิต)', data:fgData, backgroundColor:'#3b82f6', borderRadius: 2, stack:'prod'},
-                 {label:'NG (งานผลิต)', data:ngData, backgroundColor:'#ef4444', borderRadius: 2, stack:'prod'},
-                 {label:'FG (คัดแยก)', data:sortFgData, backgroundColor:'#10b981', borderRadius: 2, stack:'sort'},
-                 {label:'NG (คัดแยก)', data:sortNgData, backgroundColor:'#f59e0b', borderRadius: 2, stack:'sort'}
+                 {label:'FG (งานผลิต)', data:fgData, backgroundColor:'#3b82f6', borderRadius: 2},
+                 {label:'NG (งานผลิต)', data:ngData, backgroundColor:'#ef4444', borderRadius: 2},
+                 {label:'FG (คัดแยก)', data:sortFgData, backgroundColor:'#10b981', borderRadius: 2},
+                 {label:'NG (คัดแยก)', data:sortNgData, backgroundColor:'#f59e0b', borderRadius: 2}
              ]
          },
          options: {
              ...commonOpts,
              scales: scales,
+             layout: { padding: { top: 18 } },
              plugins: {
                  ...commonOpts.plugins,
                  tooltip: {
@@ -449,6 +482,10 @@ window.renderDailyOutputChart = function() {
                          },
                          label: function(context) {
                              return `${context.dataset.label}: ${context.parsed.y}${mode === 'percent' ? '%' : ' ชิ้น'}`;
+                         },
+                         footer: function(items) {
+                             const idx = items[0].dataIndex;
+                             return 'รวมทั้งหมด: ' + (totalPcsData[idx] || 0).toLocaleString() + ' ชิ้น';
                          }
                      }
                  },
