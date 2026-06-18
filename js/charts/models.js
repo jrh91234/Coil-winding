@@ -331,6 +331,14 @@ window.renderDailyOutputChart = function() {
     const avgSel = document.getElementById('dailyOutputAvgSelector');
     const avgMode = avgSel ? avgSel.value : 'off';
 
+    // เส้นชั่วโมง-เครื่อง: off / on
+    const hoursSel = document.getElementById('dailyOutputHoursSelector');
+    const hoursMode = hoursSel ? hoursSel.value : 'off';
+
+    // การแสดงตัวเลขบนกราฟ: auto (เมื่อขยาย) / hide (ซ่อน) / show (แสดงเสมอ)
+    const labelSel = document.getElementById('dailyOutputLabelSelector');
+    const labelMode = labelSel ? labelSel.value : 'auto';
+
     if(charts.dailyOutput) charts.dailyOutput.destroy();
     const trendData = data.dailyTrend || [];
 
@@ -351,11 +359,12 @@ window.renderDailyOutputChart = function() {
     const order = [];
     const grp = {};
     trendData.forEach(d => {
-        let fg, ng, sFg, sNg;
+        let fg, ng, sFg, sNg, hrs;
         if (model === 'all') {
             fg = d.fg || 0; ng = d.ng || 0;
             sFg = (d.sortYield && d.sortYield.fg) || 0;
             sNg = (d.sortYield && d.sortYield.ng) || 0;
+            hrs = d.workHours || 0;
         } else {
             const m = d.byModel && d.byModel[model];
             fg = m ? (m.fg || 0) : 0;
@@ -363,15 +372,17 @@ window.renderDailyOutputChart = function() {
             const sm = d.sortByModel && d.sortByModel[model];
             sFg = sm ? (sm.fg || 0) : 0;
             sNg = sm ? (sm.ng || 0) : 0;
+            hrs = (d.workHoursByModel && d.workHoursByModel[model]) || 0;
         }
         let key = d.date;
         if (period === 'week') key = getWeekStart(d.date);
         else if (period === 'month') key = String(d.date).substring(0, 7);
-        if (!(key in grp)) { grp[key] = { fg: 0, ng: 0, sFg: 0, sNg: 0 }; order.push(key); }
+        if (!(key in grp)) { grp[key] = { fg: 0, ng: 0, sFg: 0, sNg: 0, hours: 0 }; order.push(key); }
         grp[key].fg += fg;
         grp[key].ng += ng;
         grp[key].sFg += sFg;
         grp[key].sNg += sNg;
+        grp[key].hours += hrs;
     });
 
     const labels = order;
@@ -381,11 +392,13 @@ window.renderDailyOutputChart = function() {
     let sortNgData = [];
     let totalPcsData = [];   // ยอดรวมจริง (ชิ้น) ต่อช่วงเวลา = ผลิต FG+NG + คัดแยก FG+NG
     let fgPcsData = [];      // ยอด FG จริง (ชิ้น) = FG งานผลิต + FG คัดแยก
+    let hoursData = [];      // ชั่วโมง-เครื่องรวม ต่อช่วงเวลา
     order.forEach(k => {
         const fg = grp[k].fg, ng = grp[k].ng, sFg = grp[k].sFg, sNg = grp[k].sNg;
         const grand = fg + ng + sFg + sNg;
         totalPcsData.push(grand);
         fgPcsData.push(fg + sFg);
+        hoursData.push(Math.round(grp[k].hours * 10) / 10);
         if (mode === 'percent') {
             // สแต็กเดียว: ทุกส่วนคิดเป็น % ของยอดรวมทั้งวัน (รวมกัน = 100%)
             fgData.push(grand > 0 ? parseFloat(((fg/grand)*100).toFixed(1)) : 0);
@@ -426,9 +439,13 @@ window.renderDailyOutputChart = function() {
     const totalLabelPlugin = {
         id: 'dailyOutputTotalLabel',
         afterDatasetsDraw(chart) {
-            const card = chart.canvas.closest('.widget-card');
-            const isMax = card ? card.classList.contains('maximized-card') : false;
-            if (!isMax) return;
+            if (labelMode === 'hide') return;
+            let show = labelMode === 'show';
+            if (!show) {
+                const card = chart.canvas.closest('.widget-card');
+                show = card ? card.classList.contains('maximized-card') : false;
+            }
+            if (!show) return;
             const yScale = chart.scales.y;
             const meta = chart.getDatasetMeta(0);
             if (!yScale || !meta) return;
@@ -492,18 +509,44 @@ window.renderDailyOutputChart = function() {
     } else {
         scales.y.title = { display: true, text: 'จำนวน (ชิ้น)' };
     }
+    if (hoursMode !== 'off') {
+        scales.yHours = {
+            position: 'right',
+            beginAtZero: true,
+            grid: { drawOnChartArea: false },
+            title: { display: true, text: 'ชั่วโมง-เครื่อง' }
+        };
+    }
+
+    const chartDatasets = [
+        {label:'FG (งานผลิต)', data:fgData, backgroundColor:'#3b82f6', borderRadius: 2},
+        {label:'NG (งานผลิต)', data:ngData, backgroundColor:'#ef4444', borderRadius: 2},
+        {label:'FG (คัดแยก)', data:sortFgData, backgroundColor:'#10b981', borderRadius: 2},
+        {label:'NG (คัดแยก)', data:sortNgData, backgroundColor:'#f59e0b', borderRadius: 2}
+    ];
+    if (hoursMode !== 'off') {
+        chartDatasets.push({
+            type: 'line',
+            label: 'ชั่วโมง-เครื่อง (รวม)',
+            data: hoursData,
+            yAxisID: 'yHours',
+            borderColor: '#0ea5e9',
+            backgroundColor: '#0ea5e9',
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            fill: false,
+            datalabels: { display: false }
+        });
+    }
 
     charts.dailyOutput = new Chart(ctxDaily, {
          type: 'bar',
          plugins: activePlugins.concat([totalLabelPlugin, avgLinePlugin]),
          data: {
              labels: labels,
-             datasets: [
-                 {label:'FG (งานผลิต)', data:fgData, backgroundColor:'#3b82f6', borderRadius: 2},
-                 {label:'NG (งานผลิต)', data:ngData, backgroundColor:'#ef4444', borderRadius: 2},
-                 {label:'FG (คัดแยก)', data:sortFgData, backgroundColor:'#10b981', borderRadius: 2},
-                 {label:'NG (คัดแยก)', data:sortNgData, backgroundColor:'#f59e0b', borderRadius: 2}
-             ]
+             datasets: chartDatasets
          },
          options: {
              ...commonOpts,
@@ -520,6 +563,9 @@ window.renderDailyOutputChart = function() {
                              return lbl;
                          },
                          label: function(context) {
+                             if (context.dataset.yAxisID === 'yHours') {
+                                 return `${context.dataset.label}: ${context.parsed.y} ชม.`;
+                             }
                              return `${context.dataset.label}: ${context.parsed.y}${mode === 'percent' ? '%' : ' ชิ้น'}`;
                          },
                          footer: function(items) {
@@ -529,7 +575,12 @@ window.renderDailyOutputChart = function() {
                      }
                  },
                  datalabels: {
-                     display: function(ctx) { const c = ctx.chart.canvas.closest('.widget-card'); return c ? c.classList.contains('maximized-card') : true; },
+                     display: function(ctx) {
+                         if (labelMode === 'hide') return false;
+                         if (labelMode === 'show') return true;
+                         const c = ctx.chart.canvas.closest('.widget-card');
+                         return c ? c.classList.contains('maximized-card') : true;
+                     },
                      color: '#ffffff',
                      font: { weight: 'bold', size: 11 },
                      formatter: (value) => value > 0 ? value + (mode === 'percent' ? '%' : '') : null

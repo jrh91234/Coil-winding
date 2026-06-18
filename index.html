@@ -532,6 +532,15 @@
                                     <option value="total" selected>เฉลี่ย: รวม</option>
                                     <option value="fg">เฉลี่ย: เฉพาะ FG</option>
                                 </select>
+                                <select id="dailyOutputHoursSelector" onchange="window.renderDailyOutputChart()" class="text-[10px] border rounded p-1 text-gray-600 bg-white print-hide">
+                                    <option value="off">ไม่มีเส้นชั่วโมง</option>
+                                    <option value="on" selected>เส้นชั่วโมง-เครื่อง</option>
+                                </select>
+                                <select id="dailyOutputLabelSelector" onchange="window.renderDailyOutputChart()" class="text-[10px] border rounded p-1 text-gray-600 bg-white print-hide">
+                                    <option value="auto" selected>ตัวเลข: เมื่อขยาย</option>
+                                    <option value="hide">ตัวเลข: ซ่อน</option>
+                                    <option value="show">ตัวเลข: แสดงเสมอ</option>
+                                </select>
                             </div>
                         </div>
                         <div class="flex gap-2">
