@@ -327,6 +327,10 @@ window.renderDailyOutputChart = function() {
     const periodSel = document.getElementById('dailyOutputPeriodSelector');
     const period = periodSel ? periodSel.value : 'day';
 
+    // เส้นค่าเฉลี่ย: off / total (ยอดรวม) / fg (เฉพาะ FG)
+    const avgSel = document.getElementById('dailyOutputAvgSelector');
+    const avgMode = avgSel ? avgSel.value : 'off';
+
     if(charts.dailyOutput) charts.dailyOutput.destroy();
     const trendData = data.dailyTrend || [];
 
@@ -376,10 +380,12 @@ window.renderDailyOutputChart = function() {
     let sortFgData = [];
     let sortNgData = [];
     let totalPcsData = [];   // ยอดรวมจริง (ชิ้น) ต่อช่วงเวลา = ผลิต FG+NG + คัดแยก FG+NG
+    let fgPcsData = [];      // ยอด FG จริง (ชิ้น) = FG งานผลิต + FG คัดแยก
     order.forEach(k => {
         const fg = grp[k].fg, ng = grp[k].ng, sFg = grp[k].sFg, sNg = grp[k].sNg;
         const grand = fg + ng + sFg + sNg;
         totalPcsData.push(grand);
+        fgPcsData.push(fg + sFg);
         if (mode === 'percent') {
             // สแต็กเดียว: ทุกส่วนคิดเป็น % ของยอดรวมทั้งวัน (รวมกัน = 100%)
             fgData.push(grand > 0 ? parseFloat(((fg/grand)*100).toFixed(1)) : 0);
@@ -446,6 +452,39 @@ window.renderDailyOutputChart = function() {
         }
     };
 
+    // เส้นค่าเฉลี่ย (เส้นประแนวนอน) — คิดจากยอดจริงเป็นชิ้น เฉลี่ยทุกช่วงที่แสดง (เฉพาะโหมดชิ้น)
+    const avgLinePlugin = {
+        id: 'dailyOutputAvgLine',
+        afterDatasetsDraw(chart) {
+            if (avgMode === 'off' || mode !== 'pcs') return;
+            const metric = avgMode === 'fg' ? fgPcsData : totalPcsData;
+            if (!metric.length) return;
+            const avg = metric.reduce((a, b) => a + b, 0) / metric.length;
+            if (!(avg > 0)) return;
+            const yScale = chart.scales.y;
+            const area = chart.chartArea;
+            if (!yScale || !area) return;
+            const yPix = yScale.getPixelForValue(avg);
+            const ctx = chart.ctx;
+            ctx.save();
+            ctx.strokeStyle = '#7c3aed';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.moveTo(area.left, yPix);
+            ctx.lineTo(area.right, yPix);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            const txt = (avgMode === 'fg' ? 'เฉลี่ย FG: ' : 'เฉลี่ยรวม: ') + Math.round(avg).toLocaleString() + ' ชิ้น';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillStyle = '#7c3aed';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(txt, area.right - 4, yPix - 3);
+            ctx.restore();
+        }
+    };
+
     let scales = { x: { stacked: true }, y: { stacked: true, beginAtZero: true } };
     if (mode === 'percent') {
         scales.y.max = 100;
@@ -456,7 +495,7 @@ window.renderDailyOutputChart = function() {
 
     charts.dailyOutput = new Chart(ctxDaily, {
          type: 'bar',
-         plugins: activePlugins.concat([totalLabelPlugin]),
+         plugins: activePlugins.concat([totalLabelPlugin, avgLinePlugin]),
          data: {
              labels: labels,
              datasets: [
