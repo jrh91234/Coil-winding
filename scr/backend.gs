@@ -3378,9 +3378,12 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
         result.totalNgKg += ngKg;
         result.totalNgPcs += ngPcs;
 
-        if (!dailyStats[rowDateStr]) dailyStats[rowDateStr] = { fg: 0, ng: 0, ngBreakdown: {} };
+        if (!dailyStats[rowDateStr]) dailyStats[rowDateStr] = { fg: 0, ng: 0, ngBreakdown: {}, byModel: {} };
         dailyStats[rowDateStr].fg += fg;
         dailyStats[rowDateStr].ng += ngPcs;
+        if (!dailyStats[rowDateStr].byModel[product]) dailyStats[rowDateStr].byModel[product] = { fg: 0, ng: 0 };
+        dailyStats[rowDateStr].byModel[product].fg += fg;
+        dailyStats[rowDateStr].byModel[product].ng += ngPcs;
 
         const hIdx = displayLabels.indexOf(hour);
         if (hIdx !== -1) {
@@ -3650,7 +3653,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
   const uniqueDates = [...new Set(sortedDates)];
 
   result.dailyTrend = uniqueDates.map(date => {
-    const d = dailyStats[date] || { fg: 0, ng: 0, ngBreakdown: {} };
+    const d = dailyStats[date] || { fg: 0, ng: 0, ngBreakdown: {}, byModel: {} };
     const total = d.fg + d.ng;
     const rate = total > 0 ? ((d.ng / total) * 100).toFixed(2) : 0;
     const pending = pendingSortByDate[date] || null;
@@ -3686,6 +3689,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
     
     return {
       date: date, fg: d.fg, ng: d.ng, ngRate: parseFloat(rate), ngBreakdown: d.ngBreakdown,
+      byModel: d.byModel || {},
       pendingSortQty: pending ? pending.qty : 0,
       worstNgRate: worstNgRate,
       bestNgRate: bestNgRate,
