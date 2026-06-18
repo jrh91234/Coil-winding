@@ -343,39 +343,52 @@ window.renderDailyOutputChart = function() {
         return `${y}-${mm}-${dd}`;
     };
 
-    // รวมยอด FG/NG ตามรุ่นที่เลือก แล้วจัดกลุ่มตามช่วงเวลา (คงลำดับเวลา)
+    // รวมยอด FG/NG (งานผลิต + งานคัดแยก) ตามรุ่นที่เลือก แล้วจัดกลุ่มตามช่วงเวลา (คงลำดับเวลา)
     const order = [];
     const grp = {};
     trendData.forEach(d => {
-        let fg, ng;
+        let fg, ng, sFg, sNg;
         if (model === 'all') {
             fg = d.fg || 0; ng = d.ng || 0;
+            sFg = (d.sortYield && d.sortYield.fg) || 0;
+            sNg = (d.sortYield && d.sortYield.ng) || 0;
         } else {
             const m = d.byModel && d.byModel[model];
             fg = m ? (m.fg || 0) : 0;
             ng = m ? (m.ng || 0) : 0;
+            const sm = d.sortByModel && d.sortByModel[model];
+            sFg = sm ? (sm.fg || 0) : 0;
+            sNg = sm ? (sm.ng || 0) : 0;
         }
         let key = d.date;
         if (period === 'week') key = getWeekStart(d.date);
         else if (period === 'month') key = String(d.date).substring(0, 7);
-        if (!(key in grp)) { grp[key] = { fg: 0, ng: 0 }; order.push(key); }
+        if (!(key in grp)) { grp[key] = { fg: 0, ng: 0, sFg: 0, sNg: 0 }; order.push(key); }
         grp[key].fg += fg;
         grp[key].ng += ng;
+        grp[key].sFg += sFg;
+        grp[key].sNg += sNg;
     });
 
     const labels = order;
     let fgData = [];
     let ngData = [];
+    let sortFgData = [];
+    let sortNgData = [];
     order.forEach(k => {
-        const fg = grp[k].fg;
-        const ng = grp[k].ng;
+        const fg = grp[k].fg, ng = grp[k].ng, sFg = grp[k].sFg, sNg = grp[k].sNg;
         if (mode === 'percent') {
-            const total = fg + ng;
-            fgData.push(total > 0 ? parseFloat(((fg/total)*100).toFixed(1)) : 0);
-            ngData.push(total > 0 ? parseFloat(((ng/total)*100).toFixed(1)) : 0);
+            const pTotal = fg + ng;     // สัดส่วนงานผลิต (FG/NG รวม = 100%)
+            const sTotal = sFg + sNg;   // สัดส่วนงานคัดแยก (FG/NG รวม = 100%)
+            fgData.push(pTotal > 0 ? parseFloat(((fg/pTotal)*100).toFixed(1)) : 0);
+            ngData.push(pTotal > 0 ? parseFloat(((ng/pTotal)*100).toFixed(1)) : 0);
+            sortFgData.push(sTotal > 0 ? parseFloat(((sFg/sTotal)*100).toFixed(1)) : 0);
+            sortNgData.push(sTotal > 0 ? parseFloat(((sNg/sTotal)*100).toFixed(1)) : 0);
         } else {
             fgData.push(fg);
             ngData.push(ng);
+            sortFgData.push(sFg);
+            sortNgData.push(sNg);
         }
     });
 
@@ -415,8 +428,10 @@ window.renderDailyOutputChart = function() {
          data: {
              labels: labels,
              datasets: [
-                 {label:'FG (งานดี)', data:fgData, backgroundColor:'#3b82f6', borderRadius: 2},
-                 {label:'NG (เสียเป็นชิ้น)', data:ngData, backgroundColor:'#ef4444', borderRadius: 2}
+                 {label:'FG (งานผลิต)', data:fgData, backgroundColor:'#3b82f6', borderRadius: 2, stack:'prod'},
+                 {label:'NG (งานผลิต)', data:ngData, backgroundColor:'#ef4444', borderRadius: 2, stack:'prod'},
+                 {label:'FG (คัดแยก)', data:sortFgData, backgroundColor:'#10b981', borderRadius: 2, stack:'sort'},
+                 {label:'NG (คัดแยก)', data:sortNgData, backgroundColor:'#f59e0b', borderRadius: 2, stack:'sort'}
              ]
          },
          options: {
