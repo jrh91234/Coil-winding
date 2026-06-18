@@ -290,11 +290,10 @@ window.renderModelChart = function() {
     });
 };
 
-window.renderDailyOutputChart = function() {
-    if (!currentDashboardData || !charts) return;
+// แหล่งข้อมูลเดียวของกราฟ Daily Output — ใช้ทั้งวาดกราฟและทำ Audit (ตัวเลขตรงกันเสมอ)
+window.getDailyOutputSeries = function() {
+    if (!currentDashboardData) return null;
     const data = currentDashboardData;
-    const ctxDaily = document.getElementById('dailyOutputChart');
-    if (!ctxDaily) return;
 
     const selector = document.getElementById('dailyOutputSelector');
     const mode = selector ? selector.value : 'pcs';
@@ -323,31 +322,21 @@ window.renderDailyOutputChart = function() {
         model = modelSel.value;
     }
 
-    // เลือกช่วงเวลา: รายวัน / รายสัปดาห์ / รายเดือน
     const periodSel = document.getElementById('dailyOutputPeriodSelector');
     const period = periodSel ? periodSel.value : 'day';
-
-    // เส้นค่าเฉลี่ย: off / total (ยอดรวม) / fg (เฉพาะ FG)
     const avgSel = document.getElementById('dailyOutputAvgSelector');
     const avgMode = avgSel ? avgSel.value : 'off';
-
-    // เส้นชั่วโมง-เครื่อง: off / on
     const hoursSel = document.getElementById('dailyOutputHoursSelector');
     const hoursMode = hoursSel ? hoursSel.value : 'off';
 
-    // การแสดงตัวเลขบนกราฟ: auto (เมื่อขยาย) / hide (ซ่อน) / show (แสดงเสมอ)
-    const labelSel = document.getElementById('dailyOutputLabelSelector');
-    const labelMode = labelSel ? labelSel.value : 'auto';
-
-    if(charts.dailyOutput) charts.dailyOutput.destroy();
     const trendData = data.dailyTrend || [];
 
     // คืนค่าวันจันทร์ของสัปดาห์นั้น (yyyy-MM-dd) ใช้เป็น key รายสัปดาห์
     const getWeekStart = (dateStr) => {
         const dt = new Date(dateStr + 'T00:00:00');
         if (isNaN(dt.getTime())) return dateStr;
-        const day = dt.getDay();                 // 0=อาทิตย์ .. 6=เสาร์
-        const diff = (day === 0 ? -6 : 1 - day);  // ถอยไปวันจันทร์
+        const day = dt.getDay();
+        const diff = (day === 0 ? -6 : 1 - day);
         dt.setDate(dt.getDate() + diff);
         const y = dt.getFullYear();
         const mm = String(dt.getMonth() + 1).padStart(2, '0');
@@ -355,7 +344,7 @@ window.renderDailyOutputChart = function() {
         return `${y}-${mm}-${dd}`;
     };
 
-    // รวมยอด FG/NG (งานผลิต + งานคัดแยก) ตามรุ่นที่เลือก แล้วจัดกลุ่มตามช่วงเวลา (คงลำดับเวลา)
+    // รวมยอด FG/NG (งานผลิต + งานคัดแยก) + ชั่วโมง ตามรุ่นที่เลือก แล้วจัดกลุ่มตามช่วงเวลา
     const order = [];
     const grp = {};
     trendData.forEach(d => {
@@ -386,21 +375,18 @@ window.renderDailyOutputChart = function() {
     });
 
     const labels = order;
-    let fgData = [];
-    let ngData = [];
-    let sortFgData = [];
-    let sortNgData = [];
-    let totalPcsData = [];   // ยอดรวมจริง (ชิ้น) ต่อช่วงเวลา = ผลิต FG+NG + คัดแยก FG+NG
-    let fgPcsData = [];      // ยอด FG จริง (ชิ้น) = FG งานผลิต + FG คัดแยก
-    let hoursData = [];      // ชั่วโมง-เครื่องรวม ต่อช่วงเวลา
+    const periods = [];
+    const fgData = [], ngData = [], sortFgData = [], sortNgData = [];
+    const totalPcsData = [], fgPcsData = [], hoursData = [];
     order.forEach(k => {
         const fg = grp[k].fg, ng = grp[k].ng, sFg = grp[k].sFg, sNg = grp[k].sNg;
+        const hours = Math.round(grp[k].hours * 10) / 10;
         const grand = fg + ng + sFg + sNg;
+        periods.push({ key: k, fg, ng, sFg, sNg, hours, total: grand, fgGood: fg + sFg });
         totalPcsData.push(grand);
         fgPcsData.push(fg + sFg);
-        hoursData.push(Math.round(grp[k].hours * 10) / 10);
+        hoursData.push(hours);
         if (mode === 'percent') {
-            // สแต็กเดียว: ทุกส่วนคิดเป็น % ของยอดรวมทั้งวัน (รวมกัน = 100%)
             fgData.push(grand > 0 ? parseFloat(((fg/grand)*100).toFixed(1)) : 0);
             ngData.push(grand > 0 ? parseFloat(((ng/grand)*100).toFixed(1)) : 0);
             sortFgData.push(grand > 0 ? parseFloat(((sFg/grand)*100).toFixed(1)) : 0);
@@ -412,6 +398,32 @@ window.renderDailyOutputChart = function() {
             sortNgData.push(sNg);
         }
     });
+
+    const avgTotal = totalPcsData.length ? totalPcsData.reduce((a, b) => a + b, 0) / totalPcsData.length : 0;
+    const avgFg = fgPcsData.length ? fgPcsData.reduce((a, b) => a + b, 0) / fgPcsData.length : 0;
+
+    return { model, period, mode, avgMode, hoursMode, labels, periods,
+             fgData, ngData, sortFgData, sortNgData, totalPcsData, fgPcsData, hoursData, avgTotal, avgFg };
+};
+
+window.renderDailyOutputChart = function() {
+    if (!currentDashboardData || !charts) return;
+    const ctxDaily = document.getElementById('dailyOutputChart');
+    if (!ctxDaily) return;
+
+    // การแสดงตัวเลขบนกราฟ: auto (เมื่อขยาย) / hide (ซ่อน) / show (แสดงเสมอ)
+    const labelSel = document.getElementById('dailyOutputLabelSelector');
+    const labelMode = labelSel ? labelSel.value : 'auto';
+
+    // ใช้แหล่งข้อมูลเดียวกับ Audit เพื่อให้ตัวเลขตรงกัน
+    const S = window.getDailyOutputSeries();
+    if (!S) return;
+    const mode = S.mode, period = S.period, avgMode = S.avgMode, hoursMode = S.hoursMode;
+    const labels = S.labels;
+    const fgData = S.fgData, ngData = S.ngData, sortFgData = S.sortFgData, sortNgData = S.sortNgData;
+    const totalPcsData = S.totalPcsData, fgPcsData = S.fgPcsData, hoursData = S.hoursData;
+
+    if (charts.dailyOutput) charts.dailyOutput.destroy();
 
     const commonOpts = { 
          responsive: true, 
