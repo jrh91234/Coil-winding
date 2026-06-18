@@ -299,17 +299,78 @@ window.renderDailyOutputChart = function() {
     const selector = document.getElementById('dailyOutputSelector');
     const mode = selector ? selector.value : 'pcs';
 
+    // เลือกรุ่น (เติม dropdown จากรายการรุ่นในข้อมูล โดยคงค่าที่เลือกไว้)
+    const modelSel = document.getElementById('dailyOutputModelSelector');
+    let model = 'all';
+    if (modelSel) {
+        const models = Object.keys(data.productData || {});
+        const desired = ['all'].concat(models);
+        const current = Array.from(modelSel.options).map(o => o.value);
+        const same = current.length === desired.length && current.every((v, i) => v === desired[i]);
+        if (!same) {
+            const prev = modelSel.value;
+            modelSel.innerHTML = '';
+            const allOpt = document.createElement('option');
+            allOpt.value = 'all'; allOpt.textContent = 'ทุกรุ่น (รวม)';
+            modelSel.appendChild(allOpt);
+            models.forEach(m => {
+                const o = document.createElement('option');
+                o.value = m; o.textContent = m;
+                modelSel.appendChild(o);
+            });
+            modelSel.value = desired.indexOf(prev) !== -1 ? prev : 'all';
+        }
+        model = modelSel.value;
+    }
+
+    // เลือกช่วงเวลา: รายวัน / รายสัปดาห์ / รายเดือน
+    const periodSel = document.getElementById('dailyOutputPeriodSelector');
+    const period = periodSel ? periodSel.value : 'day';
+
     if(charts.dailyOutput) charts.dailyOutput.destroy();
     const trendData = data.dailyTrend || [];
 
+    // คืนค่าวันจันทร์ของสัปดาห์นั้น (yyyy-MM-dd) ใช้เป็น key รายสัปดาห์
+    const getWeekStart = (dateStr) => {
+        const dt = new Date(dateStr + 'T00:00:00');
+        if (isNaN(dt.getTime())) return dateStr;
+        const day = dt.getDay();                 // 0=อาทิตย์ .. 6=เสาร์
+        const diff = (day === 0 ? -6 : 1 - day);  // ถอยไปวันจันทร์
+        dt.setDate(dt.getDate() + diff);
+        const y = dt.getFullYear();
+        const mm = String(dt.getMonth() + 1).padStart(2, '0');
+        const dd = String(dt.getDate()).padStart(2, '0');
+        return `${y}-${mm}-${dd}`;
+    };
+
+    // รวมยอด FG/NG ตามรุ่นที่เลือก แล้วจัดกลุ่มตามช่วงเวลา (คงลำดับเวลา)
+    const order = [];
+    const grp = {};
+    trendData.forEach(d => {
+        let fg, ng;
+        if (model === 'all') {
+            fg = d.fg || 0; ng = d.ng || 0;
+        } else {
+            const m = d.byModel && d.byModel[model];
+            fg = m ? (m.fg || 0) : 0;
+            ng = m ? (m.ng || 0) : 0;
+        }
+        let key = d.date;
+        if (period === 'week') key = getWeekStart(d.date);
+        else if (period === 'month') key = String(d.date).substring(0, 7);
+        if (!(key in grp)) { grp[key] = { fg: 0, ng: 0 }; order.push(key); }
+        grp[key].fg += fg;
+        grp[key].ng += ng;
+    });
+
+    const labels = order;
     let fgData = [];
     let ngData = [];
-
-    trendData.forEach(d => {
-        let fg = d.fg || 0;
-        let ng = d.ng || 0;
+    order.forEach(k => {
+        const fg = grp[k].fg;
+        const ng = grp[k].ng;
         if (mode === 'percent') {
-            let total = fg + ng;
+            const total = fg + ng;
             fgData.push(total > 0 ? parseFloat(((fg/total)*100).toFixed(1)) : 0);
             ngData.push(total > 0 ? parseFloat(((ng/total)*100).toFixed(1)) : 0);
         } else {
@@ -351,20 +412,26 @@ window.renderDailyOutputChart = function() {
     charts.dailyOutput = new Chart(ctxDaily, { 
          type: 'bar',
          plugins: activePlugins,
-         data: { 
-             labels: trendData.map(d=>d.date), 
+         data: {
+             labels: labels,
              datasets: [
                  {label:'FG (งานดี)', data:fgData, backgroundColor:'#3b82f6', borderRadius: 2},
                  {label:'NG (เสียเป็นชิ้น)', data:ngData, backgroundColor:'#ef4444', borderRadius: 2}
-             ] 
-         }, 
-         options: { 
-             ...commonOpts, 
+             ]
+         },
+         options: {
+             ...commonOpts,
              scales: scales,
              plugins: {
                  ...commonOpts.plugins,
                  tooltip: {
                      callbacks: {
+                         title: function(items) {
+                             const lbl = items[0].label;
+                             if (period === 'week') return 'สัปดาห์เริ่ม ' + lbl;
+                             if (period === 'month') return 'เดือน ' + lbl;
+                             return lbl;
+                         },
                          label: function(context) {
                              return `${context.dataset.label}: ${context.parsed.y}${mode === 'percent' ? '%' : ' ชิ้น'}`;
                          }

@@ -514,7 +514,15 @@
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <div class="flex flex-col gap-1">
                             <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">📊 Daily Output</h3>
-                            <div class="flex gap-1 mt-1">
+                            <div class="flex gap-1 mt-1 flex-wrap">
+                                <select id="dailyOutputModelSelector" onchange="window.renderDailyOutputChart()" class="text-[10px] border rounded p-1 text-gray-600 bg-white print-hide">
+                                    <option value="all">ทุกรุ่น (รวม)</option>
+                                </select>
+                                <select id="dailyOutputPeriodSelector" onchange="window.renderDailyOutputChart()" class="text-[10px] border rounded p-1 text-gray-600 bg-white print-hide">
+                                    <option value="day">รายวัน</option>
+                                    <option value="week">รายสัปดาห์</option>
+                                    <option value="month">รายเดือน</option>
+                                </select>
                                 <select id="dailyOutputSelector" onchange="window.renderDailyOutputChart()" class="text-[10px] border rounded p-1 text-gray-600 bg-white print-hide">
                                     <option value="pcs">จำนวน (ชิ้น)</option>
                                     <option value="percent">สัดส่วน (%)</option>
