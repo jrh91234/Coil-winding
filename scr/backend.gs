@@ -3464,6 +3464,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
  // === อ่านยอดงานรอ Sorting และผล Sort จริง พร้อมคำนวณค่าน้ำหนักอาการ (Dynamic Weights) ===
   const pendingSortByDate = {};
   const sortResultByDate = {};   // เก็บผล sort จริง: { fgPcs, ngPcs }
+  const sortByModelDate = {};    // ผล sort แยกตามรุ่น+วัน: date → { product → { fg, ng } }
   const sortResultByMachine = {}; // แยกตามเครื่อง+วัน
   const sortYieldBySymptom = {};  // อัตรา sort แยกตามอาการ: symptom → { fgPcs, ngPcs }
   const pendingByDateSymptom = {}; // pending แยกตามวัน+อาการ: date → [ { symptom, pcs } ]
@@ -3557,6 +3558,11 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
             if (!sortResultByDate[sDateStr]) sortResultByDate[sDateStr] = { fgPcs: 0, ngPcs: 0 };
             sortResultByDate[sDateStr].fgPcs += fgPcs;
             sortResultByDate[sDateStr].ngPcs += ngPcs;
+            // ผล sort แยกตามรุ่น (ใช้สำหรับ filter รุ่นในกราฟ Daily Output)
+            if (!sortByModelDate[sDateStr]) sortByModelDate[sDateStr] = {};
+            if (!sortByModelDate[sDateStr][prodName]) sortByModelDate[sDateStr][prodName] = { fg: 0, ng: 0 };
+            sortByModelDate[sDateStr][prodName].fg += fgPcs;
+            sortByModelDate[sDateStr][prodName].ng += ngPcs;
             globalSortFg += fgPcs;
             globalSortNg += ngPcs;
 
@@ -3695,6 +3701,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
       bestNgRate: bestNgRate,
       forecastNgRate: forecastNgRate,
       sortYield: sortResult ? { fg: sortResult.fgPcs, ng: sortResult.ngPcs } : null,
+      sortByModel: sortByModelDate[date] || {},
       coilChanges: coilChangesByDate[date] || 0,
       coilChangesByMachine: coilChangesByDateMachine[date] || {}
     };
