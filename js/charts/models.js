@@ -39,11 +39,51 @@ window.renderFgByModel = function(data) {
 window.renderSimulator = function(data) {
     const container = document.getElementById('simulator-checkboxes');
     if (!container) return;
+    if (!data) data = currentDashboardData;
+    if (!data) return;
 
-    const labels = data.ngLabels || [];
-    const valsPcs = data.ngValuesPcs || data.ngValues || [];
+    // เติม dropdown เลือกเครื่อง (เฉพาะเครื่องที่มีข้อมูล + คงค่าที่เลือก)
+    const macSel = document.getElementById('simMachineSelector');
+    let selectedMac = 'all';
+    if (macSel) {
+        const macsWithData = Object.keys(data.machineData || {}).filter(m => {
+            const md = data.machineData[m];
+            const ng = md.ngTotalPcs !== undefined ? md.ngTotalPcs : (md.ngTotal || 0);
+            return (md.fg || 0) > 0 || ng > 0;
+        }).sort();
+        const desired = ['all'].concat(macsWithData);
+        const current = Array.from(macSel.options).map(o => o.value);
+        const same = current.length === desired.length && current.every((v, i) => v === desired[i]);
+        if (!same) {
+            const prev = macSel.value;
+            macSel.innerHTML = '';
+            const allOpt = document.createElement('option');
+            allOpt.value = 'all'; allOpt.textContent = 'ทุกเครื่อง (รวม)';
+            macSel.appendChild(allOpt);
+            macsWithData.forEach(m => {
+                const o = document.createElement('option');
+                o.value = m;
+                const model = (typeof machineMapping !== 'undefined' && machineMapping[m]) ? machineMapping[m] : (data.machineMapping && data.machineMapping[m]);
+                o.textContent = model ? `${m} (${model})` : m;
+                macSel.appendChild(o);
+            });
+            macSel.value = desired.indexOf(prev) !== -1 ? prev : 'all';
+        }
+        selectedMac = macSel.value;
+    }
 
-    const ngItems = labels.map((l, i) => ({ label: l, pcs: valsPcs[i] || 0 })).sort((a,b)=>b.pcs-a.pcs);
+    // เลือกชุดอาการ NG ตามสโคป: ทุกเครื่อง = ยอดรวม, รายเครื่อง = breakdown ของเครื่องนั้น
+    let ngItems = [];
+    if (selectedMac === 'all') {
+        const labels = data.ngLabels || [];
+        const valsPcs = data.ngValuesPcs || data.ngValues || [];
+        ngItems = labels.map((l, i) => ({ label: l, pcs: valsPcs[i] || 0 }));
+    } else {
+        const md = data.machineData && data.machineData[selectedMac];
+        const bd = (md && md.ngBreakdownPcs) ? md.ngBreakdownPcs : {};
+        ngItems = Object.entries(bd).map(([l, pcs]) => ({ label: l, pcs: pcs || 0 }));
+    }
+    ngItems.sort((a, b) => b.pcs - a.pcs);
 
     let html = '';
     ngItems.forEach((item) => {
@@ -56,7 +96,7 @@ window.renderSimulator = function(data) {
             `;
         }
     });
-    
+
     container.innerHTML = html || '<div class="text-gray-400 col-span-2 text-center py-4">ไม่มีข้อมูล NG ในรอบนี้</div>';
 
     window.updateSimulator();
@@ -64,9 +104,20 @@ window.renderSimulator = function(data) {
 
 window.updateSimulator = function() {
     if (!currentDashboardData) return;
+    const data = currentDashboardData;
 
-    const fg = currentDashboardData.totalFg || 0;
-    const originalNg = currentDashboardData.totalNgPcs !== undefined ? currentDashboardData.totalNgPcs : (currentDashboardData.totalNg || 0);
+    const macSel = document.getElementById('simMachineSelector');
+    const selectedMac = macSel ? macSel.value : 'all';
+
+    let fg, originalNg;
+    if (selectedMac === 'all') {
+        fg = data.totalFg || 0;
+        originalNg = data.totalNgPcs !== undefined ? data.totalNgPcs : (data.totalNg || 0);
+    } else {
+        const md = data.machineData && data.machineData[selectedMac];
+        fg = md ? (md.fg || 0) : 0;
+        originalNg = md ? (md.ngTotalPcs !== undefined ? md.ngTotalPcs : (md.ngTotal || 0)) : 0;
+    }
 
     let savedNg = 0;
     const checkboxes = document.querySelectorAll('.sim-cb:checked');
@@ -75,7 +126,7 @@ window.updateSimulator = function() {
     });
 
     const newNg = originalNg - savedNg;
-    
+
     const totalOriginal = fg + originalNg;
     const originalYield = totalOriginal > 0 ? (fg / totalOriginal) * 100 : 0;
 
