@@ -3347,6 +3347,20 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
   const ngTempMapPcs = {};
   const ngTempMapKg = {};
   const dailyStats = {};
+  const workHourSeenByDate = {};      // date → set ของ "machine|hour" (ทุกรุ่นรวม)
+  const workHoursByDate = {};         // date → ชั่วโมง-เครื่องรวม (ทุกรุ่น)
+  const workHourSeenByDateModel = {}; // date → product → set ของ "machine|hour"
+  const workHoursByDateModel = {};    // date → product → ชั่วโมง-เครื่อง
+  // ความยาวช่วงเวลาจาก label เช่น "08:00-09:00"=1, "OT 17:30-18:00"=0.5
+  const getSlotHours = (label) => {
+    const mt = String(label).replace(/OT/i, '').trim().match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+    if (!mt) return 1;
+    let start = (+mt[1]) + (+mt[2]) / 60;
+    let end = (+mt[3]) + (+mt[4]) / 60;
+    if (end <= start) end += 24;
+    const h = end - start;
+    return (h > 0 && h <= 24) ? h : 1;
+  };
 
   rows.forEach(row => {
     try {
@@ -3395,6 +3409,15 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
            }
            result.hourlyByModel[product].fg[hIdx] += fg;
            result.hourlyByModel[product].ng[hIdx] += ngPcs;
+
+           // ชั่วโมง-เครื่อง: นับ (เครื่อง|ช่วงเวลา) ครั้งเดียวต่อวัน แล้วบวกความยาวช่วง
+           const mhKey = machine + "|" + hour;
+           const slotH = getSlotHours(hour);
+           if (!workHourSeenByDate[rowDateStr]) { workHourSeenByDate[rowDateStr] = {}; workHoursByDate[rowDateStr] = 0; }
+           if (!workHourSeenByDate[rowDateStr][mhKey]) { workHourSeenByDate[rowDateStr][mhKey] = true; workHoursByDate[rowDateStr] += slotH; }
+           if (!workHourSeenByDateModel[rowDateStr]) { workHourSeenByDateModel[rowDateStr] = {}; workHoursByDateModel[rowDateStr] = {}; }
+           if (!workHourSeenByDateModel[rowDateStr][product]) { workHourSeenByDateModel[rowDateStr][product] = {}; workHoursByDateModel[rowDateStr][product] = 0; }
+           if (!workHourSeenByDateModel[rowDateStr][product][mhKey]) { workHourSeenByDateModel[rowDateStr][product][mhKey] = true; workHoursByDateModel[rowDateStr][product] += slotH; }
         }
 
         if (!result.machineData[machine]) {
@@ -3702,6 +3725,8 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
       forecastNgRate: forecastNgRate,
       sortYield: sortResult ? { fg: sortResult.fgPcs, ng: sortResult.ngPcs } : null,
       sortByModel: sortByModelDate[date] || {},
+      workHours: Math.round((workHoursByDate[date] || 0) * 10) / 10,
+      workHoursByModel: workHoursByDateModel[date] || {},
       coilChanges: coilChangesByDate[date] || 0,
       coilChangesByMachine: coilChangesByDateMachine[date] || {}
     };
