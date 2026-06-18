@@ -84,14 +84,16 @@ window.renderSimulator = function(data) {
         ngItems = Object.entries(bd).map(([l, pcs]) => ({ label: l, pcs: pcs || 0 }));
     }
     ngItems.sort((a, b) => b.pcs - a.pcs);
+    const totalNgScope = ngItems.reduce((a, b) => a + b.pcs, 0);
 
     let html = '';
     ngItems.forEach((item) => {
         if(item.pcs > 0) {
+            const pct = totalNgScope > 0 ? ((item.pcs / totalNgScope) * 100).toFixed(1) : '0.0';
             html += `
             <label class="flex items-center space-x-2 cursor-pointer p-1 hover:bg-gray-200 rounded transition-colors">
                 <input type="checkbox" class="sim-cb w-4 h-4 text-blue-600 rounded flex-none" value="${item.label}" data-pcs="${item.pcs}" onchange="window.updateSimulator()">
-                <span class="truncate leading-tight flex-1" title="${item.label}">${item.label} (<span class="text-red-500 font-bold">${item.pcs}</span>)</span>
+                <span class="truncate leading-tight flex-1" title="${item.label}">${item.label} (<span class="text-red-500 font-bold">${item.pcs}</span> · <span class="text-orange-500 font-semibold">${pct}%</span>)</span>
             </label>
             `;
         }
@@ -135,8 +137,10 @@ window.updateSimulator = function() {
 
     const yieldDiff = newYield - originalYield;
 
+    const savedPct = originalNg > 0 ? ((savedNg / originalNg) * 100).toFixed(1) : '0.0';
+
     document.getElementById('sim-yield').innerHTML = `${newYield.toFixed(2)}% <span class="text-sm font-medium ${yieldDiff > 0 ? 'text-green-500' : 'text-gray-400'}">(+${yieldDiff.toFixed(2)}%)</span>`;
-    document.getElementById('sim-ng-saved').innerHTML = `${savedNg.toLocaleString()} ชิ้น <span class="text-gray-400 font-normal ml-1">(เหลือ NG: ${newNg.toLocaleString()})</span>`;
+    document.getElementById('sim-ng-saved').innerHTML = `${savedNg.toLocaleString()} ชิ้น <span class="text-orange-500 font-semibold ml-1">(${savedPct}% ของ NG)</span> <span class="text-gray-400 font-normal ml-1">(เหลือ NG: ${newNg.toLocaleString()})</span>`;
 };
 
 window.renderModelChart = function() {
