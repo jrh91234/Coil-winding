@@ -99,9 +99,10 @@ window.loadPartsMaster = async function() {
             const lifeShots = parseInt(inst.Life_Shots) || 0;
             const checkCount = parseInt(inst.Check_Count) || 0;
             const nextCheckShot = parseInt(inst.Next_Check_Shot) || 0;
-            const effectiveLife = lifeShots * (checkCount + 1);
-            const autoNextCheck = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
-            const needsCheck = (autoNextCheck > 0 && actualShots >= autoNextCheck);
+            const effectiveLife = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
+            // ใช้ Next_Check_Shot ที่บันทึกจริงจาก Parts_Installation เป็นเกณฑ์เดียวกับ Machine Detail
+            // ห้ามคำนวณ auto จาก Life_Shots เพราะหลังตรวจผ่าน ผู้ใช้สามารถเลื่อนรอบเช็คเป็น Actual + Interval ได้
+            const needsCheck = (nextCheckShot > 0 && actualShots >= nextCheckShot);
             partLocationsCache[pid].push({
                 machine: inst.Machine,
                 actualShots: actualShots,
@@ -113,7 +114,7 @@ window.loadPartsMaster = async function() {
                 carriedDays: carriedDays,
                 checkInterval: checkInterval,
                 checkCount: checkCount,
-                nextCheckShot: autoNextCheck,
+                nextCheckShot: nextCheckShot,
                 needsCheck: needsCheck,
                 partName: inst.Part_Name || ''
             });
@@ -365,8 +366,6 @@ window.loadMachineParts = async function(machine) {
             const lifeShots = parseInt(inst.Life_Shots) || 0;
             const carried = parseInt(inst.Carried_Shots) || 0;
             const usedShots = carried + Math.max(0, totalShots - installShot);
-            const pct = lifeShots > 0 ? Math.min((usedShots / lifeShots) * 100, 100) : 0;
-            const remaining = lifeShots > 0 ? Math.max(lifeShots - usedShots, 0) : 0;
             // Actual Days = Carried_Days + จำนวนวันที่อยู่บนเครื่องปัจจุบัน
             const carriedDays = parseInt(inst.Carried_Days) || 0;
             const installDateStr = extractInstallDateStr(inst.Install_Date);
@@ -376,6 +375,9 @@ window.loadMachineParts = async function(machine) {
             const checkInterval = parseInt(inst.Check_Interval_Shots) || 0;
             const nextCheckShot = parseInt(inst.Next_Check_Shot) || 0;
             const checkCount = parseInt(inst.Check_Count) || 0;
+            const effectiveLife = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
+            const pct = effectiveLife > 0 ? Math.min((usedShots / effectiveLife) * 100, 100) : 0;
+            const remaining = effectiveLife > 0 ? Math.max(effectiveLife - usedShots, 0) : 0;
             const lastCheckDate = inst.Last_Check_Date ? extractInstallDateStr(inst.Last_Check_Date) : '';
             const needsCheck = (nextCheckShot > 0 && usedShots >= nextCheckShot);
             const shotsToNextCheck = nextCheckShot > 0 ? Math.max(0, nextCheckShot - usedShots) : 0;
@@ -396,7 +398,7 @@ window.loadMachineParts = async function(machine) {
                 </div>
                 <div class="flex justify-between text-xs text-gray-500 mb-1">
                     <span>ติดตั้ง: ${installDateDisplay}</span>
-                    <span>Actual: <b>${usedShots.toLocaleString()}</b>${carried > 0 ? ` (สะสม ${carried.toLocaleString()})` : ''} / ${lifeShots > 0 ? lifeShots.toLocaleString() : '∞'} shot</span>
+                    <span>Actual: <b>${usedShots.toLocaleString()}</b>${carried > 0 ? ` (สะสม ${carried.toLocaleString()})` : ''} / ${effectiveLife > 0 ? effectiveLife.toLocaleString() : '∞'} shot${checkCount > 0 && lifeShots > 0 ? ` <span class="text-green-600">(Life ${lifeShots.toLocaleString()} × ${checkCount + 1})</span>` : ''}</span>
                 </div>
                 <div class="flex justify-between text-xs text-gray-500 mb-1">
                     <span>&nbsp;</span>
