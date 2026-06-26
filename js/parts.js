@@ -3,6 +3,14 @@
 let partsCache = [];
 let partLocationsCache = {};  // { Part_ID: [{machine, actualShots, actualDays, installId, lifeShots, carried, carriedDays}] }
 
+function fetchPartsJson(payload) {
+    return fetch(`${SCRIPT_URL}?_t=${Date.now()}`, {
+        method: 'POST',
+        cache: 'no-store',
+        body: JSON.stringify(payload)
+    });
+}
+
 // แปลงค่า Install_Date (อาจเป็น Date object, ISO string, "yyyy-MM-dd", หรือ "yyyy-MM-dd HH:mm") → "yyyy-MM-dd"
 function extractInstallDateStr(raw) {
     if (!raw) return '';
@@ -72,8 +80,8 @@ window.loadPartsMaster = async function() {
     tbody.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-4">กำลังโหลด...</td></tr>';
     try {
         const [masterRes, instRes] = await Promise.all([
-            fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_PARTS_MASTER' }) }),
-            fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_PARTS_INSTALLATION' }) })
+            fetchPartsJson({ action: 'GET_PARTS_MASTER' }),
+            fetchPartsJson({ action: 'GET_PARTS_INSTALLATION' })
         ]);
         const masterResult = await masterRes.json();
         const instResult = await instRes.json();
@@ -83,7 +91,7 @@ window.loadPartsMaster = async function() {
         // สร้าง map: Part_ID → [{ machine, actualShots, ... }] (เฉพาะ Active)
         partLocationsCache = {};
         (instResult.data || []).forEach(inst => {
-            if (inst.Status !== 'Active') return;
+            if (String(inst.Status || '').trim() !== 'Active') return;
             const pid = inst.Part_ID;
             if (!pid) return;
             if (!partLocationsCache[pid]) partLocationsCache[pid] = [];
@@ -99,9 +107,10 @@ window.loadPartsMaster = async function() {
             const lifeShots = parseInt(inst.Life_Shots) || 0;
             const checkCount = parseInt(inst.Check_Count) || 0;
             const nextCheckShot = parseInt(inst.Next_Check_Shot) || 0;
-            const effectiveLife = lifeShots * (checkCount + 1);
-            const autoNextCheck = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
-            const needsCheck = (autoNextCheck > 0 && actualShots >= autoNextCheck);
+            const effectiveLife = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
+            // ใช้ Next_Check_Shot ที่บันทึกจริงจาก Parts_Installation เป็นเกณฑ์เดียวกับ Machine Detail
+            // ห้ามคำนวณ auto จาก Life_Shots เพราะหลังตรวจผ่าน ผู้ใช้สามารถเลื่อนรอบเช็คเป็น Actual + Interval ได้
+            const needsCheck = (nextCheckShot > 0 && actualShots >= nextCheckShot);
             partLocationsCache[pid].push({
                 machine: inst.Machine,
                 actualShots: actualShots,
@@ -113,7 +122,7 @@ window.loadPartsMaster = async function() {
                 carriedDays: carriedDays,
                 checkInterval: checkInterval,
                 checkCount: checkCount,
-                nextCheckShot: autoNextCheck,
+                nextCheckShot: nextCheckShot,
                 needsCheck: needsCheck,
                 partName: inst.Part_Name || ''
             });
@@ -342,12 +351,12 @@ window.loadMachineParts = async function(machine) {
     try {
         // โหลด Installation + Shot ปัจจุบัน พร้อมกัน
         const [instRes, shotRes] = await Promise.all([
-            fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_PARTS_INSTALLATION', machine: machine }) }),
-            fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_MACHINE_SHOTS', machine: machine, sinceDate: '2020-01-01' }) })
+            fetchPartsJson({ action: 'GET_PARTS_INSTALLATION', machine: machine }),
+            fetchPartsJson({ action: 'GET_MACHINE_SHOTS', machine: machine, sinceDate: '2020-01-01' })
         ]);
         const instData = await instRes.json();
         const shotData = await shotRes.json();
-        const installations = (instData.data || []).filter(x => x.Status === 'Active');
+        const installations = (instData.data || []).filter(x => String(x.Status || '').trim() === 'Active');
         const totalShots = shotData.totalShots || 0;
 
         if (installations.length === 0) {
@@ -365,8 +374,6 @@ window.loadMachineParts = async function(machine) {
             const lifeShots = parseInt(inst.Life_Shots) || 0;
             const carried = parseInt(inst.Carried_Shots) || 0;
             const usedShots = carried + Math.max(0, totalShots - installShot);
-            const pct = lifeShots > 0 ? Math.min((usedShots / lifeShots) * 100, 100) : 0;
-            const remaining = lifeShots > 0 ? Math.max(lifeShots - usedShots, 0) : 0;
             // Actual Days = Carried_Days + จำนวนวันที่อยู่บนเครื่องปัจจุบัน
             const carriedDays = parseInt(inst.Carried_Days) || 0;
             const installDateStr = extractInstallDateStr(inst.Install_Date);
@@ -376,6 +383,9 @@ window.loadMachineParts = async function(machine) {
             const checkInterval = parseInt(inst.Check_Interval_Shots) || 0;
             const nextCheckShot = parseInt(inst.Next_Check_Shot) || 0;
             const checkCount = parseInt(inst.Check_Count) || 0;
+            const effectiveLife = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
+            const pct = effectiveLife > 0 ? Math.min((usedShots / effectiveLife) * 100, 100) : 0;
+            const remaining = effectiveLife > 0 ? Math.max(effectiveLife - usedShots, 0) : 0;
             const lastCheckDate = inst.Last_Check_Date ? extractInstallDateStr(inst.Last_Check_Date) : '';
             const needsCheck = (nextCheckShot > 0 && usedShots >= nextCheckShot);
             const shotsToNextCheck = nextCheckShot > 0 ? Math.max(0, nextCheckShot - usedShots) : 0;
@@ -389,14 +399,14 @@ window.loadMachineParts = async function(machine) {
             const installDateDisplay = formatInstallDateTime(inst.Install_Date);
             const escName = (inst.Part_Name || '').replace(/'/g, "\\'");
             const checkBtnClass = needsCheck ? 'text-orange-600 font-bold animate-pulse' : 'text-orange-500';
-            html += `<div class="border rounded-lg p-3 bg-white ${needsCheck ? 'border-orange-400 bg-orange-50' : ''}">
+            html += `<div data-install-id="${inst.Install_ID}" class="border rounded-lg p-3 bg-white ${needsCheck ? 'border-orange-400 bg-orange-50' : ''}">
                 <div class="flex justify-between items-center mb-1">
                     <span class="font-bold text-sm">${inst.Part_Name || inst.Part_ID}${inst.Part_ID ? ` <span class="text-[10px] text-gray-400 font-mono font-normal">(${inst.Part_ID})</span>` : ''}</span>
                     <span class="text-xs ${statusTextColor}">${statusText}</span>
                 </div>
                 <div class="flex justify-between text-xs text-gray-500 mb-1">
                     <span>ติดตั้ง: ${installDateDisplay}</span>
-                    <span>Actual: <b>${usedShots.toLocaleString()}</b>${carried > 0 ? ` (สะสม ${carried.toLocaleString()})` : ''} / ${lifeShots > 0 ? lifeShots.toLocaleString() : '∞'} shot</span>
+                    <span>Actual: <b>${usedShots.toLocaleString()}</b>${carried > 0 ? ` (สะสม ${carried.toLocaleString()})` : ''} / ${effectiveLife > 0 ? effectiveLife.toLocaleString() : '∞'} shot${checkCount > 0 && lifeShots > 0 ? ` <span class="text-green-600">(Life ${lifeShots.toLocaleString()} × ${checkCount + 1})</span>` : ''}</span>
                 </div>
                 <div class="flex justify-between text-xs text-gray-500 mb-1">
                     <span>&nbsp;</span>
@@ -433,15 +443,15 @@ window.loadMachineParts = async function(machine) {
 window.uninstallPart = async function(installId, machine, partName) {
     if (!confirm(`⚠️ ยืนยันถอดอะไหล่ "${partName}" ออกจากเครื่อง ${machine}?\n\nอะไหล่จะถูกเปลี่ยนสถานะเป็น "Removed" โดยไม่ติดตั้งเครื่องอื่น`)) return;
     try {
-        const res = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'UNINSTALL_PART', installId: installId })
-        });
+        const res = await fetchPartsJson({ action: 'UNINSTALL_PART', installId: installId });
         const result = await res.json();
         if (result.status === 'success') {
             alert('✅ ถอดอะไหล่สำเร็จ');
-            window.loadMachineParts(machine);
-            if (typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
+            document.querySelectorAll(`[data-install-id="${installId}"]`).forEach(el => el.remove());
+            await Promise.all([
+                (typeof window.loadMachineParts === 'function') ? window.loadMachineParts(machine) : Promise.resolve(),
+                (typeof window.loadPartsMaster === 'function') ? window.loadPartsMaster() : Promise.resolve()
+            ]);
         } else {
             alert('เกิดข้อผิดพลาด: ' + (result.message || ''));
         }

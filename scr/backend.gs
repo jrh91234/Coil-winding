@@ -1163,22 +1163,11 @@ function doPost(e) {
       SpreadsheetApp.flush();
       return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId, carriedShots: newCarried, carriedDays: newCarriedDays, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot})).setMimeType(ContentService.MimeType.JSON);
     } else {
-      // ติดตั้งอะไหล่ใหม่ — เช็คว่ามีรายการ "Removed" ของ Part_ID เดียวกันหรือไม่ เพื่อ carry-over shot/days
-      const allRows = sheet.getDataRange().getValues();
-      const allHeaders = allRows[0].map(h => String(h).trim());
-      const ci = (name) => allHeaders.indexOf(name);
-      let carryShots = 0, carryDays = 0, removedRowIdx = -1;
-      for (let r = allRows.length - 1; r >= 1; r--) {
-        if (String(allRows[r][ci("Part_ID")]).trim() === d.Part_ID && String(allRows[r][ci("Status")]).trim() === "Removed") {
-          carryShots = parseInt(allRows[r][ci("Carried_Shots")]) || 0;
-          carryDays = parseInt(allRows[r][ci("Carried_Days")]) || 0;
-          removedRowIdx = r;
-          break;
-        }
-      }
-      if (removedRowIdx > 0) {
-        sheet.getRange(removedRowIdx + 1, ci("Status") + 1).setValue("Reinstalled");
-      }
+      // ติดตั้งอะไหล่ใหม่จาก Parts Master = อะไหล่ชิ้นใหม่ ต้องเริ่มนับอายุที่ 0
+      // การย้าย/เปลี่ยนชิ้นเดิมให้ใช้ mode="replace" เท่านั้น เพราะ Part_ID เป็นรหัสชนิดอะไหล่
+      // ไม่ใช่ serial ของอะไหล่แต่ละชิ้น ถ้า carry จาก Removed ของ Part_ID เดียวกันจะทำให้ shot count เพี้ยน
+      const carryShots = 0;
+      const carryDays = 0;
       const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
       const hdr = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
       const newInstallShot = calcMachineShots(ss, d.Machine, "2020-01-01", installDateOnly);
@@ -1207,8 +1196,7 @@ function doPost(e) {
       });
       sheet.appendRow(rowData);
       SpreadsheetApp.flush();
-      var msg = carryShots > 0 ? "Installed (carry-over " + carryShots + " shots, " + carryDays + " days)" : "Installed";
-      return ContentService.createTextOutput(JSON.stringify({status: "success", message: msg, installId: newId, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot, carriedShots: carryShots, carriedDays: carryDays})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Installed", installId: newId, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot, carriedShots: carryShots, carriedDays: carryDays})).setMimeType(ContentService.MimeType.JSON);
     }
   }
 
@@ -2246,9 +2234,8 @@ function doPost(e) {
           const actualShots = carried + Math.max(0, machineShot - installShot);
           const nextCheck = parseInt(r[pi("Next_Check_Shot")]) || 0;
           const checkCount = parseInt(r[pi("Check_Count")]) || 0;
-          const effectiveLife = lifeShots * (checkCount + 1);
+          const effectiveLife = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
           const pct = effectiveLife > 0 ? (actualShots / effectiveLife) * 100 : 0;
-          const autoNextCheck = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
           const item = {
             installId: String(r[pi("Install_ID")] || ""),
             machine: mac,
@@ -2258,10 +2245,10 @@ function doPost(e) {
             lifeShots: lifeShots,
             effectiveLife: effectiveLife,
             pct: Math.round(pct * 10) / 10,
-            nextCheckShot: autoNextCheck,
+            nextCheckShot: nextCheck,
             checkCount: checkCount
           };
-          if (autoNextCheck > 0 && actualShots >= autoNextCheck) {
+          if (nextCheck > 0 && actualShots >= nextCheck) {
             result.partsCheck.push(item);
           } else if (lifeShots > 0 && pct >= 90) {
             result.partsNearEnd.push(item);
@@ -3384,6 +3371,8 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
         const fg = parseInt(getVal(row, "FG")) || 0;
         const ngKg = parseFloat(getVal(row, "NG_Total")) || 0;
         const ngPcs = getPcsFromKg(product, ngKg);
+        const batchId = String(getVal(row, "Batch_ID") || "").trim();
+        const isSortPostedRow = batchId.indexOf("SORT-") === 0;
         
         let details = []; try { const j = getVal(row, "NG_Details_JSON"); if(j) details = JSON.parse(j); } catch (e) {}
 
@@ -3392,12 +3381,20 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
         result.totalNgKg += ngKg;
         result.totalNgPcs += ngPcs;
 
-        if (!dailyStats[rowDateStr]) dailyStats[rowDateStr] = { fg: 0, ng: 0, ngBreakdown: {}, byModel: {} };
+        if (!dailyStats[rowDateStr]) dailyStats[rowDateStr] = { fg: 0, ng: 0, sortPostedFg: 0, sortPostedNg: 0, ngBreakdown: {}, byModel: {} };
         dailyStats[rowDateStr].fg += fg;
         dailyStats[rowDateStr].ng += ngPcs;
-        if (!dailyStats[rowDateStr].byModel[product]) dailyStats[rowDateStr].byModel[product] = { fg: 0, ng: 0 };
+        if (isSortPostedRow) {
+          dailyStats[rowDateStr].sortPostedFg += fg;
+          dailyStats[rowDateStr].sortPostedNg += ngPcs;
+        }
+        if (!dailyStats[rowDateStr].byModel[product]) dailyStats[rowDateStr].byModel[product] = { fg: 0, ng: 0, sortPostedFg: 0, sortPostedNg: 0 };
         dailyStats[rowDateStr].byModel[product].fg += fg;
         dailyStats[rowDateStr].byModel[product].ng += ngPcs;
+        if (isSortPostedRow) {
+          dailyStats[rowDateStr].byModel[product].sortPostedFg += fg;
+          dailyStats[rowDateStr].byModel[product].sortPostedNg += ngPcs;
+        }
 
         const hIdx = displayLabels.indexOf(hour);
         if (hIdx !== -1) {
@@ -3682,7 +3679,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
   const uniqueDates = [...new Set(sortedDates)];
 
   result.dailyTrend = uniqueDates.map(date => {
-    const d = dailyStats[date] || { fg: 0, ng: 0, ngBreakdown: {}, byModel: {} };
+    const d = dailyStats[date] || { fg: 0, ng: 0, sortPostedFg: 0, sortPostedNg: 0, ngBreakdown: {}, byModel: {} };
     const total = d.fg + d.ng;
     const rate = total > 0 ? ((d.ng / total) * 100).toFixed(2) : 0;
     const pending = pendingSortByDate[date] || null;
@@ -3716,9 +3713,25 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
       }
     }
     
+    const outputByModel = {};
+    Object.keys(d.byModel || {}).forEach(modelName => {
+      const bm = d.byModel[modelName] || {};
+      outputByModel[modelName] = {
+        fg: Math.max(0, (bm.fg || 0) - (bm.sortPostedFg || 0)),
+        ng: Math.max(0, (bm.ng || 0) - (bm.sortPostedNg || 0))
+      };
+    });
+
     return {
       date: date, fg: d.fg, ng: d.ng, ngRate: parseFloat(rate), ngBreakdown: d.ngBreakdown,
       byModel: d.byModel || {},
+      dailyOutputProduction: {
+        fg: Math.max(0, (d.fg || 0) - (d.sortPostedFg || 0)),
+        ng: Math.max(0, (d.ng || 0) - (d.sortPostedNg || 0)),
+        excludedSortPostedFg: d.sortPostedFg || 0,
+        excludedSortPostedNg: d.sortPostedNg || 0,
+        byModel: outputByModel
+      },
       pendingSortQty: pending ? pending.qty : 0,
       worstNgRate: worstNgRate,
       bestNgRate: bestNgRate,
