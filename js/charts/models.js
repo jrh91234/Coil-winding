@@ -405,12 +405,15 @@ window.getDailyOutputSeries = function() {
     trendData.forEach(d => {
         let fg, ng, sFg, sNg, hrs;
         if (model === 'all') {
-            fg = d.fg || 0; ng = d.ng || 0;
+            const outputProd = d.dailyOutputProduction || null;
+            fg = outputProd ? (outputProd.fg || 0) : (d.fg || 0);
+            ng = outputProd ? (outputProd.ng || 0) : (d.ng || 0);
             sFg = (d.sortYield && d.sortYield.fg) || 0;
             sNg = (d.sortYield && d.sortYield.ng) || 0;
             hrs = d.workHours || 0;
         } else {
-            const m = d.byModel && d.byModel[model];
+            const outputByModel = d.dailyOutputProduction && d.dailyOutputProduction.byModel;
+            const m = (outputByModel && outputByModel[model]) || (d.byModel && d.byModel[model]);
             fg = m ? (m.fg || 0) : 0;
             ng = m ? (m.ng || 0) : 0;
             const sm = d.sortByModel && d.sortByModel[model];
