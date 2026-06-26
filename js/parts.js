@@ -3,6 +3,14 @@
 let partsCache = [];
 let partLocationsCache = {};  // { Part_ID: [{machine, actualShots, actualDays, installId, lifeShots, carried, carriedDays}] }
 
+function fetchPartsJson(payload) {
+    return fetch(`${SCRIPT_URL}?_t=${Date.now()}`, {
+        method: 'POST',
+        cache: 'no-store',
+        body: JSON.stringify(payload)
+    });
+}
+
 // แปลงค่า Install_Date (อาจเป็น Date object, ISO string, "yyyy-MM-dd", หรือ "yyyy-MM-dd HH:mm") → "yyyy-MM-dd"
 function extractInstallDateStr(raw) {
     if (!raw) return '';
@@ -72,8 +80,8 @@ window.loadPartsMaster = async function() {
     tbody.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-4">กำลังโหลด...</td></tr>';
     try {
         const [masterRes, instRes] = await Promise.all([
-            fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_PARTS_MASTER' }) }),
-            fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_PARTS_INSTALLATION' }) })
+            fetchPartsJson({ action: 'GET_PARTS_MASTER' }),
+            fetchPartsJson({ action: 'GET_PARTS_INSTALLATION' })
         ]);
         const masterResult = await masterRes.json();
         const instResult = await instRes.json();
@@ -83,7 +91,7 @@ window.loadPartsMaster = async function() {
         // สร้าง map: Part_ID → [{ machine, actualShots, ... }] (เฉพาะ Active)
         partLocationsCache = {};
         (instResult.data || []).forEach(inst => {
-            if (inst.Status !== 'Active') return;
+            if (String(inst.Status || '').trim() !== 'Active') return;
             const pid = inst.Part_ID;
             if (!pid) return;
             if (!partLocationsCache[pid]) partLocationsCache[pid] = [];
@@ -343,12 +351,12 @@ window.loadMachineParts = async function(machine) {
     try {
         // โหลด Installation + Shot ปัจจุบัน พร้อมกัน
         const [instRes, shotRes] = await Promise.all([
-            fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_PARTS_INSTALLATION', machine: machine }) }),
-            fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_MACHINE_SHOTS', machine: machine, sinceDate: '2020-01-01' }) })
+            fetchPartsJson({ action: 'GET_PARTS_INSTALLATION', machine: machine }),
+            fetchPartsJson({ action: 'GET_MACHINE_SHOTS', machine: machine, sinceDate: '2020-01-01' })
         ]);
         const instData = await instRes.json();
         const shotData = await shotRes.json();
-        const installations = (instData.data || []).filter(x => x.Status === 'Active');
+        const installations = (instData.data || []).filter(x => String(x.Status || '').trim() === 'Active');
         const totalShots = shotData.totalShots || 0;
 
         if (installations.length === 0) {
@@ -391,7 +399,7 @@ window.loadMachineParts = async function(machine) {
             const installDateDisplay = formatInstallDateTime(inst.Install_Date);
             const escName = (inst.Part_Name || '').replace(/'/g, "\\'");
             const checkBtnClass = needsCheck ? 'text-orange-600 font-bold animate-pulse' : 'text-orange-500';
-            html += `<div class="border rounded-lg p-3 bg-white ${needsCheck ? 'border-orange-400 bg-orange-50' : ''}">
+            html += `<div data-install-id="${inst.Install_ID}" class="border rounded-lg p-3 bg-white ${needsCheck ? 'border-orange-400 bg-orange-50' : ''}">
                 <div class="flex justify-between items-center mb-1">
                     <span class="font-bold text-sm">${inst.Part_Name || inst.Part_ID}${inst.Part_ID ? ` <span class="text-[10px] text-gray-400 font-mono font-normal">(${inst.Part_ID})</span>` : ''}</span>
                     <span class="text-xs ${statusTextColor}">${statusText}</span>
@@ -435,15 +443,15 @@ window.loadMachineParts = async function(machine) {
 window.uninstallPart = async function(installId, machine, partName) {
     if (!confirm(`⚠️ ยืนยันถอดอะไหล่ "${partName}" ออกจากเครื่อง ${machine}?\n\nอะไหล่จะถูกเปลี่ยนสถานะเป็น "Removed" โดยไม่ติดตั้งเครื่องอื่น`)) return;
     try {
-        const res = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'UNINSTALL_PART', installId: installId })
-        });
+        const res = await fetchPartsJson({ action: 'UNINSTALL_PART', installId: installId });
         const result = await res.json();
         if (result.status === 'success') {
             alert('✅ ถอดอะไหล่สำเร็จ');
-            window.loadMachineParts(machine);
-            if (typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
+            document.querySelectorAll(`[data-install-id="${installId}"]`).forEach(el => el.remove());
+            await Promise.all([
+                (typeof window.loadMachineParts === 'function') ? window.loadMachineParts(machine) : Promise.resolve(),
+                (typeof window.loadPartsMaster === 'function') ? window.loadPartsMaster() : Promise.resolve()
+            ]);
         } else {
             alert('เกิดข้อผิดพลาด: ' + (result.message || ''));
         }
