@@ -3371,6 +3371,8 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
         const fg = parseInt(getVal(row, "FG")) || 0;
         const ngKg = parseFloat(getVal(row, "NG_Total")) || 0;
         const ngPcs = getPcsFromKg(product, ngKg);
+        const batchId = String(getVal(row, "Batch_ID") || "").trim();
+        const isSortPostedRow = batchId.indexOf("SORT-") === 0;
         
         let details = []; try { const j = getVal(row, "NG_Details_JSON"); if(j) details = JSON.parse(j); } catch (e) {}
 
@@ -3379,12 +3381,20 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
         result.totalNgKg += ngKg;
         result.totalNgPcs += ngPcs;
 
-        if (!dailyStats[rowDateStr]) dailyStats[rowDateStr] = { fg: 0, ng: 0, ngBreakdown: {}, byModel: {} };
+        if (!dailyStats[rowDateStr]) dailyStats[rowDateStr] = { fg: 0, ng: 0, sortPostedFg: 0, sortPostedNg: 0, ngBreakdown: {}, byModel: {} };
         dailyStats[rowDateStr].fg += fg;
         dailyStats[rowDateStr].ng += ngPcs;
-        if (!dailyStats[rowDateStr].byModel[product]) dailyStats[rowDateStr].byModel[product] = { fg: 0, ng: 0 };
+        if (isSortPostedRow) {
+          dailyStats[rowDateStr].sortPostedFg += fg;
+          dailyStats[rowDateStr].sortPostedNg += ngPcs;
+        }
+        if (!dailyStats[rowDateStr].byModel[product]) dailyStats[rowDateStr].byModel[product] = { fg: 0, ng: 0, sortPostedFg: 0, sortPostedNg: 0 };
         dailyStats[rowDateStr].byModel[product].fg += fg;
         dailyStats[rowDateStr].byModel[product].ng += ngPcs;
+        if (isSortPostedRow) {
+          dailyStats[rowDateStr].byModel[product].sortPostedFg += fg;
+          dailyStats[rowDateStr].byModel[product].sortPostedNg += ngPcs;
+        }
 
         const hIdx = displayLabels.indexOf(hour);
         if (hIdx !== -1) {
@@ -3669,7 +3679,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
   const uniqueDates = [...new Set(sortedDates)];
 
   result.dailyTrend = uniqueDates.map(date => {
-    const d = dailyStats[date] || { fg: 0, ng: 0, ngBreakdown: {}, byModel: {} };
+    const d = dailyStats[date] || { fg: 0, ng: 0, sortPostedFg: 0, sortPostedNg: 0, ngBreakdown: {}, byModel: {} };
     const total = d.fg + d.ng;
     const rate = total > 0 ? ((d.ng / total) * 100).toFixed(2) : 0;
     const pending = pendingSortByDate[date] || null;
@@ -3703,9 +3713,25 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
       }
     }
     
+    const outputByModel = {};
+    Object.keys(d.byModel || {}).forEach(modelName => {
+      const bm = d.byModel[modelName] || {};
+      outputByModel[modelName] = {
+        fg: Math.max(0, (bm.fg || 0) - (bm.sortPostedFg || 0)),
+        ng: Math.max(0, (bm.ng || 0) - (bm.sortPostedNg || 0))
+      };
+    });
+
     return {
       date: date, fg: d.fg, ng: d.ng, ngRate: parseFloat(rate), ngBreakdown: d.ngBreakdown,
       byModel: d.byModel || {},
+      dailyOutputProduction: {
+        fg: Math.max(0, (d.fg || 0) - (d.sortPostedFg || 0)),
+        ng: Math.max(0, (d.ng || 0) - (d.sortPostedNg || 0)),
+        excludedSortPostedFg: d.sortPostedFg || 0,
+        excludedSortPostedNg: d.sortPostedNg || 0,
+        byModel: outputByModel
+      },
       pendingSortQty: pending ? pending.qty : 0,
       worstNgRate: worstNgRate,
       bestNgRate: bestNgRate,

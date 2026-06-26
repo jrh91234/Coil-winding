@@ -186,7 +186,7 @@ window.buildDailyOutputAudit = function() {
     };
 
     const methodology = [
-        '<b>รวมทั้งหมด (ต่อช่วง)</b> = <code class="bg-gray-100 px-1 rounded">FG ผลิต + NG ผลิต + FG คัดแยก + NG คัดแยก</code> (นับเป็นชิ้น) = ความสูงของแท่ง stack',
+        '<b>รวมทั้งหมด (ต่อช่วง)</b> = <code class="bg-gray-100 px-1 rounded">FG ผลิต + NG ผลิต + FG คัดแยก + NG คัดแยก</code> (นับเป็นชิ้น) = ความสูงของแท่ง stack · แถว Production_Data ที่มาจาก Batch_ID SORT-* จะไม่ถูกนับซ้ำในฝั่งงานผลิตของกราฟนี้',
         '<b>FG รวม/ดี</b> = <code class="bg-gray-100 px-1 rounded">FG ผลิต + FG คัดแยก</code>',
         '<b>NG (ชิ้น)</b> แปลงจากน้ำหนัก: <code class="bg-gray-100 px-1 rounded">NG ชิ้น = NG Kg ÷ WPP ของรุ่น</code>',
         '<b>ชั่วโมง-เครื่อง</b> = รวม (เครื่อง × ช่วงชั่วโมงที่เดินจริง) ถ่วงด้วยความยาวช่วง (เช่น OT 17:30-18:00 = 0.5 ชม.)',
@@ -204,7 +204,7 @@ window.buildDailyOutputAudit = function() {
     const notes = [
         'ตัวเลขทุกคอลัมน์มาจากฟังก์ชันคำนวณเดียวกับที่กราฟใช้วาด (getDailyOutputSeries) จึงตรงกับกราฟเสมอ',
         'NG ชิ้นปัดจากน้ำหนัก ÷ WPP อาจมีปัดเศษเล็กน้อยเมื่อเทียบกับยอดน้ำหนักดิบ',
-        'งานคัดแยกบางส่วนมาจากของค้าง/เสียของการผลิต ยอด "รวมทั้งหมด" จึงเป็นผลรวมงานที่จับทั้งหมด (อาจซ้อนเชิงแนวคิดกับงานผลิต)',
+        'งานคัดแยกที่ Completed/Wait QC แสดงเป็น FG/NG คัดแยก ส่วนงาน Pending/Rejected เท่านั้นที่ถือเป็นงานรอคัดใน forecast; แถว SORT-* ที่ sync เข้า Production_Data ถูกกันออกจากฝั่งงานผลิตของ Daily Output เพื่อไม่ให้นับซ้ำ',
         S.model !== 'all'
             ? `กำลังดูเฉพาะรุ่น ${S.model} — ยอด sort รายรุ่นอาศัยชื่อรุ่นในชีต Sorting ตรงกับฝั่งผลิต`
             : 'ดูรายรุ่นได้โดยเลือกรุ่นที่ dropdown แล้วเปิด Audit ใหม่'
