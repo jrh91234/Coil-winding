@@ -29,5 +29,9 @@ jobs:
       - name: Authenticate clasp
         run: echo '${{ secrets.CLASP_TOKEN }}' > ~/.clasprc.json
 
-      - name: Push to Apps Script
+      - name: Push code to Apps Script
         run: clasp push --force
+
+      # redeploy deployment เดิม (id เดียวกับใน SCRIPT_URL /exec) → โค้ดใหม่ live โดย URL ไม่เปลี่ยน
+      - name: Deploy new version (same /exec URL)
+        run: clasp deploy -i AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw --description "Auto-deploy from GitHub Actions"
