@@ -2,6 +2,7 @@
 
 let partsCache = [];
 let partLocationsCache = {};  // { Part_ID: [{machine, actualShots, actualDays, installId, lifeShots, carried, carriedDays}] }
+let partRemovedCache = {};    // { Part_ID: { carriedShots, carriedDays, replacedDate, machine } } — most recent Removed record
 
 function fetchPartsJson(payload) {
     return fetch(`${SCRIPT_URL}?_t=${Date.now()}`, {
@@ -90,8 +91,26 @@ window.loadPartsMaster = async function() {
 
         // สร้าง map: Part_ID → [{ machine, actualShots, ... }] (เฉพาะ Active)
         partLocationsCache = {};
+        partRemovedCache = {};
         (instResult.data || []).forEach(inst => {
-            if (String(inst.Status || '').trim() !== 'Active') return;
+            const status = String(inst.Status || '').trim();
+            // เก็บ Removed record ล่าสุดต่อ Part_ID (ดู shot สะสม ณ วันถอด)
+            if (status === 'Removed') {
+                const pid = inst.Part_ID;
+                if (!pid) return;
+                const replacedDate = inst.Replaced_Date ? extractInstallDateStr(inst.Replaced_Date) : '';
+                const prev = partRemovedCache[pid];
+                if (!prev || replacedDate > (prev.replacedDate || '')) {
+                    partRemovedCache[pid] = {
+                        carriedShots: parseInt(inst.Carried_Shots) || 0,
+                        carriedDays: parseInt(inst.Carried_Days) || 0,
+                        replacedDate: replacedDate,
+                        machine: inst.Machine || ''
+                    };
+                }
+                return;
+            }
+            if (status !== 'Active') return;
             const pid = inst.Part_ID;
             if (!pid) return;
             if (!partLocationsCache[pid]) partLocationsCache[pid] = [];
@@ -146,9 +165,14 @@ function renderPartsTable() {
         const cost = parseFloat(p.Unit_Cost) || 0;
         const installations = partLocationsCache[p.Part_ID] || [];
         // สร้าง Location HTML — แสดง machine + actual shots ต่อ installation
+        const removed = partRemovedCache[p.Part_ID];
         let locationHtml;
         if (installations.length === 0) {
-            locationHtml = '<span class="text-gray-300 text-xs">-</span>';
+            if (removed && removed.machine) {
+                locationHtml = `<span class="inline-block bg-gray-100 text-gray-400 text-xs px-1.5 py-0.5 rounded font-mono line-through" title="ถอดออกแล้ว ${removed.replacedDate || ''}">${removed.machine}</span>`;
+            } else {
+                locationHtml = '<span class="text-gray-300 text-xs">-</span>';
+            }
         } else {
             const escName = (p.Part_Name || '').replace(/'/g, "\\'");
             locationHtml = '<div class="flex flex-wrap gap-1">' + installations.map(inst => {
@@ -183,7 +207,9 @@ function renderPartsTable() {
         }
         const shotHtml = installations.length > 0
             ? `<div><span class="${shotColor} font-mono">${totalActualShots.toLocaleString()}</span><div class="text-[10px] text-gray-500 font-mono">${maxActualDays.toLocaleString()} วัน</div>${checkBadge}</div>`
-            : '<span class="text-gray-300">-</span>';
+            : removed
+                ? `<div><span class="text-gray-500 font-mono">${removed.carriedShots.toLocaleString()}</span><div class="text-[10px] text-gray-400 font-mono">${removed.carriedDays.toLocaleString()} วัน</div><div class="text-[10px] text-gray-400">📤 ถอดแล้ว${removed.replacedDate ? ` ${removed.replacedDate}` : ''}</div></div>`
+                : '<span class="text-gray-300">-</span>';
 
         // ปุ่ม 🔍 ตรวจเช็ค — แสดงเฉพาะกรณีมี active installation
         const escNameAction = (p.Part_Name || '').replace(/'/g, "\\'");
