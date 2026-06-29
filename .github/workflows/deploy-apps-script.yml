@@ -1,6 +1,9 @@
 name: Deploy to Google Apps Script
 
 on:
+  # กดปุ่ม "Run workflow" ใน Actions tab เพื่อ deploy เอง (ควบคุมจังหวะตอนคนใช้น้อย)
+  workflow_dispatch:
+  # หรือ auto เมื่อ push scr/** ตรงเข้า main (หมายเหตุ: การ merge โดย bot จะไม่ trigger อันนี้)
   push:
     branches:
       - main
