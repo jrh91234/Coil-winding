@@ -985,6 +985,7 @@ function doPost(e) {
             }
           }
           SpreadsheetApp.flush();
+          logUserAction(data.recorder || "System", "User", "EDIT_PARTS_MASTER", "แก้ไขอะไหล่: " + d.Part_ID + " " + (d.Part_Name || ""));
           return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Updated"})).setMimeType(ContentService.MimeType.JSON);
         }
       }
@@ -1018,6 +1019,7 @@ function doPost(e) {
       });
       sheet.appendRow(rowData);
       SpreadsheetApp.flush();
+      logUserAction(data.recorder || "System", "User", "ADD_PARTS_MASTER", "เพิ่มอะไหล่: " + newId + " " + (d.Part_Name || ""));
       return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Added", partId: newId})).setMimeType(ContentService.MimeType.JSON);
     }
   }
@@ -1030,6 +1032,7 @@ function doPost(e) {
       if (String(rows[i][0]).trim() === data.partId) {
         sheet.deleteRow(i + 1);
         SpreadsheetApp.flush();
+        logUserAction(data.recorder || "System", "User", "DELETE_PARTS_MASTER", "ลบอะไหล่: " + data.partId);
         return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Deleted"})).setMimeType(ContentService.MimeType.JSON);
       }
     }
@@ -1161,6 +1164,7 @@ function doPost(e) {
       });
       sheet.appendRow(rowData);
       SpreadsheetApp.flush();
+      logUserAction(d.Recorder || "System", "User", "REPLACE_PARTS_INSTALLATION", "เปลี่ยน/ย้ายอะไหล่ " + (d.Part_Name || d.Part_ID) + " (" + d.Install_ID + ") จาก " + oldMachine + " ไป " + d.Machine);
       return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId, carriedShots: newCarried, carriedDays: newCarriedDays, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot})).setMimeType(ContentService.MimeType.JSON);
     } else {
       // ติดตั้งอะไหล่ใหม่จาก Parts Master = อะไหล่ชิ้นใหม่ ต้องเริ่มนับอายุที่ 0
@@ -1196,6 +1200,7 @@ function doPost(e) {
       });
       sheet.appendRow(rowData);
       SpreadsheetApp.flush();
+      logUserAction(d.Recorder || "System", "User", "INSTALL_PARTS", "ติดตั้งอะไหล่ " + (d.Part_Name || d.Part_ID) + " กับเครื่อง " + d.Machine);
       return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Installed", installId: newId, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot, carriedShots: carryShots, carriedDays: carryDays})).setMimeType(ContentService.MimeType.JSON);
     }
   }
@@ -1259,6 +1264,7 @@ function doPost(e) {
       }
     }
     SpreadsheetApp.flush();
+    logUserAction(data.recorder || "System", "User", "UPDATE_PARTS_LIFE", "ปรับอายุอะไหล่ " + targetPartId + " เป็น " + newLife + " shot (Install: " + data.installId + ")");
     return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Life updated", partId: targetPartId, lifeShots: newLife})).setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -1331,6 +1337,7 @@ function doPost(e) {
       }
     }
     SpreadsheetApp.flush();
+    logUserAction(c.Recorder || "System", "User", "SAVE_PARTS_CHECK", "ตรวจเช็คอะไหล่ " + (c.Part_Name || c.Part_ID) + " บนเครื่อง " + c.Machine + " ผล: " + (c.Result || "Passed") + " (Shot: " + (c.Actual_Part_Shot || 0) + ")");
     return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Check saved", checkId: checkId, photoUrls: urls})).setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -2969,6 +2976,7 @@ function doPost(e) {
           sheet.getRange(i + 1, colIdx("Carried_Shots") + 1).setValue(finalCarried);
           sheet.getRange(i + 1, colIdx("Carried_Days") + 1).setValue(finalCarriedDays);
           SpreadsheetApp.flush();
+          logUserAction(data.recorder || "System", "User", "UNINSTALL_PART", "ถอดอะไหล่ " + instId + " จากเครื่อง " + oldMachine + " (Shot สะสม: " + finalCarried + ")");
           found = true;
           break;
         }

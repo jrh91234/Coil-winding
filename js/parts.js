@@ -251,8 +251,9 @@ document.getElementById('parts-form').addEventListener('submit', async function(
     const editId = document.getElementById('parts-edit-id').value;
     const checkIntervalEl = document.getElementById('parts-check-interval');
     const payload = {
-        action: editId ? 'SAVE_PARTS_MASTER' : 'SAVE_PARTS_MASTER',
+        action: 'SAVE_PARTS_MASTER',
         mode: editId ? 'edit' : 'new',
+        recorder: (window.currentUser && window.currentUser.name) || 'System',
         part: {
             Part_ID: editId || '',
             Part_Name: document.getElementById('parts-name').value.trim(),
@@ -309,9 +310,10 @@ window.cancelPartEdit = function() {
 window.deletePart = async function(partId, partName) {
     if (!confirm(`ต้องการลบอะไหล่ "${partName}" (${partId}) ใช่หรือไม่?`)) return;
     try {
+        const recorder = (window.currentUser && window.currentUser.name) || 'System';
         const res = await fetch(SCRIPT_URL, {
             method: 'POST',
-            body: JSON.stringify({ action: 'DELETE_PARTS_MASTER', partId: partId })
+            body: JSON.stringify({ action: 'DELETE_PARTS_MASTER', partId: partId, recorder: recorder })
         });
         const result = await res.json();
         if (result.status === 'success') {
@@ -469,7 +471,8 @@ window.loadMachineParts = async function(machine) {
 window.uninstallPart = async function(installId, machine, partName) {
     if (!confirm(`⚠️ ยืนยันถอดอะไหล่ "${partName}" ออกจากเครื่อง ${machine}?\n\nอะไหล่จะถูกเปลี่ยนสถานะเป็น "Removed" โดยไม่ติดตั้งเครื่องอื่น`)) return;
     try {
-        const res = await fetchPartsJson({ action: 'UNINSTALL_PART', installId: installId });
+        const recorder = (window.currentUser && window.currentUser.name) || 'System';
+        const res = await fetchPartsJson({ action: 'UNINSTALL_PART', installId: installId, recorder: recorder });
         const result = await res.json();
         if (result.status === 'success') {
             alert('✅ ถอดอะไหล่สำเร็จ');
@@ -499,9 +502,10 @@ window.promptUpdateLife = async function(installId, currentLife) {
     const val = parseInt(newLife);
     if (isNaN(val) || val < 0) { alert('กรุณาใส่ตัวเลขที่ถูกต้อง'); return; }
     try {
+        const recorder = (window.currentUser && window.currentUser.name) || 'System';
         const res = await fetch(SCRIPT_URL, {
             method: 'POST',
-            body: JSON.stringify({ action: 'UPDATE_PARTS_LIFE', installId: installId, lifeShots: val })
+            body: JSON.stringify({ action: 'UPDATE_PARTS_LIFE', installId: installId, lifeShots: val, recorder: recorder })
         });
         const result = await res.json();
         if (result.status === 'success') {
