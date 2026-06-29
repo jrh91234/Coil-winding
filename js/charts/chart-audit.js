@@ -138,6 +138,7 @@ window.printChartAudit = function() {
     const content = document.getElementById('chart-audit-content');
     if (!content) return;
     const w = window.open('', '_blank');
+    if (!w) { alert('กรุณาอนุญาต Popup ในเบราว์เซอร์เพื่อพิมพ์รายงาน'); return; }
     w.document.write(`<html><head><title>Chart Audit Report</title>
         <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
         <style>body{padding:20px;font-size:11px} table{page-break-inside:auto} tr{page-break-inside:avoid} @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>

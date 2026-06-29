@@ -1,5 +1,14 @@
 // ⚙️ ระบบจัดการอะไหล่เครื่องจักร (Parts Tracking)
 
+// Escape สำหรับใช้ใน HTML attribute (onclick="...escAttr(val)...") ป้องกัน XSS
+function escAttr(s) {
+    return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+// Escape สำหรับใช้ใน innerHTML text content
+function escHtml(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 let partsCache = [];
 let partLocationsCache = {};  // { Part_ID: [{machine, actualShots, actualDays, installId, lifeShots, carried, carriedDays}] }
 let partRemovedCache = {};    // { Part_ID: { carriedShots, carriedDays, replacedDate, machine } } — most recent Removed record
@@ -100,10 +109,12 @@ window.loadPartsMaster = async function() {
                 if (!pid) return;
                 const replacedDate = inst.Replaced_Date ? extractInstallDateStr(inst.Replaced_Date) : '';
                 const prev = partRemovedCache[pid];
-                if (!prev || replacedDate > (prev.replacedDate || '')) {
+                // เมื่อวันที่เท่ากัน (รวมถึงกรณีทั้งคู่ว่าง) ให้ใช้ record ล่าสุดใน array (index มากกว่า)
+                // แก้ไข: ใช้ >= เพื่อให้ record ที่อ่านทีหลัง (index มากกว่า) ชนะเมื่อวันที่เท่ากัน
+                if (!prev || replacedDate >= (prev.replacedDate || '')) {
                     partRemovedCache[pid] = {
-                        carriedShots: parseInt(inst.Carried_Shots) || 0,
-                        carriedDays: parseInt(inst.Carried_Days) || 0,
+                        carriedShots: Math.round(parseFloat(inst.Carried_Shots) || 0),
+                        carriedDays: Math.round(parseFloat(inst.Carried_Days) || 0),
                         replacedDate: replacedDate,
                         machine: inst.Machine || ''
                     };
@@ -174,7 +185,7 @@ function renderPartsTable() {
                 locationHtml = '<span class="text-gray-300 text-xs">-</span>';
             }
         } else {
-            const escName = (p.Part_Name || '').replace(/'/g, "\\'");
+            const escName = escAttr(p.Part_Name);
             locationHtml = '<div class="flex flex-wrap gap-1">' + installations.map(inst => {
                 const effLife = inst.effectiveLife || inst.lifeShots;
                 const pct = effLife > 0 ? Math.min((inst.actualShots / effLife) * 100, 100) : 0;
@@ -184,7 +195,7 @@ function renderPartsTable() {
                 else if (pct >= 80) color = 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200';
                 else color = 'bg-green-100 text-green-700 hover:bg-green-200';
                 const checkMark = inst.needsCheck ? ' 🔍' : (inst.checkCount > 0 ? ' ✅' : '');
-                return `<button type="button" onclick="window.promptReplacepart('${inst.installId}', '${inst.machine}', '${p.Part_ID}', '${escName}', ${inst.lifeShots || 0})" title="คลิกเพื่อเปลี่ยน / ย้ายอะไหล่ตัวนี้${inst.needsCheck ? ' (ต้องตรวจเช็ค)' : ''}" class="inline-block ${color} text-xs px-1.5 py-0.5 rounded font-mono cursor-pointer transition">${inst.machine}${checkMark}</button>`;
+                return `<button type="button" onclick="window.promptReplacepart('${inst.installId}', '${inst.machine}', '${p.Part_ID}', '${escName}', ${inst.lifeShots || 0})" title="คลิกเพื่อเปลี่ยน / ย้ายอะไหล่ตัวนี้${inst.needsCheck ? ' (ต้องตรวจเช็ค)' : ''}" class="inline-block ${color} text-xs px-1.5 py-0.5 rounded font-mono cursor-pointer transition">${escHtml(inst.machine)}${checkMark}</button>`;
             }).join('') + '</div>';
         }
         // Actual Shot + Actual Days รวมทุกเครื่อง
@@ -212,29 +223,29 @@ function renderPartsTable() {
                 : '<span class="text-gray-300">-</span>';
 
         // ปุ่ม 🔍 ตรวจเช็ค — แสดงเฉพาะกรณีมี active installation
-        const escNameAction = (p.Part_Name || '').replace(/'/g, "\\'");
+        const escNameAction = escAttr(p.Part_Name);
         const checkBtnHtml = installations.length > 0
             ? installations.map(inst => {
                 const highlight = inst.needsCheck ? 'text-orange-600 font-bold' : 'text-orange-500';
-                return `<button onclick="window.openCheckPartDialog('${inst.installId}', '${p.Part_ID}', '${escNameAction}', '${inst.machine}', ${inst.actualShots}, ${inst.lifeShots}, ${inst.nextCheckShot}, ${inst.checkInterval})" class="${highlight} hover:underline text-xs mr-1" title="ตรวจเช็คอะไหล่ที่ติดตั้งบน ${inst.machine}">🔍 เช็ค(${inst.machine})</button><button onclick="window.uninstallPart('${inst.installId}', '${inst.machine}', '${escNameAction}')" class="text-red-400 hover:text-red-600 hover:underline text-xs mr-2" title="ถอดอะไหล่ออกจาก ${inst.machine}">⏏️ ถอด(${inst.machine})</button>`;
+                return `<button onclick="window.openCheckPartDialog('${inst.installId}', '${p.Part_ID}', '${escNameAction}', '${inst.machine}', ${inst.actualShots}, ${inst.lifeShots}, ${inst.nextCheckShot}, ${inst.checkInterval})" class="${highlight} hover:underline text-xs mr-1" title="ตรวจเช็คอะไหล่ที่ติดตั้งบน ${escHtml(inst.machine)}">🔍 เช็ค(${escHtml(inst.machine)})</button><button onclick="window.uninstallPart('${inst.installId}', '${inst.machine}', '${escNameAction}')" class="text-red-400 hover:text-red-600 hover:underline text-xs mr-2" title="ถอดอะไหล่ออกจาก ${escHtml(inst.machine)}">⏏️ ถอด(${escHtml(inst.machine)})</button>`;
             }).join('')
             : '';
 
         html += `<tr class="border-b hover:bg-gray-50">
-            <td class="p-2 font-mono text-xs text-gray-500">${p.Part_ID}</td>
-            <td class="p-2 font-bold">${p.Part_Name || '-'}</td>
-            <td class="p-2"><span class="bg-cyan-100 text-cyan-700 text-xs px-2 py-0.5 rounded-full">${p.Category || '-'}</span></td>
+            <td class="p-2 font-mono text-xs text-gray-500">${escHtml(p.Part_ID)}</td>
+            <td class="p-2 font-bold">${escHtml(p.Part_Name) || '-'}</td>
+            <td class="p-2"><span class="bg-cyan-100 text-cyan-700 text-xs px-2 py-0.5 rounded-full">${escHtml(p.Category) || '-'}</span></td>
             <td class="p-2 text-right font-mono">${life > 0 ? life.toLocaleString() : '-'}</td>
             <td class="p-2 text-right text-xs">${shotHtml}</td>
             <td class="p-2 text-right font-mono">${cost > 0 ? cost.toLocaleString(undefined, {minimumFractionDigits: 0}) : '-'}</td>
-            <td class="p-2 text-xs text-gray-600">${p.Supplier || '-'}</td>
+            <td class="p-2 text-xs text-gray-600">${escHtml(p.Supplier) || '-'}</td>
             <td class="p-2">${locationHtml}</td>
             <td class="p-2 text-center whitespace-nowrap">
                 ${checkBtnHtml}
-                <button onclick="window.showPartHistory('${p.Part_ID}', '${(p.Part_Name || '').replace(/'/g, "\\'")}')" class="text-teal-600 hover:underline text-xs mr-2">🗓️ ประวัติ</button>
-                <button onclick="window.openInstallPartDialog('${p.Part_ID}', '${(p.Part_Name || '').replace(/'/g, "\\'")}', ${life})" class="text-cyan-600 hover:underline text-xs mr-2">🔧 ติดตั้ง</button>
+                <button onclick="window.showPartHistory('${p.Part_ID}', '${escAttr(p.Part_Name)}')" class="text-teal-600 hover:underline text-xs mr-2">🗓️ ประวัติ</button>
+                <button onclick="window.openInstallPartDialog('${p.Part_ID}', '${escAttr(p.Part_Name)}', ${life})" class="text-cyan-600 hover:underline text-xs mr-2">🔧 ติดตั้ง</button>
                 <button onclick="window.editPart('${p.Part_ID}')" class="text-blue-600 hover:underline text-xs mr-2">✏️ แก้ไข</button>
-                <button onclick="window.deletePart('${p.Part_ID}', '${(p.Part_Name || '').replace(/'/g, "\\'")}')" class="text-red-600 hover:underline text-xs">🗑️ ลบ</button>
+                <button onclick="window.deletePart('${p.Part_ID}', '${escAttr(p.Part_Name)}')" class="text-red-600 hover:underline text-xs">🗑️ ลบ</button>
             </td>
         </tr>`;
     });
@@ -426,11 +437,11 @@ window.loadMachineParts = async function(machine) {
             else if (needsCheck) { statusColor = 'bg-orange-500'; statusText = '🟠 ต้องตรวจเช็ค'; statusTextColor = 'text-orange-600 font-bold'; }
 
             const installDateDisplay = formatInstallDateTime(inst.Install_Date);
-            const escName = (inst.Part_Name || '').replace(/'/g, "\\'");
+            const escName = escAttr(inst.Part_Name);
             const checkBtnClass = needsCheck ? 'text-orange-600 font-bold animate-pulse' : 'text-orange-500';
             html += `<div data-install-id="${inst.Install_ID}" class="border rounded-lg p-3 bg-white ${needsCheck ? 'border-orange-400 bg-orange-50' : ''}">
                 <div class="flex justify-between items-center mb-1">
-                    <span class="font-bold text-sm">${inst.Part_Name || inst.Part_ID}${inst.Part_ID ? ` <span class="text-[10px] text-gray-400 font-mono font-normal">(${inst.Part_ID})</span>` : ''}</span>
+                    <span class="font-bold text-sm">${escHtml(inst.Part_Name || inst.Part_ID)}${inst.Part_ID ? ` <span class="text-[10px] text-gray-400 font-mono font-normal">(${escHtml(inst.Part_ID)})</span>` : ''}</span>
                     <span class="text-xs ${statusTextColor}">${statusText}</span>
                 </div>
                 <div class="flex justify-between text-xs text-gray-500 mb-1">
@@ -920,13 +931,13 @@ window.showCheckHistory = async function(installId, partName, partId) {
             }
             html += `<div class="border rounded p-2 bg-gray-50">
                 <div class="flex justify-between items-center text-xs text-gray-500 mb-1">
-                    <span>${formatInstallDateTime(c.Check_Date)}</span>
+                    <span>${escHtml(formatInstallDateTime(c.Check_Date))}</span>
                     ${resultBadge}
                 </div>
                 <div class="text-xs text-gray-700 mb-1">Actual: <b>${Number(c.Actual_Part_Shot || 0).toLocaleString()}</b> shot${c.Next_Check_Shot > 0 ? ` → Next: <b>${Number(c.Next_Check_Shot).toLocaleString()}</b>` : ''}</div>
-                ${c.Note ? `<div class="text-xs text-gray-600 italic">"${c.Note}"</div>` : ''}
+                ${c.Note ? `<div class="text-xs text-gray-600 italic">"${escHtml(c.Note)}"</div>` : ''}
                 ${photoHtml}
-                <div class="text-[10px] text-gray-400 mt-1">โดย ${c.Recorder || '-'}</div>
+                <div class="text-[10px] text-gray-400 mt-1">โดย ${escHtml(c.Recorder) || '-'}</div>
             </div>`;
         });
         html += '</div>';
@@ -969,9 +980,10 @@ window.showPartHistory = async function(partId, partName) {
         }
 
         // หา Active record สำหรับ shot ปัจจุบัน
+        // key ต้อง trim ให้สอดคล้องกันเพื่อป้องกัน trailing space ใน sheet
         const activeLookup = {};
         (partLocationsCache[partId] || []).forEach(inst => {
-            activeLookup[inst.installId] = inst.actualShots;
+            activeLookup[String(inst.installId).trim()] = inst.actualShots;
         });
 
         const totalRecords = records.length;
@@ -1028,16 +1040,16 @@ window.showPartHistory = async function(partId, partName) {
                 <div class="absolute left-2.5 top-1 w-3 h-3 rounded-full ${dotColor} border-2 border-white shadow z-10"></div>
                 <div class="bg-white border rounded-lg p-3 shadow-sm ${status === 'Active' ? 'border-green-300' : status === 'Replaced' ? 'border-blue-200' : 'border-gray-200'}">
                     <div class="flex justify-between items-start gap-2 mb-1">
-                        <span class="font-bold text-sm text-gray-800">${inst.Machine || '-'}</span>
+                        <span class="font-bold text-sm text-gray-800">${escHtml(inst.Machine) || '-'}</span>
                         <span class="text-[10px] px-1.5 py-0.5 rounded-full font-bold ${badgeCls} whitespace-nowrap">${statusLabel}</span>
                     </div>
                     <div class="text-xs text-gray-600 space-y-0.5">
-                        <div><span class="text-gray-400">ติดตั้ง: </span>${installDateDisplay}${inst.Recorder ? ` <span class="text-gray-400">(โดย ${inst.Recorder})</span>` : ''}</div>
-                        ${status !== 'Active' ? `<div><span class="text-gray-400">${status === 'Replaced' ? 'เปลี่ยน/ย้าย: ' : 'ถอดออก: '}</span>${replacedDateDisplay}</div>` : ''}
+                        <div><span class="text-gray-400">ติดตั้ง: </span>${escHtml(installDateDisplay)}${inst.Recorder ? ` <span class="text-gray-400">(โดย ${escHtml(inst.Recorder)})</span>` : ''}</div>
+                        ${status !== 'Active' ? `<div><span class="text-gray-400">${status === 'Replaced' ? 'เปลี่ยน/ย้าย: ' : 'ถอดออก: '}</span>${escHtml(replacedDateDisplay)}</div>` : ''}
                         <div><span class="text-gray-400">ระยะเวลา: </span><b>${durationDays.toLocaleString()} วัน</b></div>
                     </div>
                     ${shotLine}
-                    ${inst.Maint_Job_ID ? `<div class="text-[10px] text-gray-400 mt-1">Job: ${inst.Maint_Job_ID}</div>` : ''}
+                    ${inst.Maint_Job_ID ? `<div class="text-[10px] text-gray-400 mt-1">Job: ${escHtml(inst.Maint_Job_ID)}</div>` : ''}
                 </div>
             </div>`;
         });

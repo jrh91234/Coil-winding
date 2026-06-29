@@ -1001,6 +1001,21 @@ function doPost(e) {
         const match = pid.match(new RegExp("^" + prefix + "-(\\d+)$"));
         if (match) maxNum = Math.max(maxNum, parseInt(match[1]));
       }
+      // ตรวจ Parts_Installation ด้วยเพื่อป้องกัน ID ซ้ำหลังจากลบ Parts_Master
+      const instSheetNew = ss.getSheetByName("Parts_Installation");
+      if (instSheetNew) {
+        const iRowsNew = instSheetNew.getDataRange().getValues();
+        if (iRowsNew.length > 1) {
+          const iPidNewIdx = iRowsNew[0].map(function(h) { return String(h).trim(); }).indexOf("Part_ID");
+          if (iPidNewIdx !== -1) {
+            for (let i = 1; i < iRowsNew.length; i++) {
+              const pid2 = String(iRowsNew[i][iPidNewIdx] || "");
+              const m2 = pid2.match(new RegExp("^" + prefix + "-(\\d+)$"));
+              if (m2) maxNum = Math.max(maxNum, parseInt(m2[1]));
+            }
+          }
+        }
+      }
       const newId = prefix + "-" + String(maxNum + 1).padStart(3, "0");
       // Build row ตาม header order (รองรับ Check_Interval_Shots)
       const freshHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
@@ -1027,6 +1042,26 @@ function doPost(e) {
   if (action === "DELETE_PARTS_MASTER") {
     let sheet = ss.getSheetByName("Parts_Master");
     if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Sheet not found"})).setMimeType(ContentService.MimeType.JSON);
+    // ตรวจสอบว่ามี Active Installation อยู่หรือไม่ก่อนลบ
+    const instSheetDel = ss.getSheetByName("Parts_Installation");
+    if (instSheetDel) {
+      const iRowsDel = instSheetDel.getDataRange().getValues();
+      if (iRowsDel.length > 1) {
+        const iHdrDel = iRowsDel[0].map(function(h) { return String(h).trim(); });
+        const iPidDel = iHdrDel.indexOf("Part_ID");
+        const iStatusDel = iHdrDel.indexOf("Status");
+        const iMacDel = iHdrDel.indexOf("Machine");
+        if (iPidDel !== -1 && iStatusDel !== -1) {
+          for (let i = 1; i < iRowsDel.length; i++) {
+            if (String(iRowsDel[i][iPidDel] || "").trim() === data.partId &&
+                String(iRowsDel[i][iStatusDel] || "").trim() === "Active") {
+              const mac = iMacDel !== -1 ? String(iRowsDel[i][iMacDel] || "") : "เครื่องไม่ทราบ";
+              return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่สามารถลบได้: อะไหล่นี้ยังติดตั้งอยู่ที่เครื่อง " + mac + " กรุณาถอดอะไหล่ออกก่อน"})).setMimeType(ContentService.MimeType.JSON);
+            }
+          }
+        }
+      }
+    }
     const rows = sheet.getDataRange().getValues();
     for (let i = 1; i < rows.length; i++) {
       if (String(rows[i][0]).trim() === data.partId) {
@@ -1329,8 +1364,11 @@ function doPost(e) {
       const iNextIdx = iHdr.indexOf("Next_Check_Shot");
       const iLastIdx = iHdr.indexOf("Last_Check_Date");
       const iCountIdx = iHdr.indexOf("Check_Count");
+      const iStatusChkIdx = iHdr.indexOf("Status");
       for (let i = 1; i < iRows.length; i++) {
         if (String(iRows[i][iIdIdx] || "").trim() === c.Install_ID) {
+          // อัพเดตเฉพาะ Active installation — ป้องกันการเขียนทับ Removed/Replaced rows
+          if (iStatusChkIdx !== -1 && String(iRows[i][iStatusChkIdx] || "").trim() !== "Active") break;
           if (iNextIdx !== -1) instSheet.getRange(i + 1, iNextIdx + 1).setValue(parseInt(c.Next_Check_Shot) || 0);
           if (iLastIdx !== -1) instSheet.getRange(i + 1, iLastIdx + 1).setValue(checkDate.substring(0, 10));
           if (iCountIdx !== -1) instSheet.getRange(i + 1, iCountIdx + 1).setValue((parseInt(iRows[i][iCountIdx]) || 0) + 1);
