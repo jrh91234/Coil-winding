@@ -1204,11 +1204,33 @@ function doPost(e) {
       logUserAction(d.Recorder || "System", "User", "REPLACE_PARTS_INSTALLATION", "เปลี่ยน/ย้ายอะไหล่ " + (d.Part_Name || d.Part_ID) + " (" + d.Install_ID + ") จาก " + oldMachine + " ไป " + d.Machine);
       return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId, carriedShots: newCarried, carriedDays: newCarriedDays, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot})).setMimeType(ContentService.MimeType.JSON);
     } else {
-      // ติดตั้งอะไหล่ใหม่จาก Parts Master = อะไหล่ชิ้นใหม่ ต้องเริ่มนับอายุที่ 0
-      // การย้าย/เปลี่ยนชิ้นเดิมให้ใช้ mode="replace" เท่านั้น เพราะ Part_ID เป็นรหัสชนิดอะไหล่
-      // ไม่ใช่ serial ของอะไหล่แต่ละชิ้น ถ้า carry จาก Removed ของ Part_ID เดียวกันจะทำให้ shot count เพี้ยน
-      const carryShots = 0;
-      const carryDays = 0;
+      // ติดตั้งอะไหล่ใหม่ — ยกยอด Shot/Day สะสมจาก Removed record ล่าสุดของ Part_ID เดียวกัน (ถ้ามี)
+      let carryShots = 0;
+      let carryDays = 0;
+      const existRows = sheet.getDataRange().getValues();
+      const existHdr = existRows[0].map(function(h) { return String(h).trim(); });
+      const exPidIdx = existHdr.indexOf("Part_ID");
+      const exStatusIdx = existHdr.indexOf("Status");
+      const exCarriedIdx = existHdr.indexOf("Carried_Shots");
+      const exCarriedDIdx = existHdr.indexOf("Carried_Days");
+      const exRepDateIdx = existHdr.indexOf("Replaced_Date");
+      if (exPidIdx !== -1 && exStatusIdx !== -1) {
+        let latestRemovedDate = "";
+        for (let i = 1; i < existRows.length; i++) {
+          if (String(existRows[i][exPidIdx] || "").trim() === d.Part_ID &&
+              String(existRows[i][exStatusIdx] || "").trim() === "Removed") {
+            var rdRaw = exRepDateIdx !== -1 ? existRows[i][exRepDateIdx] : "";
+            var rd = (rdRaw instanceof Date && !isNaN(rdRaw.getTime()))
+              ? Utilities.formatDate(rdRaw, "GMT+7", "yyyy-MM-dd")
+              : String(rdRaw || "").trim().substring(0, 10);
+            if (!latestRemovedDate || rd >= latestRemovedDate) {
+              latestRemovedDate = rd;
+              carryShots = exCarriedIdx !== -1 ? (parseInt(existRows[i][exCarriedIdx]) || 0) : 0;
+              carryDays = exCarriedDIdx !== -1 ? (parseInt(existRows[i][exCarriedDIdx]) || 0) : 0;
+            }
+          }
+        }
+      }
       const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
       const hdr = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
       const newInstallShot = calcMachineShots(ss, d.Machine, "2020-01-01", installDateOnly);
