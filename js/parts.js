@@ -571,6 +571,20 @@ window.openInstallPartDialog = function(partId, partName, lifeShots, options) {
         if (hintEl) hintEl.classList.add('hidden');
     }
 
+    // แสดงข้อมูล carry-over จาก Removed record (ถ้ามี) เพื่อให้ผู้ใช้รู้ว่า Shot จะยกยอดมา
+    const carryHintEl = document.getElementById('install-carry-hint');
+    if (carryHintEl && !isReplaceMode) {
+        const removed = partRemovedCache[partId];
+        if (removed && removed.carriedShots > 0) {
+            carryHintEl.innerHTML = `<div class="text-xs bg-blue-50 border border-blue-200 rounded px-2 py-1 text-blue-700">📊 ยกยอด Shot สะสมจากการใช้งานก่อนหน้า: <b>${removed.carriedShots.toLocaleString()}</b> shot (${removed.carriedDays.toLocaleString()} วัน)${removed.machine ? ` จากเครื่อง ${removed.machine}` : ''}</div>`;
+            carryHintEl.classList.remove('hidden');
+        } else {
+            carryHintEl.classList.add('hidden');
+        }
+    } else if (carryHintEl) {
+        carryHintEl.classList.add('hidden');
+    }
+
     // ตั้งค่า date + time (24h) เป็นเวลาปัจจุบัน (local timezone)
     const dateInput = document.getElementById('install-date');
     const timeInput = document.getElementById('install-time');
