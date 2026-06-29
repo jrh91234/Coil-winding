@@ -1214,6 +1214,7 @@ function doPost(e) {
       const exCarriedIdx = existHdr.indexOf("Carried_Shots");
       const exCarriedDIdx = existHdr.indexOf("Carried_Days");
       const exRepDateIdx = existHdr.indexOf("Replaced_Date");
+      let consumedRowNum = -1; // แถว (1-based) ของ Removed record ที่ยกยอดมา → จะ mark เป็น Archived กันยกซ้ำ
       if (exPidIdx !== -1 && exStatusIdx !== -1) {
         let latestRemovedDate = "";
         for (let i = 1; i < existRows.length; i++) {
@@ -1227,6 +1228,7 @@ function doPost(e) {
               latestRemovedDate = rd;
               carryShots = exCarriedIdx !== -1 ? (parseInt(existRows[i][exCarriedIdx]) || 0) : 0;
               carryDays = exCarriedDIdx !== -1 ? (parseInt(existRows[i][exCarriedDIdx]) || 0) : 0;
+              consumedRowNum = i + 1;
             }
           }
         }
@@ -1258,8 +1260,12 @@ function doPost(e) {
         }
       });
       sheet.appendRow(rowData);
+      // mark Removed record ที่ยกยอดมาแล้วเป็น "Archived" กันการยกยอดซ้ำเมื่อติดตั้ง Part_ID เดิมอีกครั้ง
+      if (consumedRowNum > 0 && carryShots > 0 && exStatusIdx !== -1) {
+        sheet.getRange(consumedRowNum, exStatusIdx + 1).setValue("Archived");
+      }
       SpreadsheetApp.flush();
-      logUserAction(d.Recorder || "System", "User", "INSTALL_PARTS", "ติดตั้งอะไหล่ " + (d.Part_Name || d.Part_ID) + " กับเครื่อง " + d.Machine);
+      logUserAction(d.Recorder || "System", "User", "INSTALL_PARTS", "ติดตั้งอะไหล่ " + (d.Part_Name || d.Part_ID) + " กับเครื่อง " + d.Machine + (carryShots > 0 ? " (ยกยอด " + carryShots + " shot)" : ""));
       return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Installed", installId: newId, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot, carriedShots: carryShots, carriedDays: carryDays})).setMimeType(ContentService.MimeType.JSON);
     }
   }

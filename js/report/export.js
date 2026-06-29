@@ -66,20 +66,27 @@ window.exportCSV = function() {
     }
     
     const data = currentDashboardData;
-    let csvContent = "\ufeff"; 
-    
+    let csvContent = "\ufeff";
+    // escape \u0e04\u0e48\u0e32\u0e43\u0e19 CSV: \u0e04\u0e23\u0e2d\u0e1a quote \u0e40\u0e21\u0e37\u0e48\u0e2d\u0e21\u0e35 comma/quote/newline + \u0e01\u0e31\u0e19 formula injection (= + - @)
+    const csvCell = (v) => {
+        let s = (v === null || v === undefined) ? '' : String(v);
+        if (/^[=+\-@]/.test(s)) s = "'" + s;
+        if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+        return s;
+    };
+
     csvContent += "--- Overall Summary ---\n";
     csvContent += "Machine,Product Assigned,FG (Pcs),NG (Pcs),NG (Kg),% Yield\n";
-    
+
     for(let i=1; i<=16; i++) {
-        const m = `CWM-${String(i).padStart(2,'0')}`; 
+        const m = `CWM-${String(i).padStart(2,'0')}`;
         const d = (data.machineData && data.machineData[m]) ? data.machineData[m] : {fg:0, ngTotal:0, ngTotalKg:0, ngTotalPcs:0};
         const ngPcs = d.ngTotalPcs !== undefined ? d.ngTotalPcs : (d.ngTotal || 0);
         const ngKg = d.ngTotalKg || 0;
-        const t = d.fg + ngPcs; 
+        const t = d.fg + ngPcs;
         const y = t > 0 ? ((d.fg/t)*100).toFixed(2) : "0.00";
         const productAssigned = machineMapping[m] || 'Unassigned';
-        csvContent += `${m},${productAssigned},${d.fg},${ngPcs},${ngKg.toFixed(2)},${y}%\n`;
+        csvContent += [m, productAssigned, d.fg, ngPcs, ngKg.toFixed(2), y + '%'].map(csvCell).join(',') + '\n';
     }
 
     csvContent += "\n--- Daily Breakdown ---\n";
@@ -103,18 +110,13 @@ window.exportCSV = function() {
                 const daily = mData.daily[date];
                 const fg = daily.fg || 0;
                 const ngPcs = daily.ngPcs || 0;
-                
-                let weightPerPc = 0.003; 
-                if (productAssigned.includes("10A")) weightPerPc = 0.00228;
-                else if (productAssigned.includes("16A")) weightPerPc = 0.00279;
-                else if (productAssigned.includes("20A")) weightPerPc = 0.00357;
-                else if (productAssigned.includes("25/32A")) weightPerPc = 0.005335; 
-                
-                const ngKg = (ngPcs * weightPerPc).toFixed(2);
+
+                // ใช้ helper กลาง (strict, no fallback) แทนการคำนวณ WPP ซ้ำ — ตรงกับ dashboard
+                const ngKg = (typeof getKgFromPcs === 'function' ? getKgFromPcs(productAssigned, ngPcs) : 0).toFixed(2);
                 const total = fg + ngPcs;
                 const y = total > 0 ? ((fg/total)*100).toFixed(2) : "0.00";
-                
-                if (total > 0) csvContent += `${date},${m},${productAssigned},${fg},${ngPcs},${ngKg},${y}%\n`;
+
+                if (total > 0) csvContent += [date, m, productAssigned, fg, ngPcs, ngKg, y + '%'].map(csvCell).join(',') + '\n';
             }
         }
     });

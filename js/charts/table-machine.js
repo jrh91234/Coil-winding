@@ -1,3 +1,11 @@
+// escape สำหรับ innerHTML / attribute (กัน XSS จากข้อมูลใน sheet เช่น remark, issueType, recorder)
+function tmEscHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function tmEscAttr(s) {
+    return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 window.renderTable = function(data) {
     // รวม Setup เข้ากับอาการหลักสำหรับ column headers
     let rawColumns = normalizeSymptomList(ngSymptoms);
@@ -127,7 +135,7 @@ window.showMachineDetail = function(machineName) {
     const rSec = document.getElementById('machine-detail-remarks');
     if(mData.remarks && mData.remarks.length > 0) { 
         rSec.classList.remove('hidden'); 
-        rList.innerHTML = `<ul class="list-disc pl-5 space-y-1">${mData.remarks.map(r => `<li>${r}</li>`).join('')}</ul>`; 
+        rList.innerHTML = `<ul class="list-disc pl-5 space-y-1">${mData.remarks.map(r => `<li>${tmEscHtml(r)}</li>`).join('')}</ul>`;
     } else { 
         rSec.classList.add('hidden'); 
     }
@@ -187,7 +195,7 @@ window.showMachineDetail = function(machineName) {
     
     if (dashStartDate && dashEndDate) {
         processedLogs = processedLogs.filter(log => {
-            if (!log.date) return true; 
+            if (!log.date) return false; // row ไม่มีวันที่ → ระบุช่วงไม่ได้ ไม่นับเข้าช่วงที่กรอง
             return log.date >= dashStartDate && log.date <= dashEndDate;
         });
     }
@@ -217,13 +225,18 @@ window.showMachineDetail = function(machineName) {
                     let sMins = parseInt(s[0]) * 60 + parseInt(s[1]);
                     let eMins = parseInt(e[0]) * 60 + parseInt(e[1]);
                     mins = eMins - sMins;
-                    
-                    if (mins < 0) mins += 1440;
-                    totalDowntimeMins += mins;
 
-                    let h = Math.floor(mins / 60);
-                    let m = mins % 60;
-                    durationStr = h > 0 ? `${h} ชม. ${m} นาที` : `${m} นาที`;
+                    // กัน NaN จากเวลาที่ผิดรูปแบบ — ไม่ให้ลามเข้ายอดรวม Total Downtime
+                    if (isNaN(mins)) {
+                        mins = 0;
+                    } else {
+                        if (mins < 0) mins += 1440;
+                        totalDowntimeMins += mins;
+
+                        let h = Math.floor(mins / 60);
+                        let m = mins % 60;
+                        durationStr = h > 0 ? `${h} ชม. ${m} นาที` : `${m} นาที`;
+                    }
                 } catch(err) { console.log("Time calc error:", err); }
             }
 
@@ -244,7 +257,7 @@ window.showMachineDetail = function(machineName) {
                     const fallbackThumb = `https://lh3.googleusercontent.com/d/${fileId}`;
                     
                     imgBtn = `
-                        <div class="mt-3 border border-gray-200 rounded overflow-hidden cursor-pointer relative group" onclick="window.viewMaintImage('${fallbackThumb}', '${log.issueType}')" title="คลิกเพื่อดูรูปใหญ่">
+                        <div class="mt-3 border border-gray-200 rounded overflow-hidden cursor-pointer relative group" onclick="window.viewMaintImage('${fallbackThumb}', '${tmEscAttr(log.issueType)}')" title="คลิกเพื่อดูรูปใหญ่">
                             <div class="h-32 w-full bg-gray-100 flex items-center justify-center">
                                 <img src="${thumbUrl}" onerror="this.onerror=null; this.src='${fallbackThumb}'; this.onerror=function(){ this.style.display='none'; this.nextElementSibling.style.display='flex'; };" class="w-full h-full object-cover" alt="Maintenance Image" loading="lazy">
                                 <div class="hidden flex-col items-center justify-center text-gray-500 text-xs w-full h-full">
@@ -265,14 +278,14 @@ window.showMachineDetail = function(machineName) {
             maintHtml += `
                 <div class="bg-white border border-gray-200 p-3 rounded-lg shadow-sm">
                     <div class="flex justify-between items-start mb-2">
-                        <span class="font-bold text-sm text-orange-700">${log.issueType}</span>
-                        <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">${log.date}</span>
+                        <span class="font-bold text-sm text-orange-700">${tmEscHtml(log.issueType)}</span>
+                        <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">${tmEscHtml(log.date)}</span>
                     </div>
                     <div class="text-xs text-gray-600 mb-2 flex justify-between bg-orange-50 p-2 rounded">
-                        <span>⏱️ ${sTime} - ${eTime} (<b class="text-gray-800">${durationStr}</b>)</span>
-                        <span>👤 ${log.recorder || '-'}</span>
+                        <span>⏱️ ${tmEscHtml(sTime)} - ${tmEscHtml(eTime)} (<b class="text-gray-800">${durationStr}</b>)</span>
+                        <span>👤 ${tmEscHtml(log.recorder) || '-'}</span>
                     </div>
-                    <p class="text-sm text-gray-700 p-2 rounded border border-gray-100 bg-gray-50">${log.remark || 'ไม่มีรายละเอียดเพิ่มเติม'}</p>
+                    <p class="text-sm text-gray-700 p-2 rounded border border-gray-100 bg-gray-50">${log.remark ? tmEscHtml(log.remark) : 'ไม่มีรายละเอียดเพิ่มเติม'}</p>
                     ${imgBtn}
                 </div>
             `;

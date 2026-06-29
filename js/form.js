@@ -251,6 +251,7 @@ window.saveCurrentNgInputs = function() {
         return false;
     }
 
+    let setupValidationError = false;
     rows.forEach(row => {
         let type = "";
         const labelSpan = row.querySelector('.ng-type-label');
@@ -272,17 +273,21 @@ window.saveCurrentNgInputs = function() {
         const remark = row.querySelector('.ng-input-remark').value;
         if (type && qty > 0) {
             // validate: Setup ต้องเลือกอาการย่อย
-            if (type.trim().toLowerCase() === 'setup') {
-                if (setupSelect) {
-                    setupSelect.style.borderColor = 'red';
-                    alert('กรุณาเลือกอาการ Setup ว่าเป็นอาการอะไร');
-                    return false;
-                }
+            if (type.trim().toLowerCase() === 'setup' && setupSelect) {
+                setupSelect.style.borderColor = 'red';
+                setupValidationError = true;
+                return; // ข้ามแถวนี้ — จะ abort หลังจบ loop
             }
             newData.push({ type: capitalizeFirst(type), qty, remark });
             total += qty;
         }
     });
+
+    // ถ้ามีแถว Setup ที่ยังไม่เลือกอาการย่อย → ยกเลิกการบันทึกทั้งหมด (กันข้อมูลหาย)
+    if (setupValidationError) {
+        alert('กรุณาเลือกอาการ Setup ว่าเป็นอาการอะไร (ช่องที่ขอบแดง)');
+        return false;
+    }
 
     batchNgData[currentRowIdForNg] = newData;
     const badge = document.getElementById(`ng-badge-${currentRowIdForNg}`);

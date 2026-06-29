@@ -423,7 +423,10 @@ window.renderAutoReportContent = async function() {
         const pLabels = ngItems.map(item => item.label);
         const pDataPcs = ngItems.map(item => item.pcs);
         let cumulativeAcc = 0;
-        const pDataCum = pDataPcs.map(val => { cumulativeAcc += val; return (cumulativeAcc / totalNG * 100).toFixed(2); });
+        // ใช้ผลรวมของ ngItems เป็นตัวหารถ้า totalNG ไม่ถูกต้อง (0/น้อยกว่าผลรวม) — กัน Infinity%/เกิน 100%
+        const sumPcs = pDataPcs.reduce((a, b) => a + b, 0);
+        const cumDenom = (totalNG && totalNG >= sumPcs) ? totalNG : (sumPcs || 1);
+        const pDataCum = pDataPcs.map(val => { cumulativeAcc += val; return (cumulativeAcc / cumDenom * 100).toFixed(2); });
         
         // กำหนดสีให้แท่ง Pareto ตามอาการ (ใช้ฟังก์ชัน getSymptomColor ที่สร้างไว้)
         const pBarColors = pLabels.map(label => getSymptomColor(label));
