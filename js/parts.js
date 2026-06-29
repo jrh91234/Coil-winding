@@ -231,6 +231,7 @@ function renderPartsTable() {
             <td class="p-2">${locationHtml}</td>
             <td class="p-2 text-center whitespace-nowrap">
                 ${checkBtnHtml}
+                <button onclick="window.showPartHistory('${p.Part_ID}', '${(p.Part_Name || '').replace(/'/g, "\\'")}')" class="text-teal-600 hover:underline text-xs mr-2">🗓️ ประวัติ</button>
                 <button onclick="window.openInstallPartDialog('${p.Part_ID}', '${(p.Part_Name || '').replace(/'/g, "\\'")}', ${life})" class="text-cyan-600 hover:underline text-xs mr-2">🔧 ติดตั้ง</button>
                 <button onclick="window.editPart('${p.Part_ID}')" class="text-blue-600 hover:underline text-xs mr-2">✏️ แก้ไข</button>
                 <button onclick="window.deletePart('${p.Part_ID}', '${(p.Part_Name || '').replace(/'/g, "\\'")}')" class="text-red-600 hover:underline text-xs">🗑️ ลบ</button>
@@ -937,5 +938,118 @@ window.showCheckHistory = async function(installId, partName, partId) {
 
 window.closeCheckHistory = function() {
     const modal = document.getElementById('modal-check-history');
+    if (modal) modal.classList.add('hidden');
+};
+
+// ==========================================
+// 🗓️ ประวัติการติดตั้ง (Installation Timeline)
+// ==========================================
+
+window.showPartHistory = async function(partId, partName) {
+    const modal = document.getElementById('modal-part-history');
+    if (!modal) { alert('ไม่พบ modal ประวัติการติดตั้ง'); return; }
+    const titleEl = document.getElementById('part-history-title');
+    const bodyEl = document.getElementById('part-history-body');
+    if (titleEl) titleEl.innerText = `🗓️ ประวัติการติดตั้ง: ${partName} (${partId})`;
+    if (bodyEl) bodyEl.innerHTML = '<div class="text-center text-gray-400 py-6">⏳ กำลังโหลด...</div>';
+    modal.classList.remove('hidden');
+
+    try {
+        const res = await fetchPartsJson({ action: 'GET_PARTS_INSTALLATION', partId: partId });
+        const data = await res.json();
+        const records = (data.data || []).sort((a, b) => {
+            const da = extractInstallDateStr(a.Install_Date) || '';
+            const db = extractInstallDateStr(b.Install_Date) || '';
+            return da < db ? -1 : da > db ? 1 : 0;
+        });
+
+        if (records.length === 0) {
+            bodyEl.innerHTML = '<div class="text-center text-gray-400 py-6">ยังไม่มีประวัติการติดตั้ง</div>';
+            return;
+        }
+
+        // หา Active record สำหรับ shot ปัจจุบัน
+        const activeLookup = {};
+        (partLocationsCache[partId] || []).forEach(inst => {
+            activeLookup[inst.installId] = inst.actualShots;
+        });
+
+        const totalRecords = records.length;
+        let html = `<div class="text-xs text-gray-500 mb-3 px-1">${totalRecords} รายการ (ทุกสถานะ)</div>`;
+        html += '<div class="relative">';
+        // เส้นแนวตั้ง
+        html += '<div class="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>';
+
+        records.forEach((inst, idx) => {
+            const status = String(inst.Status || '').trim();
+            const installDateDisplay = formatInstallDateTime(inst.Install_Date);
+            const installDateStr = extractInstallDateStr(inst.Install_Date);
+            const replacedDateStr = inst.Replaced_Date ? extractInstallDateStr(inst.Replaced_Date) : '';
+            const replacedDateDisplay = replacedDateStr || '-';
+            const carried = parseInt(inst.Carried_Shots) || 0;
+            const carriedDays = parseInt(inst.Carried_Days) || 0;
+
+            // ระยะเวลาที่ติดตั้ง
+            let durationDays = 0;
+            if (status === 'Active') {
+                durationDays = daysFromInstall(installDateStr);
+            } else if (installDateStr && replacedDateStr) {
+                const d1 = new Date(installDateStr + 'T00:00:00');
+                const d2 = new Date(replacedDateStr + 'T00:00:00');
+                durationDays = Math.max(0, Math.floor((d2 - d1) / 86400000));
+            }
+
+            // สี + badge ตาม status
+            let dotColor, badgeCls, statusLabel;
+            if (status === 'Active') {
+                dotColor = 'bg-green-500'; badgeCls = 'bg-green-100 text-green-700'; statusLabel = '🟢 กำลังใช้งาน';
+            } else if (status === 'Replaced') {
+                dotColor = 'bg-blue-400'; badgeCls = 'bg-blue-100 text-blue-700'; statusLabel = '🔄 เปลี่ยน/ย้าย';
+            } else {
+                dotColor = 'bg-gray-400'; badgeCls = 'bg-gray-100 text-gray-600'; statusLabel = '📤 ถอดออก';
+            }
+
+            // Shot ที่แสดง
+            let shotLine = '';
+            if (status === 'Active') {
+                const currentShots = activeLookup[String(inst.Install_ID).trim()];
+                if (currentShots !== undefined) {
+                    const sinceInstall = currentShots - (carried); // shots on this machine = actual - carry-over
+                    shotLine = `<div class="text-xs mt-1"><span class="text-gray-500">Shot ปัจจุบัน: </span><b class="text-green-700">${currentShots.toLocaleString()}</b><span class="text-gray-400 text-[10px] ml-1">(ใช้ไปในรอบนี้: ${Math.max(0, sinceInstall).toLocaleString()})</span></div>`;
+                }
+            } else if (status === 'Removed') {
+                shotLine = `<div class="text-xs mt-1"><span class="text-gray-500">Shot สะสม ณ วันถอด: </span><b class="text-gray-700">${carried.toLocaleString()}</b><span class="text-gray-400 text-[10px] ml-1">(${carriedDays.toLocaleString()} วัน)</span></div>`;
+            } else if (status === 'Replaced') {
+                shotLine = `<div class="text-xs mt-1 text-gray-400">Shot carry-over ออก: <b>${carried.toLocaleString()}</b></div>`;
+            }
+
+            const isLast = idx === totalRecords - 1;
+            html += `<div class="relative pl-10 pb-5 ${isLast ? '' : ''}">
+                <div class="absolute left-2.5 top-1 w-3 h-3 rounded-full ${dotColor} border-2 border-white shadow z-10"></div>
+                <div class="bg-white border rounded-lg p-3 shadow-sm ${status === 'Active' ? 'border-green-300' : status === 'Replaced' ? 'border-blue-200' : 'border-gray-200'}">
+                    <div class="flex justify-between items-start gap-2 mb-1">
+                        <span class="font-bold text-sm text-gray-800">${inst.Machine || '-'}</span>
+                        <span class="text-[10px] px-1.5 py-0.5 rounded-full font-bold ${badgeCls} whitespace-nowrap">${statusLabel}</span>
+                    </div>
+                    <div class="text-xs text-gray-600 space-y-0.5">
+                        <div><span class="text-gray-400">ติดตั้ง: </span>${installDateDisplay}${inst.Recorder ? ` <span class="text-gray-400">(โดย ${inst.Recorder})</span>` : ''}</div>
+                        ${status !== 'Active' ? `<div><span class="text-gray-400">${status === 'Replaced' ? 'เปลี่ยน/ย้าย: ' : 'ถอดออก: '}</span>${replacedDateDisplay}</div>` : ''}
+                        <div><span class="text-gray-400">ระยะเวลา: </span><b>${durationDays.toLocaleString()} วัน</b></div>
+                    </div>
+                    ${shotLine}
+                    ${inst.Maint_Job_ID ? `<div class="text-[10px] text-gray-400 mt-1">Job: ${inst.Maint_Job_ID}</div>` : ''}
+                </div>
+            </div>`;
+        });
+
+        html += '</div>';
+        bodyEl.innerHTML = html;
+    } catch (err) {
+        bodyEl.innerHTML = '<div class="text-center text-red-500 py-4">โหลดประวัติไม่สำเร็จ: ' + err.message + '</div>';
+    }
+};
+
+window.closePartHistory = function() {
+    const modal = document.getElementById('modal-part-history');
     if (modal) modal.classList.add('hidden');
 };

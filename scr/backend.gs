@@ -1046,17 +1046,19 @@ function doPost(e) {
     if (rows.length <= 1) return ContentService.createTextOutput(JSON.stringify({status: "success", data: []})).setMimeType(ContentService.MimeType.JSON);
     const headers = rows[0].map(h => String(h).trim());
     const filterMachine = data.machine || "";
+    const filterPartId = data.partId || "";
     const results = [];
     for (let i = 1; i < rows.length; i++) {
       const obj = {};
       headers.forEach((h, idx) => { obj[h] = rows[i][idx] !== undefined ? rows[i][idx] : ""; });
       if (!obj.Install_ID) continue;
       if (filterMachine && obj.Machine !== filterMachine) continue;
+      if (filterPartId && String(obj.Part_ID || "").trim() !== filterPartId) continue;
       results.push(obj);
     }
-    // ถ้าไม่ระบุ machine filter → คำนวณ machineShots สำหรับ Active records ทั้งหมด (ใช้ใน Parts Master table)
+    // ถ้าไม่ระบุ machine/part filter → คำนวณ machineShots สำหรับ Active records ทั้งหมด (ใช้ใน Parts Master table)
     let machineShots = null;
-    if (!filterMachine) {
+    if (!filterMachine && !filterPartId) {
       const activeMachines = [];
       results.forEach(function(r) {
         if (r.Status === "Active" && r.Machine && activeMachines.indexOf(r.Machine) === -1) {
