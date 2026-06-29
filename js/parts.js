@@ -1031,6 +1031,8 @@ window.showPartHistory = async function(partId, partName) {
                 dotColor = 'bg-green-500'; badgeCls = 'bg-green-100 text-green-700'; statusLabel = '🟢 กำลังใช้งาน';
             } else if (status === 'Replaced') {
                 dotColor = 'bg-blue-400'; badgeCls = 'bg-blue-100 text-blue-700'; statusLabel = '🔄 เปลี่ยน/ย้าย';
+            } else if (status === 'Archived') {
+                dotColor = 'bg-gray-400'; badgeCls = 'bg-gray-100 text-gray-600'; statusLabel = '♻️ ถอด → นำกลับมาใช้';
             } else {
                 dotColor = 'bg-gray-400'; badgeCls = 'bg-gray-100 text-gray-600'; statusLabel = '📤 ถอดออก';
             }
@@ -1043,8 +1045,8 @@ window.showPartHistory = async function(partId, partName) {
                     const sinceInstall = currentShots - (carried); // shots on this machine = actual - carry-over
                     shotLine = `<div class="text-xs mt-1"><span class="text-gray-500">Shot ปัจจุบัน: </span><b class="text-green-700">${currentShots.toLocaleString()}</b><span class="text-gray-400 text-[10px] ml-1">(ใช้ไปในรอบนี้: ${Math.max(0, sinceInstall).toLocaleString()})</span></div>`;
                 }
-            } else if (status === 'Removed') {
-                shotLine = `<div class="text-xs mt-1"><span class="text-gray-500">Shot สะสม ณ วันถอด: </span><b class="text-gray-700">${carried.toLocaleString()}</b><span class="text-gray-400 text-[10px] ml-1">(${carriedDays.toLocaleString()} วัน)</span></div>`;
+            } else if (status === 'Removed' || status === 'Archived') {
+                shotLine = `<div class="text-xs mt-1"><span class="text-gray-500">Shot สะสม ณ วันถอด: </span><b class="text-gray-700">${carried.toLocaleString()}</b><span class="text-gray-400 text-[10px] ml-1">(${carriedDays.toLocaleString()} วัน)${status === 'Archived' ? ' · ยกยอดไปติดตั้งใหม่แล้ว' : ''}</span></div>`;
             } else if (status === 'Replaced') {
                 shotLine = `<div class="text-xs mt-1 text-gray-400">Shot carry-over ออก: <b>${carried.toLocaleString()}</b></div>`;
             }
