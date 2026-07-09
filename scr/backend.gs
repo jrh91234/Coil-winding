@@ -912,77 +912,102 @@ function doPost(e) {
   // --- ส่วนที่ 2.6: ระบบบันทึกขยะ / วัสดุเหลือใช้ (Waste / Scrap Log) ---
   // port มาจาก Lug-Screw-management-system (WasteService.gs) → เก็บลง Google Sheet จริง
   if (action === "GET_WASTE_TYPES") {
-    let sheet = ss.getSheetByName("WasteTypes");
-    if (!sheet) {
-      sheet = ss.insertSheet("WasteTypes");
-      sheet.appendRow(["TypeID", "TypeName", "Active", "CreatedAt", "CreatedBy"]);
-      const defaults = ["ขยะอันตราย", "ขยะรีไซเคิล", "ขยะอุตสาหกรรมไม่อันตราย", "อื่น ๆ"];
-      const nowStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss");
-      defaults.forEach(function(name) {
-        sheet.appendRow(["WT-" + Utilities.getUuid().substring(0, 8).toUpperCase(), name, true, nowStr, "System"]);
-      });
-      SpreadsheetApp.flush();
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      let sheet = ss.getSheetByName("WasteTypes");
+      if (!sheet) {
+        sheet = ss.insertSheet("WasteTypes");
+        sheet.appendRow(["TypeID", "TypeName", "Active", "CreatedAt", "CreatedBy"]);
+        const defaults = ["ขยะอันตราย", "ขยะรีไซเคิล", "ขยะอุตสาหกรรมไม่อันตราย", "อื่น ๆ"];
+        const nowStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss");
+        const rowsToAdd = defaults.map(function(name) {
+          return ["WT-" + Utilities.getUuid().substring(0, 8).toUpperCase(), name, true, nowStr, "System"];
+        });
+        sheet.getRange(2, 1, rowsToAdd.length, 5).setValues(rowsToAdd);
+        SpreadsheetApp.flush();
+      }
+      const rows = sheet.getDataRange().getValues();
+      const headers = rows[0].map(h => String(h).trim());
+      const idCol = headers.indexOf("TypeID");
+      const nameCol = headers.indexOf("TypeName");
+      const activeCol = headers.indexOf("Active");
+      const types = [];
+      for (let i = 1; i < rows.length; i++) {
+        const rawActive = activeCol === -1 ? "" : String(rows[i][activeCol]).trim().toLowerCase();
+        const isActive = rawActive === "" || rawActive === "true" || rows[i][activeCol] === true;
+        if (!isActive) continue;
+        const name = String(rows[i][nameCol] || "").trim();
+        if (!name) continue;
+        types.push({ typeId: String(rows[i][idCol] || "").trim(), typeName: name });
+      }
+      return ContentService.createTextOutput(JSON.stringify({status: "success", data: types})).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+    } finally {
+      lock.releaseLock();
     }
-    const rows = sheet.getDataRange().getValues();
-    const headers = rows[0].map(h => String(h).trim());
-    const idCol = headers.indexOf("TypeID");
-    const nameCol = headers.indexOf("TypeName");
-    const activeCol = headers.indexOf("Active");
-    const types = [];
-    for (let i = 1; i < rows.length; i++) {
-      const rawActive = activeCol === -1 ? "" : String(rows[i][activeCol]).trim().toLowerCase();
-      const isActive = rawActive === "" || rawActive === "true" || rows[i][activeCol] === true;
-      if (!isActive) continue;
-      const name = String(rows[i][nameCol] || "").trim();
-      if (!name) continue;
-      types.push({ typeId: String(rows[i][idCol] || "").trim(), typeName: name });
-    }
-    return ContentService.createTextOutput(JSON.stringify({status: "success", data: types})).setMimeType(ContentService.MimeType.JSON);
   }
 
   if (action === "ADD_WASTE_TYPE") {
-    let sheet = ss.getSheetByName("WasteTypes");
-    if (!sheet) {
-      sheet = ss.insertSheet("WasteTypes");
-      sheet.appendRow(["TypeID", "TypeName", "Active", "CreatedAt", "CreatedBy"]);
-    }
-    const name = String(data.typeName || "").trim();
-    if (!name) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "กรุณากรอกชื่อชนิดขยะ"})).setMimeType(ContentService.MimeType.JSON);
-    const rows = sheet.getDataRange().getValues();
-    const headers = rows[0].map(h => String(h).trim());
-    const nameCol = headers.indexOf("TypeName");
-    const activeCol = headers.indexOf("Active");
-    for (let i = 1; i < rows.length; i++) {
-      const rawActive = activeCol === -1 ? "" : String(rows[i][activeCol]).trim().toLowerCase();
-      const isActive = rawActive === "" || rawActive === "true" || rows[i][activeCol] === true;
-      if (isActive && String(rows[i][nameCol] || "").trim().toLowerCase() === name.toLowerCase()) {
-        return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ชนิดขยะนี้มีอยู่แล้ว"})).setMimeType(ContentService.MimeType.JSON);
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      let sheet = ss.getSheetByName("WasteTypes");
+      if (!sheet) {
+        sheet = ss.insertSheet("WasteTypes");
+        sheet.appendRow(["TypeID", "TypeName", "Active", "CreatedAt", "CreatedBy"]);
       }
+      const name = String(data.typeName || "").trim();
+      if (!name) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "กรุณากรอกชื่อชนิดขยะ"})).setMimeType(ContentService.MimeType.JSON);
+      const rows = sheet.getDataRange().getValues();
+      const headers = rows[0].map(h => String(h).trim());
+      const nameCol = headers.indexOf("TypeName");
+      const activeCol = headers.indexOf("Active");
+      for (let i = 1; i < rows.length; i++) {
+        const rawActive = activeCol === -1 ? "" : String(rows[i][activeCol]).trim().toLowerCase();
+        const isActive = rawActive === "" || rawActive === "true" || rows[i][activeCol] === true;
+        if (isActive && String(rows[i][nameCol] || "").trim().toLowerCase() === name.toLowerCase()) {
+          return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ชนิดขยะนี้มีอยู่แล้ว"})).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+      const typeId = "WT-" + Utilities.getUuid().substring(0, 8).toUpperCase();
+      sheet.appendRow([typeId, name, true, Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss"), data.recorder || "System"]);
+      SpreadsheetApp.flush();
+      logUserAction(data.recorder || "System", data.role || "User", "ADD_WASTE_TYPE", "เพิ่มชนิดขยะ: " + name);
+      return ContentService.createTextOutput(JSON.stringify({status: "success", typeId: typeId, message: "เพิ่มชนิดขยะสำเร็จ"})).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+    } finally {
+      lock.releaseLock();
     }
-    const typeId = "WT-" + Utilities.getUuid().substring(0, 8).toUpperCase();
-    sheet.appendRow([typeId, name, true, Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss"), data.recorder || "System"]);
-    SpreadsheetApp.flush();
-    logUserAction(data.recorder || "System", data.role || "User", "ADD_WASTE_TYPE", "เพิ่มชนิดขยะ: " + name);
-    return ContentService.createTextOutput(JSON.stringify({status: "success", typeId: typeId, message: "เพิ่มชนิดขยะสำเร็จ"})).setMimeType(ContentService.MimeType.JSON);
   }
 
   if (action === "DELETE_WASTE_TYPE") {
-    const sheet = ss.getSheetByName("WasteTypes");
-    if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบข้อมูลชนิดขยะ"})).setMimeType(ContentService.MimeType.JSON);
-    const rows = sheet.getDataRange().getValues();
-    const headers = rows[0].map(h => String(h).trim());
-    const idCol = headers.indexOf("TypeID");
-    const activeCol = headers.indexOf("Active");
-    for (let i = 1; i < rows.length; i++) {
-      if (String(rows[i][idCol] || "").trim() === String(data.typeId || "").trim() && String(data.typeId || "").trim() !== "") {
-        if (activeCol !== -1) sheet.getRange(i + 1, activeCol + 1).setValue(false);
-        else sheet.deleteRow(i + 1);
-        SpreadsheetApp.flush();
-        logUserAction(data.recorder || "System", data.role || "User", "DELETE_WASTE_TYPE", "ลบชนิดขยะ: " + data.typeId);
-        return ContentService.createTextOutput(JSON.stringify({status: "success", message: "ลบชนิดขยะสำเร็จ"})).setMimeType(ContentService.MimeType.JSON);
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      const sheet = ss.getSheetByName("WasteTypes");
+      if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบข้อมูลชนิดขยะ"})).setMimeType(ContentService.MimeType.JSON);
+      const rows = sheet.getDataRange().getValues();
+      const headers = rows[0].map(h => String(h).trim());
+      const idCol = headers.indexOf("TypeID");
+      const activeCol = headers.indexOf("Active");
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][idCol] || "").trim() === String(data.typeId || "").trim() && String(data.typeId || "").trim() !== "") {
+          if (activeCol !== -1) sheet.getRange(i + 1, activeCol + 1).setValue(false);
+          else sheet.deleteRow(i + 1);
+          SpreadsheetApp.flush();
+          logUserAction(data.recorder || "System", data.role || "User", "DELETE_WASTE_TYPE", "ลบชนิดขยะ: " + data.typeId);
+          return ContentService.createTextOutput(JSON.stringify({status: "success", message: "ลบชนิดขยะสำเร็จ"})).setMimeType(ContentService.MimeType.JSON);
+        }
       }
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบชนิดขยะที่ต้องการลบ"})).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+    } finally {
+      lock.releaseLock();
     }
-    return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบชนิดขยะที่ต้องการลบ"})).setMimeType(ContentService.MimeType.JSON);
   }
 
   if (action === "SUBMIT_WASTE") {
@@ -991,31 +1016,44 @@ function doPost(e) {
     if (!data.weightKg || isNaN(weight) || weight <= 0) {
       return ContentService.createTextOutput(JSON.stringify({status: "error", message: "กรุณากรอกน้ำหนักที่ถูกต้อง"})).setMimeType(ContentService.MimeType.JSON);
     }
-    let sheet = ss.getSheetByName("WasteLog");
-    if (!sheet) {
-      sheet = ss.insertSheet("WasteLog");
-      sheet.appendRow(["WasteID", "Timestamp", "Date", "RecordedBy", "RecorderName", "WasteType", "WeightKg", "Remark"]);
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      let sheet = ss.getSheetByName("WasteLog");
+      if (!sheet) {
+        sheet = ss.insertSheet("WasteLog");
+        sheet.appendRow(["WasteID", "Timestamp", "Date", "RecordedBy", "RecorderName", "WasteType", "WeightKg", "Remark"]);
+      }
+      // datetime-local ("2026-07-09T12:00") ไม่มี timezone offset — เติม +07:00 กันเวลาเพี้ยนตอน new Date() บนเซิร์ฟเวอร์ที่อาจรัน UTC
+      let recordedAt = data.recordedAt;
+      if (recordedAt && recordedAt.indexOf("T") !== -1 && recordedAt.indexOf("+") === -1 && recordedAt.indexOf("Z") === -1) {
+        recordedAt += "+07:00";
+      }
+      const parsed = recordedAt ? new Date(recordedAt) : new Date();
+      const now = isNaN(parsed.getTime()) ? new Date() : parsed;
+      const dateStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+      const tsStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
+      const wasteId = "WS-" + Utilities.formatDate(now, "GMT+7", "yyyyMMdd") + "-" + Utilities.getUuid().substring(0, 8).toUpperCase();
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      const rowMap = {
+        WasteID: wasteId,
+        Timestamp: tsStr,
+        Date: dateStr,
+        RecordedBy: data.username || data.recorder || "",
+        RecorderName: data.recorder || "",
+        WasteType: data.wasteType,
+        WeightKg: weight,
+        Remark: data.remark || ""
+      };
+      sheet.appendRow(headers.map(h => rowMap.hasOwnProperty(h) ? rowMap[h] : ""));
+      SpreadsheetApp.flush();
+      logUserAction(data.username || data.recorder || "System", data.role || "User", "SUBMIT_WASTE", "บันทึกขยะ: " + wasteId + " | " + data.wasteType + " | " + weight + " kg");
+      return ContentService.createTextOutput(JSON.stringify({status: "success", wasteId: wasteId, message: "บันทึกข้อมูลขยะเรียบร้อย: " + wasteId})).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+    } finally {
+      lock.releaseLock();
     }
-    const parsed = data.recordedAt ? new Date(data.recordedAt) : new Date();
-    const now = isNaN(parsed.getTime()) ? new Date() : parsed;
-    const dateStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
-    const tsStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
-    const wasteId = "WS-" + Utilities.formatDate(now, "GMT+7", "yyyyMMdd") + "-" + Utilities.getUuid().substring(0, 6).toUpperCase();
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
-    const rowMap = {
-      WasteID: wasteId,
-      Timestamp: tsStr,
-      Date: dateStr,
-      RecordedBy: data.username || data.recorder || "",
-      RecorderName: data.recorder || "",
-      WasteType: data.wasteType,
-      WeightKg: weight,
-      Remark: data.remark || ""
-    };
-    sheet.appendRow(headers.map(h => rowMap.hasOwnProperty(h) ? rowMap[h] : ""));
-    SpreadsheetApp.flush();
-    logUserAction(data.username || data.recorder || "System", data.role || "User", "SUBMIT_WASTE", "บันทึกขยะ: " + wasteId + " | " + data.wasteType + " | " + weight + " kg");
-    return ContentService.createTextOutput(JSON.stringify({status: "success", wasteId: wasteId, message: "บันทึกข้อมูลขยะเรียบร้อย: " + wasteId})).setMimeType(ContentService.MimeType.JSON);
   }
 
   if (action === "GET_TODAY_WASTE" || action === "GET_WASTE_HISTORY") {
