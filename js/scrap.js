@@ -103,15 +103,18 @@
     document.getElementById('btn-scrap-type-panel')?.addEventListener('click', () => {
       document.getElementById('scrap-type-panel')?.classList.toggle('hidden');
     });
-    document.getElementById('btn-scrap-type-add')?.addEventListener('click', async () => {
+    document.getElementById('btn-scrap-type-add')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
       const inp = document.getElementById('scrap-type-new');
       const val = (inp?.value || '').trim();
       if(!val) return;
+      btn.disabled = true;
       try {
         const res = await postScrap({ action: 'ADD_WASTE_TYPE', typeName: val, recorder: recorderName(), role: window.currentUser?.role || '' });
         if(res && res.status === 'success'){ inp.value = ''; await loadTypes(); }
         else alert((res && res.message) || 'เพิ่มไม่สำเร็จ');
       } catch(e){ alert('เพิ่มไม่สำเร็จ: ' + e); }
+      finally { btn.disabled = false; }
     });
     document.getElementById('btn-scrap-reset-time')?.addEventListener('click', () => {
       if(dt) dt.value = nowLocalInput();
