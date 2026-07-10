@@ -88,17 +88,45 @@
     renderItemPanelList();
   }
 
-  // แสดงเฉพาะรายการขยะที่ผูกกับชนิดที่เลือกอยู่
+  // แสดงรายการขยะทั้งหมด จัดกลุ่มตามชนิดขยะ (optgroup) — เลือกแล้วชนิดจะเปลี่ยนตาม
   function renderItemSelect(){
     const sel = document.getElementById('scrap-item');
     if(!sel) return;
-    const curType = document.getElementById('scrap-type')?.value || '';
-    const matched = itemsCache.filter(it => (it.typeName || '') === curType);
     const prev = sel.value;
+    const groups = {};
+    itemsCache.forEach(it => {
+      const key = it.typeName || 'ไม่ระบุชนิด';
+      (groups[key] = groups[key] || []).push(it);
+    });
     let html = '<option value="">— ไม่ระบุ —</option>';
-    html += matched.map(it => `<option value="${esc(it.itemName)}">${esc(it.itemName)}</option>`).join('');
+    html += Object.keys(groups).map(typeName =>
+      `<optgroup label="${esc(typeName)}">`
+      + groups[typeName].map(it => `<option value="${esc(it.itemName)}" data-type="${esc(it.typeName || '')}">${esc(it.itemName)}</option>`).join('')
+      + `</optgroup>`
+    ).join('');
     sel.innerHTML = html;
-    if(prev && matched.some(it => it.itemName === prev)) sel.value = prev;
+    if(prev && itemsCache.some(it => it.itemName === prev)) sel.value = prev;
+  }
+
+  // เลือกรายการขยะ → ตั้งชนิดขยะให้ตรงกับที่ผูกไว้
+  function syncTypeFromItem(){
+    const itemSel = document.getElementById('scrap-item');
+    if(!itemSel) return;
+    const opt = itemSel.options[itemSel.selectedIndex];
+    const itemType = opt ? (opt.dataset.type || '') : '';
+    if(!itemType) return;
+    const typeSel = document.getElementById('scrap-type');
+    if(typeSel && Array.from(typeSel.options).some(o => o.value === itemType)) typeSel.value = itemType;
+  }
+
+  // เปลี่ยนชนิดขยะเอง → ถ้ารายการที่เลือกไม่ตรงชนิด ให้รีเซ็ตรายการ
+  function clearItemIfTypeMismatch(){
+    const itemSel = document.getElementById('scrap-item');
+    const typeVal = document.getElementById('scrap-type')?.value || '';
+    if(!itemSel || !itemSel.value) return;
+    const opt = itemSel.options[itemSel.selectedIndex];
+    const itemType = opt ? (opt.dataset.type || '') : '';
+    if(itemType !== typeVal) itemSel.value = '';
   }
 
   function renderItemPanelList(){
@@ -227,8 +255,9 @@
     loadItems();
     renderTodayList();
 
-    // เปลี่ยนชนิดขยะ → กรองรายการขยะให้ตรงชนิด
-    document.getElementById('scrap-type')?.addEventListener('change', renderItemSelect);
+    // ผูกสองทาง: เลือกรายการ → ตั้งชนิด, เปลี่ยนชนิด → รีเซ็ตรายการที่ไม่ตรง
+    document.getElementById('scrap-item')?.addEventListener('change', syncTypeFromItem);
+    document.getElementById('scrap-type')?.addEventListener('change', clearItemIfTypeMismatch);
 
     // แผงจัดการชนิดขยะ
     document.getElementById('btn-scrap-type-panel')?.addEventListener('click', () => {
