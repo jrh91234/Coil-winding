@@ -167,13 +167,13 @@
     const body = document.getElementById('scrap-today-body');
     const totalEl = document.getElementById('scrap-today-total');
     if(!body || !totalEl) return;
-    body.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-400">กำลังโหลด...</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">กำลังโหลด...</td></tr>';
     let items = [];
     try {
       const res = await postScrap({ action: 'GET_TODAY_WASTE' });
       if(res && res.status === 'success' && Array.isArray(res.data)) items = res.data;
     } catch(_) {
-      body.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-red-400">โหลดข้อมูลไม่สำเร็จ</td></tr>';
+      body.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-red-400">โหลดข้อมูลไม่สำเร็จ</td></tr>';
       totalEl.textContent = 'รวม 0.00 กก.';
       renderScrapForm([]);
       return;
@@ -184,7 +184,7 @@
 
     let total = 0;
     if(!items.length){
-      body.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-400">ยังไม่มีรายการวันนี้</td></tr>';
+      body.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">ยังไม่มีรายการวันนี้</td></tr>';
       totalEl.textContent = 'รวม 0.00 กก.';
       return;
     }
@@ -194,9 +194,22 @@
       const ts = String(x.Timestamp || '');
       const hhmm = ts.length >= 16 ? ts.substring(11, 16) : '-';
       const desc = x.WasteItem ? `${esc(x.WasteItem)} <span class="text-[11px] text-gray-400">(${esc(x.WasteType)})</span>` : esc(x.WasteType);
-      return `<tr class="border-t"><td class="p-2">${esc(hhmm)}</td><td class="p-2">${desc}</td><td class="p-2 text-right">${w.toFixed(2)}</td><td class="p-2">${esc(x.RecorderName)}</td></tr>`;
+      const delBtn = x.WasteID
+        ? `<button data-id="${esc(x.WasteID)}" class="btn-scrap-del text-red-600 hover:bg-red-50 text-xs font-bold px-2 py-1 rounded">🗑️ ลบ</button>`
+        : '';
+      return `<tr class="border-t"><td class="p-2">${esc(hhmm)}</td><td class="p-2">${desc}</td><td class="p-2 text-right">${w.toFixed(2)}</td><td class="p-2">${esc(x.RecorderName)}</td><td class="p-2 text-center">${delBtn}</td></tr>`;
     }).join('');
     totalEl.textContent = `รวม ${total.toFixed(2)} กก.`;
+
+    body.querySelectorAll('.btn-scrap-del').forEach(btn => btn.addEventListener('click', async () => {
+      if(!confirm('ลบรายการทิ้งขยะนี้?')) return;
+      btn.disabled = true;
+      try {
+        const res = await postScrap({ action: 'DELETE_WASTE', wasteId: btn.dataset.id, recorder: recorderName(), username: window.currentUser?.username || '', role: window.currentUser?.role || '' });
+        if(res && res.status === 'success') await renderTodayList();  // รีเฟรชทั้งรายการวันนี้ + ฟอร์มใบนำส่งขยะ
+        else { alert((res && res.message) || 'ลบไม่สำเร็จ'); btn.disabled = false; }
+      } catch(e){ alert('ลบไม่สำเร็จ: ' + e); btn.disabled = false; }
+    }));
   }
 
   // เติมข้อมูลลงตารางใบนำส่งขยะ (Scrap List) อัตโนมัติ — อย่างน้อย 5 แถวเพื่อความสวยงามของเอกสาร

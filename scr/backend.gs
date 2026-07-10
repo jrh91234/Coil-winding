@@ -1157,6 +1157,34 @@ function doPost(e) {
     }
   }
 
+  if (action === "DELETE_WASTE") {
+    const wasteId = String(data.wasteId || "").trim();
+    if (!wasteId) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบรหัสรายการที่ต้องการลบ"})).setMimeType(ContentService.MimeType.JSON);
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      const sheet = ss.getSheetByName("WasteLog");
+      if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบข้อมูลขยะ"})).setMimeType(ContentService.MimeType.JSON);
+      const rows = sheet.getDataRange().getValues();
+      const headers = rows[0].map(h => String(h).trim());
+      const idCol = headers.indexOf("WasteID");
+      if (idCol === -1) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบคอลัมน์ WasteID"})).setMimeType(ContentService.MimeType.JSON);
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][idCol] || "").trim() === wasteId) {
+          sheet.deleteRow(i + 1);
+          SpreadsheetApp.flush();
+          logUserAction(data.username || data.recorder || "System", data.role || "User", "DELETE_WASTE", "ลบรายการขยะ: " + wasteId);
+          return ContentService.createTextOutput(JSON.stringify({status: "success", message: "ลบรายการขยะสำเร็จ"})).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบรายการที่ต้องการลบ"})).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
   if (action === "GET_TODAY_WASTE" || action === "GET_WASTE_HISTORY") {
     const sheet = ss.getSheetByName("WasteLog");
     if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "success", data: []})).setMimeType(ContentService.MimeType.JSON);
