@@ -4,6 +4,7 @@
   const DEFAULT_TYPES = ['ขยะอันตราย','ขยะรีไซเคิล','ขยะอุตสาหกรรมไม่อันตราย','อื่น ๆ'];
   let typesCache = [];  // [{typeId, typeName}]
   let itemsCache = [];  // [{itemId, itemName, typeId, typeName}]
+  let formRowsCache = [];  // รายการขยะวันนี้ (เรียงเก่า→ใหม่) สำหรับเติมในฟอร์ม
 
   function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function recorderName(){ return window.currentUser?.name || window.currentUser?.username || '-'; }
@@ -50,6 +51,13 @@
       const prevIt = itemTypeSel.value;
       itemTypeSel.innerHTML = typesCache.map(t => `<option value="${esc(t.typeId)}" data-name="${esc(t.typeName)}">${esc(t.typeName)}</option>`).join('');
       if(prevIt) itemTypeSel.value = prevIt;
+    }
+    // dropdown เลือกประเภทที่จะ export (มีตัวเลือก "ทั้งหมด")
+    const expSel = document.getElementById('scrap-export-type');
+    if(expSel){
+      const prevExp = expSel.value;
+      expSel.innerHTML = '<option value="">ทั้งหมด</option>' + typesCache.map(t => `<option value="${esc(t.typeName)}">${esc(t.typeName)}</option>`).join('');
+      if(prevExp && typesCache.some(t => t.typeName === prevExp)) expSel.value = prevExp;
     }
     renderTypePanelList();
     renderItemSelect();
@@ -175,12 +183,13 @@
     } catch(_) {
       body.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-red-400">โหลดข้อมูลไม่สำเร็จ</td></tr>';
       totalEl.textContent = 'รวม 0.00 กก.';
-      renderScrapForm([]);
+      formRowsCache = [];
+      applyScrapForm();
       return;
     }
     // เรียงจากเก่าไปใหม่สำหรับฟอร์มเอกสาร (ลำดับ No. 1,2,3...)
-    const ordered = items.slice().sort((a,b) => String(a.Timestamp||'').localeCompare(String(b.Timestamp||'')));
-    renderScrapForm(ordered);
+    formRowsCache = items.slice().sort((a,b) => String(a.Timestamp||'').localeCompare(String(b.Timestamp||'')));
+    applyScrapForm();
 
     let total = 0;
     if(!items.length){
@@ -242,6 +251,35 @@
       const d = new Date();
       monthInp.value = `${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
     }
+  }
+
+  // กรองรายการตามประเภทที่เลือก export แล้วเติมฟอร์ม + ทำเครื่องหมายช่องประเภทของเสีย
+  function applyScrapForm(){
+    const filterType = document.getElementById('scrap-export-type')?.value || '';
+    const rows = filterType ? formRowsCache.filter(x => String(x.WasteType || '') === filterType) : formRowsCache;
+    renderScrapForm(rows);
+    // ประเภทที่ต้องทำเครื่องหมาย: ถ้าเลือกเฉพาะประเภท ใช้ประเภทนั้น, ถ้าทั้งหมด ใช้ประเภทที่มีในรายการ
+    const typeNames = filterType ? [filterType] : Array.from(new Set(rows.map(x => String(x.WasteType || '')).filter(Boolean)));
+    updateDocCheckboxes(typeNames);
+  }
+
+  // ทำเครื่องหมาย ☑ ในช่อง "ประเภทของเสีย" ให้ตรงกับประเภทที่ปรากฏ
+  function updateDocCheckboxes(typeNames){
+    const span = document.getElementById('scrap-doc-types');
+    if(!span) return;
+    const cats = [
+      { label: 'ขยะอันตราย 危险垃圾', match: t => t.indexOf('อันตราย') !== -1 && t.indexOf('ไม่') === -1 && t.indexOf('อุตสาหกรรม') === -1 },
+      { label: 'ขยะรีไซเคิล 回收垃圾', match: t => t.indexOf('รีไซเคิล') !== -1 },
+      { label: 'ขยะอุตสาหกรรมที่ไม่เป็นอันตราย (เศษเหลือใช้จากการผลิต) 非危险工业垃圾（如生产边料）', match: t => t.indexOf('อุตสาหกรรม') !== -1 },
+      { label: 'อื่น ๆ (ระบุ) Other 其他 ____________', match: null }  // catch-all
+    ];
+    const checked = [false, false, false, false];
+    (typeNames || []).forEach(t => {
+      let idx = cats.findIndex(c => c.match && c.match(t));
+      if(idx === -1) idx = 3;  // ประเภทอื่น ๆ
+      checked[idx] = true;
+    });
+    span.innerHTML = cats.map((c, i) => `${checked[i] ? '☑' : '☐'} ${c.label}`).join(' &nbsp;&nbsp;&nbsp; ');
   }
 
   // ===== Export PDF (พิมพ์ใบนำส่งขยะ) =====
@@ -319,6 +357,8 @@
       if(dt) dt.value = nowLocalInput();
     });
     document.getElementById('btn-scrap-export-pdf')?.addEventListener('click', exportScrapPdf);
+    // เลือกประเภทที่จะ export → กรองฟอร์ม + ทำเครื่องหมายช่องประเภทของเสียทันที
+    document.getElementById('scrap-export-type')?.addEventListener('change', applyScrapForm);
 
     document.getElementById('btn-scrap-save')?.addEventListener('click', async () => {
       const btn = document.getElementById('btn-scrap-save');

@@ -1063,8 +1063,10 @@
             </div>
         </div>
 
-        <!-- แถบเครื่องมือฟอร์ม (Export PDF) -->
-        <div class="flex justify-end print-hide">
+        <!-- แถบเครื่องมือฟอร์ม (เลือกประเภท + Export PDF) -->
+        <div class="flex flex-wrap justify-end items-center gap-2 print-hide">
+            <label for="scrap-export-type" class="text-sm font-bold text-gray-600">Export ประเภทขยะ:</label>
+            <select id="scrap-export-type" class="border rounded-lg p-2 bg-white text-sm"></select>
             <button type="button" id="btn-scrap-export-pdf" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold shadow">📄 Export PDF (พิมพ์ใบนำส่งขยะ)</button>
         </div>
 
@@ -1567,7 +1569,7 @@
         </div>
     </div>
 
-    <script src="js/scrap.js?v=1.5"></script>
+    <script src="js/scrap.js?v=1.6"></script>
     <script src="js/parts.js?v=5.3"></script>
     <script src="js/inbox.js?v=2.1"></script>
     <script src="js/cost.js?v=1.1"></script>
