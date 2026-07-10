@@ -222,14 +222,17 @@
   }
 
   // เติมข้อมูลลงตารางใบนำส่งขยะ (Scrap List) อัตโนมัติ — อย่างน้อย 5 แถวเพื่อความสวยงามของเอกสาร
-  function renderScrapForm(rows){
+  function renderScrapForm(rows, hideType){
     const body = document.getElementById('scrap-form-body');
     if(!body) return;
     const MIN_ROWS = 5;
     const dataRows = rows.map((x, idx) => {
       const w = Number(x.WeightKg || 0);
       const dateStr = String(x.Date || x.Timestamp || '').substring(0, 10);
-      const desc = x.WasteItem ? `${esc(x.WasteItem)} (${esc(x.WasteType)})` : esc(x.WasteType);
+      // เมื่อกรองเป็นประเภทเดียว ช่องประเภทของเสียติ๊กไว้แล้ว จึงไม่ต้องมีวงเล็บประเภทซ้ำ
+      const desc = x.WasteItem
+        ? (hideType ? esc(x.WasteItem) : `${esc(x.WasteItem)} (${esc(x.WasteType)})`)
+        : esc(x.WasteType);
       const recorder = esc(x.RecorderName || '');
       return `<tr class="h-14 border-b border-black">`
         + `<td class="border-r-2 border-black text-center align-middle">${esc(dateStr)}</td>`
@@ -257,7 +260,7 @@
   function applyScrapForm(){
     const filterType = document.getElementById('scrap-export-type')?.value || '';
     const rows = filterType ? formRowsCache.filter(x => String(x.WasteType || '') === filterType) : formRowsCache;
-    renderScrapForm(rows);
+    renderScrapForm(rows, !!filterType);
     // ประเภทที่ต้องทำเครื่องหมาย: ถ้าเลือกเฉพาะประเภท ใช้ประเภทนั้น, ถ้าทั้งหมด ใช้ประเภทที่มีในรายการ
     const typeNames = filterType ? [filterType] : Array.from(new Set(rows.map(x => String(x.WasteType || '')).filter(Boolean)));
     updateDocCheckboxes(typeNames);
