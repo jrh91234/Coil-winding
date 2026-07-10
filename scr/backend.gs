@@ -1010,6 +1010,101 @@ function doPost(e) {
     }
   }
 
+  // --- รายการขยะ (Waste Items) — ผูกกับชนิดขยะ (WasteTypes) ---
+  if (action === "GET_WASTE_ITEMS") {
+    const sheet = ss.getSheetByName("WasteItems");
+    if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "success", data: []})).setMimeType(ContentService.MimeType.JSON);
+    const rows = sheet.getDataRange().getValues();
+    if (rows.length <= 1) return ContentService.createTextOutput(JSON.stringify({status: "success", data: []})).setMimeType(ContentService.MimeType.JSON);
+    const headers = rows[0].map(h => String(h).trim());
+    const idCol = headers.indexOf("ItemID");
+    const nameCol = headers.indexOf("ItemName");
+    const typeIdCol = headers.indexOf("TypeID");
+    const typeNameCol = headers.indexOf("TypeName");
+    const activeCol = headers.indexOf("Active");
+    const items = [];
+    for (let i = 1; i < rows.length; i++) {
+      const rawActive = activeCol === -1 ? "" : String(rows[i][activeCol]).trim().toLowerCase();
+      const isActive = rawActive === "" || rawActive === "true" || rows[i][activeCol] === true;
+      if (!isActive) continue;
+      const name = String(rows[i][nameCol] || "").trim();
+      if (!name) continue;
+      items.push({
+        itemId: String(rows[i][idCol] || "").trim(),
+        itemName: name,
+        typeId: typeIdCol === -1 ? "" : String(rows[i][typeIdCol] || "").trim(),
+        typeName: typeNameCol === -1 ? "" : String(rows[i][typeNameCol] || "").trim()
+      });
+    }
+    return ContentService.createTextOutput(JSON.stringify({status: "success", data: items})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === "ADD_WASTE_ITEM") {
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      let sheet = ss.getSheetByName("WasteItems");
+      if (!sheet) {
+        sheet = ss.insertSheet("WasteItems");
+        sheet.appendRow(["ItemID", "ItemName", "TypeID", "TypeName", "Active", "CreatedAt", "CreatedBy"]);
+      }
+      const name = String(data.itemName || "").trim();
+      const typeName = String(data.typeName || "").trim();
+      if (!name) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "กรุณากรอกชื่อรายการขยะ"})).setMimeType(ContentService.MimeType.JSON);
+      if (!typeName) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "กรุณาเลือกชนิดขยะ"})).setMimeType(ContentService.MimeType.JSON);
+      const rows = sheet.getDataRange().getValues();
+      const headers = rows[0].map(h => String(h).trim());
+      const nameCol = headers.indexOf("ItemName");
+      const typeNameCol = headers.indexOf("TypeName");
+      const activeCol = headers.indexOf("Active");
+      for (let i = 1; i < rows.length; i++) {
+        const rawActive = activeCol === -1 ? "" : String(rows[i][activeCol]).trim().toLowerCase();
+        const isActive = rawActive === "" || rawActive === "true" || rows[i][activeCol] === true;
+        if (isActive
+          && String(rows[i][nameCol] || "").trim().toLowerCase() === name.toLowerCase()
+          && String(rows[i][typeNameCol] || "").trim().toLowerCase() === typeName.toLowerCase()) {
+          return ContentService.createTextOutput(JSON.stringify({status: "error", message: "รายการขยะนี้มีอยู่แล้วในชนิดนี้"})).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+      const itemId = "WI-" + Utilities.getUuid().substring(0, 8).toUpperCase();
+      sheet.appendRow([itemId, name, String(data.typeId || "").trim(), typeName, true, Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss"), data.recorder || "System"]);
+      SpreadsheetApp.flush();
+      logUserAction(data.recorder || "System", data.role || "User", "ADD_WASTE_ITEM", "เพิ่มรายการขยะ: " + name + " (" + typeName + ")");
+      return ContentService.createTextOutput(JSON.stringify({status: "success", itemId: itemId, message: "เพิ่มรายการขยะสำเร็จ"})).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  if (action === "DELETE_WASTE_ITEM") {
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      const sheet = ss.getSheetByName("WasteItems");
+      if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบข้อมูลรายการขยะ"})).setMimeType(ContentService.MimeType.JSON);
+      const rows = sheet.getDataRange().getValues();
+      const headers = rows[0].map(h => String(h).trim());
+      const idCol = headers.indexOf("ItemID");
+      const activeCol = headers.indexOf("Active");
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][idCol] || "").trim() === String(data.itemId || "").trim() && String(data.itemId || "").trim() !== "") {
+          if (activeCol !== -1) sheet.getRange(i + 1, activeCol + 1).setValue(false);
+          else sheet.deleteRow(i + 1);
+          SpreadsheetApp.flush();
+          logUserAction(data.recorder || "System", data.role || "User", "DELETE_WASTE_ITEM", "ลบรายการขยะ: " + data.itemId);
+          return ContentService.createTextOutput(JSON.stringify({status: "success", message: "ลบรายการขยะสำเร็จ"})).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบรายการขยะที่ต้องการลบ"})).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
   if (action === "SUBMIT_WASTE") {
     if (!data.wasteType) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "กรุณาเลือกชนิดขยะ"})).setMimeType(ContentService.MimeType.JSON);
     const weight = Number(data.weightKg);
@@ -1022,7 +1117,7 @@ function doPost(e) {
       let sheet = ss.getSheetByName("WasteLog");
       if (!sheet) {
         sheet = ss.insertSheet("WasteLog");
-        sheet.appendRow(["WasteID", "Timestamp", "Date", "RecordedBy", "RecorderName", "WasteType", "WeightKg", "Remark"]);
+        sheet.appendRow(["WasteID", "Timestamp", "Date", "RecordedBy", "RecorderName", "WasteType", "WasteItem", "WeightKg", "Remark"]);
       }
       // datetime-local ("2026-07-09T12:00") ไม่มี timezone offset — เติม +07:00 กันเวลาเพี้ยนตอน new Date() บนเซิร์ฟเวอร์ที่อาจรัน UTC
       let recordedAt = data.recordedAt;
@@ -1034,7 +1129,12 @@ function doPost(e) {
       const dateStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
       const tsStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
       const wasteId = "WS-" + Utilities.formatDate(now, "GMT+7", "yyyyMMdd") + "-" + Utilities.getUuid().substring(0, 8).toUpperCase();
-      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      let headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      // เพิ่มคอลัมน์ WasteItem ให้ชีตเดิมที่ยังไม่มี (backward-compatible)
+      if (headers.indexOf("WasteItem") === -1) {
+        sheet.getRange(1, headers.length + 1).setValue("WasteItem");
+        headers.push("WasteItem");
+      }
       const rowMap = {
         WasteID: wasteId,
         Timestamp: tsStr,
@@ -1042,6 +1142,7 @@ function doPost(e) {
         RecordedBy: data.username || data.recorder || "",
         RecorderName: data.recorder || "",
         WasteType: data.wasteType,
+        WasteItem: data.wasteItem || "",
         WeightKg: weight,
         Remark: data.remark || ""
       };
