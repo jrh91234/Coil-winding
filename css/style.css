@@ -92,5 +92,32 @@ td { @apply px-6 py-4 border-b text-sm text-gray-700 whitespace-nowrap; }
     /* 5. ควบคุมไม่ให้กราฟ/ตาราง โดนตัดครึ่งกลางหน้ากระดาษ */
     .page-break-before { page-break-before: always !important; break-before: page !important; }
     .page-break-inside-avoid { page-break-inside: avoid !important; break-inside: avoid !important; display: block !important; }
+
+    /* ===== พิมพ์ใบนำส่งขยะ (Scrap List) เป็น PDF ===== */
+    /* ซ่อนทุกอย่างยกเว้นหน้าฟอร์มขยะ */
+    body.printing-scrap > *:not(#section-scrap) { display: none !important; }
+    body.printing-scrap #section-scrap {
+        display: block !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    /* ในหน้าฟอร์มขยะ แสดงเฉพาะเอกสารที่จะพิมพ์ */
+    body.printing-scrap #section-scrap > *:not(#scrap-print-area) { display: none !important; }
+    body.printing-scrap #scrap-print-area {
+        display: block !important;
+        box-shadow: none !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
+    }
+    /* ให้เอกสารพอดีกับ A4 (ลดขนาดตัวอักษรหัวเรื่องที่ตั้งไว้ใหญ่สำหรับจอ) */
+    body.printing-scrap .scrap-doc { min-width: 0 !important; width: 100% !important; }
+    body.printing-scrap .scrap-doc-title { font-size: 18pt !important; }
+    body.printing-scrap .scrap-doc-title-cn { font-size: 20pt !important; }
+    body.printing-scrap .scrap-doc table { font-size: 9pt !important; }
+    body.printing-scrap .scrap-doc .text-3xl { font-size: 12pt !important; }
+    body.printing-scrap .scrap-doc-input { border-bottom: 1px solid #000 !important; }
 }
 #print-header { display: none; }
