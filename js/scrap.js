@@ -351,16 +351,20 @@
         scrollX: 0,
         scrollY: 0,
         // html2canvas วาด <input> แล้ว baseline ตก → แปลงเป็นข้อความธรรมดาก่อนแคป
+        // ใช้ text-decoration แทน border-bottom เพราะเส้นใต้ยึดกับ baseline ของตัวอักษรโดยตรง
+        // (border-bottom ยึดกับกล่อง span ซึ่งบางฟอนต์เตี้ยกว่าตัวอักษร ทำให้เส้นคาดกลางตัวหนังสือ)
         onclone: (clonedDoc) => {
           clonedDoc.querySelectorAll('.scrap-doc-input').forEach(inp => {
             const span = clonedDoc.createElement('span');
-            span.textContent = inp.value || ' ';
-            span.className = inp.className.replace('scrap-doc-input', '');
-            span.style.display = 'inline-block';
-            span.style.borderBottom = '1px solid #000';
-            span.style.textAlign = 'center';
-            span.style.minWidth = (inp.offsetWidth || 100) + 'px';
-            span.style.lineHeight = '1.2';
+            if(inp.value){
+              const pad = '\u00A0'.repeat(6);
+              span.textContent = pad + inp.value + pad;
+              span.style.textDecoration = 'underline';
+              span.style.textUnderlineOffset = '4px';
+            } else {
+              // ช่องว่าง: ใช้ขีดล่างแทน (html2canvas ไม่วาดเส้นใต้บนช่องว่างล้วน)
+              span.textContent = '____________';
+            }
             inp.parentNode.replaceChild(span, inp);
           });
         }
