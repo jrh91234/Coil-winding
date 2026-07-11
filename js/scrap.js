@@ -196,15 +196,33 @@
     applyScrapForm();
   }
 
-  // ===== รายการวันนี้ =====
+  // ===== รายการทิ้งขยะ (เลือกช่วงวันที่ได้ — ค่าเริ่มต้นคือวันนี้) =====
+  function todayDateStr(){
+    const d = new Date();
+    d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
+    return d.toISOString().slice(0,10);
+  }
+
+  function scrapListRange(){
+    const fromInp = document.getElementById('scrap-list-from');
+    const toInp = document.getElementById('scrap-list-to');
+    const today = todayDateStr();
+    let from = (fromInp?.value || '').trim() || today;
+    let to = (toInp?.value || '').trim() || today;
+    if(from > to) [from, to] = [to, from];  // สลับให้ถูกลำดับหากเลือกกลับด้าน
+    return { from, to };
+  }
+
   async function renderTodayList(){
     const body = document.getElementById('scrap-today-body');
     const totalEl = document.getElementById('scrap-today-total');
     if(!body || !totalEl) return;
+    const { from, to } = scrapListRange();
+    const singleDay = from === to;
     body.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">กำลังโหลด...</td></tr>';
     let items = [];
     try {
-      const res = await postScrap({ action: 'GET_TODAY_WASTE' });
+      const res = await postScrap({ action: 'GET_WASTE_HISTORY', dateFrom: from, dateTo: to });
       if(res && res.status === 'success' && Array.isArray(res.data)) items = res.data;
     } catch(_) {
       body.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-red-400">โหลดข้อมูลไม่สำเร็จ</td></tr>';
@@ -214,7 +232,7 @@
 
     let total = 0;
     if(!items.length){
-      body.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">ยังไม่มีรายการวันนี้</td></tr>';
+      body.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">ไม่มีรายการในช่วงที่เลือก</td></tr>';
       totalEl.textContent = 'รวม 0.00 กก.';
       return;
     }
@@ -222,12 +240,15 @@
       const w = Number(x.WeightKg || 0);
       total += w;
       const ts = String(x.Timestamp || '');
-      const hhmm = ts.length >= 16 ? ts.substring(11, 16) : '-';
+      // ช่วงวันเดียวโชว์แค่เวลา, ช่วงหลายวันโชว์วันที่+เวลา
+      const dt = singleDay
+        ? (ts.length >= 16 ? ts.substring(11, 16) : '-')
+        : (ts.length >= 16 ? `${ts.substring(0,10)} ${ts.substring(11,16)}` : String(x.Date || '-'));
       const desc = x.WasteItem ? `${esc(x.WasteItem)} <span class="text-[11px] text-gray-400">(${esc(x.WasteType)})</span>` : esc(x.WasteType);
       const delBtn = x.WasteID
         ? `<button data-id="${esc(x.WasteID)}" class="btn-scrap-del text-red-600 hover:bg-red-50 text-xs font-bold px-2 py-1 rounded">🗑️ ลบ</button>`
         : '';
-      return `<tr class="border-t"><td class="p-2">${esc(hhmm)}</td><td class="p-2">${desc}</td><td class="p-2 text-right">${w.toFixed(2)}</td><td class="p-2">${esc(x.RecorderName)}</td><td class="p-2 text-center">${delBtn}</td></tr>`;
+      return `<tr class="border-t"><td class="p-2">${esc(dt)}</td><td class="p-2">${desc}</td><td class="p-2 text-right">${w.toFixed(2)}</td><td class="p-2">${esc(x.RecorderName)}</td><td class="p-2 text-center">${delBtn}</td></tr>`;
     }).join('');
     totalEl.textContent = `รวม ${total.toFixed(2)} กก.`;
 
@@ -236,7 +257,7 @@
       btn.disabled = true;
       try {
         const res = await postScrap({ action: 'DELETE_WASTE', wasteId: btn.dataset.id, recorder: recorderName(), username: window.currentUser?.username || '', role: window.currentUser?.role || '' });
-        if(res && res.status === 'success'){ await renderTodayList(); await loadFormMonth(); }  // รีเฟรชทั้งรายการวันนี้ + ฟอร์มใบนำส่งขยะ
+        if(res && res.status === 'success'){ await renderTodayList(); await loadFormMonth(); }  // รีเฟรชทั้งรายการ + ฟอร์มใบนำส่งขยะ
         else { alert((res && res.message) || 'ลบไม่สำเร็จ'); btn.disabled = false; }
       } catch(e){ alert('ลบไม่สำเร็จ: ' + e); btn.disabled = false; }
     }));
@@ -424,6 +445,18 @@
     // ค่าเริ่มต้นเดือนที่ export = เดือนปัจจุบัน
     const monthSel = document.getElementById('scrap-export-month');
     if(monthSel && !monthSel.value) monthSel.value = selectedMonth();
+    // ค่าเริ่มต้นช่วงวันที่ของรายการ = วันนี้
+    const listFrom = document.getElementById('scrap-list-from');
+    const listTo = document.getElementById('scrap-list-to');
+    if(listFrom && !listFrom.value) listFrom.value = todayDateStr();
+    if(listTo && !listTo.value) listTo.value = todayDateStr();
+    document.getElementById('scrap-list-from')?.addEventListener('change', renderTodayList);
+    document.getElementById('scrap-list-to')?.addEventListener('change', renderTodayList);
+    document.getElementById('btn-scrap-list-today')?.addEventListener('click', () => {
+      if(listFrom) listFrom.value = todayDateStr();
+      if(listTo) listTo.value = todayDateStr();
+      renderTodayList();
+    });
     loadTypes();
     loadItems();
     renderTodayList();
