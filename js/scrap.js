@@ -170,7 +170,33 @@
     }));
   }
 
-  // ===== รายการวันนี้ + เติมลงฟอร์มใบนำส่งขยะ =====
+  // ===== เดือนที่เลือกสำหรับฟอร์ม/Export =====
+  function selectedMonth(){
+    const inp = document.getElementById('scrap-export-month');
+    if(inp && /^\d{4}-\d{2}$/.test(inp.value || '')) return inp.value;
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  }
+
+  // โหลดรายการของเดือนที่เลือกมาเติมฟอร์มใบนำส่งขยะ
+  async function loadFormMonth(){
+    const ym = selectedMonth();
+    const [y, m] = ym.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    let items = [];
+    try {
+      const res = await postScrap({ action: 'GET_WASTE_HISTORY', dateFrom: `${ym}-01`, dateTo: `${ym}-${String(lastDay).padStart(2,'0')}` });
+      if(res && res.status === 'success' && Array.isArray(res.data)) items = res.data;
+    } catch(_) { items = []; }
+    // เรียงจากเก่าไปใหม่สำหรับฟอร์มเอกสาร (ลำดับ No. 1,2,3...)
+    formRowsCache = items.slice().sort((a,b) => String(a.Timestamp||'').localeCompare(String(b.Timestamp||'')));
+    // ช่องประจำเดือน/ปี ในเอกสารให้ตรงกับเดือนที่เลือก
+    const monthInp = document.getElementById('scrap-doc-month');
+    if(monthInp) monthInp.value = `${String(m).padStart(2,'0')}/${y}`;
+    applyScrapForm();
+  }
+
+  // ===== รายการวันนี้ =====
   async function renderTodayList(){
     const body = document.getElementById('scrap-today-body');
     const totalEl = document.getElementById('scrap-today-total');
@@ -183,13 +209,8 @@
     } catch(_) {
       body.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-red-400">โหลดข้อมูลไม่สำเร็จ</td></tr>';
       totalEl.textContent = 'รวม 0.00 กก.';
-      formRowsCache = [];
-      applyScrapForm();
       return;
     }
-    // เรียงจากเก่าไปใหม่สำหรับฟอร์มเอกสาร (ลำดับ No. 1,2,3...)
-    formRowsCache = items.slice().sort((a,b) => String(a.Timestamp||'').localeCompare(String(b.Timestamp||'')));
-    applyScrapForm();
 
     let total = 0;
     if(!items.length){
@@ -215,7 +236,7 @@
       btn.disabled = true;
       try {
         const res = await postScrap({ action: 'DELETE_WASTE', wasteId: btn.dataset.id, recorder: recorderName(), username: window.currentUser?.username || '', role: window.currentUser?.role || '' });
-        if(res && res.status === 'success') await renderTodayList();  // รีเฟรชทั้งรายการวันนี้ + ฟอร์มใบนำส่งขยะ
+        if(res && res.status === 'success'){ await renderTodayList(); await loadFormMonth(); }  // รีเฟรชทั้งรายการวันนี้ + ฟอร์มใบนำส่งขยะ
         else { alert((res && res.message) || 'ลบไม่สำเร็จ'); btn.disabled = false; }
       } catch(e){ alert('ลบไม่สำเร็จ: ' + e); btn.disabled = false; }
     }));
@@ -247,13 +268,6 @@
     const emptyRow = `<tr class="h-14 border-b border-black"><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td class="border-r-2 border-black"></td><td></td></tr>`;
     while(dataRows.length < MIN_ROWS) dataRows.push(emptyRow);
     body.innerHTML = dataRows.join('');
-
-    // อัปเดตช่องประจำเดือน/ปี ให้เป็นเดือนปัจจุบันหากยังว่าง
-    const monthInp = document.getElementById('scrap-doc-month');
-    if(monthInp && !monthInp.value){
-      const d = new Date();
-      monthInp.value = `${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-    }
   }
 
   // กรองรายการตามประเภทที่เลือก export แล้วเติมฟอร์ม + ทำเครื่องหมายช่องประเภทของเสีย
@@ -311,9 +325,8 @@
 
   function scrapPdfFilename(){
     const type = document.getElementById('scrap-export-type')?.value || '';
-    const date = new Date().toISOString().slice(0, 10);
     const suffix = type ? '_' + type.replace(/[\s/\\?%*:|"<>]+/g, '-') : '';
-    return `ScrapList_${date}${suffix}.pdf`;
+    return `ScrapList_${selectedMonth()}${suffix}.pdf`;
   }
 
   async function exportScrapPdf(){
@@ -336,7 +349,21 @@
         backgroundColor: '#ffffff',
         windowWidth: target.scrollWidth,
         scrollX: 0,
-        scrollY: 0
+        scrollY: 0,
+        // html2canvas วาด <input> แล้ว baseline ตก → แปลงเป็นข้อความธรรมดาก่อนแคป
+        onclone: (clonedDoc) => {
+          clonedDoc.querySelectorAll('.scrap-doc-input').forEach(inp => {
+            const span = clonedDoc.createElement('span');
+            span.textContent = inp.value || ' ';
+            span.className = inp.className.replace('scrap-doc-input', '');
+            span.style.display = 'inline-block';
+            span.style.borderBottom = '1px solid #000';
+            span.style.textAlign = 'center';
+            span.style.minWidth = (inp.offsetWidth || 100) + 'px';
+            span.style.lineHeight = '1.2';
+            inp.parentNode.replaceChild(span, inp);
+          });
+        }
       });
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -390,9 +417,13 @@
     const dt = document.getElementById('scrap-datetime');
     if(recorder) recorder.value = recorderName();
     if(dt && !dt.value) dt.value = nowLocalInput();
+    // ค่าเริ่มต้นเดือนที่ export = เดือนปัจจุบัน
+    const monthSel = document.getElementById('scrap-export-month');
+    if(monthSel && !monthSel.value) monthSel.value = selectedMonth();
     loadTypes();
     loadItems();
     renderTodayList();
+    loadFormMonth();
 
     // ผูกสองทาง: เลือกรายการ → ตั้งชนิด, เปลี่ยนชนิด → รีเซ็ตรายการที่ไม่ตรง
     document.getElementById('scrap-item')?.addEventListener('change', syncTypeFromItem);
@@ -447,6 +478,8 @@
     document.getElementById('btn-scrap-export-pdf')?.addEventListener('click', exportScrapPdf);
     // เลือกประเภทที่จะ export → กรองฟอร์ม + ทำเครื่องหมายช่องประเภทของเสียทันที
     document.getElementById('scrap-export-type')?.addEventListener('change', applyScrapForm);
+    // เลือกเดือน → โหลดรายการของเดือนนั้นมาเติมฟอร์ม
+    document.getElementById('scrap-export-month')?.addEventListener('change', loadFormMonth);
 
     document.getElementById('btn-scrap-save')?.addEventListener('click', async () => {
       const btn = document.getElementById('btn-scrap-save');
@@ -473,7 +506,8 @@
         });
         if(res && res.status === 'success'){
           document.getElementById('scrap-weight').value = '';
-          await renderTodayList();  // อัปเดตทั้งรายการวันนี้ + ฟอร์มใบนำส่งขยะ
+          await renderTodayList();  // อัปเดตรายการวันนี้
+          await loadFormMonth();    // อัปเดตฟอร์มใบนำส่งขยะของเดือนที่เลือก
         } else {
           alert((res && res.message) || 'บันทึกไม่สำเร็จ');
         }
@@ -490,5 +524,6 @@
     loadTypes();
     loadItems();
     renderTodayList();
+    loadFormMonth();
   };
 })();
