@@ -285,8 +285,93 @@
     span.innerHTML = cats.map((c, i) => `${checked[i] ? '☑' : '☐'} ${c.label}`).join(' &nbsp;&nbsp;&nbsp; ');
   }
 
-  // ===== Export PDF (พิมพ์ใบนำส่งขยะ) =====
-  function exportScrapPdf(){
+  // ===== Export PDF (ดาวน์โหลดใบนำส่งขยะเป็นไฟล์ PDF) =====
+  // โหลดไลบรารีเฉพาะตอนใช้งาน (lazy) เพื่อไม่ให้ถ่วงหน้าอื่น
+  function loadScriptOnce(src){
+    return new Promise((resolve, reject) => {
+      if(Array.from(document.scripts).some(s => s.src === src)) return resolve();
+      const el = document.createElement('script');
+      el.src = src;
+      el.onload = () => resolve();
+      el.onerror = () => reject(new Error('โหลดไม่สำเร็จ: ' + src));
+      document.head.appendChild(el);
+    });
+  }
+
+  async function ensurePdfLibs(){
+    if(window.html2canvas && window.jspdf) return true;
+    try {
+      await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+      await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+      return !!(window.html2canvas && window.jspdf && window.jspdf.jsPDF);
+    } catch(_) {
+      return false;
+    }
+  }
+
+  function scrapPdfFilename(){
+    const type = document.getElementById('scrap-export-type')?.value || '';
+    const date = new Date().toISOString().slice(0, 10);
+    const suffix = type ? '_' + type.replace(/[\s/\\?%*:|"<>]+/g, '-') : '';
+    return `ScrapList_${date}${suffix}.pdf`;
+  }
+
+  async function exportScrapPdf(){
+    const btn = document.getElementById('btn-scrap-export-pdf');
+    const oldLabel = btn ? btn.textContent : '';
+    const target = document.querySelector('#scrap-print-area .scrap-doc');
+    if(!target){ return legacyPrintScrap(); }
+
+    if(btn){ btn.disabled = true; btn.textContent = 'กำลังสร้าง PDF...'; }
+    const ok = await ensurePdfLibs();
+    if(!ok){
+      if(btn){ btn.disabled = false; btn.textContent = oldLabel; }
+      // โหลดไลบรารีไม่ได้ (เช่น ออฟไลน์) → ใช้การพิมพ์ผ่านเบราว์เซอร์แทน
+      return legacyPrintScrap();
+    }
+    try {
+      const canvas = await window.html2canvas(target, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        windowWidth: target.scrollWidth,
+        scrollX: 0,
+        scrollY: 0
+      });
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const margin = 8;
+      const imgW = pageW - margin * 2;
+      const imgH = canvas.height * imgW / canvas.width;
+      const imgData = canvas.toDataURL('image/jpeg', 0.92);
+      if(imgH <= pageH - margin * 2){
+        pdf.addImage(imgData, 'JPEG', margin, margin, imgW, imgH);
+      } else {
+        // เนื้อหายาวเกินหนึ่งหน้า → แบ่งหลายหน้า
+        let heightLeft = imgH;
+        let position = margin;
+        pdf.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
+        heightLeft -= (pageH - margin);
+        while(heightLeft > 0){
+          position = margin - (imgH - heightLeft);
+          pdf.addPage();
+          pdf.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
+          heightLeft -= pageH;
+        }
+      }
+      pdf.save(scrapPdfFilename());
+    } catch(e){
+      alert('สร้าง PDF ไม่สำเร็จ: ' + e + '\nจะใช้การพิมพ์ผ่านเบราว์เซอร์แทน');
+      legacyPrintScrap();
+    } finally {
+      if(btn){ btn.disabled = false; btn.textContent = oldLabel; }
+    }
+  }
+
+  // สำรอง: พิมพ์เฉพาะฟอร์มขยะผ่านเบราว์เซอร์ (กรณีสร้าง PDF ตรง ๆ ไม่ได้)
+  function legacyPrintScrap(){
     const originalTitle = document.title;
     document.title = 'Scrap_List_' + new Date().toISOString().slice(0,10);
     document.body.classList.add('printing-scrap');
