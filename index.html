@@ -1110,15 +1110,26 @@
         </div>
 
         <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-amber-100 print-hide">
-            <div class="bg-amber-600 text-white px-4 py-3 flex justify-between items-center">
-                <h3 class="font-bold">📋 รายการวันนี้</h3>
+            <div class="bg-amber-600 text-white px-4 py-3 flex flex-wrap justify-between items-center gap-2">
+                <h3 class="font-bold">📋 รายการทิ้งขยะ</h3>
                 <span id="scrap-today-total" class="text-sm font-bold bg-amber-700 px-3 py-1 rounded-full">รวม 0.00 กก.</span>
+            </div>
+            <div class="flex flex-wrap items-end gap-2 p-3 bg-amber-50 border-b border-amber-100">
+                <div>
+                    <label class="text-xs font-bold text-gray-600 mb-1 block">ตั้งแต่วันที่</label>
+                    <input type="date" id="scrap-list-from" class="border rounded-lg p-2 bg-white text-sm">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-600 mb-1 block">ถึงวันที่</label>
+                    <input type="date" id="scrap-list-to" class="border rounded-lg p-2 bg-white text-sm">
+                </div>
+                <button type="button" id="btn-scrap-list-today" class="bg-amber-100 hover:bg-amber-200 border border-amber-300 px-3 py-2 rounded-lg text-sm font-bold">วันนี้</button>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead class="bg-amber-50">
                         <tr>
-                            <th class="p-2 text-left">เวลา</th>
+                            <th class="p-2 text-left">วันที่/เวลา</th>
                             <th class="p-2 text-left">ชนิดขยะ</th>
                             <th class="p-2 text-right">น้ำหนัก (กก.)</th>
                             <th class="p-2 text-left">ผู้บันทึก</th>
@@ -1126,7 +1137,7 @@
                         </tr>
                     </thead>
                     <tbody id="scrap-today-body">
-                        <tr><td colspan="5" class="p-4 text-center text-gray-400">ยังไม่มีรายการวันนี้</td></tr>
+                        <tr><td colspan="5" class="p-4 text-center text-gray-400">ยังไม่มีรายการ</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1571,7 +1582,7 @@
         </div>
     </div>
 
-    <script src="js/scrap.js?v=2.0"></script>
+    <script src="js/scrap.js?v=2.1"></script>
     <script src="js/parts.js?v=5.3"></script>
     <script src="js/inbox.js?v=2.1"></script>
     <script src="js/cost.js?v=1.1"></script>
