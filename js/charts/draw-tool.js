@@ -4,6 +4,7 @@
 // - ✏️ เส้นแนวโน้ม (ลากจากจุดหนึ่งไปอีกจุด)
 // - ━ เส้นแนวนอน (คลิกครั้งเดียว, แสดงค่า % ที่ขอบขวา)
 // - ⏱️ วัดคาบเวลา (คลิกวันเริ่ม-วันสิ้นสุด ได้แถบช่วงเวลาพร้อมจำนวนวัน)
+// - 🔁 คาบซ้ำ Cycle Lines (กำหนดคาบครั้งเดียว เส้นแบ่งคาบทำซ้ำเท่าๆ กันไปทางขวาจนสุดกราฟ)
 // - ✋ โหมดขยับ/แก้ไข (คลิกเลือกเส้น ลากทั้งเส้นหรือลากจุดปลาย, กด Delete ลบเส้นที่เลือก)
 // - 🧽 โหมดลบ (คลิกใกล้เส้นเพื่อลบทีละเส้น)
 // - ↩️ ลบเส้นล่าสุด / 🗑️ ลบทั้งหมด
@@ -61,6 +62,27 @@ window.chartDrawings = window.chartDrawings || {};
         return Math.abs(labels.indexOf(d.p2.label) - labels.indexOf(d.p1.label)) + ' ช่วง';
     }
 
+    // ตำแหน่ง x (pixel) ของเส้นแบ่งคาบซ้ำทั้งหมด: เริ่มที่คาบแรก ทำซ้ำความกว้างเท่ากันไปทางขวาจนพ้นกราฟ
+    function cycleXs(chart, d) {
+        const labels = chart.data.labels || [];
+        const i1 = labels.indexOf(d.p1.label), i2 = labels.indexOf(d.p2.label);
+        if (i1 < 0 || i2 < 0) return null;
+        const a1 = i1 + (d.p1.off || 0), a2 = i2 + (d.p2.off || 0);
+        const start = Math.min(a1, a2), w = Math.abs(a2 - a1);
+        const xs = chart.scales.x;
+        const startPx = xs.getPixelForValue(start);
+        const wPx = xs.getPixelForValue(start + w) - startPx;
+        if (!(wPx > 4)) return null; // คาบแคบเกินไป
+        const area = chart.chartArea;
+        const arr = [];
+        for (let k = 0; k < 300; k++) {
+            const x = startPx + k * wPx;
+            arr.push(x);
+            if (x > area.right) break;
+        }
+        return arr;
+    }
+
     function distToSegment(px, py, x1, y1, x2, y2) {
         const dx = x2 - x1, dy = y2 - y1;
         const lenSq = dx * dx + dy * dy;
@@ -86,6 +108,7 @@ window.chartDrawings = window.chartDrawings || {};
     function drawLine(chart, ctx, d, preview) {
         const area = chart.chartArea;
         if (d.type === 'time') { drawTimeSpan(chart, ctx, d, preview); return; }
+        if (d.type === 'cycle') { drawCycle(chart, ctx, d, preview); return; }
         const px = linePixels(chart, d);
         if (!px) return;
         const { x1, y1, x2, y2 } = px;
@@ -172,6 +195,51 @@ window.chartDrawings = window.chartDrawings || {};
         ctx.restore();
     }
 
+    // ---- เส้นแบ่งคาบซ้ำ (Cycle Lines แบบ TradingView) ----
+    function drawCycle(chart, ctx, d, preview) {
+        const area = chart.chartArea;
+        const xs = cycleXs(chart, d);
+        if (!xs || xs.length < 2) return;
+        const selected = chart.$drawSelected === d;
+        const midY = (area.top + area.bottom) / 2;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(area.left, area.top, area.right - area.left, area.bottom - area.top);
+        ctx.clip();
+        // แรเงาสลับคาบเว้นคาบให้เห็นจังหวะ
+        ctx.fillStyle = hexToRgba(d.color, 0.06);
+        for (let k = 0; k + 1 < xs.length; k += 2) {
+            ctx.fillRect(xs[k], area.top, xs[k + 1] - xs[k], area.bottom - area.top);
+        }
+        // เส้นแบ่งคาบ
+        ctx.strokeStyle = d.color;
+        ctx.lineWidth = selected ? 3 : 2;
+        ctx.setLineDash(preview ? [5, 4] : [7, 4]);
+        xs.forEach(x => {
+            ctx.beginPath(); ctx.moveTo(x, area.top); ctx.lineTo(x, area.bottom); ctx.stroke();
+        });
+        ctx.setLineDash([]);
+        // ป้ายความยาวคาบในคาบแรก
+        const txt = timeSpanText(chart, d) + '/รอบ';
+        ctx.font = 'bold 11px sans-serif';
+        const w = ctx.measureText(txt).width + 10;
+        const lx = (xs[0] + xs[1]) / 2;
+        ctx.fillStyle = d.color;
+        ctx.fillRect(lx - w / 2, area.top + 4, w, 18);
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(txt, lx, area.top + 13);
+        // handle ที่เส้นแรก (ย้ายทั้งชุด) และเส้นที่สอง (ปรับความกว้างคาบ)
+        if (selected) {
+            [xs[0], xs[1]].forEach(x => {
+                ctx.beginPath(); ctx.arc(x, midY, 5, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff'; ctx.fill();
+                ctx.strokeStyle = d.color; ctx.lineWidth = 2; ctx.stroke();
+            });
+        }
+        ctx.restore();
+    }
+
     let pluginRegistered = false;
     function ensurePlugin() {
         if (pluginRegistered || typeof Chart === 'undefined') return;
@@ -214,8 +282,8 @@ window.chartDrawings = window.chartDrawings || {};
         }
 
         function refreshActive() {
-            [state.btnTrend, state.btnH, state.btnTime, state.btnEdit, state.btnErase].forEach(b => { if (b) b.style.background = 'transparent'; });
-            const map = { trend: state.btnTrend, h: state.btnH, time: state.btnTime, edit: state.btnEdit, erase: state.btnErase };
+            [state.btnTrend, state.btnH, state.btnTime, state.btnCycle, state.btnEdit, state.btnErase].forEach(b => { if (b) b.style.background = 'transparent'; });
+            const map = { trend: state.btnTrend, h: state.btnH, time: state.btnTime, cycle: state.btnCycle, edit: state.btnEdit, erase: state.btnErase };
             if (state.mode && map[state.mode]) map[state.mode].style.background = '#fde68a';
             chart.canvas.style.cursor = state.mode === 'edit' ? 'grab' : (state.mode ? 'crosshair' : '');
         }
@@ -242,6 +310,7 @@ window.chartDrawings = window.chartDrawings || {};
         state.btnTrend = mkBtn('✏️', 'วาดเส้นแนวโน้ม (คลิกจุดเริ่ม แล้วคลิกจุดปลาย)', () => state.setMode('trend'));
         state.btnH = mkBtn('━', 'วาดเส้นแนวนอน (คลิก 1 ครั้งที่ระดับที่ต้องการ)', () => state.setMode('h'));
         state.btnTime = mkBtn('⏱️', 'วัดคาบเวลา (คลิกวันเริ่ม แล้วคลิกวันสิ้นสุด ได้แถบพร้อมจำนวนวัน)', () => state.setMode('time'));
+        state.btnCycle = mkBtn('🔁', 'คาบซ้ำ Cycle Lines (คลิกกำหนดคาบแรก เส้นแบ่งทำซ้ำเท่าๆ กันไปทางขวาจนสุดกราฟ)', () => state.setMode('cycle'));
         state.btnEdit = mkBtn('✋', 'ขยับ/แก้ไขเส้น (คลิกเลือกเส้น ลากทั้งเส้นหรือลากจุดปลาย, กด Delete ลบ)', () => state.setMode('edit'));
 
         const colorBtn = mkBtn('', 'เปลี่ยนสีเส้น', (b) => {
@@ -288,6 +357,11 @@ window.chartDrawings = window.chartDrawings || {};
         // ระยะจากจุดคลิกถึงเส้น/แถบ (แถบเวลา: โดนขอบ = ระยะจริง, คลิกข้างในแถบ = โดนแบบ priority ต่ำ)
         function hitDist(d, p) {
             const a = chart.chartArea;
+            if (d.type === 'cycle') {
+                const xs = cycleXs(chart, d);
+                if (!xs || p.y < a.top || p.y > a.bottom) return Infinity;
+                return Math.min.apply(null, xs.map(x => Math.abs(p.x - x)));
+            }
             if (d.type === 'time') {
                 const q1 = dataToPx(chart, d.p1), q2 = dataToPx(chart, d.p2);
                 if (!q1 || !q2 || p.y < a.top || p.y > a.bottom) return Infinity;
@@ -340,6 +414,16 @@ window.chartDrawings = window.chartDrawings || {};
                 const a = chart.chartArea;
                 let hit = null;
                 for (const d of list) {
+                    if (d.type === 'cycle') {
+                        // เส้นที่สอง = ปรับความกว้างคาบ, เส้นอื่นๆ = ย้ายทั้งชุด
+                        const q1 = dataToPx(chart, d.p1), q2 = dataToPx(chart, d.p2);
+                        const xs = cycleXs(chart, d);
+                        if (!q1 || !q2 || !xs || p.y < a.top || p.y > a.bottom) continue;
+                        const px = { x1: q1.x, y1: a.top, x2: q2.x, y2: a.bottom };
+                        if (Math.abs(p.x - q2.x) <= HIT_TOLERANCE) { hit = { d, kind: 'p2', px }; break; }
+                        if (xs.some(x => Math.abs(p.x - x) <= HIT_TOLERANCE)) { hit = { d, kind: 'body', px }; break; }
+                        continue;
+                    }
                     if (d.type === 'time') {
                         const q1 = dataToPx(chart, d.p1), q2 = dataToPx(chart, d.p2);
                         if (!q1 || !q2 || p.y < a.top || p.y > a.bottom) continue;
@@ -383,8 +467,8 @@ window.chartDrawings = window.chartDrawings || {};
                 const p = getPos(e);
                 const dx = p.x - state.drag.startX, dy = p.y - state.drag.startY;
                 const d = state.drag.d, o = state.drag.orig;
-                if (d.type === 'time') {
-                    // แถบเวลาขยับเฉพาะแกนวันที่ (ลากขอบ = ปรับข้างนั้น, ลากในแถบ = เลื่อนทั้งแถบ)
+                if (d.type === 'time' || d.type === 'cycle') {
+                    // แถบเวลา/คาบซ้ำขยับเฉพาะแกนวันที่ (ลากขอบ = ปรับข้างนั้น, ลากตัวเส้น = เลื่อนทั้งชุด)
                     const k = state.drag.kind;
                     if (k === 'p1' || k === 'body') {
                         const n1 = pxToData(chart, o.x1 + dx, o.y1);
@@ -407,7 +491,7 @@ window.chartDrawings = window.chartDrawings || {};
                 chart.draw();
                 return;
             }
-            if ((state.mode !== 'trend' && state.mode !== 'time') || !state.pending) return;
+            if ((state.mode !== 'trend' && state.mode !== 'time' && state.mode !== 'cycle') || !state.pending) return;
             const p = getPos(e);
             chart.$drawTemp = { type: state.mode, p1: state.pending, p2: pxToData(chart, p.x, p.y), color: COLORS[state.colorIdx] };
             chart.draw();
