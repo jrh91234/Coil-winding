@@ -8,6 +8,7 @@
 // - ✋ โหมดขยับ/แก้ไข (คลิกเลือกเส้น ลากทั้งเส้นหรือลากจุดปลาย, กด Delete ลบเส้นที่เลือก)
 // - 🧽 โหมดลบ (คลิกใกล้เส้นเพื่อลบทีละเส้น)
 // - ↩️ ลบเส้นล่าสุด / 🗑️ ลบทั้งหมด
+// - ⠿ ลาก toolbar ย้ายตำแหน่งได้ (กันบัง legend) และจำตำแหน่งไว้
 // เส้นถูกเก็บเป็นพิกัดข้อมูล (วันที่ + ค่า) จึงอยู่ถูกตำแหน่งเมื่อ zoom/pan
 // และบันทึกลง localStorage เพื่อให้อยู่ครบตอนเปิดใหม่/re-render
 // ============================================
@@ -267,6 +268,45 @@ window.chartDrawings = window.chartDrawings || {};
         const bar = document.createElement('div');
         bar.className = 'chart-draw-toolbar';
         bar.style.cssText = 'position:absolute;top:4px;left:4px;z-index:20;display:flex;gap:2px;background:rgba(255,255,255,0.9);border:1px solid #e5e7eb;border-radius:8px;padding:2px;box-shadow:0 1px 3px rgba(0,0,0,0.1);';
+
+        // ตำแหน่งที่ผู้ใช้เคยลากไว้ (จำต่อกราฟ)
+        try {
+            const saved = JSON.parse(localStorage.getItem(STORAGE_PREFIX + 'toolbarPos_' + key));
+            if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
+                bar.style.left = saved.left + 'px';
+                bar.style.top = saved.top + 'px';
+            }
+        } catch (e) {}
+
+        // ⠿ ที่จับสำหรับลากย้าย toolbar
+        const grip = document.createElement('div');
+        grip.textContent = '⠿';
+        grip.title = 'ลากเพื่อย้ายแถบเครื่องมือ';
+        grip.style.cssText = 'cursor:grab;color:#9ca3af;font-size:12px;display:flex;align-items:center;justify-content:center;width:16px;user-select:none;touch-action:none;';
+        grip.addEventListener('pointerdown', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            grip.setPointerCapture(e.pointerId);
+            grip.style.cursor = 'grabbing';
+            const startX = e.clientX, startY = e.clientY;
+            const startLeft = bar.offsetLeft, startTop = bar.offsetTop;
+            function move(ev) {
+                // จำกัดไม่ให้หลุดออกนอกกรอบกราฟ
+                const maxL = Math.max(0, parent.clientWidth - bar.offsetWidth);
+                const maxT = Math.max(0, parent.clientHeight - bar.offsetHeight);
+                bar.style.left = Math.max(0, Math.min(maxL, startLeft + ev.clientX - startX)) + 'px';
+                bar.style.top = Math.max(0, Math.min(maxT, startTop + ev.clientY - startY)) + 'px';
+            }
+            function up(ev) {
+                grip.releasePointerCapture(ev.pointerId);
+                grip.style.cursor = 'grab';
+                grip.removeEventListener('pointermove', move);
+                grip.removeEventListener('pointerup', up);
+                try { localStorage.setItem(STORAGE_PREFIX + 'toolbarPos_' + key, JSON.stringify({ left: bar.offsetLeft, top: bar.offsetTop })); } catch (err) {}
+            }
+            grip.addEventListener('pointermove', move);
+            grip.addEventListener('pointerup', up);
+        });
+        bar.appendChild(grip);
 
         const btnStyle = 'border:none;background:transparent;border-radius:6px;width:26px;height:26px;font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;';
 
