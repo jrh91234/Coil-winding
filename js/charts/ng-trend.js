@@ -7,8 +7,41 @@ window.renderNgTrendChart = function() {
     const selector = document.getElementById('ngTrendSelector');
     const mode = selector ? selector.value : 'pcs';
 
+    // === Machine Filter (แยกดูรายเครื่อง) ===
+    const macSel = document.getElementById('ngTrendMachineSelector');
+    if (macSel) {
+        const prevVal = macSel.value;
+        macSel.innerHTML = '<option value="all">ทุกเครื่อง</option>';
+        Object.keys(data.machineData || {}).sort().forEach(m => {
+            const md = data.machineData[m];
+            const hasNg = md && md.daily && Object.values(md.daily).some(day => day.ngBreakdown && Object.keys(day.ngBreakdown).length > 0);
+            if (hasNg) {
+                const opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = m;
+                macSel.appendChild(opt);
+            }
+        });
+        if (prevVal && [...macSel.options].some(o => o.value === prevVal)) macSel.value = prevVal;
+    }
+    const selectedMac = macSel ? macSel.value : 'all';
+
     if (charts.ngSymptomTrend) charts.ngSymptomTrend.destroy();
-    const trendData = data.dailyTrend || [];
+    let trendData = data.dailyTrend || [];
+
+    // ถ้าเลือกเครื่องเฉพาะ: สร้างข้อมูลรายวันใหม่จาก machineData ของเครื่องนั้น (วันที่ตรงกับกราฟรวม)
+    if (selectedMac !== 'all' && data.machineData && data.machineData[selectedMac]) {
+        const mDaily = data.machineData[selectedMac].daily || {};
+        trendData = trendData.map(d => {
+            const day = mDaily[d.date] || {};
+            return {
+                date: d.date,
+                ngBreakdown: day.ngBreakdown || {},
+                fg: day.fg || 0,
+                ng: day.ngPcs !== undefined ? day.ngPcs : (day.ng || 0)
+            };
+        });
+    }
     
     // รวม Setup เข้ากับอาการหลัก + เก็บ setup แยก
     let ngTypeTotals = {};
@@ -156,7 +189,9 @@ window.renderNgTrendChart = function() {
                         let totalPcs = 0;
                         
                         // วนลูปหาข้อมูลของเสียอาการนี้ ในวันที่เลือก จากทุกเครื่องจักร (รวม Setup)
+                        // ถ้ากรองรายเครื่องอยู่ แสดงเฉพาะเครื่องนั้น
                         for (const [mac, mData] of Object.entries(currentDashboardData.machineData)) {
+                            if (selectedMac !== 'all' && mac !== selectedMac) continue;
                             if (mData.daily && mData.daily[dateStr] && mData.daily[dateStr].ngBreakdown) {
                                 const bd = mData.daily[dateStr].ngBreakdown;
                                 // รวม base + Setup ของอาการนี้
