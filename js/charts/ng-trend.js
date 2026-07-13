@@ -121,6 +121,7 @@ window.renderNgTrendChart = function() {
             // 🌟 ระบบแยกคลิก 1 ครั้ง / 2 ครั้ง สำหรับกราฟนี้ 
             // ============================================
             onClick: function(e, elements, chart) {
+                if (chart.$drawMode) return; // กำลังใช้เครื่องมือตีเส้น ไม่เปิด breakdown
                 if (!elements || elements.length === 0) return;
                 const element = elements[0];
                 const datasetIndex = element.datasetIndex;
@@ -295,6 +296,9 @@ window.renderNgTrendChart = function() {
             }
         }
     });
+
+    // 🖊️ เครื่องมือตีเส้นบนกราฟ (TradingView style) — js/charts/draw-tool.js
+    if (window.initChartDrawTool) window.initChartDrawTool(charts.ngSymptomTrend, 'ngSymptomTrend', { suffix: mode === 'percent' ? '%' : '' });
 
     // อัพเดทสถานะปุ่ม toggle label
     const lblBtn = document.getElementById('ngTrendLabelToggle');

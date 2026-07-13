@@ -766,6 +766,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                         }
                     },
                     onClick: (e, elements, chart) => {
+                        if (chart.$drawMode) return; // กำลังใช้เครื่องมือตีเส้น ไม่เปิด breakdown
                         if (!elements || elements.length === 0) return;
                         const idx = elements[0].index;
                         const d = displayTrendData[idx];
@@ -774,6 +775,9 @@ const ctxQC = document.getElementById('qcTrendChart');
                     }
                 }
             });
+
+            // 🖊️ เครื่องมือตีเส้นบนกราฟ (TradingView style) — js/charts/draw-tool.js
+            if (window.initChartDrawTool) window.initChartDrawTool(charts.qcTrend, 'qcTrend');
          }
 
          window.renderNgTrendChart();
