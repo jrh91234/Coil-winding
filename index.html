@@ -1609,6 +1609,17 @@
             return m ? m[1].padStart(5, '0') : str.substring(0, 5);
         }
 
+        // ฟังก์ชันตัวช่วยดึง Thumbnail จาก Google Drive URL
+        function getThumbUrl(url) {
+            if (!url) return null;
+            let fileId = '';
+            const matchD = url.match(/\/d\/(.+?)\//);
+            const matchId = url.match(/id=([^&]+)/);
+            if (matchD && matchD[1]) fileId = matchD[1];
+            else if (matchId && matchId[1]) fileId = matchId[1];
+            return fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w400` : null;
+        }
+
         // Safe Caller Function ป้องกันปัญหาโหลดหน้าเว็บไม่สมบูรณ์
         function safeLoadDashboard() {
             const debugPanel = document.getElementById('debug-panel');
@@ -2114,18 +2125,45 @@
         // ==========================================
         // 🌟 ฟังก์ชันสำหรับเปิด Modal สรุปงานซ่อมรายวัน (Idea 3) 🌟
         // ==========================================
+        window.dailySummarySortOrder = 'desc'; // 'desc' = ใหม่ไปเก่า, 'asc' = เก่าไปใหม่
+
         window.openDailySummaryModal = function() {
             if (!currentDashboardData) {
                 alert("กรุณากด 'ค้นหา' เพื่อโหลดข้อมูล Dashboard ก่อนครับ");
                 return;
             }
 
+            window.dailySummarySortOrder = 'desc';
+            renderDailySummaryContent();
+
             const modal = document.getElementById('modal-daily-summary');
+            modal.classList.remove('hidden');
+            modal.style.setProperty('z-index', '999999', 'important');
+        };
+
+        window.toggleDailySummarySort = function() {
+            window.dailySummarySortOrder = window.dailySummarySortOrder === 'desc' ? 'asc' : 'desc';
+            renderDailySummaryContent();
+        };
+
+        // แปลงวันที่+เวลาของรายการแจ้งซ่อมเป็นค่าตัวเลขไว้เรียงลำดับ
+        function getMaintLogTimestamp(log) {
+            let sTime = formatTimeStr(log.startTime) || '00:00';
+            let d = new Date(`${log.date || ''} ${sTime}`);
+            return isNaN(d.getTime()) ? 0 : d.getTime();
+        }
+
+        function renderDailySummaryContent() {
             const content = document.getElementById('daily-summary-content');
-            
-            const maintLogs = currentDashboardData.maintenanceLogs || [];
+
+            const maintLogs = [...(currentDashboardData.maintenanceLogs || [])];
             const rtvLogs = currentDashboardData.rtvLogs || [];
-            
+
+            maintLogs.sort((a, b) => {
+                let diff = getMaintLogTimestamp(a) - getMaintLogTimestamp(b);
+                return window.dailySummarySortOrder === 'asc' ? diff : -diff;
+            });
+
             // สรุปสถิติเบื้องต้น
             let totalMaint = maintLogs.length;
             let totalRtv = rtvLogs.length;
@@ -2147,7 +2185,12 @@
             </div>`;
 
             // ส่วนรายการแจ้งซ่อม
-            html += `<h4 class="font-bold text-gray-800 text-lg mb-3 flex items-center gap-2">🛠️ รายการปัญหาเครื่องจักร</h4>`;
+            html += `<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <h4 class="font-bold text-gray-800 text-lg flex items-center gap-2">🛠️ รายการปัญหาเครื่องจักร</h4>
+                <button onclick="window.toggleDailySummarySort()" class="bg-white border border-gray-200 text-gray-600 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:border-amber-300 hover:text-amber-600 transition-colors flex items-center gap-1">
+                    ${window.dailySummarySortOrder === 'asc' ? '⬆️ เก่า → ใหม่' : '⬇️ ใหม่ → เก่า'}
+                </button>
+            </div>`;
             if (totalMaint === 0) {
                 html += `<div class="bg-white p-6 rounded-xl shadow-sm text-center text-gray-400 mb-6 border border-dashed">🎉 ไม่มีรายการแจ้งปัญหาในรอบวันที่เลือก</div>`;
             } else {
@@ -2180,6 +2223,15 @@
                     let dateShow = log.date ? log.date + ' ' : '';
                     let timeShow = dateShow + sTime + (eTime ? ' - ' + eTime : ' (รอดำเนินการ)');
 
+                    // รูปภาพประกอบ (ถ้ามี)
+                    let photoHtml = '';
+                    if (log.imageUrl) {
+                        let thumbs = log.imageUrl.split('|').map(u => u.trim()).filter(Boolean).map(getThumbUrl).filter(Boolean);
+                        if (thumbs.length) {
+                            photoHtml = `<div class="flex gap-2 mt-2 flex-wrap">${thumbs.map(t => `<img src="${t}" onerror="this.style.display='none'" onclick="window.open('${t}', '_blank')" class="w-16 h-16 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity">`).join('')}</div>`;
+                        }
+                    }
+
                     html += `
                     <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:border-amber-300 transition-colors">
                         <div class="flex flex-wrap justify-between items-start gap-2 mb-2">
@@ -2193,6 +2245,7 @@
                             </div>
                         </div>
                         <p class="text-sm text-gray-600 bg-gray-50 p-2 rounded">${log.remark || '-'}</p>
+                        ${photoHtml}
                     </div>`;
                 });
                 html += `</div>`;
@@ -2227,10 +2280,7 @@
             if(domTotalDowntime) {
                  domTotalDowntime.innerText = tH > 0 ? `${tH} ชม. ${tM} นาที` : `${tM} นาที`;
             }
-
-            modal.classList.remove('hidden');
-            modal.style.setProperty('z-index', '999999', 'important');
-        };
+        }
 
         // ==========================================
         // 🌟 ฟังก์ชันสำหรับเปิด TV Mode (นำเสนอข้อมูลแบบเจาะจงซ่อมบำรุงและ RTV พร้อมรูปภาพ) 🌟
@@ -2268,17 +2318,6 @@
                 const now = new Date();
                 document.getElementById('tv-clock').innerText = now.toLocaleTimeString('th-TH');
             }, 1000);
-
-            // ฟังก์ชันตัวช่วยดึง Thumbnail จาก Google Drive URL
-            const getThumbUrl = (url) => {
-                if (!url) return null;
-                let fileId = '';
-                const matchD = url.match(/\/d\/(.+?)\//);
-                const matchId = url.match(/id=([^&]+)/);
-                if (matchD && matchD[1]) fileId = matchD[1];
-                else if (matchId && matchId[1]) fileId = matchId[1];
-                return fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w400` : null;
-            };
 
             const maintLogs = currentDashboardData.maintenanceLogs || [];
             const rtvLogs = currentDashboardData.rtvLogs || [];
