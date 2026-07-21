@@ -2561,9 +2561,6 @@ function doPost(e) {
   // === 📬 Inbox: รวบรวมงานค้างจากหลาย sheet ส่งให้ frontend แสดงแบบ Email ===
   if (action === "GET_INBOX") {
     const role = data.role || "";
-    const userName = data.userName || "";
-    const username = data.username || "";
-    const normName = (s) => String(s || "").trim().toLowerCase();
     const todayISO = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
     const result = { maintenance: [], partsCheck: [], partsNearEnd: [], sortingWaitQC: [], pmTasks: [] };
 
@@ -2670,8 +2667,8 @@ function doPost(e) {
       } catch (e) { console.error("Inbox sort err: " + e); }
     }
 
-    // 4) แผน PM ที่ถึงกำหนด (Maintenance_Plan: Active + Next_Due_Date <= today + Assigned_To = user)
-    try {
+    // 4) แผน PM ที่ถึงกำหนด (Maintenance_Plan: Active + Next_Due_Date <= today, ให้ทุก role เห็นยกเว้น Viewer)
+    if (role !== "Viewer") try {
       const pmSheet = ss.getSheetByName("Maintenance_Plan");
       if (pmSheet && pmSheet.getLastRow() > 1) {
         const pmRows = pmSheet.getDataRange().getValues();
@@ -2681,8 +2678,6 @@ function doPost(e) {
           const status = String(pmRows[i][pi("Status")] || "").trim();
           if (status !== "Active") continue;
           const assignedTo = String(pmRows[i][pi("Assigned_To")] || "").trim();
-          const isAssignedToMe = !assignedTo || normName(assignedTo) === normName(userName) || normName(assignedTo) === normName(username);
-          if (!isAssignedToMe && role !== "Admin") continue;
           const dueDateRaw = pmRows[i][pi("Next_Due_Date")];
           let dueDate = "";
           if (dueDateRaw instanceof Date) dueDate = Utilities.formatDate(dueDateRaw, "GMT+7", "yyyy-MM-dd");
