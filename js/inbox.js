@@ -25,7 +25,7 @@ window.loadInbox = async function() {
     try {
         const res = await fetch(SCRIPT_URL, {
             method: 'POST',
-            body: JSON.stringify({ action: 'GET_INBOX', role: user.role, userName: user.name })
+            body: JSON.stringify({ action: 'GET_INBOX', role: user.role, userName: user.name, username: user.username })
         });
         inboxData = await res.json();
         if (inboxData.status !== 'success') throw new Error(inboxData.message || 'Unknown error');

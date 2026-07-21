@@ -2562,6 +2562,8 @@ function doPost(e) {
   if (action === "GET_INBOX") {
     const role = data.role || "";
     const userName = data.userName || "";
+    const username = data.username || "";
+    const normName = (s) => String(s || "").trim().toLowerCase();
     const todayISO = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
     const result = { maintenance: [], partsCheck: [], partsNearEnd: [], sortingWaitQC: [], pmTasks: [] };
 
@@ -2679,7 +2681,8 @@ function doPost(e) {
           const status = String(pmRows[i][pi("Status")] || "").trim();
           if (status !== "Active") continue;
           const assignedTo = String(pmRows[i][pi("Assigned_To")] || "").trim();
-          if (assignedTo && assignedTo !== userName && role !== "Admin") continue;
+          const isAssignedToMe = !assignedTo || normName(assignedTo) === normName(userName) || normName(assignedTo) === normName(username);
+          if (!isAssignedToMe && role !== "Admin") continue;
           const dueDateRaw = pmRows[i][pi("Next_Due_Date")];
           let dueDate = "";
           if (dueDateRaw instanceof Date) dueDate = Utilities.formatDate(dueDateRaw, "GMT+7", "yyyy-MM-dd");
