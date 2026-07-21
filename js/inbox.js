@@ -322,6 +322,37 @@ window.submitPmComplete = async function(planId) {
     } catch (e) { alert('บันทึกไม่สำเร็จ: ' + e.message); btn.disabled = false; btn.innerHTML = '📸 ยืนยัน'; }
 };
 
+function escapePmAttr(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+window.deletePmPlan = async function(btn) {
+    const planId = btn.dataset.planId;
+    const taskName = btn.dataset.taskName;
+    const machine = btn.dataset.machine;
+    if (!planId) return;
+    if (!confirm(`ยืนยันลบแผน PM นี้?\n\n${taskName} (${machine})\n\nการลบนี้ไม่สามารถย้อนกลับได้`)) return;
+
+    btn.disabled = true;
+    try {
+        const res = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({
+                action: 'DELETE_PM_PLAN',
+                planId,
+                username: window.currentUser?.username || window.currentUser?.name || '',
+                role: window.currentUser?.role || ''
+            })
+        });
+        const result = await res.json();
+        if (result.status !== 'success') throw new Error(result.message || 'ลบไม่สำเร็จ');
+        window.showPmGantt();
+    } catch (e) {
+        alert('❌ เกิดข้อผิดพลาด: ' + e.message);
+        btn.disabled = false;
+    }
+};
+
 // === เพิ่มแผน PM จากหน้า Gantt Chart ===
 window.openAddPmPlanModal = function() {
     const macGrid = document.getElementById('pmplan-machine-grid');
@@ -600,10 +631,13 @@ function renderGanttChart(container, data) {
 
         const overdueLabel = nextDue && nextDue <= today ? `<span class="text-red-600 text-[9px] font-bold ml-1">เกิน ${dayIndex(today) - dayIndex(nextDue)} วัน</span>` : '';
 
-        return `<div class="flex border-b border-gray-100 hover:bg-gray-50">
-            <div class="shrink-0 w-48 p-1.5 border-r bg-white sticky left-0 z-10">
-                <div class="text-xs font-bold text-gray-800 truncate">${plan.taskName}${overdueLabel}</div>
-                <div class="text-[9px] text-gray-400">${plan.machine} · ${plan.frequency} · ${plan.assignedTo || '-'}</div>
+        return `<div class="flex border-b border-gray-100 hover:bg-gray-50 group">
+            <div class="shrink-0 w-48 p-1.5 border-r bg-white sticky left-0 z-10 flex items-start justify-between gap-1">
+                <div class="min-w-0">
+                    <div class="text-xs font-bold text-gray-800 truncate">${plan.taskName}${overdueLabel}</div>
+                    <div class="text-[9px] text-gray-400">${plan.machine} · ${plan.frequency} · ${plan.assignedTo || '-'}</div>
+                </div>
+                <button data-plan-id="${escapePmAttr(plan.planId)}" data-task-name="${escapePmAttr(plan.taskName)}" data-machine="${escapePmAttr(plan.machine)}" onclick="window.deletePmPlan(this)" title="ลบแผนนี้" class="shrink-0 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm">🗑️</button>
             </div>
             <div class="flex-1 whitespace-nowrap overflow-hidden">${cells}</div>
         </div>`;

@@ -2902,6 +2902,35 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({status: "success", message: "เพิ่มแผน PM สำเร็จ " + planIds.length + " เครื่อง", planIds: planIds})).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // === DELETE_PM_PLAN — ลบแผนซ่อมบำรุงจากหน้า Gantt Chart ===
+  if (action === "DELETE_PM_PLAN") {
+    const planId = String(data.planId || "").trim();
+    if (!planId) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบรหัสแผนที่ต้องการลบ"})).setMimeType(ContentService.MimeType.JSON);
+
+    const pmSheet = ss.getSheetByName("Maintenance_Plan");
+    if (!pmSheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบชีท Maintenance_Plan"})).setMimeType(ContentService.MimeType.JSON);
+
+    const pmRows = pmSheet.getDataRange().getValues();
+    const pmH = pmRows[0].map(h => String(h).trim());
+    const pi = (n) => pmH.indexOf(n);
+    let rowToDelete = -1, machine = "", taskName = "";
+    for (let i = 1; i < pmRows.length; i++) {
+      if (String(pmRows[i][pi("Plan_ID")] || "").trim() === planId) {
+        rowToDelete = i + 1;
+        machine = String(pmRows[i][pi("Machine")] || "");
+        taskName = String(pmRows[i][pi("Task_Name")] || "");
+        break;
+      }
+    }
+    if (rowToDelete === -1) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบแผน " + planId})).setMimeType(ContentService.MimeType.JSON);
+
+    pmSheet.deleteRow(rowToDelete);
+    SpreadsheetApp.flush();
+
+    logUserAction(data.username || "Unknown", data.role || "", "DELETE_PM_PLAN", "ลบแผน PM: " + taskName + " (" + machine + ")");
+    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "ลบแผน PM สำเร็จ"})).setMimeType(ContentService.MimeType.JSON);
+  }
+
   // === GET_PM_SUMMARY — ข้อมูลสำหรับ Gantt Chart ===
   if (action === "GET_PM_SUMMARY") {
     const plans = [];
