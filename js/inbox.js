@@ -322,6 +322,80 @@ window.submitPmComplete = async function(planId) {
     } catch (e) { alert('บันทึกไม่สำเร็จ: ' + e.message); btn.disabled = false; btn.innerHTML = '📸 ยืนยัน'; }
 };
 
+// === เพิ่มแผน PM จากหน้า Gantt Chart ===
+window.openAddPmPlanModal = function() {
+    const macSelect = document.getElementById('pmplan-machine');
+    if (macSelect) {
+        let opts = '<option value="">-- กรุณาเลือก --</option>';
+        for (let i = 1; i <= 16; i++) {
+            opts += `<option value="CWM-${String(i).padStart(2, '0')}">CWM-${String(i).padStart(2, '0')}</option>`;
+        }
+        macSelect.innerHTML = opts;
+    }
+    const dueInput = document.getElementById('pmplan-nextdue');
+    if (dueInput) dueInput.value = getShiftDateStr();
+    const taskInput = document.getElementById('pmplan-taskname');
+    if (taskInput) taskInput.value = '';
+    const assignedInput = document.getElementById('pmplan-assignedto');
+    if (assignedInput) assignedInput.value = '';
+    const noteInput = document.getElementById('pmplan-note');
+    if (noteInput) noteInput.value = '';
+    const intervalInput = document.getElementById('pmplan-interval');
+    if (intervalInput) intervalInput.value = '';
+    document.getElementById('pmplan-interval-wrap').classList.add('hidden');
+
+    document.getElementById('modal-add-pm-plan').classList.remove('hidden');
+};
+
+window.submitAddPmPlan = async function() {
+    const machine = document.getElementById('pmplan-machine').value;
+    const planType = document.getElementById('pmplan-type').value;
+    const frequency = document.getElementById('pmplan-frequency').value;
+    const intervalValue = document.getElementById('pmplan-interval').value;
+    const taskName = document.getElementById('pmplan-taskname').value.trim();
+    const nextDueDate = document.getElementById('pmplan-nextdue').value;
+    const assignedTo = document.getElementById('pmplan-assignedto').value.trim();
+    const note = document.getElementById('pmplan-note').value.trim();
+
+    if (!machine || !taskName || !nextDueDate) {
+        alert('กรุณากรอกเครื่องจักร, ชื่องาน และวันที่ครบกำหนดให้ครบ');
+        return;
+    }
+    if (frequency === 'Custom' && !intervalValue) {
+        alert('กรุณาระบุจำนวนวันสำหรับความถี่แบบกำหนดเอง');
+        return;
+    }
+
+    const btn = document.getElementById('pmplan-submit-btn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ กำลังบันทึก...';
+
+    try {
+        const res = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({
+                action: 'ADD_PM_PLAN',
+                machine, planType, taskName, frequency,
+                intervalValue: intervalValue || 0,
+                nextDueDate, assignedTo, note,
+                username: window.currentUser?.username || window.currentUser?.name || '',
+                role: window.currentUser?.role || ''
+            })
+        });
+        const result = await res.json();
+        if (result.status !== 'success') throw new Error(result.message || 'บันทึกไม่สำเร็จ');
+
+        document.getElementById('modal-add-pm-plan').classList.add('hidden');
+        window.showPmGantt();
+    } catch (e) {
+        alert('❌ เกิดข้อผิดพลาด: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+};
+
 // === Gantt Chart ===
 window.showPmGantt = async function() {
     const container = document.getElementById('inbox-content');
@@ -372,8 +446,15 @@ function renderGanttChart(container, data) {
     const toDate = (s) => { const d = new Date(s + 'T00:00:00'); return isNaN(d.getTime()) ? null : d; };
     const dayIndex = (d) => Math.round((d - startDate) / 86400000);
 
+    // ปุ่มเพิ่มแผน PM
+    let statsHtml = `<div class="flex justify-end mb-3">
+        <button onclick="window.openAddPmPlanModal()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-indigo-700 transition-colors flex items-center gap-1">
+            ➕ เพิ่มแผน PM
+        </button>
+    </div>`;
+
     // Stats cards
-    let statsHtml = `<div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+    statsHtml += `<div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
         <div class="bg-blue-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-blue-700">${stats.total}</div><div class="text-xs text-blue-600">งานทั้งหมด</div></div>
         <div class="bg-green-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-green-700">${stats.onTime}</div><div class="text-xs text-green-600">ตรงเวลา</div></div>
         <div class="bg-red-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-red-700">${stats.late}</div><div class="text-xs text-red-600">ช้ากว่ากำหนด</div></div>
