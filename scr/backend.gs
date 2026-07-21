@@ -2839,42 +2839,67 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({status: "success", message: approved ? "อนุมัติแล้ว" : "ปฏิเสธแล้ว"})).setMimeType(ContentService.MimeType.JSON);
   }
 
-  // === ADD_PM_PLAN — เพิ่มแผนซ่อมบำรุงใหม่จากหน้า Gantt Chart ===
+  // === ADD_PM_PLAN — เพิ่มแผนซ่อมบำรุงใหม่จากหน้า Gantt Chart (เลือกได้หลายเครื่อง) ===
   if (action === "ADD_PM_PLAN") {
-    const machine = String(data.machine || "").trim();
+    let machines = Array.isArray(data.machines) ? data.machines : (data.machine ? [data.machine] : []);
+    machines = machines.map(m => String(m || "").trim()).filter(Boolean);
     const taskName = String(data.taskName || "").trim();
     const nextDueDate = String(data.nextDueDate || "").trim();
-    if (!machine || !taskName || !nextDueDate) {
-      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "กรุณากรอกเครื่องจักร, ชื่องาน และวันที่ครบกำหนดให้ครบ"})).setMimeType(ContentService.MimeType.JSON);
+    if (machines.length === 0 || !taskName || !nextDueDate) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "กรุณาเลือกเครื่องจักรอย่างน้อย 1 เครื่อง และกรอกชื่องานกับวันที่ครบกำหนดให้ครบ"})).setMimeType(ContentService.MimeType.JSON);
     }
 
     let pmSheet = ss.getSheetByName("Maintenance_Plan");
     if (!pmSheet) {
       pmSheet = ss.insertSheet("Maintenance_Plan");
-      pmSheet.appendRow(["Plan_ID", "Machine", "Plan_Type", "Task_Name", "Frequency", "Interval_Value", "Assigned_To", "Note", "Status", "Next_Due_Date", "Last_Done_Date"]);
+      pmSheet.appendRow(["Plan_ID", "Machine", "Plan_Type", "Task_Name", "Frequency", "Interval_Value", "Assigned_To", "Note", "Instruction", "Reference_Photo_URL", "Status", "Next_Due_Date", "Last_Done_Date"]);
     }
 
-    const pmH = pmSheet.getDataRange().getValues()[0].map(h => String(h).trim());
-    const now = new Date();
-    const planId = "PMPLAN-" + Utilities.formatDate(now, "GMT+7", "yyMMddHHmmss") + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+    // เพิ่มคอลัมน์ที่ยังไม่มีในชีทเดิมโดยอัตโนมัติ (สำหรับชีทที่สร้างไว้ก่อนหน้านี้)
+    let pmH = pmSheet.getRange(1, 1, 1, pmSheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    ["Instruction", "Reference_Photo_URL"].forEach(col => {
+      if (pmH.indexOf(col) === -1) {
+        pmSheet.getRange(1, pmH.length + 1).setValue(col);
+        pmH.push(col);
+      }
+    });
 
-    const row = new Array(pmH.length).fill("");
-    const setCol = (name, val) => { const idx = pmH.indexOf(name); if (idx > -1) row[idx] = val; };
-    setCol("Plan_ID", planId);
-    setCol("Machine", machine);
-    setCol("Plan_Type", String(data.planType || "PM").trim());
-    setCol("Task_Name", taskName);
-    setCol("Frequency", String(data.frequency || "Monthly").trim());
-    setCol("Interval_Value", parseInt(data.intervalValue) || 0);
-    setCol("Assigned_To", String(data.assignedTo || "").trim());
-    setCol("Note", String(data.note || "").trim());
-    setCol("Status", "Active");
-    setCol("Next_Due_Date", nextDueDate);
-    pmSheet.appendRow(row);
+    let photoUrl = "";
+    if (data.imageBase64) {
+      photoUrl = saveImageToDrive(data.imageBase64, "PMPLAN_" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd_HHmmss") + ".jpg");
+    }
+
+    const planType = String(data.planType || "PM").trim();
+    const frequency = String(data.frequency || "Monthly").trim();
+    const intervalValue = parseInt(data.intervalValue) || 0;
+    const assignedTo = String(data.assignedTo || "").trim();
+    const note = String(data.note || "").trim();
+    const instruction = String(data.instruction || "").trim();
+
+    const planIds = machines.map((machine, idx) => {
+      const now = new Date();
+      const planId = "PMPLAN-" + Utilities.formatDate(now, "GMT+7", "yyMMddHHmmss") + "-" + Math.random().toString(36).substring(2, 6).toUpperCase() + "-" + idx;
+      const row = new Array(pmH.length).fill("");
+      const setCol = (name, val) => { const colIdx = pmH.indexOf(name); if (colIdx > -1) row[colIdx] = val; };
+      setCol("Plan_ID", planId);
+      setCol("Machine", machine);
+      setCol("Plan_Type", planType);
+      setCol("Task_Name", taskName);
+      setCol("Frequency", frequency);
+      setCol("Interval_Value", intervalValue);
+      setCol("Assigned_To", assignedTo);
+      setCol("Note", note);
+      setCol("Instruction", instruction);
+      setCol("Reference_Photo_URL", photoUrl);
+      setCol("Status", "Active");
+      setCol("Next_Due_Date", nextDueDate);
+      pmSheet.appendRow(row);
+      return planId;
+    });
     SpreadsheetApp.flush();
 
-    logUserAction(data.username || "Unknown", data.role || "", "ADD_PM_PLAN", "เพิ่มแผน PM: " + taskName + " (" + machine + ")");
-    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "เพิ่มแผน PM สำเร็จ", planId: planId})).setMimeType(ContentService.MimeType.JSON);
+    logUserAction(data.username || "Unknown", data.role || "", "ADD_PM_PLAN", "เพิ่มแผน PM: " + taskName + " (" + machines.join(", ") + ")");
+    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "เพิ่มแผน PM สำเร็จ " + planIds.length + " เครื่อง", planIds: planIds})).setMimeType(ContentService.MimeType.JSON);
   }
 
   // === GET_PM_SUMMARY — ข้อมูลสำหรับ Gantt Chart ===

@@ -1395,10 +1395,11 @@
             </div>
             <div class="p-4 md:p-6 overflow-y-auto flex-1 bg-gray-50 space-y-3">
                 <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">เครื่องจักร</label>
-                    <select id="pmplan-machine" required class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
-                        <option value="">-- กรุณาเลือก --</option>
-                    </select>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="block text-sm font-bold text-gray-700">เครื่องจักร (เลือกได้หลายเครื่อง)</label>
+                        <button type="button" onclick="window.togglePmPlanMachineAll()" class="text-xs font-bold text-indigo-600 hover:underline">เลือก/ยกเลิกทั้งหมด</button>
+                    </div>
+                    <div id="pmplan-machine-grid" class="grid grid-cols-4 gap-2 p-2 border border-gray-300 rounded-lg bg-white max-h-32 overflow-y-auto"></div>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
@@ -1439,8 +1440,19 @@
                     </div>
                 </div>
                 <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">วิธีการทำ Maintenance</label>
+                    <textarea id="pmplan-instruction" rows="3" placeholder="ขั้นตอนการทำงาน เช่น 1. ปิดเบรกเกอร์ 2. ถอดฝาครอบ ..." class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500"></textarea>
+                </div>
+                <div>
                     <label class="block text-sm font-bold text-gray-700 mb-1">หมายเหตุ</label>
                     <textarea id="pmplan-note" rows="2" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)" class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500"></textarea>
+                </div>
+                <div class="bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">📸 แนบรูปอ้างอิง / วิธีการ (ถ้ามี)</label>
+                    <input type="file" id="pmplan-photo" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">
+                    <div id="pmplan-photo-preview" class="mt-3 hidden rounded-lg overflow-hidden border border-gray-200">
+                        <img id="pmplan-photo-img" src="" alt="Preview" class="w-full h-auto max-h-48 object-contain bg-black">
+                    </div>
                 </div>
             </div>
             <div class="p-4 border-t bg-white flex-none flex justify-end gap-2">
@@ -1754,6 +1766,18 @@
                 reader.onload = function(e) {
                     document.getElementById('maint-photo-img').src = e.target.result;
                     document.getElementById('maint-photo-preview').classList.remove('hidden');
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.getElementById('pmplan-photo')?.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('pmplan-photo-img').src = e.target.result;
+                    document.getElementById('pmplan-photo-preview').classList.remove('hidden');
                 }
                 reader.readAsDataURL(file);
             }

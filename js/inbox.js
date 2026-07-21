@@ -324,13 +324,16 @@ window.submitPmComplete = async function(planId) {
 
 // === เพิ่มแผน PM จากหน้า Gantt Chart ===
 window.openAddPmPlanModal = function() {
-    const macSelect = document.getElementById('pmplan-machine');
-    if (macSelect) {
-        let opts = '<option value="">-- กรุณาเลือก --</option>';
+    const macGrid = document.getElementById('pmplan-machine-grid');
+    if (macGrid) {
+        let html = '';
         for (let i = 1; i <= 16; i++) {
-            opts += `<option value="CWM-${String(i).padStart(2, '0')}">CWM-${String(i).padStart(2, '0')}</option>`;
+            const mac = `CWM-${String(i).padStart(2, '0')}`;
+            html += `<label class="flex items-center gap-1 text-xs font-medium text-gray-700 cursor-pointer">
+                <input type="checkbox" value="${mac}" class="pmplan-machine-cb accent-indigo-600"> ${mac}
+            </label>`;
         }
-        macSelect.innerHTML = opts;
+        macGrid.innerHTML = html;
     }
     const dueInput = document.getElementById('pmplan-nextdue');
     if (dueInput) dueInput.value = getShiftDateStr();
@@ -340,15 +343,56 @@ window.openAddPmPlanModal = function() {
     if (assignedInput) assignedInput.value = '';
     const noteInput = document.getElementById('pmplan-note');
     if (noteInput) noteInput.value = '';
+    const instructionInput = document.getElementById('pmplan-instruction');
+    if (instructionInput) instructionInput.value = '';
     const intervalInput = document.getElementById('pmplan-interval');
     if (intervalInput) intervalInput.value = '';
     document.getElementById('pmplan-interval-wrap').classList.add('hidden');
+    const photoInput = document.getElementById('pmplan-photo');
+    if (photoInput) photoInput.value = '';
+    document.getElementById('pmplan-photo-preview').classList.add('hidden');
 
     document.getElementById('modal-add-pm-plan').classList.remove('hidden');
 };
 
+window.togglePmPlanMachineAll = function() {
+    const boxes = document.querySelectorAll('.pmplan-machine-cb');
+    const allChecked = Array.from(boxes).every(b => b.checked);
+    boxes.forEach(b => b.checked = !allChecked);
+};
+
+// บีบอัดรูปภาพให้เล็กกว่า maxSizeKB ก่อนส่งขึ้น backend
+function compressPmPlanImage(file, maxSizeKB) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width, height = img.height;
+                const MAX_DIMENSION = 1200;
+                if (width > height && width > MAX_DIMENSION) { height *= MAX_DIMENSION / width; width = MAX_DIMENSION; }
+                else if (height > MAX_DIMENSION) { width *= MAX_DIMENSION / height; height = MAX_DIMENSION; }
+                canvas.width = width; canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                let quality = 0.8;
+                let dataUrl = canvas.toDataURL('image/jpeg', quality);
+                while (Math.round((dataUrl.length * 3 / 4) / 1024) > maxSizeKB && quality > 0.1) {
+                    quality -= 0.1;
+                    dataUrl = canvas.toDataURL('image/jpeg', quality);
+                }
+                resolve(dataUrl);
+            };
+            img.onerror = reject;
+            img.src = event.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
 window.submitAddPmPlan = async function() {
-    const machine = document.getElementById('pmplan-machine').value;
+    const machines = Array.from(document.querySelectorAll('.pmplan-machine-cb:checked')).map(b => b.value);
     const planType = document.getElementById('pmplan-type').value;
     const frequency = document.getElementById('pmplan-frequency').value;
     const intervalValue = document.getElementById('pmplan-interval').value;
@@ -356,9 +400,11 @@ window.submitAddPmPlan = async function() {
     const nextDueDate = document.getElementById('pmplan-nextdue').value;
     const assignedTo = document.getElementById('pmplan-assignedto').value.trim();
     const note = document.getElementById('pmplan-note').value.trim();
+    const instruction = document.getElementById('pmplan-instruction').value.trim();
+    const photoFile = document.getElementById('pmplan-photo').files[0];
 
-    if (!machine || !taskName || !nextDueDate) {
-        alert('กรุณากรอกเครื่องจักร, ชื่องาน และวันที่ครบกำหนดให้ครบ');
+    if (machines.length === 0 || !taskName || !nextDueDate) {
+        alert('กรุณาเลือกเครื่องจักรอย่างน้อย 1 เครื่อง และกรอกชื่องาน กับวันที่ครบกำหนดให้ครบ');
         return;
     }
     if (frequency === 'Custom' && !intervalValue) {
@@ -369,6 +415,20 @@ window.submitAddPmPlan = async function() {
     const btn = document.getElementById('pmplan-submit-btn');
     const originalText = btn.innerHTML;
     btn.disabled = true;
+
+    let imageBase64 = '';
+    if (photoFile) {
+        try {
+            btn.innerHTML = '⏳ กำลังบีบอัดรูปภาพ...';
+            imageBase64 = await compressPmPlanImage(photoFile, 256);
+        } catch (e) {
+            alert('❌ ไม่สามารถประมวลผลไฟล์ภาพได้ กรุณาลองใหม่อีกครั้ง');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            return;
+        }
+    }
+
     btn.innerHTML = '⏳ กำลังบันทึก...';
 
     try {
@@ -376,9 +436,9 @@ window.submitAddPmPlan = async function() {
             method: 'POST',
             body: JSON.stringify({
                 action: 'ADD_PM_PLAN',
-                machine, planType, taskName, frequency,
+                machines, planType, taskName, frequency,
                 intervalValue: intervalValue || 0,
-                nextDueDate, assignedTo, note,
+                nextDueDate, assignedTo, note, instruction, imageBase64,
                 username: window.currentUser?.username || window.currentUser?.name || '',
                 role: window.currentUser?.role || ''
             })
