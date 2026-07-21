@@ -506,6 +506,19 @@ function renderGanttChart(container, data) {
     const toDate = (s) => { const d = new Date(s + 'T00:00:00'); return isNaN(d.getTime()) ? null : d; };
     const dayIndex = (d) => Math.round((d - startDate) / 86400000);
 
+    // เลื่อนวันที่ไปตามความถี่ของแผน (ใช้ตรรกะเดียวกับฝั่ง backend ตอนปิดงาน PM)
+    const stepByFrequency = (date, frequency, intervalValue) => {
+        const d = new Date(date);
+        const freq = String(frequency || '').trim().toLowerCase();
+        if (freq === 'daily') d.setDate(d.getDate() + 1);
+        else if (freq === 'weekly') d.setDate(d.getDate() + 7);
+        else if (freq === 'monthly') d.setMonth(d.getMonth() + 1);
+        else if (freq === 'quarterly') d.setMonth(d.getMonth() + 3);
+        else if (freq === 'yearly') d.setFullYear(d.getFullYear() + 1);
+        else d.setDate(d.getDate() + (intervalValue || 30));
+        return d;
+    };
+
     // ปุ่มเพิ่มแผน PM
     let statsHtml = `<div class="flex justify-end mb-3">
         <button onclick="window.openAddPmPlanModal()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-indigo-700 transition-colors flex items-center gap-1">
@@ -543,6 +556,19 @@ function renderGanttChart(container, data) {
         const nextDue = toDate(plan.nextDueDate);
         const lastDone = toDate(plan.lastDoneDate);
 
+        // คาดการณ์รอบถัดๆ ไปตามความถี่ของแผน (เพื่อให้เห็นรอบ Weekly/Monthly ฯลฯ ล่วงหน้าในกราฟ)
+        const projectedDueTimes = new Set();
+        if (nextDue) {
+            let pd = new Date(nextDue);
+            let guard = 0;
+            while (guard < 200) {
+                pd = stepByFrequency(pd, plan.frequency, plan.intervalValue);
+                if (pd > endDate) break;
+                projectedDueTimes.add(pd.getTime());
+                guard++;
+            }
+        }
+
         let cells = '';
         for (let i = 0; i < totalDays; i++) {
             const d = new Date(startDate); d.setDate(d.getDate() + i);
@@ -553,6 +579,8 @@ function renderGanttChart(container, data) {
             // due date marker
             if (nextDue && d.getTime() === nextDue.getTime()) {
                 marker = `<div class="absolute inset-0 flex items-center justify-center"><div class="w-3 h-3 rounded-full ${isToday ? 'bg-indigo-600' : d < today ? 'bg-red-500' : 'bg-blue-500'} border-2 border-white shadow"></div></div>`;
+            } else if (projectedDueTimes.has(d.getTime())) {
+                marker = `<div class="absolute inset-0 flex items-center justify-center" title="กำหนดถัดไป (คาดการณ์)"><div class="w-2.5 h-2.5 rounded-full bg-white border-2 border-blue-300"></div></div>`;
             }
 
             // log markers
@@ -585,6 +613,7 @@ function renderGanttChart(container, data) {
     const legendHtml = `<div class="flex flex-wrap gap-3 mt-3 text-[10px] text-gray-600">
         <span><span class="inline-block w-3 h-3 bg-blue-500 rounded-full align-middle"></span> กำหนดถัดไป</span>
         <span><span class="inline-block w-3 h-3 bg-red-500 rounded-full align-middle"></span> เลยกำหนด</span>
+        <span><span class="inline-block w-2.5 h-2.5 rounded-full bg-white border-2 border-blue-300 align-middle"></span> รอบถัดไป (คาดการณ์ตามความถี่)</span>
         <span><span class="inline-block w-3 h-3 bg-green-500 rounded-sm align-middle"></span> ทำตรงเวลา</span>
         <span><span class="inline-block w-3 h-3 bg-orange-500 rounded-sm align-middle"></span> ทำแต่ช้า</span>
         <span><span class="inline-block w-3 h-3 bg-yellow-400 rounded-sm align-middle"></span> รออนุมัติ</span>
