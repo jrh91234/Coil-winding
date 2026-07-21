@@ -2839,6 +2839,44 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({status: "success", message: approved ? "อนุมัติแล้ว" : "ปฏิเสธแล้ว"})).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // === ADD_PM_PLAN — เพิ่มแผนซ่อมบำรุงใหม่จากหน้า Gantt Chart ===
+  if (action === "ADD_PM_PLAN") {
+    const machine = String(data.machine || "").trim();
+    const taskName = String(data.taskName || "").trim();
+    const nextDueDate = String(data.nextDueDate || "").trim();
+    if (!machine || !taskName || !nextDueDate) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "กรุณากรอกเครื่องจักร, ชื่องาน และวันที่ครบกำหนดให้ครบ"})).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    let pmSheet = ss.getSheetByName("Maintenance_Plan");
+    if (!pmSheet) {
+      pmSheet = ss.insertSheet("Maintenance_Plan");
+      pmSheet.appendRow(["Plan_ID", "Machine", "Plan_Type", "Task_Name", "Frequency", "Interval_Value", "Assigned_To", "Note", "Status", "Next_Due_Date", "Last_Done_Date"]);
+    }
+
+    const pmH = pmSheet.getDataRange().getValues()[0].map(h => String(h).trim());
+    const now = new Date();
+    const planId = "PMPLAN-" + Utilities.formatDate(now, "GMT+7", "yyMMddHHmmss") + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+
+    const row = new Array(pmH.length).fill("");
+    const setCol = (name, val) => { const idx = pmH.indexOf(name); if (idx > -1) row[idx] = val; };
+    setCol("Plan_ID", planId);
+    setCol("Machine", machine);
+    setCol("Plan_Type", String(data.planType || "PM").trim());
+    setCol("Task_Name", taskName);
+    setCol("Frequency", String(data.frequency || "Monthly").trim());
+    setCol("Interval_Value", parseInt(data.intervalValue) || 0);
+    setCol("Assigned_To", String(data.assignedTo || "").trim());
+    setCol("Note", String(data.note || "").trim());
+    setCol("Status", "Active");
+    setCol("Next_Due_Date", nextDueDate);
+    pmSheet.appendRow(row);
+    SpreadsheetApp.flush();
+
+    logUserAction(data.username || "Unknown", data.role || "", "ADD_PM_PLAN", "เพิ่มแผน PM: " + taskName + " (" + machine + ")");
+    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "เพิ่มแผน PM สำเร็จ", planId: planId})).setMimeType(ContentService.MimeType.JSON);
+  }
+
   // === GET_PM_SUMMARY — ข้อมูลสำหรับ Gantt Chart ===
   if (action === "GET_PM_SUMMARY") {
     const plans = [];

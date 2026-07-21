@@ -1386,6 +1386,70 @@
         </div>
     </div>
     
+    <!-- 🌟 MODAL: เพิ่มแผน PM (Preventive Maintenance) 🌟 -->
+    <div id="modal-add-pm-plan" class="fixed inset-0 bg-black bg-opacity-60 z-[300] hidden flex items-center justify-center p-4 print-hide">
+        <div class="bg-white w-full max-w-lg rounded-xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-fade-in">
+            <div class="bg-indigo-600 p-4 flex justify-between items-center text-white flex-none">
+                <h3 class="font-bold text-lg flex items-center gap-2">📅 เพิ่มแผนซ่อมบำรุง (PM)</h3>
+                <button onclick="document.getElementById('modal-add-pm-plan').classList.add('hidden')" class="text-white hover:text-indigo-100 text-2xl font-bold leading-none">&times;</button>
+            </div>
+            <div class="p-4 md:p-6 overflow-y-auto flex-1 bg-gray-50 space-y-3">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">เครื่องจักร</label>
+                    <select id="pmplan-machine" required class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                        <option value="">-- กรุณาเลือก --</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">ประเภทแผน</label>
+                        <select id="pmplan-type" class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                            <option value="PM">PM (Preventive Maintenance)</option>
+                            <option value="AM">AM (Autonomous Maintenance)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">ความถี่</label>
+                        <select id="pmplan-frequency" onchange="document.getElementById('pmplan-interval-wrap').classList.toggle('hidden', this.value !== 'Custom')" class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                            <option value="Daily">รายวัน (Daily)</option>
+                            <option value="Weekly">รายสัปดาห์ (Weekly)</option>
+                            <option value="Monthly" selected>รายเดือน (Monthly)</option>
+                            <option value="Quarterly">ราย 3 เดือน (Quarterly)</option>
+                            <option value="Yearly">รายปี (Yearly)</option>
+                            <option value="Custom">กำหนดเอง (จำนวนวัน)</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="pmplan-interval-wrap" class="hidden">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">ทุกๆ กี่วัน</label>
+                    <input type="number" id="pmplan-interval" min="1" placeholder="เช่น 45" class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">ชื่องาน / รายการที่ต้องทำ</label>
+                    <input type="text" id="pmplan-taskname" required placeholder="เช่น อัดจารบี, เปลี่ยนไส้กรอง" class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">วันที่ครบกำหนดครั้งแรก</label>
+                        <input type="date" id="pmplan-nextdue" required class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">ผู้รับผิดชอบ (ถ้ามี)</label>
+                        <input type="text" id="pmplan-assignedto" placeholder="ชื่อผู้รับผิดชอบ" class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">หมายเหตุ</label>
+                    <textarea id="pmplan-note" rows="2" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)" class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500"></textarea>
+                </div>
+            </div>
+            <div class="p-4 border-t bg-white flex-none flex justify-end gap-2">
+                <button onclick="document.getElementById('modal-add-pm-plan').classList.add('hidden')" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-300 transition-colors">ยกเลิก</button>
+                <button id="pmplan-submit-btn" onclick="window.submitAddPmPlan()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 transition-colors">💾 บันทึกแผน</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 🌟 MODAL: TV Mode (โหมดนำเสนอแบบเต็มจอ) 🌟 -->
     <div id="modal-tv-mode" class="fixed inset-0 bg-black z-[200] hidden flex-col">
         <div class="flex justify-between items-center p-4 bg-gray-900 text-white flex-none">
