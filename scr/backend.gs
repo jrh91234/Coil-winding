@@ -2693,7 +2693,9 @@ function doPost(e) {
             assignedTo: assignedTo,
             dueDate: dueDate,
             daysOverdue: daysOverdue,
-            note: String(pmRows[i][pi("Note")] || "")
+            note: String(pmRows[i][pi("Note")] || ""),
+            instruction: pi("Instruction") > -1 ? String(pmRows[i][pi("Instruction")] || "") : "",
+            photoUrl: pi("Reference_Photo_URL") > -1 ? String(pmRows[i][pi("Reference_Photo_URL")] || "") : ""
           });
         }
       }

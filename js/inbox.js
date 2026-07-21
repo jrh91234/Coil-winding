@@ -225,8 +225,12 @@ function renderSortingItem(d) {
 function renderPmTaskItem(d) {
     const urgency = d.daysOverdue >= 3 ? 'border-l-red-500 bg-red-50/30' : d.daysOverdue >= 1 ? 'border-l-indigo-500' : 'border-l-indigo-400';
     const daysLabel = d.daysOverdue === 0 ? 'ถึงกำหนดวันนี้' : `เกินกำหนด ${d.daysOverdue} วัน`;
+    const thumb = d.photoUrl && typeof getThumbUrl === 'function' ? getThumbUrl(d.photoUrl) : null;
+    const photoHtml = thumb
+        ? `<img src="${thumb}" onclick="window.open('${d.photoUrl}', '_blank')" onerror="this.style.display='none'" class="w-14 h-14 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity shrink-0" title="แนบรูปอ้างอิง คลิกเพื่อดูขนาดเต็ม">`
+        : '';
     return `<div class="border-l-4 ${urgency} bg-white rounded-r-lg shadow-sm p-4 mb-2 hover:shadow-md transition-shadow">
-        <div class="flex items-start justify-between">
+        <div class="flex items-start justify-between gap-3">
             <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
                     <span class="text-lg">📋</span>
@@ -236,8 +240,10 @@ function renderPmTaskItem(d) {
                 </div>
                 <div class="text-xs text-gray-600">กำหนด: <b>${d.dueDate}</b> · <span class="${d.daysOverdue >= 3 ? 'text-red-600 font-bold' : 'text-indigo-600'}">${daysLabel}</span></div>
                 <div class="text-[10px] text-gray-400 mt-1">ความถี่: ${d.frequency} · ${d.planId}${d.note ? ' · ' + d.note : ''}</div>
+                ${d.instruction ? `<div class="text-xs text-gray-600 bg-gray-50 p-2 rounded mt-2 whitespace-pre-line">📝 ${d.instruction}</div>` : ''}
             </div>
-            <div class="flex flex-col gap-1 ml-3 shrink-0">
+            ${photoHtml}
+            <div class="flex flex-col gap-1 ml-1 shrink-0">
                 <button onclick="window.openPmCompleteModal('${d.planId}')" class="text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700 font-bold">📸 ทำเสร็จ</button>
             </div>
         </div>
@@ -253,6 +259,8 @@ window.openPmCompleteModal = function(planId) {
             <div class="bg-indigo-50 p-3 rounded-lg mb-3 text-sm">
                 <div class="font-bold text-indigo-800">${task.taskName}</div>
                 <div class="text-indigo-600 text-xs">${task.machine} · ${task.planType} · กำหนด ${task.dueDate}</div>
+                ${task.instruction ? `<div class="text-gray-700 text-xs mt-2 whitespace-pre-line">📝 ${task.instruction}</div>` : ''}
+                ${task.photoUrl ? `<a href="${task.photoUrl}" target="_blank" class="inline-block mt-2 text-xs font-bold text-indigo-700 underline">📸 ดูรูปอ้างอิงวิธีทำ</a>` : ''}
             </div>
             <div class="mb-3">
                 <label class="block text-sm font-bold text-gray-700 mb-1">📸 แนบรูปถ่าย (บังคับ)</label>
