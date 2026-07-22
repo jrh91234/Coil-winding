@@ -738,7 +738,10 @@ window.openCheckPartDialog = async function(installId, partId, partName, machine
     if (replacedRadio) replacedRadio.checked = false;
     document.getElementById('check-note').value = '';
     const nextInput = document.getElementById('check-next-shot');
-    const defaultNext = (checkInterval > 0) ? (actualShots + checkInterval) : (nextCheckShot || 0);
+    // ถ้าไม่เคยตั้ง Check_Interval_Shots ไว้ ให้ fallback เป็นอายุใช้งานเต็มรอบแทนค่า 0
+    // (ป้องกัน Next_Check_Shot ค้างที่ 0 ตลอดไป ทำให้อะไหล่ไม่เด้งเข้าคิว "รอตรวจเช็ค" อีกเลย)
+    const fallbackInterval = checkInterval > 0 ? checkInterval : (lifeShots > 0 ? lifeShots : 0);
+    const defaultNext = fallbackInterval > 0 ? (actualShots + fallbackInterval) : (nextCheckShot || 0);
     if (nextInput) nextInput.value = defaultNext;
 
     // Reset file input + preview
