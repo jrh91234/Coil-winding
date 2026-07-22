@@ -2632,7 +2632,10 @@ function doPost(e) {
             nextCheckShot: nextCheck,
             checkCount: checkCount
           };
-          if (nextCheck > 0 && actualShots >= nextCheck) {
+          // เข้าคิว "รอตรวจเช็ค" เมื่อถึงรอบที่ตั้งไว้ (Next_Check_Shot) หรือใช้งานครบ/เกินอายุจริงแล้ว
+          // (กันเคสที่ไม่เคยตั้ง Check_Interval_Shots ไว้ ทำให้ Next_Check_Shot เป็น 0 ค้างตลอดไป
+          //  และอะไหล่ไม่เคยถูกเลื่อนจาก "ใกล้หมดอายุ" ไปคิวตรวจเช็คเลยทั้งที่เกิน 100% แล้ว)
+          if ((nextCheck > 0 && actualShots >= nextCheck) || (lifeShots > 0 && pct >= 100)) {
             result.partsCheck.push(item);
           } else if (lifeShots > 0 && pct >= 90) {
             result.partsNearEnd.push(item);
