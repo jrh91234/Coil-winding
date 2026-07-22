@@ -156,14 +156,18 @@ function renderMaintenanceItem(d) {
 
 function renderPartsCheckItem(d) {
     const escName = (d.partName || '').replace(/'/g, "\\'");
+    const reasonBadge = d.checkReason === 'overdue_life'
+        ? `<span class="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-bold" title="ใช้งานเกินอายุที่คำนวณได้แล้ว (${d.pct}%) จึงเข้าคิวตรวจเช็คทันที แม้ยังไม่ถึง Next Check ที่ตั้งไว้">🔴 เกินอายุใช้งาน (${d.pct}%)</span>`
+        : `<span class="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold" title="ใช้งานถึงรอบ Next Check ที่ตั้งไว้แล้ว">🟡 ถึงรอบตรวจตามกำหนด</span>`;
     return `<div class="border-l-4 border-l-amber-500 bg-white rounded-r-lg shadow-sm p-4 mb-2 hover:shadow-md transition-shadow">
         <div class="flex items-start justify-between">
             <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-1">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
                     <span class="text-lg">🔍</span>
                     <span class="font-bold text-gray-800 text-sm">${d.partName}</span>
                     <span class="text-[10px] text-gray-400 font-mono">(${d.partId})</span>
                     <span class="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-mono">${d.machine}</span>
+                    ${reasonBadge}
                 </div>
                 <div class="text-xs text-gray-600">Actual: <b class="text-amber-700">${Number(d.actualShots).toLocaleString()}</b> / Next Check: <b>${Number(d.nextCheckShot).toLocaleString()}</b> shot</div>
                 <div class="text-xs text-gray-500 mt-0.5">Life: ${d.lifeShots > 0 ? Number(d.lifeShots).toLocaleString() : '∞'} · ตรวจแล้ว ${d.checkCount} ครั้ง</div>

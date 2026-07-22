@@ -2620,6 +2620,11 @@ function doPost(e) {
           const checkCount = parseInt(r[pi("Check_Count")]) || 0;
           const effectiveLife = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
           const pct = effectiveLife > 0 ? (actualShots / effectiveLife) * 100 : 0;
+          // เข้าคิว "รอตรวจเช็ค" เมื่อถึงรอบที่ตั้งไว้ (Next_Check_Shot) หรือใช้งานครบ/เกินอายุจริงแล้ว
+          // (กันเคสที่ไม่เคยตั้ง Check_Interval_Shots ไว้ ทำให้ Next_Check_Shot เป็น 0 ค้างตลอดไป
+          //  และอะไหล่ไม่เคยถูกเลื่อนจาก "ใกล้หมดอายุ" ไปคิวตรวจเช็คเลยทั้งที่เกิน 100% แล้ว)
+          const dueByCheckShot = nextCheck > 0 && actualShots >= nextCheck;
+          const dueByLifeOverage = lifeShots > 0 && pct >= 100;
           const item = {
             installId: String(r[pi("Install_ID")] || ""),
             machine: mac,
@@ -2630,12 +2635,10 @@ function doPost(e) {
             effectiveLife: effectiveLife,
             pct: Math.round(pct * 10) / 10,
             nextCheckShot: nextCheck,
-            checkCount: checkCount
+            checkCount: checkCount,
+            checkReason: dueByCheckShot ? "due_shot" : (dueByLifeOverage ? "overdue_life" : "")
           };
-          // เข้าคิว "รอตรวจเช็ค" เมื่อถึงรอบที่ตั้งไว้ (Next_Check_Shot) หรือใช้งานครบ/เกินอายุจริงแล้ว
-          // (กันเคสที่ไม่เคยตั้ง Check_Interval_Shots ไว้ ทำให้ Next_Check_Shot เป็น 0 ค้างตลอดไป
-          //  และอะไหล่ไม่เคยถูกเลื่อนจาก "ใกล้หมดอายุ" ไปคิวตรวจเช็คเลยทั้งที่เกิน 100% แล้ว)
-          if ((nextCheck > 0 && actualShots >= nextCheck) || (lifeShots > 0 && pct >= 100)) {
+          if (dueByCheckShot || dueByLifeOverage) {
             result.partsCheck.push(item);
           } else if (lifeShots > 0 && pct >= 90) {
             result.partsNearEnd.push(item);
