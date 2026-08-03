@@ -843,7 +843,8 @@ function renderPmHistory(container, data) {
             <button onclick="window.applyPmHistoryFilter()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-indigo-700">🔍 ค้นหา</button>
             <button onclick="window.resetPmHistoryFilter()" class="bg-gray-200 text-gray-700 text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-gray-300">ล้างตัวกรอง (90 วันล่าสุด)</button>
             <div class="flex-1"></div>
-            <button onclick="window.printPmHistoryReport()" class="bg-white border border-indigo-600 text-indigo-700 text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-indigo-50">🖨️ พิมพ์รายงาน / PDF</button>
+            <button id="pmhist-pdf-btn" onclick="window.downloadPmHistoryPdf()" class="bg-red-600 text-white text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-red-700">⬇️ ดาวน์โหลด PDF</button>
+            <button onclick="window.printPmHistoryReport()" class="bg-white border border-indigo-600 text-indigo-700 text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-indigo-50">🖨️ พิมพ์</button>
             <button onclick="window.exportPmHistoryCSV()" class="bg-white border border-green-600 text-green-700 text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-green-50">📄 CSV (Excel)</button>
         </div>
     </div>`;
@@ -1093,4 +1094,47 @@ window.exportPmHistoryCSV = function() {
     a.download = `PM_History_${pmHistoryFilters.fromDate || 'all'}_${pmHistoryFilters.toDate || 'all'}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+};
+
+// ดาวน์โหลดเป็นไฟล์ PDF ทันที (backend สร้างไฟล์ให้ ไม่ต้องผ่านหน้าต่างพิมพ์)
+window.downloadPmHistoryPdf = async function() {
+    const logs = (pmHistoryData && pmHistoryData.logs) || [];
+    if (logs.length === 0) { alert('ไม่มีข้อมูลให้ดาวน์โหลด — กรุณาค้นหาก่อน'); return; }
+
+    const btn = document.getElementById('pmhist-pdf-btn');
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ กำลังสร้าง PDF...'; }
+
+    try {
+        const res = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({
+                action: 'EXPORT_PM_HISTORY_PDF',
+                fromDate: pmHistoryFilters.fromDate,
+                toDate: pmHistoryFilters.toDate,
+                machine: pmHistoryFilters.machine,
+                keyword: pmHistoryFilters.keyword,
+                username: (window.currentUser && (window.currentUser.name || window.currentUser.username)) || '',
+                role: (window.currentUser && window.currentUser.role) || ''
+            })
+        });
+        const result = await res.json();
+        if (result.status !== 'success' || !result.base64) throw new Error(result.message || 'สร้าง PDF ไม่สำเร็จ');
+
+        const bin = atob(result.base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = result.filename || `PM_History_${pmHistoryFilters.fromDate || 'all'}_${pmHistoryFilters.toDate || 'all'}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+        alert('❌ ดาวน์โหลด PDF ไม่สำเร็จ: ' + e.message + '\nลองใช้ปุ่ม "🖨️ พิมพ์" แล้วเลือกบันทึกเป็น PDF แทนได้');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
+    }
 };
