@@ -77,9 +77,12 @@ function renderInboxSidebar() {
         </button>`;
     }).join('');
 
-    sidebar.innerHTML += `<div class="border-t mt-3 pt-3">
+    sidebar.innerHTML += `<div class="border-t mt-3 pt-3 space-y-2">
         <button onclick="window.showPmGantt()" class="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-all">
             📊 Gantt Chart PM
+        </button>
+        <button onclick="window.showPmHistory()" class="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-all">
+            🗂️ ประวัติ PM ที่ทำแล้ว
         </button>
     </div>`;
 }
@@ -550,6 +553,8 @@ window.submitAddPmPlan = async function() {
 };
 
 // === Gantt Chart ===
+let pmGanttData = null;
+
 window.showPmGantt = async function() {
     const container = document.getElementById('inbox-content');
     if (!container) return;
@@ -562,6 +567,7 @@ window.showPmGantt = async function() {
         });
         const data = await res.json();
         if (data.status !== 'success') throw new Error(data.message);
+        pmGanttData = data;
         renderGanttChart(container, data);
     } catch (e) {
         container.innerHTML = `<div class="text-red-500 text-center py-8">โหลดไม่สำเร็จ: ${e.message}</div>`;
@@ -613,7 +619,10 @@ function renderGanttChart(container, data) {
     };
 
     // ปุ่มเพิ่มแผน PM
-    let statsHtml = `<div class="flex justify-end mb-3">
+    let statsHtml = `<div class="flex justify-end gap-2 mb-3">
+        <button onclick="window.showPmHistory()" class="bg-white border border-green-600 text-green-700 text-sm font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-green-50 transition-colors flex items-center gap-1">
+            🗂️ ประวัติที่ทำแล้ว
+        </button>
         <button onclick="window.openAddPmPlanModal()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-indigo-700 transition-colors flex items-center gap-1">
             ➕ เพิ่มแผน PM
         </button>
@@ -676,12 +685,12 @@ function renderGanttChart(container, data) {
                 marker = `<div class="absolute inset-0 flex items-center justify-center" title="กำหนดถัดไป (คาดการณ์)"><div class="w-2.5 h-2.5 rounded-full bg-white border-2 border-blue-300"></div></div>`;
             }
 
-            // log markers
+            // log markers — คลิกเพื่อย้อนดูรายละเอียดงานที่ทำไปแล้ว
             planLogs.forEach(l => {
                 const doneD = toDate(l.doneDate);
                 if (doneD && d.getTime() === doneD.getTime()) {
                     const color = l.status === 'Approved' ? (l.daysDiff <= 0 ? 'bg-green-500' : 'bg-orange-500') : l.status === 'Wait Approve' ? 'bg-yellow-400' : 'bg-gray-400';
-                    marker = `<div class="absolute inset-0 flex items-center justify-center"><div class="w-3 h-3 ${color} rounded-sm border border-white shadow" title="${l.status} (${l.daysDiff > 0 ? '+' + l.daysDiff + ' วัน' : 'ตรงเวลา'})"></div></div>`;
+                    marker = `<div class="absolute inset-0 flex items-center justify-center cursor-pointer" onclick="window.openPmLogDetail('${escapePmAttr(l.logId)}')"><div class="w-3 h-3 ${color} rounded-sm border border-white shadow hover:scale-150 transition-transform" title="${l.status} (${l.daysDiff > 0 ? '+' + l.daysDiff + ' วัน' : 'ตรงเวลา'}) — คลิกดูรายละเอียด"></div></div>`;
                 }
             });
 
@@ -741,3 +750,219 @@ function renderGanttChart(container, data) {
         scrollEl.scrollLeft = Math.max(0, todayPx - visibleWidth / 2);
     }
 }
+
+// ==================================================
+// 🗂️ ประวัติแผน PM ที่ทำ/ปิดงานไปแล้ว — ย้อนกลับมาตรวจดูได้
+// ==================================================
+let pmHistoryData = null;
+let pmHistoryFilters = { machine: '', fromDate: '', toDate: '', keyword: '' };
+
+function pmHistoryDefaultRange() {
+    // ใช้วันที่ปฏิทินจริง (ไม่ใช้ cutoff 08:00) เพราะ Maintenance_Log บันทึกด้วยวันที่ปฏิทิน
+    const pad = (n) => String(n).padStart(2, '0');
+    const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const today = new Date();
+    const from = new Date(today);
+    from.setDate(from.getDate() - 90);
+    return { fromDate: fmt(from), toDate: fmt(today) };
+}
+
+window.showPmHistory = async function(keepFilters) {
+    const container = document.getElementById('inbox-content');
+    if (!container) return;
+    if (!keepFilters) {
+        const range = pmHistoryDefaultRange();
+        pmHistoryFilters = { machine: '', fromDate: range.fromDate, toDate: range.toDate, keyword: '' };
+    }
+    container.innerHTML = '<div class="flex items-center justify-center h-64 text-gray-400 animate-pulse">⏳ กำลังโหลดประวัติ PM...</div>';
+
+    try {
+        const res = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({
+                action: 'GET_PM_HISTORY',
+                fromDate: pmHistoryFilters.fromDate,
+                toDate: pmHistoryFilters.toDate,
+                machine: pmHistoryFilters.machine,
+                keyword: pmHistoryFilters.keyword
+            })
+        });
+        const data = await res.json();
+        if (data.status !== 'success') throw new Error(data.message || 'โหลดไม่สำเร็จ');
+        pmHistoryData = data;
+        renderPmHistory(container, data);
+    } catch (e) {
+        container.innerHTML = `<div class="text-red-500 text-center py-8">โหลดประวัติไม่สำเร็จ: ${e.message}</div>`;
+    }
+};
+
+window.applyPmHistoryFilter = function() {
+    pmHistoryFilters = {
+        machine: document.getElementById('pmhist-machine')?.value || '',
+        fromDate: document.getElementById('pmhist-from')?.value || '',
+        toDate: document.getElementById('pmhist-to')?.value || '',
+        keyword: document.getElementById('pmhist-keyword')?.value.trim() || ''
+    };
+    window.showPmHistory(true);
+};
+
+window.resetPmHistoryFilter = function() {
+    window.showPmHistory(false);
+};
+
+function renderPmHistory(container, data) {
+    const { logs, stats, machines } = data;
+    const machineOptions = ['<option value="">ทุกเครื่อง</option>']
+        .concat((machines || []).map(m => `<option value="${m}" ${pmHistoryFilters.machine === m ? 'selected' : ''}>${m}</option>`))
+        .join('');
+
+    const filterHtml = `<div class="bg-white rounded-lg shadow-sm border p-3 mb-3">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="font-bold text-sm text-gray-700 flex items-center gap-2">🗂️ ประวัติ PM ที่ทำแล้ว</h3>
+            <button onclick="window.showPmGantt()" class="text-xs font-bold text-indigo-600 hover:underline">📊 กลับไป Gantt</button>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div>
+                <label class="block text-[11px] font-bold text-gray-500 mb-0.5">เครื่องจักร</label>
+                <select id="pmhist-machine" class="w-full p-2 text-sm border border-gray-300 rounded-lg bg-white">${machineOptions}</select>
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-gray-500 mb-0.5">ตั้งแต่วันที่</label>
+                <input type="date" id="pmhist-from" value="${pmHistoryFilters.fromDate}" class="w-full p-2 text-sm border border-gray-300 rounded-lg bg-white">
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-gray-500 mb-0.5">ถึงวันที่</label>
+                <input type="date" id="pmhist-to" value="${pmHistoryFilters.toDate}" class="w-full p-2 text-sm border border-gray-300 rounded-lg bg-white">
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-gray-500 mb-0.5">ค้นหา (ชื่องาน / ผู้ทำ)</label>
+                <input type="text" id="pmhist-keyword" value="${escapePmAttr(pmHistoryFilters.keyword)}" placeholder="เช่น อัดจารบี" onkeydown="if(event.key==='Enter') window.applyPmHistoryFilter()" class="w-full p-2 text-sm border border-gray-300 rounded-lg bg-white">
+            </div>
+        </div>
+        <div class="flex gap-2 mt-2">
+            <button onclick="window.applyPmHistoryFilter()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-indigo-700">🔍 ค้นหา</button>
+            <button onclick="window.resetPmHistoryFilter()" class="bg-gray-200 text-gray-700 text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-gray-300">ล้างตัวกรอง (90 วันล่าสุด)</button>
+        </div>
+    </div>`;
+
+    const statsHtml = `<div class="grid grid-cols-3 gap-2 mb-3">
+        <div class="bg-blue-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-blue-700">${stats.total}</div><div class="text-xs text-blue-600">งานที่ทำแล้ว</div></div>
+        <div class="bg-green-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-green-700">${stats.onTime}</div><div class="text-xs text-green-600">ตรงเวลา</div></div>
+        <div class="bg-orange-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-orange-700">${stats.late}</div><div class="text-xs text-orange-600">ช้ากว่ากำหนด</div></div>
+    </div>`;
+
+    const listHtml = logs.length === 0
+        ? `<div class="flex flex-col items-center justify-center h-48 text-gray-400 bg-white rounded-lg border">
+            <div class="text-4xl mb-2">🗂️</div>
+            <div class="font-bold">ไม่พบประวัติในช่วงที่เลือก</div>
+            <div class="text-sm">ลองขยายช่วงวันที่ หรือล้างตัวกรอง</div>
+        </div>`
+        : logs.map(renderPmHistoryItem).join('');
+
+    const moreHtml = data.totalFound > logs.length
+        ? `<div class="text-center text-xs text-gray-400 py-2">แสดง ${logs.length} จาก ${data.totalFound} รายการ — กรองช่วงวันที่ให้แคบลงเพื่อดูรายการที่เหลือ</div>`
+        : '';
+
+    container.innerHTML = filterHtml + statsHtml + listHtml + moreHtml;
+}
+
+function renderPmHistoryItem(l) {
+    const late = l.daysDiff > 0;
+    const border = late ? 'border-l-orange-500' : 'border-l-green-500';
+    const badge = late
+        ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded-full font-bold">ช้า ${l.daysDiff} วัน</span>`
+        : `<span class="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded-full font-bold">ตรงเวลา</span>`;
+    const thumbs = (l.photoUrls || [])
+        .map(u => ({ url: u, thumb: typeof getThumbUrl === 'function' ? getThumbUrl(u) : null }))
+        .filter(t => t.thumb);
+    const photoHtml = thumbs.length
+        ? `<div class="flex flex-wrap gap-1.5 mt-2">${thumbs.map((t, i) => `
+            <img src="${t.thumb}" onclick="window.openPmPhoto('${t.url}', '${escapePmAttr(l.taskName)} · ${l.machine} · ${l.doneDate}')" onerror="this.style.display='none'" class="w-16 h-16 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity" title="รูปหลังทำเสร็จ ${i + 1}/${thumbs.length}">`).join('')}</div>`
+        : '<div class="text-[11px] text-gray-400 mt-2">— ไม่มีรูปแนบ —</div>';
+
+    return `<div class="border-l-4 ${border} bg-white rounded-r-lg shadow-sm p-4 mb-2 hover:shadow-md transition-shadow">
+        <div class="flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center flex-wrap gap-2 mb-1">
+                    <span class="text-lg">✅</span>
+                    <span class="font-bold text-gray-800 text-sm">${l.taskName}</span>
+                    ${l.planType ? `<span class="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full">${l.planType}</span>` : ''}
+                    <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded-full font-mono">${l.machine}</span>
+                    ${badge}
+                </div>
+                <div class="text-xs text-gray-600">ทำเมื่อ: <b>${l.doneDate || '-'}</b> · กำหนด: ${l.dueDate || '-'} · ผู้ทำ: <b>${l.doneBy || '-'}</b></div>
+                ${l.note ? `<div class="text-xs text-gray-600 bg-gray-50 p-2 rounded mt-2 whitespace-pre-line">📝 ${l.note}</div>` : ''}
+                ${photoHtml}
+                <div class="text-[10px] text-gray-400 mt-2">${l.logId} · ${l.planId}${l.frequency ? ' · ' + l.frequency : ''}</div>
+            </div>
+            <button onclick="window.openPmLogDetail('${escapePmAttr(l.logId)}')" class="shrink-0 text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded hover:bg-gray-200 font-bold">🔍 รายละเอียด</button>
+        </div>
+    </div>`;
+}
+
+window.openPmPhoto = function(url, caption) {
+    if (typeof window.viewMaintImage === 'function') window.viewMaintImage(url, caption);
+    else window.open(url, '_blank');
+};
+
+// เปิดรายละเอียดงาน PM ที่ทำไปแล้ว (เรียกได้จากทั้งหน้าประวัติและ Gantt)
+window.openPmLogDetail = async function(logId) {
+    let log = (pmHistoryData && pmHistoryData.logs || []).find(l => l.logId === logId);
+
+    if (!log) {
+        // กดมาจาก Gantt — ดึงรายละเอียดเต็ม (วิธีทำ/รูปอ้างอิง) จาก backend ก่อน
+        try {
+            const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_PM_HISTORY', logId: logId }) });
+            const data = await res.json();
+            if (data.status === 'success') log = (data.logs || []).find(l => l.logId === logId);
+        } catch (e) { /* ใช้ข้อมูลเท่าที่มีใน Gantt แทน */ }
+    }
+    if (!log) log = (pmGanttData && pmGanttData.logs || []).find(l => l.logId === logId);
+    if (!log) { alert('ไม่พบประวัติงาน ' + logId); return; }
+
+    const late = log.daysDiff > 0;
+    const thumbs = (log.photoUrls || [])
+        .map(u => ({ url: u, thumb: typeof getThumbUrl === 'function' ? getThumbUrl(u) : null }))
+        .filter(t => t.thumb);
+    const photoHtml = thumbs.length
+        ? `<div class="grid grid-cols-2 gap-2">${thumbs.map((t, i) => `
+            <img src="${t.thumb}" onclick="window.openPmPhoto('${t.url}', '${escapePmAttr(log.taskName)} · ${log.machine} · ${log.doneDate}')" onerror="this.style.display='none'" class="w-full h-28 object-cover rounded-lg border cursor-pointer hover:opacity-80" title="รูปที่ ${i + 1}">`).join('')}</div>`
+        : '<div class="text-xs text-gray-400">— ไม่มีรูปแนบตอนปิดงาน —</div>';
+    const refHtml = (log.referencePhotos || []).length
+        ? `<div class="flex flex-wrap gap-2 mt-1">${log.referencePhotos.map((u, i) => `<a href="${u}" target="_blank" class="text-xs font-bold text-indigo-700 underline">📸 รูปอ้างอิงวิธีทำ ${i + 1}</a>`).join('')}</div>`
+        : '';
+
+    document.getElementById('modal-pm-log-detail')?.remove();
+    const html = `<div id="modal-pm-log-detail" class="fixed inset-0 bg-black bg-opacity-50 z-[400] flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-white w-full max-w-md rounded-xl shadow-2xl flex flex-col overflow-hidden" style="max-height: 90vh; max-height: 90dvh;">
+            <div class="px-5 pt-5 pb-3 flex-none flex items-start justify-between gap-2">
+                <h3 class="text-lg font-bold">🗂️ รายละเอียดงาน PM ที่ทำแล้ว</h3>
+                <button onclick="document.getElementById('modal-pm-log-detail').remove()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="px-5 flex-1 overflow-y-auto overscroll-contain space-y-3">
+                <div class="bg-indigo-50 p-3 rounded-lg text-sm">
+                    <div class="font-bold text-indigo-800">${log.taskName}</div>
+                    <div class="text-indigo-600 text-xs">${log.machine}${log.planType ? ' · ' + log.planType : ''}${log.frequency ? ' · ' + log.frequency : ''}</div>
+                    ${log.instruction ? `<div class="text-gray-700 text-xs mt-2 whitespace-pre-line">📝 ${log.instruction}</div>` : ''}
+                    ${refHtml}
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="bg-gray-50 p-2 rounded"><div class="text-gray-500">กำหนด</div><div class="font-bold text-gray-800">${log.dueDate || '-'}</div></div>
+                    <div class="bg-gray-50 p-2 rounded"><div class="text-gray-500">ทำเสร็จ</div><div class="font-bold text-gray-800">${log.doneDate || '-'}</div></div>
+                    <div class="bg-gray-50 p-2 rounded"><div class="text-gray-500">ผู้ทำ</div><div class="font-bold text-gray-800">${log.doneBy || '-'}</div></div>
+                    <div class="${late ? 'bg-orange-50' : 'bg-green-50'} p-2 rounded"><div class="text-gray-500">สถานะ</div><div class="font-bold ${late ? 'text-orange-700' : 'text-green-700'}">${late ? 'ช้า ' + log.daysDiff + ' วัน' : 'ตรงเวลา'}</div></div>
+                </div>
+                ${log.note ? `<div class="text-xs text-gray-700 bg-gray-50 p-2 rounded whitespace-pre-line">📝 หมายเหตุ: ${log.note}</div>` : ''}
+                <div>
+                    <div class="text-sm font-bold text-gray-700 mb-1">📸 รูปหลังทำเสร็จ</div>
+                    ${photoHtml}
+                </div>
+                <div class="text-[10px] text-gray-400">${log.logId} · ${log.planId}</div>
+            </div>
+            <div class="px-5 py-3 border-t bg-white flex-none flex justify-end">
+                <button onclick="document.getElementById('modal-pm-log-detail').remove()" class="bg-gray-200 text-gray-700 px-5 py-2 rounded-xl font-bold hover:bg-gray-300">ปิด</button>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+};
