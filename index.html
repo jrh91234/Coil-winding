@@ -951,6 +951,18 @@
                             <option value="daily">📅 ดูเทรนด์รายวัน (Daily Trend)</option>
                         </select>
                     </div>
+                    <!-- เลือกช่วงวันที่ของกราฟเทรนด์รายวันเอง (อยู่ในช่วงข้อมูลที่โหลดไว้) -->
+                    <div id="machine-daily-range" class="hidden flex flex-wrap items-center gap-2 mb-2 p-2 bg-blue-50 border border-blue-100 rounded text-xs">
+                        <span class="font-bold text-blue-800" title="เลือกได้ภายในช่วงข้อมูลที่โหลดไว้ — ถ้าต้องการย้อนไกลกว่านี้ ให้ขยายช่วงวันที่ของ Dashboard แล้วเปิดใหม่">📅 ช่วงวันที่:</span>
+                        <input type="date" id="md-daily-from" onchange="window.renderMachineDailyTrend()" class="border border-gray-300 rounded p-1 bg-white">
+                        <span class="text-gray-500">ถึง</span>
+                        <input type="date" id="md-daily-to" onchange="window.renderMachineDailyTrend()" class="border border-gray-300 rounded p-1 bg-white">
+                        <button onclick="window.setMachineDailyRangePreset(7)" class="px-2 py-1 rounded bg-white border border-blue-300 text-blue-700 font-bold hover:bg-blue-100">7 วัน</button>
+                        <button onclick="window.setMachineDailyRangePreset(30)" class="px-2 py-1 rounded bg-white border border-blue-300 text-blue-700 font-bold hover:bg-blue-100">30 วัน</button>
+                        <button onclick="window.setMachineDailyRangePreset(90)" class="px-2 py-1 rounded bg-white border border-blue-300 text-blue-700 font-bold hover:bg-blue-100">90 วัน</button>
+                        <button onclick="window.setMachineDailyRangePreset(0)" class="px-2 py-1 rounded bg-white border border-gray-300 text-gray-700 font-bold hover:bg-gray-100">ทั้งหมด</button>
+                        <span id="md-daily-range-info" class="text-gray-500 ml-auto"></span>
+                    </div>
                     <div class="text-xs text-blue-600 mb-1 hidden text-right font-bold" id="daily-chart-hint">💡 คลิกที่แท่ง NG สีแดงเพื่อดูรายละเอียดอาการเสีย</div>
                     <div id="machine-hourly-wrapper" class="h-64 md:h-80 w-full relative"><canvas id="machineDetailChart"></canvas></div>
                     <div id="machine-daily-wrapper" class="h-64 md:h-80 w-full relative hidden"><canvas id="machineDailyTrendChart"></canvas></div>
@@ -1560,7 +1572,7 @@
     <script src="js/charts/models.js?v=4.0"></script>
     <script src="js/charts/ng-trend.js?v=4.0"></script>
     <script src="js/charts/main.js?v=4.0"></script>
-    <script src="js/charts/table-machine.js?v=4.0"></script>
+    <script src="js/charts/table-machine.js?v=4.1"></script>
     <script src="js/charts/popups.js?v=4.0"></script>
     <script src="js/charts/audit.js?v=4.0"></script>
     <script src="js/charts/chart-audit.js?v=4.0"></script>

@@ -91,11 +91,13 @@ window.renderTable = function(data) {
 window.switchMachineChart = function() {
     const val = document.getElementById('machineChartToggle').value;
     const hint = document.getElementById('daily-chart-hint');
+    const rangeBar = document.getElementById('machine-daily-range');
     
     if(val === 'hourly') {
         document.getElementById('machine-hourly-wrapper').classList.remove('hidden');
         document.getElementById('machine-daily-wrapper').classList.add('hidden');
         if(hint) hint.classList.add('hidden');
+        if(rangeBar) rangeBar.classList.add('hidden');
         
         // ใช้ setTimeout หน่วงเวลา 100ms เพื่อให้ CSS แสดงผลเสร็จก่อนค่อย resize กราฟ
         setTimeout(() => {
@@ -109,6 +111,7 @@ window.switchMachineChart = function() {
         document.getElementById('machine-hourly-wrapper').classList.add('hidden');
         document.getElementById('machine-daily-wrapper').classList.remove('hidden');
         if(hint) hint.classList.remove('hidden');
+        if(rangeBar) rangeBar.classList.remove('hidden');
         
         setTimeout(() => {
             if (typeof machineDailyChartInst !== 'undefined' && machineDailyChartInst) {
@@ -310,8 +313,8 @@ window.showMachineDetail = function(machineName) {
         modal.style.setProperty('z-index', '999999', 'important');
     }
 
-    if(machineDetailChart) machineDetailChart.destroy();
-    if(machineDailyChartInst) machineDailyChartInst.destroy();
+    if(machineDetailChart) { machineDetailChart.destroy(); machineDetailChart = null; }
+    if(machineDailyChartInst) { machineDailyChartInst.destroy(); machineDailyChartInst = null; }
 
     const hNgPcs = mData.hourlyNgPcs || mData.hourlyNg || [];
 
@@ -378,8 +381,64 @@ window.showMachineDetail = function(machineName) {
             scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } 
         } 
     });
-const dailyData = mData.daily || {};
-    const dailyKeys = Object.keys(dailyData).sort();
+    // กราฟรายวัน — วาดผ่านฟังก์ชันแยก เพื่อให้เลือกช่วงวันที่เองแล้ววาดใหม่ได้
+    window.currentMachineDailyData = mData;
+    initMachineDailyRangeInputs(mData);
+    window.renderMachineDailyTrend();
+};
+
+// ===== ตัวเลือกช่วงวันที่ของกราฟเทรนด์รายวัน (ในหน้ารายละเอียดเครื่อง) =====
+function initMachineDailyRangeInputs(mData) {
+    const keys = Object.keys(mData.daily || {}).sort();
+    const fromEl = document.getElementById("md-daily-from");
+    const toEl = document.getElementById("md-daily-to");
+    if (!fromEl || !toEl) return;
+    if (keys.length === 0) {
+        fromEl.value = ""; toEl.value = "";
+        fromEl.min = toEl.min = ""; fromEl.max = toEl.max = "";
+        return;
+    }
+    // จำกัดให้เลือกได้เฉพาะช่วงที่โหลดข้อมูลมาแล้ว (ตามช่วงวันที่ของ Dashboard)
+    fromEl.min = toEl.min = keys[0];
+    fromEl.max = toEl.max = keys[keys.length - 1];
+    fromEl.value = keys[0];
+    toEl.value = keys[keys.length - 1];
+}
+
+window.setMachineDailyRangePreset = function(days) {
+    const mData = window.currentMachineDailyData;
+    if (!mData) return;
+    const keys = Object.keys(mData.daily || {}).sort();
+    if (keys.length === 0) return;
+    const last = keys[keys.length - 1];
+    const fromEl = document.getElementById("md-daily-from");
+    const toEl = document.getElementById("md-daily-to");
+    if (!days) {              // "ทั้งหมด"
+        fromEl.value = keys[0];
+    } else {
+        const d = new Date(last + "T00:00:00");
+        d.setDate(d.getDate() - (days - 1));
+        const pad = (n) => String(n).padStart(2, "0");
+        const start = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        fromEl.value = start < keys[0] ? keys[0] : start;
+    }
+    toEl.value = last;
+    window.renderMachineDailyTrend();
+};
+
+window.renderMachineDailyTrend = function() {
+    const mData = window.currentMachineDailyData;
+    if (!mData || !document.getElementById("machineDailyTrendChart")) return;
+    const fromEl = document.getElementById("md-daily-from");
+    const toEl = document.getElementById("md-daily-to");
+    let fromDate = fromEl ? fromEl.value : "";
+    let toDate = toEl ? toEl.value : "";
+    if (fromDate && toDate && fromDate > toDate) { const t = fromDate; fromDate = toDate; toDate = t; }
+    if (machineDailyChartInst) { machineDailyChartInst.destroy(); machineDailyChartInst = null; }
+
+    const dailyData = mData.daily || {};
+    const allKeys = Object.keys(dailyData).sort();
+    const dailyKeys = allKeys.filter(k => (!fromDate || k >= fromDate) && (!toDate || k <= toDate));
 
     const sortData = mData.sortData || {};
     // 🔴 แก้ไข data.globalSortNgRatio เป็น currentDashboardData
@@ -533,5 +592,12 @@ const dailyData = mData.daily || {};
             }
         }
     });
+
+    const info = document.getElementById("md-daily-range-info");
+    if (info) {
+        info.innerHTML = dailyKeys.length === 0
+            ? '<span class="text-red-600 font-bold">ไม่มีข้อมูลในช่วงที่เลือก</span>'
+            : `แสดง <b>${dailyKeys.length}</b> วัน (จากทั้งหมด ${allKeys.length} วันที่โหลดไว้)`;
+    }
 };
 
