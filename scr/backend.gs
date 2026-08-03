@@ -40,6 +40,190 @@ function splitPhotoUrls(raw) {
 }
 
 // ==================================================
+// 🗂️ ประวัติงาน PM — ใช้ร่วมกันระหว่าง GET_PM_HISTORY และ EXPORT_PM_HISTORY_PDF
+// ==================================================
+function collectPmHistory(ss, data) {
+  const fromDate = String(data.fromDate || "").trim().substring(0, 10);
+  const toDate = String(data.toDate || "").trim().substring(0, 10);
+  const machineFilter = String(data.machine || "").trim();
+  const keyword = String(data.keyword || "").trim().toLowerCase();
+  const logIdFilter = String(data.logId || "").trim();
+  const limit = parseInt(data.limit) || 500;
+
+  // ข้อมูลแผนไว้เติมประเภท/ความถี่/วิธีทำ ให้ log แต่ละรายการ
+  const planInfo = {};
+  try {
+    const pmSheet = ss.getSheetByName("Maintenance_Plan");
+    if (pmSheet && pmSheet.getLastRow() > 1) {
+      const pmRows = pmSheet.getDataRange().getValues();
+      const pmH = pmRows[0].map(h => String(h).trim());
+      const pi = (n) => pmH.indexOf(n);
+      for (let i = 1; i < pmRows.length; i++) {
+        const pid = String(pmRows[i][pi("Plan_ID")] || "").trim();
+        if (!pid) continue;
+        planInfo[pid] = {
+          planType: String(pmRows[i][pi("Plan_Type")] || ""),
+          frequency: String(pmRows[i][pi("Frequency")] || ""),
+          instruction: pi("Instruction") > -1 ? String(pmRows[i][pi("Instruction")] || "") : "",
+          referencePhotos: pi("Reference_Photo_URL") > -1 ? splitPhotoUrls(pmRows[i][pi("Reference_Photo_URL")]) : []
+        };
+      }
+    }
+  } catch (e) { console.error("PM history plans err: " + e); }
+
+  const logs = [];
+  const machineSet = {};
+  try {
+    const logSheet = ss.getSheetByName("Maintenance_Log");
+    if (logSheet && logSheet.getLastRow() > 1) {
+      const logRows = logSheet.getDataRange().getValues();
+      const lH = logRows[0].map(h => String(h).trim());
+      const li = (n) => lH.indexOf(n);
+      const asDate = (v) => (v instanceof Date) ? Utilities.formatDate(v, "GMT+7", "yyyy-MM-dd") : String(v || "").trim().substring(0, 10);
+      for (let i = 1; i < logRows.length; i++) {
+        const planId = String(logRows[i][li("Plan_ID")] || "").trim();
+        const machine = String(logRows[i][li("Machine")] || "").trim();
+        const logId = String(logRows[i][li("Log_ID")] || "").trim();
+        if (machine) machineSet[machine] = true;
+
+        // ขอเจาะจง Log เดียว (เปิดรายละเอียดจาก Gantt) — ข้ามตัวกรองช่วงวันที่
+        if (logIdFilter) {
+          if (logId !== logIdFilter) continue;
+        } else {
+          const doneD = asDate(logRows[i][li("Done_Date")]);
+          if (fromDate && doneD && doneD < fromDate) continue;
+          if (toDate && doneD && doneD > toDate) continue;
+          if (machineFilter && machine !== machineFilter) continue;
+        }
+
+        const doneDate = asDate(logRows[i][li("Done_Date")]);
+        const taskName = String(logRows[i][li("Task_Name")] || "");
+        const doneBy = String(logRows[i][li("Done_By")] || "");
+        const note = li("Note") > -1 ? String(logRows[i][li("Note")] || "") : "";
+        if (keyword && (taskName + " " + machine + " " + doneBy + " " + note + " " + planId + " " + logId).toLowerCase().indexOf(keyword) === -1) continue;
+
+        const info = planInfo[planId] || {};
+        logs.push({
+          logId: logId,
+          planId: planId,
+          machine: machine,
+          taskName: taskName,
+          planType: info.planType || "",
+          frequency: info.frequency || "",
+          instruction: info.instruction || "",
+          referencePhotos: info.referencePhotos || [],
+          dueDate: asDate(logRows[i][li("Due_Date")]),
+          doneDate: doneDate,
+          doneBy: doneBy,
+          status: String(logRows[i][li("Status")] || ""),
+          approvedBy: li("Approved_By") > -1 ? String(logRows[i][li("Approved_By")] || "") : "",
+          approvedDate: li("Approved_Date") > -1 ? asDate(logRows[i][li("Approved_Date")]) : "",
+          note: note,
+          photoUrls: li("Photo_URLs") > -1 ? splitPhotoUrls(logRows[i][li("Photo_URLs")]) : [],
+          daysDiff: parseInt(logRows[i][li("Days_Diff")]) || 0
+        });
+      }
+    }
+  } catch (e) { console.error("PM history logs err: " + e); }
+
+  // ใหม่สุดอยู่บนสุด
+  logs.sort(function(a, b) {
+    if (a.doneDate === b.doneDate) return a.logId < b.logId ? 1 : -1;
+    return a.doneDate < b.doneDate ? 1 : -1;
+  });
+
+  const onTime = logs.filter(function(l) { return l.daysDiff <= 0; }).length;
+  const withPhoto = logs.filter(function(l) { return l.photoUrls.length > 0; }).length;
+
+  return {
+    logs: logs,
+    limit: limit,
+    machines: Object.keys(machineSet).sort(),
+    stats: { total: logs.length, onTime: onTime, late: logs.length - onTime, withPhoto: withPhoto }
+  };
+}
+
+function pmHtmlEscape(v) {
+  return String(v === null || v === undefined ? "" : v)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// ดึง thumbnail ของ Google Drive เพื่อฝังในรายงาน (ตรงกับ getThumbUrl ฝั่งหน้าเว็บ)
+function pmDriveThumb(url) {
+  const s = String(url || "");
+  let id = "";
+  const mD = s.match(/\/d\/(.+?)\//);
+  const mId = s.match(/id=([^&]+)/);
+  if (mD && mD[1]) id = mD[1];
+  else if (mId && mId[1]) id = mId[1];
+  return id ? "https://drive.google.com/thumbnail?id=" + id + "&sz=w400" : "";
+}
+
+// HTML ของรายงานประวัติ PM (ใช้แปลงเป็น PDF)
+function buildPmHistoryReportHtml(logs, stats, meta) {
+  const adherence = stats.total > 0 ? Math.round(stats.onTime / stats.total * 1000) / 10 : 0;
+  const filterLine = "ช่วงวันที่: " + (meta.fromDate || "ทั้งหมด") + " ถึง " + (meta.toDate || "ทั้งหมด") +
+    " · เครื่องจักร: " + (meta.machine || "ทุกเครื่อง") + (meta.keyword ? " · คำค้น: " + meta.keyword : "");
+  const printedAt = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy HH:mm");
+
+  const rows = logs.map(function(l, idx) {
+    const photos = (l.photoUrls || []).slice(0, 4).map(function(u) {
+      const t = pmDriveThumb(u);
+      return t ? '<img class="ph" src="' + pmHtmlEscape(t) + '">' : "";
+    }).join("");
+    return '<tr>' +
+      '<td class="c">' + (idx + 1) + '</td>' +
+      '<td class="c">' + pmHtmlEscape(l.doneDate) + '</td>' +
+      '<td class="c">' + pmHtmlEscape(l.machine) + '</td>' +
+      '<td>' + pmHtmlEscape(l.taskName) + (l.planType ? ' <span class="tag">' + pmHtmlEscape(l.planType) + '</span>' : '') +
+        (l.frequency ? '<div class="sub">ความถี่: ' + pmHtmlEscape(l.frequency) + '</div>' : '') + '</td>' +
+      '<td class="c">' + pmHtmlEscape(l.dueDate) + '</td>' +
+      '<td class="c">' + pmHtmlEscape(l.doneBy) + '</td>' +
+      '<td class="c ' + (l.daysDiff > 0 ? 'late' : 'ontime') + '">' + (l.daysDiff > 0 ? 'ช้า ' + l.daysDiff + ' วัน' : 'ตรงเวลา') + '</td>' +
+      '<td>' + pmHtmlEscape(l.note) + '</td>' +
+      '<td class="c">' + (photos || '<span class="sub">ไม่มีรูป</span>') + '</td>' +
+    '</tr>';
+  }).join("");
+
+  return '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>รายงานประวัติการซ่อมบำรุง (PM)</title><style>' +
+    'body{font-family:"Sarabun","TH Sarabun New",Tahoma,sans-serif;color:#1f2937;font-size:11px;padding:10px}' +
+    'h1{font-size:16px;margin:0 0 4px}' +
+    '.meta{font-size:10px;color:#6b7280;margin-bottom:10px;line-height:1.6}' +
+    'table{width:100%;border-collapse:collapse}' +
+    'th,td{border:1px solid #d1d5db;padding:4px 5px;vertical-align:top}' +
+    'th{background:#eef2ff;font-size:10px}' +
+    'td.c{text-align:center}' +
+    'tr{page-break-inside:avoid}' +
+    'thead{display:table-header-group}' +
+    '.sub{font-size:9px;color:#6b7280}' +
+    '.tag{background:#eef2ff;color:#4338ca;border-radius:8px;padding:1px 4px;font-size:9px}' +
+    '.late{color:#c2410c;font-weight:bold}.ontime{color:#15803d;font-weight:bold}' +
+    '.ph{width:60px;height:60px;margin:1px;border:1px solid #e5e7eb}' +
+    '.cards{width:100%;border-collapse:collapse;margin-bottom:10px}' +
+    '.cards td{text-align:center;border:1px solid #e5e7eb}' +
+    '.cards .n{font-size:16px;font-weight:bold}.cards .l{font-size:9px;color:#6b7280}' +
+    '.sign{margin-top:26px;width:100%}' +
+    '.sign td{text-align:center;font-size:10px;color:#6b7280;border-top:1px dotted #9ca3af;padding-top:4px}' +
+    '</style></head><body>' +
+    '<h1>รายงานประวัติการซ่อมบำรุง (PM / AM)</h1>' +
+    '<div class="meta">' + pmHtmlEscape(filterLine) + '<br>พิมพ์โดย: ' + pmHtmlEscape(meta.printedBy || "-") +
+      ' · วันที่พิมพ์: ' + printedAt + ' · จำนวน ' + logs.length + ' รายการ</div>' +
+    '<table class="cards"><tr>' +
+      '<td><div class="n">' + stats.total + '</div><div class="l">งานที่ทำแล้ว</div></td>' +
+      '<td><div class="n" style="color:#15803d">' + stats.onTime + '</div><div class="l">ตรงเวลา</div></td>' +
+      '<td><div class="n" style="color:#c2410c">' + stats.late + '</div><div class="l">ช้ากว่ากำหนด</div></td>' +
+      '<td><div class="n" style="color:#4338ca">' + adherence + '%</div><div class="l">On-time Rate</div></td>' +
+    '</tr></table>' +
+    '<table><thead><tr>' +
+      '<th style="width:24px">#</th><th style="width:64px">วันที่ทำ</th><th style="width:56px">เครื่อง</th>' +
+      '<th>งานที่ทำ</th><th style="width:64px">กำหนด</th><th style="width:70px">ผู้ทำ</th>' +
+      '<th style="width:62px">สถานะ</th><th style="width:110px">หมายเหตุ</th><th style="width:140px">รูปหลังทำเสร็จ</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<table class="sign"><tr><td>ผู้จัดทำ</td><td>หัวหน้าแผนก</td><td>ผู้อนุมัติ</td></tr></table>' +
+    '</body></html>';
+}
+
+// ==================================================
 // 🌟 ฟังก์ชันสำหรับเซฟรูปภาพลง Google Drive
 // ==================================================
 function saveImageToDrive(base64Data, filename) {
@@ -3026,106 +3210,42 @@ function doPost(e) {
 
   // === GET_PM_HISTORY — ประวัติแผน PM ที่ทำ/ปิดงานไปแล้ว (ย้อนดูได้พร้อมรูปและหมายเหตุ) ===
   if (action === "GET_PM_HISTORY") {
-    const fromDate = String(data.fromDate || "").trim().substring(0, 10);
-    const toDate = String(data.toDate || "").trim().substring(0, 10);
-    const machineFilter = String(data.machine || "").trim();
-    const keyword = String(data.keyword || "").trim().toLowerCase();
-    const logIdFilter = String(data.logId || "").trim();
-    const limit = parseInt(data.limit) || 500;
-
-    // ข้อมูลแผนไว้เติมประเภท/ความถี่/วิธีทำ ให้ log แต่ละรายการ
-    const planInfo = {};
-    try {
-      const pmSheet = ss.getSheetByName("Maintenance_Plan");
-      if (pmSheet && pmSheet.getLastRow() > 1) {
-        const pmRows = pmSheet.getDataRange().getValues();
-        const pmH = pmRows[0].map(h => String(h).trim());
-        const pi = (n) => pmH.indexOf(n);
-        for (let i = 1; i < pmRows.length; i++) {
-          const pid = String(pmRows[i][pi("Plan_ID")] || "").trim();
-          if (!pid) continue;
-          planInfo[pid] = {
-            planType: String(pmRows[i][pi("Plan_Type")] || ""),
-            frequency: String(pmRows[i][pi("Frequency")] || ""),
-            instruction: pi("Instruction") > -1 ? String(pmRows[i][pi("Instruction")] || "") : "",
-            referencePhotos: pi("Reference_Photo_URL") > -1 ? splitPhotoUrls(pmRows[i][pi("Reference_Photo_URL")]) : []
-          };
-        }
-      }
-    } catch (e) { console.error("PM history plans err: " + e); }
-
-    const logs = [];
-    const machineSet = {};
-    try {
-      const logSheet = ss.getSheetByName("Maintenance_Log");
-      if (logSheet && logSheet.getLastRow() > 1) {
-        const logRows = logSheet.getDataRange().getValues();
-        const lH = logRows[0].map(h => String(h).trim());
-        const li = (n) => lH.indexOf(n);
-        const asDate = (v) => (v instanceof Date) ? Utilities.formatDate(v, "GMT+7", "yyyy-MM-dd") : String(v || "").trim().substring(0, 10);
-        for (let i = 1; i < logRows.length; i++) {
-          const planId = String(logRows[i][li("Plan_ID")] || "").trim();
-          const machine = String(logRows[i][li("Machine")] || "").trim();
-          const logId = String(logRows[i][li("Log_ID")] || "").trim();
-          if (machine) machineSet[machine] = true;
-
-          // ขอเจาะจง Log เดียว (เปิดรายละเอียดจาก Gantt) — ข้ามตัวกรองช่วงวันที่
-          if (logIdFilter) {
-            if (logId !== logIdFilter) continue;
-          } else {
-            const doneD = asDate(logRows[i][li("Done_Date")]);
-            if (fromDate && doneD && doneD < fromDate) continue;
-            if (toDate && doneD && doneD > toDate) continue;
-            if (machineFilter && machine !== machineFilter) continue;
-          }
-
-          const doneDate = asDate(logRows[i][li("Done_Date")]);
-          const taskName = String(logRows[i][li("Task_Name")] || "");
-          const doneBy = String(logRows[i][li("Done_By")] || "");
-          const note = li("Note") > -1 ? String(logRows[i][li("Note")] || "") : "";
-          if (keyword && (taskName + " " + machine + " " + doneBy + " " + note + " " + planId + " " + logId).toLowerCase().indexOf(keyword) === -1) continue;
-
-          const info = planInfo[planId] || {};
-          logs.push({
-            logId: logId,
-            planId: planId,
-            machine: machine,
-            taskName: taskName,
-            planType: info.planType || "",
-            frequency: info.frequency || "",
-            instruction: info.instruction || "",
-            referencePhotos: info.referencePhotos || [],
-            dueDate: asDate(logRows[i][li("Due_Date")]),
-            doneDate: doneDate,
-            doneBy: doneBy,
-            status: String(logRows[i][li("Status")] || ""),
-            approvedBy: li("Approved_By") > -1 ? String(logRows[i][li("Approved_By")] || "") : "",
-            approvedDate: li("Approved_Date") > -1 ? asDate(logRows[i][li("Approved_Date")]) : "",
-            note: note,
-            photoUrls: li("Photo_URLs") > -1 ? splitPhotoUrls(logRows[i][li("Photo_URLs")]) : [],
-            daysDiff: parseInt(logRows[i][li("Days_Diff")]) || 0
-          });
-        }
-      }
-    } catch (e) { console.error("PM history logs err: " + e); }
-
-    // ใหม่สุดอยู่บนสุด
-    logs.sort(function(a, b) {
-      if (a.doneDate === b.doneDate) return a.logId < b.logId ? 1 : -1;
-      return a.doneDate < b.doneDate ? 1 : -1;
-    });
-
-    const onTime = logs.filter(function(l) { return l.daysDiff <= 0; }).length;
-    const withPhoto = logs.filter(function(l) { return l.photoUrls.length > 0; }).length;
-    const machines = Object.keys(machineSet).sort();
-
+    const h = collectPmHistory(ss, data);
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
-      logs: logs.slice(0, limit),
-      totalFound: logs.length,
-      machines: machines,
-      stats: { total: logs.length, onTime: onTime, late: logs.length - onTime, withPhoto: withPhoto }
+      logs: h.logs.slice(0, h.limit),
+      totalFound: h.logs.length,
+      machines: h.machines,
+      stats: h.stats
     })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // === EXPORT_PM_HISTORY_PDF — สร้างไฟล์ PDF ของรายงานประวัติ PM ให้ดาวน์โหลดทันที ===
+  if (action === "EXPORT_PM_HISTORY_PDF") {
+    try {
+      const h = collectPmHistory(ss, data);
+      if (h.logs.length === 0) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "ไม่มีข้อมูลในช่วงที่เลือก" })).setMimeType(ContentService.MimeType.JSON);
+      }
+      const html = buildPmHistoryReportHtml(h.logs, h.stats, {
+        fromDate: String(data.fromDate || ""),
+        toDate: String(data.toDate || ""),
+        machine: String(data.machine || ""),
+        keyword: String(data.keyword || ""),
+        printedBy: String(data.username || "")
+      });
+      const stamp = Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd_HHmmss");
+      const filename = "PM_History_" + stamp + ".pdf";
+      const pdf = Utilities.newBlob(html, "text/html", "report.html").getAs("application/pdf").setName(filename);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        filename: filename,
+        rows: h.logs.length,
+        base64: Utilities.base64Encode(pdf.getBytes())
+      })).setMimeType(ContentService.MimeType.JSON);
+    } catch (e) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "สร้าง PDF ไม่สำเร็จ: " + e })).setMimeType(ContentService.MimeType.JSON);
+    }
   }
 
   // ===================== Force Refresh =====================
