@@ -229,9 +229,13 @@ function renderSortingItem(d) {
 function renderPmTaskItem(d) {
     const urgency = d.daysOverdue >= 3 ? 'border-l-red-500 bg-red-50/30' : d.daysOverdue >= 1 ? 'border-l-indigo-500' : 'border-l-indigo-400';
     const daysLabel = d.daysOverdue === 0 ? 'ถึงกำหนดวันนี้' : `เกินกำหนด ${d.daysOverdue} วัน`;
-    const thumb = d.photoUrl && typeof getThumbUrl === 'function' ? getThumbUrl(d.photoUrl) : null;
-    const photoHtml = thumb
-        ? `<img src="${thumb}" onclick="window.open('${d.photoUrl}', '_blank')" onerror="this.style.display='none'" class="w-14 h-14 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity shrink-0" title="แนบรูปอ้างอิง คลิกเพื่อดูขนาดเต็ม">`
+    const photoUrls = (Array.isArray(d.photoUrls) && d.photoUrls.length ? d.photoUrls : (d.photoUrl ? [d.photoUrl] : [])).filter(Boolean);
+    const thumbs = photoUrls
+        .map(u => ({ url: u, thumb: typeof getThumbUrl === 'function' ? getThumbUrl(u) : null }))
+        .filter(t => t.thumb);
+    const photoHtml = thumbs.length
+        ? `<div class="flex flex-wrap gap-1 shrink-0 max-w-[7.5rem] justify-end">${thumbs.map((t, i) => `
+            <img src="${t.thumb}" onclick="window.open('${t.url}', '_blank')" onerror="this.style.display='none'" class="w-14 h-14 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity" title="แนบรูปอ้างอิง ${i + 1}/${thumbs.length} คลิกเพื่อดูขนาดเต็ม">`).join('')}</div>`
         : '';
     return `<div class="border-l-4 ${urgency} bg-white rounded-r-lg shadow-sm p-4 mb-2 hover:shadow-md transition-shadow">
         <div class="flex items-start justify-between gap-3">
@@ -257,25 +261,36 @@ function renderPmTaskItem(d) {
 window.openPmCompleteModal = function(planId) {
     const task = inboxData && inboxData.categories.pmTasks.find(t => t.planId === planId);
     if (!task) { alert('ไม่พบแผน ' + planId); return; }
-    const html = `<div id="modal-pm-complete" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-        <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl p-5">
-            <h3 class="text-lg font-bold mb-3">📸 ยืนยันทำเสร็จ</h3>
-            <div class="bg-indigo-50 p-3 rounded-lg mb-3 text-sm">
-                <div class="font-bold text-indigo-800">${task.taskName}</div>
-                <div class="text-indigo-600 text-xs">${task.machine} · ${task.planType} · กำหนด ${task.dueDate}</div>
-                ${task.instruction ? `<div class="text-gray-700 text-xs mt-2 whitespace-pre-line">📝 ${task.instruction}</div>` : ''}
-                ${task.photoUrl ? `<a href="${task.photoUrl}" target="_blank" class="inline-block mt-2 text-xs font-bold text-indigo-700 underline">📸 ดูรูปอ้างอิงวิธีทำ</a>` : ''}
+    const refPhotos = Array.isArray(task.photoUrls) && task.photoUrls.length
+        ? task.photoUrls
+        : (task.photoUrl ? [task.photoUrl] : []);
+    const refPhotoHtml = refPhotos.length
+        ? `<div class="mt-2 flex flex-wrap gap-2">${refPhotos.map((u, i) => `<a href="${u}" target="_blank" class="text-xs font-bold text-indigo-700 underline">📸 ดูรูปอ้างอิงวิธีทำ${refPhotos.length > 1 ? ' ' + (i + 1) : ''}</a>`).join('')}</div>`
+        : '';
+    // มือถือ: ใช้ flex column + body เลื่อนได้ เพื่อไม่ให้ปุ่มยืนยัน/ยกเลิกตกขอบจอเมื่อเนื้อหายาว
+    const html = `<div id="modal-pm-complete" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl flex flex-col overflow-hidden" style="max-height: 90vh; max-height: 90dvh;">
+            <div class="px-5 pt-5 pb-3 flex-none">
+                <h3 class="text-lg font-bold">📸 ยืนยันทำเสร็จ</h3>
             </div>
-            <div class="mb-3">
-                <label class="block text-sm font-bold text-gray-700 mb-1">📸 แนบรูปถ่าย (บังคับ)</label>
-                <input type="file" id="pm-photo" accept="image/*" required class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">
-                <div id="pm-photo-preview" class="mt-2 hidden rounded-lg overflow-hidden border"><img id="pm-photo-img" src="" class="w-full max-h-40 object-contain bg-black"></div>
+            <div class="px-5 flex-1 overflow-y-auto overscroll-contain">
+                <div class="bg-indigo-50 p-3 rounded-lg mb-3 text-sm">
+                    <div class="font-bold text-indigo-800">${task.taskName}</div>
+                    <div class="text-indigo-600 text-xs">${task.machine} · ${task.planType} · กำหนด ${task.dueDate}</div>
+                    ${task.instruction ? `<div class="text-gray-700 text-xs mt-2 whitespace-pre-line">📝 ${task.instruction}</div>` : ''}
+                    ${refPhotoHtml}
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">📸 แนบรูปถ่าย (บังคับ)</label>
+                    <input type="file" id="pm-photo" accept="image/*" required class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">
+                    <div id="pm-photo-preview" class="mt-2 hidden rounded-lg overflow-hidden border"><img id="pm-photo-img" src="" class="w-full max-h-40 object-contain bg-black"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">หมายเหตุ</label>
+                    <textarea id="pm-note" rows="2" class="w-full p-2 border rounded-lg text-sm" placeholder="รายละเอียดเพิ่มเติม..."></textarea>
+                </div>
             </div>
-            <div class="mb-3">
-                <label class="block text-sm font-bold text-gray-700 mb-1">หมายเหตุ</label>
-                <textarea id="pm-note" rows="2" class="w-full p-2 border rounded-lg text-sm" placeholder="รายละเอียดเพิ่มเติม..."></textarea>
-            </div>
-            <div class="flex gap-2">
+            <div class="px-5 py-3 border-t bg-white flex-none flex gap-2">
                 <button onclick="document.getElementById('modal-pm-complete').remove()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-xl font-bold hover:bg-gray-300">ยกเลิก</button>
                 <button onclick="window.submitPmComplete('${planId}')" id="btn-pm-submit" class="flex-1 bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700">📸 ยืนยัน</button>
             </div>
@@ -302,12 +317,8 @@ window.submitPmComplete = async function(planId) {
 
     let imageBase64 = '';
     try {
-        const file = photoInput.files[0];
-        imageBase64 = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target.result.split(',')[1]);
-            reader.readAsDataURL(file);
-        });
+        // ส่งเป็น data URL เต็ม (backend ต้องการ prefix "data:image/...;base64,") + บีบอัดให้ไฟล์เล็กลงสำหรับมือถือ
+        imageBase64 = await compressPmImage(photoInput.files[0], 256);
     } catch (e) { alert('อ่านรูปไม่ได้'); btn.disabled = false; btn.innerHTML = '📸 ยืนยัน'; return; }
 
     try {
@@ -393,7 +404,8 @@ window.openAddPmPlanModal = function() {
     document.getElementById('pmplan-interval-wrap').classList.add('hidden');
     const photoInput = document.getElementById('pmplan-photo');
     if (photoInput) photoInput.value = '';
-    document.getElementById('pmplan-photo-preview').classList.add('hidden');
+    pmPlanPhotoFiles = [];
+    renderPmPlanPhotoPreview();
 
     document.getElementById('modal-add-pm-plan').classList.remove('hidden');
 };
@@ -404,8 +416,44 @@ window.togglePmPlanMachineAll = function() {
     boxes.forEach(b => b.checked = !allChecked);
 };
 
+// === รูปแนบของแผน PM (รองรับหลายรูป) ===
+const PM_PLAN_MAX_PHOTOS = 5;
+let pmPlanPhotoFiles = [];
+
+function renderPmPlanPhotoPreview() {
+    const wrap = document.getElementById('pmplan-photo-preview');
+    if (!wrap) return;
+    if (pmPlanPhotoFiles.length === 0) {
+        wrap.innerHTML = '';
+        wrap.classList.add('hidden');
+        return;
+    }
+    wrap.classList.remove('hidden');
+    wrap.innerHTML = `<div class="col-span-3 text-[11px] font-bold text-gray-600">แนบแล้ว ${pmPlanPhotoFiles.length}/${PM_PLAN_MAX_PHOTOS} รูป</div>` + pmPlanPhotoFiles.map((f, i) => `
+        <div class="relative rounded-lg overflow-hidden border border-gray-200 bg-black">
+            <img src="${URL.createObjectURL(f)}" alt="Preview ${i + 1}" class="w-full h-24 object-contain" onload="window.URL.revokeObjectURL(this.src)">
+            <button type="button" onclick="window.removePmPlanPhoto(${i})" title="ลบรูปนี้"
+                class="absolute top-1 right-1 bg-black/60 text-white w-6 h-6 rounded-full text-xs font-bold leading-none hover:bg-red-600">&times;</button>
+            <span class="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 rounded">${i + 1}</span>
+        </div>`).join('');
+}
+
+window.handlePmPlanPhotoSelect = function(input) {
+    const picked = Array.from(input.files || []);
+    const room = PM_PLAN_MAX_PHOTOS - pmPlanPhotoFiles.length;
+    if (picked.length > room) alert(`แนบรูปได้สูงสุด ${PM_PLAN_MAX_PHOTOS} รูป (เพิ่มได้อีก ${room} รูป)`);
+    pmPlanPhotoFiles = pmPlanPhotoFiles.concat(picked.slice(0, Math.max(room, 0)));
+    input.value = ''; // เคลียร์เพื่อให้เลือกไฟล์เดิมซ้ำ / เลือกเพิ่มทีละรูปได้
+    renderPmPlanPhotoPreview();
+};
+
+window.removePmPlanPhoto = function(idx) {
+    pmPlanPhotoFiles.splice(idx, 1);
+    renderPmPlanPhotoPreview();
+};
+
 // บีบอัดรูปภาพให้เล็กกว่า maxSizeKB ก่อนส่งขึ้น backend
-function compressPmPlanImage(file, maxSizeKB) {
+function compressPmImage(file, maxSizeKB) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -444,7 +492,7 @@ window.submitAddPmPlan = async function() {
     const assignedTo = document.getElementById('pmplan-assignedto').value.trim();
     const note = document.getElementById('pmplan-note').value.trim();
     const instruction = document.getElementById('pmplan-instruction').value.trim();
-    const photoFile = document.getElementById('pmplan-photo').files[0];
+    const photoFiles = pmPlanPhotoFiles.slice(0, PM_PLAN_MAX_PHOTOS);
 
     if (machines.length === 0 || !taskName || !nextDueDate) {
         alert('กรุณาเลือกเครื่องจักรอย่างน้อย 1 เครื่อง และกรอกชื่องาน กับวันที่ครบกำหนดให้ครบ');
@@ -459,13 +507,13 @@ window.submitAddPmPlan = async function() {
     const originalText = btn.innerHTML;
     btn.disabled = true;
 
-    let imageBase64 = '';
-    if (photoFile) {
+    const imagesBase64 = [];
+    for (let i = 0; i < photoFiles.length; i++) {
         try {
-            btn.innerHTML = '⏳ กำลังบีบอัดรูปภาพ...';
-            imageBase64 = await compressPmPlanImage(photoFile, 256);
+            btn.innerHTML = `⏳ กำลังบีบอัดรูปภาพ ${i + 1}/${photoFiles.length}...`;
+            imagesBase64.push(await compressPmImage(photoFiles[i], 256));
         } catch (e) {
-            alert('❌ ไม่สามารถประมวลผลไฟล์ภาพได้ กรุณาลองใหม่อีกครั้ง');
+            alert(`❌ ไม่สามารถประมวลผลไฟล์ภาพที่ ${i + 1} ได้ กรุณาลองใหม่อีกครั้ง`);
             btn.disabled = false;
             btn.innerHTML = originalText;
             return;
@@ -481,7 +529,9 @@ window.submitAddPmPlan = async function() {
                 action: 'ADD_PM_PLAN',
                 machines, planType, taskName, frequency,
                 intervalValue: intervalValue || 0,
-                nextDueDate, assignedTo, note, instruction, imageBase64,
+                nextDueDate, assignedTo, note, instruction,
+                imagesBase64,
+                imageBase64: imagesBase64[0] || '', // เผื่อ backend เวอร์ชันเก่า
                 username: window.currentUser?.username || window.currentUser?.name || '',
                 role: window.currentUser?.role || ''
             })

@@ -40,9 +40,11 @@ function normalizeNgSymptomName(str) {
 function saveImageToDrive(base64Data, filename) {
   if (!base64Data) return "";
   try {
-    const splitBase = base64Data.split(',');
-    const type = splitBase[0].split(';')[0].replace('data:', '');
-    const byteCharacters = Utilities.base64Decode(splitBase[1]);
+    // รองรับทั้ง data URL เต็ม ("data:image/jpeg;base64,...") และ base64 ล้วนๆ
+    const splitBase = String(base64Data).split(',');
+    const hasPrefix = splitBase.length > 1 && splitBase[0].indexOf('base64') > -1;
+    const type = hasPrefix ? splitBase[0].split(';')[0].replace('data:', '') : 'image/jpeg';
+    const byteCharacters = Utilities.base64Decode(hasPrefix ? splitBase[1] : splitBase[0]);
     const blob = Utilities.newBlob(byteCharacters, type, filename);
 
     const folderId = "1GcY_XvQTaBTE75dkrWdh8SnABXfUc6G4"; // เปลี่ยน ID โฟลเดอร์เป็นของคุณ
@@ -86,9 +88,11 @@ function getOrCreateCheckPhotosFolder() {
 function saveCheckImageToDrive(base64Data, filename) {
   if (!base64Data) return "";
   try {
-    const splitBase = base64Data.split(',');
-    const type = splitBase[0].split(';')[0].replace('data:', '');
-    const byteCharacters = Utilities.base64Decode(splitBase[1]);
+    // รองรับทั้ง data URL เต็ม ("data:image/jpeg;base64,...") และ base64 ล้วนๆ
+    const splitBase = String(base64Data).split(',');
+    const hasPrefix = splitBase.length > 1 && splitBase[0].indexOf('base64') > -1;
+    const type = hasPrefix ? splitBase[0].split(';')[0].replace('data:', '') : 'image/jpeg';
+    const byteCharacters = Utilities.base64Decode(hasPrefix ? splitBase[1] : splitBase[0]);
     const blob = Utilities.newBlob(byteCharacters, type, filename);
     const folder = getOrCreateCheckPhotosFolder();
     const file = folder.createFile(blob);
@@ -2690,6 +2694,8 @@ function doPost(e) {
           else dueDate = String(dueDateRaw || "").trim().substring(0, 10);
           if (!dueDate || dueDate > todayISO) continue;
           const daysOverdue = dueDate ? daysBetween(dueDate, todayISO) : 0;
+          const refPhotoRaw = pi("Reference_Photo_URL") > -1 ? String(pmRows[i][pi("Reference_Photo_URL")] || "") : "";
+          const refPhotos = refPhotoRaw.split(/[,|]/).map(function(s) { return s.trim(); }).filter(Boolean);
           result.pmTasks.push({
             planId: String(pmRows[i][pi("Plan_ID")] || ""),
             machine: String(pmRows[i][pi("Machine")] || ""),
@@ -2701,7 +2707,8 @@ function doPost(e) {
             daysOverdue: daysOverdue,
             note: String(pmRows[i][pi("Note")] || ""),
             instruction: pi("Instruction") > -1 ? String(pmRows[i][pi("Instruction")] || "") : "",
-            photoUrl: pi("Reference_Photo_URL") > -1 ? String(pmRows[i][pi("Reference_Photo_URL")] || "") : ""
+            photoUrl: refPhotos[0] || "",
+            photoUrls: refPhotos
           });
         }
       }
@@ -2872,10 +2879,16 @@ function doPost(e) {
       }
     });
 
-    let photoUrl = "";
-    if (data.imageBase64) {
-      photoUrl = saveImageToDrive(data.imageBase64, "PMPLAN_" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd_HHmmss") + ".jpg");
-    }
+    // รับได้ทั้งหลายรูป (imagesBase64) และรูปเดียวแบบเดิม (imageBase64)
+    let images = Array.isArray(data.imagesBase64) ? data.imagesBase64 : (data.imageBase64 ? [data.imageBase64] : []);
+    images = images.filter(function(img) { return !!img; }).slice(0, 5);
+    const stamp = Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd_HHmmss");
+    const photoUrls = [];
+    images.forEach(function(img, i) {
+      const url = saveImageToDrive(img, "PMPLAN_" + stamp + "_" + (i + 1) + ".jpg");
+      if (url) photoUrls.push(url);
+    });
+    const photoUrl = photoUrls.join(",");
 
     const planType = String(data.planType || "PM").trim();
     const frequency = String(data.frequency || "Monthly").trim();
@@ -2907,7 +2920,7 @@ function doPost(e) {
     SpreadsheetApp.flush();
 
     logUserAction(data.username || "Unknown", data.role || "", "ADD_PM_PLAN", "เพิ่มแผน PM: " + taskName + " (" + machines.join(", ") + ")");
-    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "เพิ่มแผน PM สำเร็จ " + planIds.length + " เครื่อง", planIds: planIds})).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "เพิ่มแผน PM สำเร็จ " + planIds.length + " เครื่อง", planIds: planIds, photoUrls: photoUrls})).setMimeType(ContentService.MimeType.JSON);
   }
 
   // === DELETE_PM_PLAN — ลบแผนซ่อมบำรุงจากหน้า Gantt Chart ===
