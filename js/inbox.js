@@ -839,9 +839,12 @@ function renderPmHistory(container, data) {
                 <input type="text" id="pmhist-keyword" value="${escapePmAttr(pmHistoryFilters.keyword)}" placeholder="เช่น อัดจารบี" onkeydown="if(event.key==='Enter') window.applyPmHistoryFilter()" class="w-full p-2 text-sm border border-gray-300 rounded-lg bg-white">
             </div>
         </div>
-        <div class="flex gap-2 mt-2">
+        <div class="flex flex-wrap gap-2 mt-2">
             <button onclick="window.applyPmHistoryFilter()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-indigo-700">🔍 ค้นหา</button>
             <button onclick="window.resetPmHistoryFilter()" class="bg-gray-200 text-gray-700 text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-gray-300">ล้างตัวกรอง (90 วันล่าสุด)</button>
+            <div class="flex-1"></div>
+            <button onclick="window.printPmHistoryReport()" class="bg-white border border-indigo-600 text-indigo-700 text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-indigo-50">🖨️ พิมพ์รายงาน / PDF</button>
+            <button onclick="window.exportPmHistoryCSV()" class="bg-white border border-green-600 text-green-700 text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-green-50">📄 CSV (Excel)</button>
         </div>
     </div>`;
 
@@ -965,4 +968,129 @@ window.openPmLogDetail = async function(logId) {
         </div>
     </div>`;
     document.body.insertAdjacentHTML('beforeend', html);
+};
+
+// ==================================================
+// 📤 Export รายงานประวัติ PM (พิมพ์/PDF และ CSV)
+// ==================================================
+function pmHistoryFilterLabel() {
+    const parts = [];
+    parts.push(`ช่วงวันที่: ${pmHistoryFilters.fromDate || 'ทั้งหมด'} ถึง ${pmHistoryFilters.toDate || 'ทั้งหมด'}`);
+    parts.push(`เครื่องจักร: ${pmHistoryFilters.machine || 'ทุกเครื่อง'}`);
+    if (pmHistoryFilters.keyword) parts.push(`คำค้น: ${pmHistoryFilters.keyword}`);
+    return parts.join(' · ');
+}
+
+function pmEscapeHtml(s) {
+    return String(s === null || s === undefined ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+window.printPmHistoryReport = function() {
+    const logs = (pmHistoryData && pmHistoryData.logs) || [];
+    if (logs.length === 0) { alert('ไม่มีข้อมูลให้พิมพ์ — กรุณาค้นหาก่อน'); return; }
+
+    const stats = pmHistoryData.stats || { total: logs.length, onTime: 0, late: 0 };
+    const adherence = stats.total > 0 ? Math.round(stats.onTime / stats.total * 1000) / 10 : 0;
+    const printedBy = (window.currentUser && (window.currentUser.name || window.currentUser.username)) || '-';
+    const printedAt = new Date().toLocaleString('th-TH');
+
+    const rows = logs.map((l, idx) => {
+        const photos = (l.photoUrls || [])
+            .map(u => (typeof getThumbUrl === 'function' ? getThumbUrl(u) : null))
+            .filter(Boolean)
+            .slice(0, 4)
+            .map(t => `<img src="${pmEscapeHtml(t)}" class="ph">`)
+            .join('');
+        return `<tr>
+            <td class="c">${idx + 1}</td>
+            <td class="c">${pmEscapeHtml(l.doneDate)}</td>
+            <td class="c">${pmEscapeHtml(l.machine)}</td>
+            <td>${pmEscapeHtml(l.taskName)}${l.planType ? ` <span class="tag">${pmEscapeHtml(l.planType)}</span>` : ''}${l.frequency ? `<div class="sub">ความถี่: ${pmEscapeHtml(l.frequency)}</div>` : ''}</td>
+            <td class="c">${pmEscapeHtml(l.dueDate)}</td>
+            <td class="c">${pmEscapeHtml(l.doneBy)}</td>
+            <td class="c ${l.daysDiff > 0 ? 'late' : 'ontime'}">${l.daysDiff > 0 ? 'ช้า ' + l.daysDiff + ' วัน' : 'ตรงเวลา'}</td>
+            <td>${pmEscapeHtml(l.note)}</td>
+            <td class="c">${photos || '<span class="sub">ไม่มีรูป</span>'}</td>
+        </tr>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">
+    <title>รายงานประวัติการซ่อมบำรุง (PM)</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: "Segoe UI", Tahoma, sans-serif; padding: 16px; color: #1f2937; font-size: 12px; }
+        h1 { font-size: 18px; margin: 0 0 4px; }
+        .meta { font-size: 11px; color: #6b7280; margin-bottom: 12px; line-height: 1.6; }
+        .cards { display: flex; gap: 8px; margin-bottom: 12px; }
+        .card { flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; text-align: center; }
+        .card .n { font-size: 20px; font-weight: bold; }
+        .card .l { font-size: 10px; color: #6b7280; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #d1d5db; padding: 5px 6px; vertical-align: top; }
+        th { background: #eef2ff; font-size: 11px; }
+        td.c { text-align: center; }
+        tr { page-break-inside: avoid; }
+        thead { display: table-header-group; }
+        .sub { font-size: 10px; color: #6b7280; }
+        .tag { background: #eef2ff; color: #4338ca; border-radius: 8px; padding: 1px 5px; font-size: 10px; }
+        .late { color: #c2410c; font-weight: bold; }
+        .ontime { color: #15803d; font-weight: bold; }
+        .ph { width: 64px; height: 64px; object-fit: cover; border: 1px solid #e5e7eb; border-radius: 4px; margin: 1px; }
+        .sign { margin-top: 24px; display: flex; gap: 40px; font-size: 11px; }
+        .sign div { flex: 1; border-top: 1px dotted #9ca3af; padding-top: 4px; text-align: center; color: #6b7280; }
+        @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 0; } }
+    </style></head><body>
+    <h1>🗂️ รายงานประวัติการซ่อมบำรุง (PM / AM)</h1>
+    <div class="meta">
+        ${pmEscapeHtml(pmHistoryFilterLabel())}<br>
+        พิมพ์โดย: ${pmEscapeHtml(printedBy)} · วันที่พิมพ์: ${pmEscapeHtml(printedAt)} · จำนวน ${logs.length} รายการ
+    </div>
+    <div class="cards">
+        <div class="card"><div class="n">${stats.total}</div><div class="l">งานที่ทำแล้ว</div></div>
+        <div class="card"><div class="n" style="color:#15803d">${stats.onTime}</div><div class="l">ตรงเวลา</div></div>
+        <div class="card"><div class="n" style="color:#c2410c">${stats.late}</div><div class="l">ช้ากว่ากำหนด</div></div>
+        <div class="card"><div class="n" style="color:#4338ca">${adherence}%</div><div class="l">On-time Rate</div></div>
+    </div>
+    <table>
+        <thead><tr>
+            <th style="width:28px">#</th><th style="width:72px">วันที่ทำ</th><th style="width:62px">เครื่อง</th>
+            <th>งานที่ทำ</th><th style="width:72px">กำหนด</th><th style="width:80px">ผู้ทำ</th>
+            <th style="width:70px">สถานะ</th><th style="width:130px">หมายเหตุ</th><th style="width:150px">รูปหลังทำเสร็จ</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+    </table>
+    <div class="sign"><div>ผู้จัดทำ</div><div>หัวหน้าแผนก</div><div>ผู้อนุมัติ</div></div>
+    </body></html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) { alert('เบราว์เซอร์บล็อกป๊อปอัพ — กรุณาอนุญาตป๊อปอัพเพื่อพิมพ์รายงาน'); return; }
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => { try { w.print(); } catch (e) { /* ผู้ใช้สั่งพิมพ์เองได้ */ } }, 800);
+};
+
+window.exportPmHistoryCSV = function() {
+    const logs = (pmHistoryData && pmHistoryData.logs) || [];
+    if (logs.length === 0) { alert('ไม่มีข้อมูลให้ export — กรุณาค้นหาก่อน'); return; }
+
+    const q = (v) => '"' + String(v === null || v === undefined ? '' : v).replace(/"/g, '""') + '"';
+    const header = ['Log_ID', 'Plan_ID', 'วันที่ทำ', 'เครื่องจักร', 'ชื่องาน', 'ประเภท', 'ความถี่', 'วันครบกำหนด', 'ผู้ทำ', 'สถานะ', 'ช้า (วัน)', 'หมายเหตุ', 'ลิงก์รูปหลังทำเสร็จ'];
+    let csv = `# รายงานประวัติการซ่อมบำรุง (PM) — ${pmHistoryFilterLabel()}\n`;
+    csv += header.map(q).join(',') + '\n';
+    logs.forEach(l => {
+        csv += [
+            l.logId, l.planId, l.doneDate, l.machine, l.taskName, l.planType, l.frequency,
+            l.dueDate, l.doneBy, l.daysDiff > 0 ? 'ช้ากว่ากำหนด' : 'ตรงเวลา', l.daysDiff > 0 ? l.daysDiff : 0,
+            l.note, (l.photoUrls || []).join(' | ')
+        ].map(q).join(',') + '\n';
+    });
+
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `PM_History_${pmHistoryFilters.fromDate || 'all'}_${pmHistoryFilters.toDate || 'all'}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
 };
