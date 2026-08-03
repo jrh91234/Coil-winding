@@ -1027,8 +1027,9 @@ window.printPmHistoryReport = function() {
         .card { flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; text-align: center; }
         .card .n { font-size: 20px; font-weight: bold; }
         .card .l { font-size: 10px; color: #6b7280; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #d1d5db; padding: 5px 6px; vertical-align: top; }
+        /* table-layout: fixed + ความกว้างเป็น % เพื่อให้ช่อง "งานที่ทำ" ไม่ถูกบีบจนตัดคำทีละบรรทัด */
+        table.data { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td { border: 1px solid #d1d5db; padding: 5px 6px; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; }
         th { background: #eef2ff; font-size: 11px; }
         td.c { text-align: center; }
         tr { page-break-inside: avoid; }
@@ -1037,7 +1038,7 @@ window.printPmHistoryReport = function() {
         .tag { background: #eef2ff; color: #4338ca; border-radius: 8px; padding: 1px 5px; font-size: 10px; }
         .late { color: #c2410c; font-weight: bold; }
         .ontime { color: #15803d; font-weight: bold; }
-        .ph { width: 64px; height: 64px; object-fit: cover; border: 1px solid #e5e7eb; border-radius: 4px; margin: 1px; }
+        .ph { width: 46px; height: 46px; max-width: 48%; object-fit: cover; border: 1px solid #e5e7eb; border-radius: 4px; margin: 1px; }
         .sign { margin-top: 24px; display: flex; gap: 40px; font-size: 11px; }
         .sign div { flex: 1; border-top: 1px dotted #9ca3af; padding-top: 4px; text-align: center; color: #6b7280; }
         @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 0; } }
@@ -1053,11 +1054,14 @@ window.printPmHistoryReport = function() {
         <div class="card"><div class="n" style="color:#c2410c">${stats.late}</div><div class="l">ช้ากว่ากำหนด</div></div>
         <div class="card"><div class="n" style="color:#4338ca">${adherence}%</div><div class="l">On-time Rate</div></div>
     </div>
-    <table>
+    <table class="data">
+        <colgroup>
+            <col style="width:3%"><col style="width:9%"><col style="width:7%"><col style="width:27%"><col style="width:9%">
+            <col style="width:11%"><col style="width:8%"><col style="width:14%"><col style="width:12%">
+        </colgroup>
         <thead><tr>
-            <th style="width:28px">#</th><th style="width:72px">วันที่ทำ</th><th style="width:62px">เครื่อง</th>
-            <th>งานที่ทำ</th><th style="width:72px">กำหนด</th><th style="width:80px">ผู้ทำ</th>
-            <th style="width:70px">สถานะ</th><th style="width:130px">หมายเหตุ</th><th style="width:150px">รูปหลังทำเสร็จ</th>
+            <th>#</th><th>วันที่ทำ</th><th>เครื่อง</th><th>งานที่ทำ</th><th>กำหนด</th>
+            <th>ผู้ทำ</th><th>สถานะ</th><th>หมายเหตุ</th><th>รูปหลังทำเสร็จ</th>
         </tr></thead>
         <tbody>${rows}</tbody>
     </table>

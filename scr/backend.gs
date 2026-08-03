@@ -189,8 +189,10 @@ function buildPmHistoryReportHtml(logs, stats, meta) {
     'body{font-family:"Sarabun","TH Sarabun New",Tahoma,sans-serif;color:#1f2937;font-size:11px;padding:10px}' +
     'h1{font-size:16px;margin:0 0 4px}' +
     '.meta{font-size:10px;color:#6b7280;margin-bottom:10px;line-height:1.6}' +
+    // table-layout:fixed + ความกว้างเป็น % เพื่อไม่ให้ช่อง "งานที่ทำ" ถูกบีบจนตัดคำทีละบรรทัด
     'table{width:100%;border-collapse:collapse}' +
-    'th,td{border:1px solid #d1d5db;padding:4px 5px;vertical-align:top}' +
+    'table.data{table-layout:fixed}' +
+    'th,td{border:1px solid #d1d5db;padding:4px 5px;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word}' +
     'th{background:#eef2ff;font-size:10px}' +
     'td.c{text-align:center}' +
     'tr{page-break-inside:avoid}' +
@@ -198,7 +200,7 @@ function buildPmHistoryReportHtml(logs, stats, meta) {
     '.sub{font-size:9px;color:#6b7280}' +
     '.tag{background:#eef2ff;color:#4338ca;border-radius:8px;padding:1px 4px;font-size:9px}' +
     '.late{color:#c2410c;font-weight:bold}.ontime{color:#15803d;font-weight:bold}' +
-    '.ph{width:60px;height:60px;margin:1px;border:1px solid #e5e7eb}' +
+    '.ph{width:44px;height:44px;max-width:48%;margin:1px;border:1px solid #e5e7eb}' +
     '.cards{width:100%;border-collapse:collapse;margin-bottom:10px}' +
     '.cards td{text-align:center;border:1px solid #e5e7eb}' +
     '.cards .n{font-size:16px;font-weight:bold}.cards .l{font-size:9px;color:#6b7280}' +
@@ -214,10 +216,12 @@ function buildPmHistoryReportHtml(logs, stats, meta) {
       '<td><div class="n" style="color:#c2410c">' + stats.late + '</div><div class="l">ช้ากว่ากำหนด</div></td>' +
       '<td><div class="n" style="color:#4338ca">' + adherence + '%</div><div class="l">On-time Rate</div></td>' +
     '</tr></table>' +
-    '<table><thead><tr>' +
-      '<th style="width:24px">#</th><th style="width:64px">วันที่ทำ</th><th style="width:56px">เครื่อง</th>' +
-      '<th>งานที่ทำ</th><th style="width:64px">กำหนด</th><th style="width:70px">ผู้ทำ</th>' +
-      '<th style="width:62px">สถานะ</th><th style="width:110px">หมายเหตุ</th><th style="width:140px">รูปหลังทำเสร็จ</th>' +
+    '<table class="data"><colgroup>' +
+      '<col style="width:3%"><col style="width:9%"><col style="width:7%"><col style="width:27%"><col style="width:9%">' +
+      '<col style="width:11%"><col style="width:8%"><col style="width:14%"><col style="width:12%">' +
+    '</colgroup><thead><tr>' +
+      '<th>#</th><th>วันที่ทำ</th><th>เครื่อง</th><th>งานที่ทำ</th><th>กำหนด</th>' +
+      '<th>ผู้ทำ</th><th>สถานะ</th><th>หมายเหตุ</th><th>รูปหลังทำเสร็จ</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table>' +
     '<table class="sign"><tr><td>ผู้จัดทำ</td><td>หัวหน้าแผนก</td><td>ผู้อนุมัติ</td></tr></table>' +
     '</body></html>';
