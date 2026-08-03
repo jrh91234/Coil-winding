@@ -34,6 +34,11 @@ function normalizeNgSymptomName(str) {
   return capitalizeFirst(text);
 }
 
+// แยก URL รูปหลายรูปที่เก็บรวมในเซลล์เดียว (คั่นด้วย , หรือ |)
+function splitPhotoUrls(raw) {
+  return String(raw || "").split(/[,|]/).map(function(s) { return s.trim(); }).filter(String);
+}
+
 // ==================================================
 // 🌟 ฟังก์ชันสำหรับเซฟรูปภาพลง Google Drive
 // ==================================================
@@ -2695,7 +2700,7 @@ function doPost(e) {
           if (!dueDate || dueDate > todayISO) continue;
           const daysOverdue = dueDate ? daysBetween(dueDate, todayISO) : 0;
           const refPhotoRaw = pi("Reference_Photo_URL") > -1 ? String(pmRows[i][pi("Reference_Photo_URL")] || "") : "";
-          const refPhotos = refPhotoRaw.split(/[,|]/).map(function(s) { return s.trim(); }).filter(Boolean);
+          const refPhotos = splitPhotoUrls(refPhotoRaw);
           result.pmTasks.push({
             planId: String(pmRows[i][pi("Plan_ID")] || ""),
             machine: String(pmRows[i][pi("Machine")] || ""),
@@ -2998,6 +3003,8 @@ function doPost(e) {
             doneDate: (done instanceof Date) ? Utilities.formatDate(done, "GMT+7", "yyyy-MM-dd") : String(done || "").substring(0, 10),
             doneBy: String(logRows[i][li("Done_By")] || ""),
             status: String(logRows[i][li("Status")] || ""),
+            note: li("Note") > -1 ? String(logRows[i][li("Note")] || "") : "",
+            photoUrls: li("Photo_URLs") > -1 ? splitPhotoUrls(logRows[i][li("Photo_URLs")]) : [],
             daysDiff: parseInt(logRows[i][li("Days_Diff")]) || 0
           });
         }
@@ -3014,6 +3021,110 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "success", plans: plans, logs: logs,
       stats: { total: approved.length, onTime: onTime, late: late, overdue: overdue, avgLateDays: avgLateDays, adherencePct: approved.length > 0 ? Math.round(onTime / approved.length * 1000) / 10 : 100 }
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // === GET_PM_HISTORY — ประวัติแผน PM ที่ทำ/ปิดงานไปแล้ว (ย้อนดูได้พร้อมรูปและหมายเหตุ) ===
+  if (action === "GET_PM_HISTORY") {
+    const fromDate = String(data.fromDate || "").trim().substring(0, 10);
+    const toDate = String(data.toDate || "").trim().substring(0, 10);
+    const machineFilter = String(data.machine || "").trim();
+    const keyword = String(data.keyword || "").trim().toLowerCase();
+    const logIdFilter = String(data.logId || "").trim();
+    const limit = parseInt(data.limit) || 500;
+
+    // ข้อมูลแผนไว้เติมประเภท/ความถี่/วิธีทำ ให้ log แต่ละรายการ
+    const planInfo = {};
+    try {
+      const pmSheet = ss.getSheetByName("Maintenance_Plan");
+      if (pmSheet && pmSheet.getLastRow() > 1) {
+        const pmRows = pmSheet.getDataRange().getValues();
+        const pmH = pmRows[0].map(h => String(h).trim());
+        const pi = (n) => pmH.indexOf(n);
+        for (let i = 1; i < pmRows.length; i++) {
+          const pid = String(pmRows[i][pi("Plan_ID")] || "").trim();
+          if (!pid) continue;
+          planInfo[pid] = {
+            planType: String(pmRows[i][pi("Plan_Type")] || ""),
+            frequency: String(pmRows[i][pi("Frequency")] || ""),
+            instruction: pi("Instruction") > -1 ? String(pmRows[i][pi("Instruction")] || "") : "",
+            referencePhotos: pi("Reference_Photo_URL") > -1 ? splitPhotoUrls(pmRows[i][pi("Reference_Photo_URL")]) : []
+          };
+        }
+      }
+    } catch (e) { console.error("PM history plans err: " + e); }
+
+    const logs = [];
+    const machineSet = {};
+    try {
+      const logSheet = ss.getSheetByName("Maintenance_Log");
+      if (logSheet && logSheet.getLastRow() > 1) {
+        const logRows = logSheet.getDataRange().getValues();
+        const lH = logRows[0].map(h => String(h).trim());
+        const li = (n) => lH.indexOf(n);
+        const asDate = (v) => (v instanceof Date) ? Utilities.formatDate(v, "GMT+7", "yyyy-MM-dd") : String(v || "").trim().substring(0, 10);
+        for (let i = 1; i < logRows.length; i++) {
+          const planId = String(logRows[i][li("Plan_ID")] || "").trim();
+          const machine = String(logRows[i][li("Machine")] || "").trim();
+          const logId = String(logRows[i][li("Log_ID")] || "").trim();
+          if (machine) machineSet[machine] = true;
+
+          // ขอเจาะจง Log เดียว (เปิดรายละเอียดจาก Gantt) — ข้ามตัวกรองช่วงวันที่
+          if (logIdFilter) {
+            if (logId !== logIdFilter) continue;
+          } else {
+            const doneD = asDate(logRows[i][li("Done_Date")]);
+            if (fromDate && doneD && doneD < fromDate) continue;
+            if (toDate && doneD && doneD > toDate) continue;
+            if (machineFilter && machine !== machineFilter) continue;
+          }
+
+          const doneDate = asDate(logRows[i][li("Done_Date")]);
+          const taskName = String(logRows[i][li("Task_Name")] || "");
+          const doneBy = String(logRows[i][li("Done_By")] || "");
+          const note = li("Note") > -1 ? String(logRows[i][li("Note")] || "") : "";
+          if (keyword && (taskName + " " + machine + " " + doneBy + " " + note + " " + planId + " " + logId).toLowerCase().indexOf(keyword) === -1) continue;
+
+          const info = planInfo[planId] || {};
+          logs.push({
+            logId: logId,
+            planId: planId,
+            machine: machine,
+            taskName: taskName,
+            planType: info.planType || "",
+            frequency: info.frequency || "",
+            instruction: info.instruction || "",
+            referencePhotos: info.referencePhotos || [],
+            dueDate: asDate(logRows[i][li("Due_Date")]),
+            doneDate: doneDate,
+            doneBy: doneBy,
+            status: String(logRows[i][li("Status")] || ""),
+            approvedBy: li("Approved_By") > -1 ? String(logRows[i][li("Approved_By")] || "") : "",
+            approvedDate: li("Approved_Date") > -1 ? asDate(logRows[i][li("Approved_Date")]) : "",
+            note: note,
+            photoUrls: li("Photo_URLs") > -1 ? splitPhotoUrls(logRows[i][li("Photo_URLs")]) : [],
+            daysDiff: parseInt(logRows[i][li("Days_Diff")]) || 0
+          });
+        }
+      }
+    } catch (e) { console.error("PM history logs err: " + e); }
+
+    // ใหม่สุดอยู่บนสุด
+    logs.sort(function(a, b) {
+      if (a.doneDate === b.doneDate) return a.logId < b.logId ? 1 : -1;
+      return a.doneDate < b.doneDate ? 1 : -1;
+    });
+
+    const onTime = logs.filter(function(l) { return l.daysDiff <= 0; }).length;
+    const withPhoto = logs.filter(function(l) { return l.photoUrls.length > 0; }).length;
+    const machines = Object.keys(machineSet).sort();
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      logs: logs.slice(0, limit),
+      totalFound: logs.length,
+      machines: machines,
+      stats: { total: logs.length, onTime: onTime, late: logs.length - onTime, withPhoto: withPhoto }
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
