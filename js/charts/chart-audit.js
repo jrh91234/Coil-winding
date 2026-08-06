@@ -155,10 +155,13 @@ window.buildDailyOutputAudit = function() {
     const S = window.getDailyOutputSeries();
     if (!S) return null;
 
-    const startDate = document.getElementById('startDate')?.value || '-';
-    const endDate = document.getElementById('endDate')?.value || '-';
-    const shiftFilter = document.getElementById('shiftFilter')?.value || 'All';
-    const shiftTypeFilter = document.getElementById('shiftTypeFilter')?.value || 'All';
+    // ใช้เงื่อนไขที่โหลดข้อมูลชุดนี้มาจริง (ช่องกรองอาจถูกเปลี่ยนไปแล้วโดยยังไม่ได้กดค้นหา)
+    const qMeta = (typeof window.getLoadedQueryMeta === 'function') ? window.getLoadedQueryMeta() : null;
+    const startDate = qMeta ? qMeta.start : (document.getElementById('startDate')?.value || '-');
+    const endDate = qMeta ? qMeta.end : (document.getElementById('endDate')?.value || '-');
+    const shiftFilter = qMeta ? qMeta.shift : (document.getElementById('filterShift')?.value || 'All');
+    const shiftTypeFilter = qMeta ? qMeta.shiftType : (document.getElementById('filterShiftType')?.value || 'All');
+    const isStale = (typeof window.isFilterStale === 'function') && window.isFilterStale();
     const periodLabelMap = { day: 'รายวัน', week: 'รายสัปดาห์ (เริ่มจันทร์)', month: 'รายเดือน' };
     const modeLabelMap = { pcs: 'จำนวน (ชิ้น)', percent: 'สัดส่วน (%)' };
 
@@ -208,8 +211,12 @@ window.buildDailyOutputAudit = function() {
         'งานคัดแยกที่ Completed/Wait QC แสดงเป็น FG/NG คัดแยก ส่วนงาน Pending/Rejected เท่านั้นที่ถือเป็นงานรอคัดใน forecast; แถว SORT-* ที่ sync เข้า Production_Data ถูกกันออกจากฝั่งงานผลิตของ Daily Output เพื่อไม่ให้นับซ้ำ',
         S.model !== 'all'
             ? `กำลังดูเฉพาะรุ่น ${S.model} — ยอด sort รายรุ่นอาศัยชื่อรุ่นในชีต Sorting ตรงกับฝั่งผลิต`
-            : 'ดูรายรุ่นได้โดยเลือกรุ่นที่ dropdown แล้วเปิด Audit ใหม่'
+            : 'ดูรายรุ่นได้โดยเลือกรุ่นที่ dropdown แล้วเปิด Audit ใหม่',
+        'ตาราง KPI แยกรุ่นในรายงานอัตโนมัติเป็น "ยอดรวมทั้งช่วง" และรวมแถว SORT-* ด้วย จึงมากกว่าแท่งรายวันของกราฟนี้ — ให้เทียบกับแถว "รวม" ด้านล่าง (FG ผลิต + FG คัดแยก)'
     ];
+    if (isStale) {
+        notes.unshift('⚠️ ตัวกรองบนหน้าจอถูกเปลี่ยนหลังโหลดข้อมูล — ตัวเลขชุดนี้ยังเป็นของช่วงที่ระบุไว้ด้านบน กด 🔍 ค้นหา เพื่อโหลดใหม่');
+    }
 
     return {
         title: 'Audit: Daily Output — รายการคำนวณ',

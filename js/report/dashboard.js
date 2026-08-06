@@ -1,6 +1,13 @@
 let _dashboardAbort = null;
 let _dashboardTimer = null;
 
+// ข้อความที่แสดงอยู่ใน dropdown (ใช้ทำ label ของช่วงข้อมูล)
+function getSelectedText(id) {
+    const el = document.getElementById(id);
+    if (!el || el.selectedIndex < 0) return '';
+    return el.options[el.selectedIndex].text;
+}
+
 window.loadDashboard = async function() {
     if(!SCRIPT_URL) return;
 
@@ -176,8 +183,25 @@ window.loadDashboard = async function() {
         const uph = (fg / (workDays * activeSlots)).toFixed(0);
         document.getElementById('stat-uph').innerText = uph;
 
+        // บันทึกเงื่อนไขที่ "ดึงข้อมูลชุดนี้มาจริง" ติดไว้กับข้อมูล
+        // เพื่อให้กราฟ/รายงานแสดงช่วงวันที่ของข้อมูลจริง ไม่ใช่ค่าที่อยู่ในช่องกรอง ณ ตอนเปิดดู
+        const trendDates = (data.dailyTrend || []).map(d => d.date).filter(Boolean).sort();
+        data.queryMeta = {
+            start: start,
+            end: end,
+            shift: shift,
+            shiftType: shiftType,
+            allTime: allTime,
+            shiftLabel: getSelectedText('filterShift'),
+            shiftTypeLabel: getSelectedText('filterShiftType'),
+            dataStart: trendDates.length ? trendDates[0] : '',
+            dataEnd: trendDates.length ? trendDates[trendDates.length - 1] : '',
+            dayCount: new Set(trendDates).size,
+            loadedAt: Date.now()
+        };
+
         currentDashboardData = data;
-        
+
         if (typeof window.renderCharts === 'function') {
             window.renderCharts(data); 
             window.renderTable(data); 

@@ -279,6 +279,38 @@ window.toggleCardHeight = function(btn) {
     }, 150);
 };
 
+// ===== ช่วงข้อมูลที่โหลดมาจริง (queryMeta) =====
+// กราฟและรายงานทุกตัวต้องอ้างช่วงนี้ ไม่ใช่ค่าปัจจุบันในช่องกรอง
+// เพราะช่องกรองเปลี่ยนได้โดยที่ยังไม่ได้กด 🔍 ค้นหา ทำให้หัวเรื่องไม่ตรงกับตัวเลข
+window.getLoadedQueryMeta = function() {
+    const data = (typeof currentDashboardData !== 'undefined') ? currentDashboardData : null;
+    return (data && data.queryMeta) ? data.queryMeta : null;
+};
+
+// เงื่อนไขในช่องกรองตอนนี้ ต่างจากเงื่อนไขที่ใช้โหลดข้อมูลชุดปัจจุบันหรือไม่
+window.isFilterStale = function() {
+    const meta = window.getLoadedQueryMeta();
+    if (!meta) return false;
+    const allTime = typeof window.isAllTimeActive === 'function' && window.isAllTimeActive();
+    if (allTime !== !!meta.allTime) return true;
+    if (allTime) return false;
+    const val = (id) => (document.getElementById(id)?.value || '').trim();
+    return val('startDate') !== meta.start
+        || val('endDate') !== meta.end
+        || val('filterShift') !== meta.shift
+        || val('filterShiftType') !== meta.shiftType;
+};
+
+// ข้อความช่วงวันที่ของข้อมูลที่โหลดมาจริง เช่น "2026-08-05" หรือ "2026-08-01 ถึง 2026-08-05 (5 วัน)"
+window.getLoadedRangeLabel = function() {
+    const meta = window.getLoadedQueryMeta();
+    if (!meta) return '';
+    if (meta.allTime) return 'All Time (ข้อมูลทั้งหมด)';
+    if (meta.start === meta.end) return meta.start;
+    const days = meta.dayCount > 0 ? ` (${meta.dayCount} วันที่มีข้อมูล)` : '';
+    return `${meta.start} ถึง ${meta.end}${days}`;
+};
+
 window.toggleCardMaximize = function(btn) {
     const card = btn.closest('.widget-card');
     const isMaximized = card.classList.contains('maximized-card');
@@ -303,15 +335,24 @@ window.toggleCardMaximize = function(btn) {
         btn.innerHTML = '✖'; 
         btn.title = 'ย่อหน้าจอ';
         
-        const sDate = document.getElementById('startDate')?.value || '';
-        const eDate = document.getElementById('endDate')?.value || '';
+        // ยึดตามเงื่อนไขที่ใช้โหลดข้อมูลชุดที่กราฟกำลังวาดอยู่ (ไม่ใช่ค่าปัจจุบันในช่องกรอง)
+        const meta = window.getLoadedQueryMeta();
         const shiftElement = document.getElementById('filterShift');
         const typeElement = document.getElementById('filterShiftType');
-        
-        const shift = shiftElement ? shiftElement.options[shiftElement.selectedIndex].text : '';
-        const shiftType = typeElement ? typeElement.options[typeElement.selectedIndex].text : '';
-        
-        dateLabel.innerHTML = `📅 ข้อมูลวันที่: <span class="text-gray-700 font-bold">${sDate}</span> ถึง <span class="text-gray-700 font-bold">${eDate}</span> <span class="mx-2 text-gray-300">|</span> กะ: <span class="text-gray-700 font-bold">${shift}</span> <span class="mx-2 text-gray-300">|</span> ช่วง: <span class="text-gray-700 font-bold">${shiftType}</span>`;
+
+        const rangeLabel = meta
+            ? window.getLoadedRangeLabel()
+            : `${document.getElementById('startDate')?.value || ''} ถึง ${document.getElementById('endDate')?.value || ''}`;
+        const shift = meta ? (meta.shiftLabel || meta.shift)
+                           : (shiftElement ? shiftElement.options[shiftElement.selectedIndex].text : '');
+        const shiftType = meta ? (meta.shiftTypeLabel || meta.shiftType)
+                               : (typeElement ? typeElement.options[typeElement.selectedIndex].text : '');
+
+        const staleWarn = window.isFilterStale()
+            ? ` <span class="mx-2 text-gray-300">|</span> <span class="text-red-600 font-bold">⚠️ ตัวกรองบนหน้าจอถูกเปลี่ยนแล้ว กด 🔍 ค้นหา เพื่อโหลดข้อมูลใหม่</span>`
+            : '';
+
+        dateLabel.innerHTML = `📅 ข้อมูลวันที่: <span class="text-gray-700 font-bold">${rangeLabel}</span> <span class="mx-2 text-gray-300">|</span> กะ: <span class="text-gray-700 font-bold">${shift}</span> <span class="mx-2 text-gray-300">|</span> ช่วง: <span class="text-gray-700 font-bold">${shiftType}</span>${staleWarn}`;
         dateLabel.classList.remove('hidden'); 
     }
     
