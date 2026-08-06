@@ -237,10 +237,24 @@ window.renderAutoReportContent = async function() {
         </div>
     `;
 
-    const isSingleDay = (sDate === eDate); 
-    const dateStr = isSingleDay ? sDate : `${sDate} ถึง ${eDate}`;
-    const shiftName = document.getElementById('filterShift').options[document.getElementById('filterShift').selectedIndex].text;
-    const shiftType = document.getElementById('filterShiftType').options[document.getElementById('filterShiftType').selectedIndex].text;
+    // หัวรายงานต้องบอกช่วงข้อมูล "ที่โหลดมาจริง" ไม่ใช่ค่าที่อยู่ในช่องกรองตอนกดเปิดรายงาน
+    // (เปิดรายงานไม่ได้ดึงข้อมูลใหม่ ถ้าผู้ใช้เปลี่ยนวันแล้วยังไม่กดค้นหา ตัวเลขจะยังเป็นของช่วงเดิม)
+    const queryMeta = (typeof window.getLoadedQueryMeta === 'function') ? window.getLoadedQueryMeta() : null;
+    const metaStart = queryMeta ? queryMeta.start : sDate;
+    const metaEnd = queryMeta ? queryMeta.end : eDate;
+    const isSingleDay = (metaStart === metaEnd);
+    const dateStr = (queryMeta && typeof window.getLoadedRangeLabel === 'function')
+        ? window.getLoadedRangeLabel()
+        : (isSingleDay ? metaStart : `${metaStart} ถึง ${metaEnd}`);
+    const rangeDays = (queryMeta && queryMeta.dayCount > 0) ? queryMeta.dayCount : 1;
+    const isMultiDayRange = !isSingleDay;
+    const shiftName = queryMeta
+        ? (queryMeta.shiftLabel || queryMeta.shift)
+        : document.getElementById('filterShift').options[document.getElementById('filterShift').selectedIndex].text;
+    const shiftType = queryMeta
+        ? (queryMeta.shiftTypeLabel || queryMeta.shiftType)
+        : document.getElementById('filterShiftType').options[document.getElementById('filterShiftType').selectedIndex].text;
+    const isStaleFilter = (typeof window.isFilterStale === 'function') && window.isFilterStale();
     const printTime = new Date().toLocaleString('th-TH');
 
     const totalFG = data.totalFg || 0;
@@ -252,12 +266,33 @@ window.renderAutoReportContent = async function() {
     const isPassTarget = parseFloat(avgNgRate) <= 0.5;
 
     // 🌟 ส่วนที่ 1: ตาราง Breakdown ตามรุ่น (New KPI) 🌟
-    let productBreakdownHtml = `<div class="mt-6 bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden page-break-inside-avoid">
+    // ยอดในตารางนี้เป็น "ยอดรวมทั้งช่วงที่โหลด" — ถ้าช่วงมีหลายวันจะไม่เท่ากับแท่งวันเดียวในกราฟ Daily Output
+    // จึงเพิ่มคอลัมน์เฉลี่ย/วัน และหมายเหตุยอดที่โพสต์กลับจากงานคัดแยก (SORT-*) ไว้ให้กระทบยอดกันได้
+    const sortPostedByModel = {};
+    (data.dailyTrend || []).forEach(d => {
+        Object.keys(d.byModel || {}).forEach(m => {
+            const v = d.byModel[m] || {};
+            if (!sortPostedByModel[m]) sortPostedByModel[m] = { fg: 0, ng: 0 };
+            sortPostedByModel[m].fg += v.sortPostedFg || 0;
+            sortPostedByModel[m].ng += v.sortPostedNg || 0;
+        });
+    });
+    const totalSortPostedFg = Object.values(sortPostedByModel).reduce((a, v) => a + v.fg, 0);
+    const totalSortPostedNg = Object.values(sortPostedByModel).reduce((a, v) => a + v.ng, 0);
+
+    let productBreakdownHtml = `<div class="mt-6 bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden page-break-inside-avoid">`;
+    if (isMultiDayRange) {
+        productBreakdownHtml += `<div class="px-4 py-2 bg-amber-50 border-b border-amber-200 text-[11px] text-amber-800 font-bold">
+            📅 ยอดในตารางนี้คือ <u>ยอดรวมทั้งช่วง ${metaStart} ถึง ${metaEnd}</u> (${rangeDays} วันที่มีข้อมูล) — ไม่ใช่ยอดของวันเดียว จึงสูงกว่าแท่งรายวันในกราฟ Daily Output
+        </div>`;
+    }
+    productBreakdownHtml += `
         <table class="w-full text-sm text-left">
             <thead class="bg-gray-100 text-gray-700 font-bold uppercase text-[11px] border-b">
                 <tr>
                     <th class="px-4 py-2 text-left">รุ่นสินค้า (Model)</th>
                     <th class="px-4 py-2 text-right">FG (ชิ้น)</th>
+                    ${isMultiDayRange ? '<th class="px-4 py-2 text-right">FG เฉลี่ย/วัน</th>' : ''}
                     <th class="px-4 py-2 text-right">NG (ชิ้น)</th>
                     <th class="px-4 py-2 text-right">NG (Kg)</th>
                     <th class="px-4 py-2 text-right">% Yield</th>
@@ -289,18 +324,28 @@ window.renderAutoReportContent = async function() {
             let t = f + n;
             let y = t > 0 ? ((f/t)*100).toFixed(2) : "0.00";
             let kg = getKgFromPcs(p, n).toFixed(2);
+            let avgPerDay = Math.round(f / rangeDays);
             productBreakdownHtml += `<tr>
                 <td class="px-4 py-2.5 font-bold text-gray-800">${p}</td>
                 <td class="px-4 py-2.5 text-right text-blue-700 font-bold">${f.toLocaleString()}</td>
+                ${isMultiDayRange ? `<td class="px-4 py-2.5 text-right text-blue-500 text-xs">${avgPerDay.toLocaleString()}</td>` : ''}
                 <td class="px-4 py-2.5 text-right text-red-600 font-medium">${n.toLocaleString()}</td>
                 <td class="px-4 py-2.5 text-right text-orange-600 text-xs">${kg} Kg</td>
                 <td class="px-4 py-2.5 text-right font-black text-green-700 bg-green-50/50">${y}%</td>
             </tr>`;
         });
     } else {
-        productBreakdownHtml += `<tr><td colspan="5" class="px-4 py-4 text-center text-gray-400 text-xs">ไม่มีข้อมูลการผลิตแยกตามรุ่น</td></tr>`;
+        productBreakdownHtml += `<tr><td colspan="${isMultiDayRange ? 6 : 5}" class="px-4 py-4 text-center text-gray-400 text-xs">ไม่มีข้อมูลการผลิตแยกตามรุ่น</td></tr>`;
     }
-    productBreakdownHtml += `</tbody></table></div>`;
+    productBreakdownHtml += `</tbody></table>`;
+    if (totalSortPostedFg > 0 || totalSortPostedNg > 0) {
+        productBreakdownHtml += `<div class="px-4 py-2 bg-gray-50 border-t border-gray-200 text-[11px] text-gray-600">
+            ℹ️ ยอด FG ด้านบนรวมงานที่โพสต์กลับจากการคัดแยก (Batch <code>SORT-*</code>) อยู่ด้วย
+            <b>${totalSortPostedFg.toLocaleString()}</b> ชิ้น (NG ${totalSortPostedNg.toLocaleString()} ชิ้น) —
+            กราฟ Daily Output แยกยอดส่วนนี้ออกไปไว้ในแท่ง <b>FG/NG (คัดแยก)</b> เพื่อไม่ให้นับซ้ำกับฝั่งงานผลิต
+        </div>`;
+    }
+    productBreakdownHtml += `</div>`;
 
     // 🌟 ส่วนเสริม: สรุปงานคัดแยก (Sorting) แยกตามรุ่น 🌟
     let sortingBreakdownHtml = '';
@@ -993,6 +1038,9 @@ window.renderAutoReportContent = async function() {
                     <span class="font-bold text-gray-700">ขอบเขตข้อมูล: <span class="font-normal text-blue-700">${dateStr}</span></span>
                     <span class="font-bold text-gray-700">กะการทำงาน: <span class="font-normal text-blue-700">${shiftName} (${shiftType})</span></span>
                 </div>
+                ${isStaleFilter ? `<div class="mt-2 text-[11px] font-bold text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">
+                    ⚠️ ตัวกรองบนหน้าจอ (${sDate} ถึง ${eDate}) ไม่ตรงกับข้อมูลที่โหลดไว้ด้านบน — รายงานนี้ใช้ข้อมูลชุดที่โหลดล่าสุด กรุณากด 🔍 ค้นหา ใหม่ก่อนออกรายงาน
+                </div>` : ''}
             </div>
 
             <div class="mb-8">
