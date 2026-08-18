@@ -159,6 +159,9 @@ function renderMaintenanceItem(d) {
 
 function renderPartsCheckItem(d) {
     const escName = (d.partName || '').replace(/'/g, "\\'");
+    const hasLastCheck = !!d.lastCheckDate;
+    const checkShots = Number(d.shotsSinceLastCheck !== undefined ? d.shotsSinceLastCheck : d.actualShots);
+    const checkThreshold = Number(d.checkThresholdShots !== undefined ? d.checkThresholdShots : d.nextCheckShot);
     const reasonBadge = d.checkReason === 'overdue_life'
         ? `<span class="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-bold" title="ใช้งานเกินอายุที่คำนวณได้แล้ว (${d.pct}%) จึงเข้าคิวตรวจเช็คทันที แม้ยังไม่ถึง Next Check ที่ตั้งไว้">🔴 เกินอายุใช้งาน (${d.pct}%)</span>`
         : `<span class="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold" title="ใช้งานถึงรอบ Next Check ที่ตั้งไว้แล้ว">🟡 ถึงรอบตรวจตามกำหนด</span>`;
@@ -172,11 +175,11 @@ function renderPartsCheckItem(d) {
                     <span class="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-mono">${d.machine}</span>
                     ${reasonBadge}
                 </div>
-                <div class="text-xs text-gray-600">Actual: <b class="text-amber-700">${Number(d.actualShots).toLocaleString()}</b> / Next Check: <b>${Number(d.nextCheckShot).toLocaleString()}</b> shot</div>
+                <div class="text-xs text-gray-600">${hasLastCheck ? `Shot หลังตรวจ ${checkShots.toLocaleString()} / รอบถัดไป ${checkThreshold.toLocaleString()} shot (เริ่มนับหลัง ${d.lastCheckDate})` : `Actual: <b class="text-amber-700">${Number(d.actualShots).toLocaleString()}</b> / Next Check: <b>${Number(d.nextCheckShot).toLocaleString()}</b> shot`}</div>
                 <div class="text-xs text-gray-500 mt-0.5">Life: ${d.lifeShots > 0 ? Number(d.lifeShots).toLocaleString() : '∞'} · ตรวจแล้ว ${d.checkCount} ครั้ง</div>
             </div>
             <div class="flex flex-col gap-1 ml-3 shrink-0">
-                <button onclick="window.openCheckPartDialog('${d.installId}', '${d.partId}', '${escName}', '${d.machine}', ${d.actualShots}, ${d.lifeShots}, ${d.nextCheckShot}, 0)" class="text-xs bg-amber-600 text-white px-3 py-1 rounded hover:bg-amber-700 font-bold">🔍 ตรวจเช็ค</button>
+                <button onclick="window.openCheckPartDialog('${d.installId}', '${d.partId}', '${escName}', '${d.machine}', ${d.actualShots}, ${d.lifeShots}, ${d.nextCheckShot}, ${d.checkIntervalShots || 0})" class="text-xs bg-amber-600 text-white px-3 py-1 rounded hover:bg-amber-700 font-bold">🔍 ตรวจเช็ค</button>
                 <button onclick="window.showCheckHistory('${d.installId}', '${escName}', '${d.partId}')" class="text-xs text-gray-500 hover:underline">📋 ประวัติ</button>
             </div>
         </div>
