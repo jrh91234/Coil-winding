@@ -2824,10 +2824,8 @@ function doPost(e) {
           const checkCount = parseInt(r.Check_Count) || 0;
           const effectiveLife = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
           const pct = effectiveLife > 0 ? (actualShots / effectiveLife) * 100 : 0;
-          // เข้าคิว "รอตรวจเช็ค" เมื่อ Shot หลังตรวจล่าสุดถึงรอบที่ตั้งไว้
-          // หรือใช้งานครบ/เกินอายุจริงแล้ว
-          // (กันเคสที่ไม่เคยตั้ง Check_Interval_Shots ไว้ ทำให้ Next_Check_Shot เป็น 0 ค้างตลอดไป
-          //  และอะไหล่ไม่เคยถูกเลื่อนจาก "ใกล้หมดอายุ" ไปคิวตรวจเช็คเลยทั้งที่เกิน 100% แล้ว)
+          // เข้าคิว "รอตรวจเช็ค" เมื่อ Shot หลังตรวจล่าสุดถึงรอบที่ตั้งไว้เท่านั้น
+          // ส่วนอะไหล่ที่ใช้งานครบ/เกินอายุให้ไปอยู่ในคิวเปลี่ยนอะไหล่แทน
           const dueByCheckShot = !!state.needsCheck;
           const dueByLifeOverage = lifeShots > 0 && pct >= 100;
           const item = {
@@ -2847,7 +2845,9 @@ function doPost(e) {
             checkCount: checkCount,
             checkReason: dueByCheckShot ? "due_shot" : (dueByLifeOverage ? "overdue_life" : "")
           };
-          if (dueByCheckShot || dueByLifeOverage) {
+          if (dueByLifeOverage) {
+            result.partsNearEnd.push(item);
+          } else if (dueByCheckShot) {
             result.partsCheck.push(item);
           } else if (lifeShots > 0 && pct >= 90) {
             result.partsNearEnd.push(item);
@@ -3800,6 +3800,60 @@ function addOneISODate(dateStr) {
   return Utilities.formatDate(next, "GMT+7", "yyyy-MM-dd");
 }
 
+// อ่านรอบตรวจล่าสุดจากประวัติ สำหรับ installation เก่าที่ไม่ได้เก็บ Check_Interval_Shots ไว้
+// ใช้ Next_Check_Shot - Actual_Part_Shot ซึ่งเป็นรอบแบบ relative ของการตรวจครั้งนั้น
+function getLatestPartCheckIntervals(ss, installations) {
+  const installIds = {};
+  (installations || []).forEach(function(row) {
+    const installId = String(row.Install_ID || "").trim();
+    if (installId) installIds[installId] = true;
+  });
+  const sheet = ss.getSheetByName("Parts_Checks");
+  if (!sheet || sheet.getLastRow() <= 1 || Object.keys(installIds).length === 0) return {};
+
+  const rows = sheet.getDataRange().getValues();
+  if (rows.length <= 1) return {};
+  const headers = rows[0].map(function(h) { return String(h).trim(); });
+  const idIdx = headers.indexOf("Install_ID");
+  const dateIdx = headers.indexOf("Check_Date");
+  const actualIdx = headers.indexOf("Actual_Part_Shot");
+  const nextIdx = headers.indexOf("Next_Check_Shot");
+  if (idIdx === -1 || actualIdx === -1 || nextIdx === -1) return {};
+
+  const latest = {};
+  for (let i = 1; i < rows.length; i++) {
+    const installId = String(rows[i][idIdx] || "").trim();
+    if (!installIds[installId]) continue;
+    const actualShot = parseInt(rows[i][actualIdx]) || 0;
+    const nextCheckShot = parseInt(rows[i][nextIdx]) || 0;
+    const interval = nextCheckShot - actualShot;
+    if (interval <= 0) continue;
+
+    let dateSort = null;
+    if (dateIdx !== -1) {
+      const rawDate = rows[i][dateIdx];
+      if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
+        dateSort = rawDate.getTime();
+      } else {
+        const parsedDate = Date.parse(String(rawDate || ""));
+        if (!isNaN(parsedDate)) dateSort = parsedDate;
+      }
+    }
+    const previous = latest[installId];
+    const isLater = !previous
+      || (dateSort !== null && previous.dateSort === null)
+      || (dateSort !== null && previous.dateSort !== null && dateSort >= previous.dateSort)
+      || (dateSort === null && previous.dateSort === null && i >= previous.rowIndex);
+    if (isLater) latest[installId] = {interval: interval, dateSort: dateSort, rowIndex: i};
+  }
+
+  const result = {};
+  Object.keys(latest).forEach(function(installId) {
+    result[installId] = latest[installId].interval;
+  });
+  return result;
+}
+
 // สร้างสถานะ Shot ของ installation แต่ละรายการ โดยแยกยอดสะสมสำหรับอายุอะไหล่
 // ออกจากยอด Shot หลังการตรวจล่าสุดสำหรับตัดสินรอบตรวจ
 function calcInstallationShotStates(ss, installations, upToDate) {
@@ -3829,6 +3883,7 @@ function calcInstallationShotStates(ss, installations, upToDate) {
   const postCheckByInstall = postCheckRequests.length > 0
     ? calcMultiMachineShots(ss, postCheckRequests)
     : {};
+  const historyIntervals = getLatestPartCheckIntervals(ss, activeRows);
 
   const states = {};
   activeRows.forEach(function(row) {
@@ -3844,11 +3899,13 @@ function calcInstallationShotStates(ss, installations, upToDate) {
       ? (postCheckByInstall[installId] || 0)
       : totalUsedShots;
     const nextCheckShot = parseInt(row.Next_Check_Shot) || 0;
-    const checkInterval = parseInt(row.Check_Interval_Shots) || 0;
+    const storedCheckInterval = parseInt(row.Check_Interval_Shots) || 0;
+    const historyCheckInterval = historyIntervals[installId] || 0;
+    const checkInterval = storedCheckInterval > 0 ? storedCheckInterval : historyCheckInterval;
     const lifeShots = parseInt(row.Life_Shots) || 0;
     // ก่อนตรวจครั้งแรก Next_Check_Shot เป็นยอดสะสมตามเดิม;
-    // หลังตรวจให้เริ่มนับรอบใหม่จาก Check_Interval_Shots (ค่าเดิมของ flow ตรวจเช็ค)
-    // และ fallback เป็น Next_Check_Shot สำหรับข้อมูลเก่าที่ไม่มี interval เก็บไว้
+    // หลังตรวจให้เริ่มนับรอบใหม่จาก Check_Interval_Shots หรือรอบล่าสุดใน Parts_Checks
+    // และ fallback เป็น Next_Check_Shot สำหรับข้อมูลเก่าที่ไม่มีทั้งสองค่า
     const checkThresholdShots = hasLastCheck
       ? (checkInterval > 0 ? checkInterval : nextCheckShot)
       : nextCheckShot;

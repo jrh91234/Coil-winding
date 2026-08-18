@@ -187,6 +187,7 @@ function renderPartsCheckItem(d) {
 }
 
 function renderPartsNearEndItem(d) {
+    const isOverLife = d.pct >= 100;
     const isOver95 = d.pct >= 95;
     const borderColor = isOver95 ? 'border-l-red-600' : 'border-l-red-400';
     const pctColor = isOver95 ? 'text-red-700 font-black' : 'text-red-600 font-bold';
@@ -204,10 +205,10 @@ function renderPartsNearEndItem(d) {
                 <div class="mt-1 w-full bg-gray-200 rounded-full h-2">
                     <div class="h-2 rounded-full ${isOver95 ? 'bg-red-600' : 'bg-yellow-500'}" style="width: ${Math.min(d.pct, 100)}%"></div>
                 </div>
-                <div class="text-[10px] ${pctColor} mt-0.5">${d.pct}% ของอายุใช้งาน</div>
+                <div class="text-[10px] ${pctColor} mt-0.5">${isOverLife ? `🔴 เกินอายุใช้งาน (${d.pct}%) — ควรเปลี่ยน` : `${d.pct}% ของอายุใช้งาน`}</div>
             </div>
             <div class="flex flex-col gap-1 ml-3 shrink-0">
-                <button onclick="window.promptReplacepart('${d.installId}', '${d.machine}', '${d.partId}', '${escName}', ${d.lifeShots})" class="text-xs bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 font-bold">🔄 เปลี่ยน</button>
+                <button title="${isOverLife ? 'เปลี่ยนอะไหล่ที่เกินอายุ' : 'เปลี่ยนอะไหล่'}" onclick="window.promptReplacepart('${d.installId}', '${d.machine}', '${d.partId}', '${escName}', ${d.lifeShots})" class="text-xs bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 font-bold">🔄 เปลี่ยน</button>
             </div>
         </div>
     </div>`;
