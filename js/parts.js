@@ -97,6 +97,7 @@ window.loadPartsMaster = async function() {
         const instResult = await instRes.json();
         partsCache = masterResult.data || [];
         const machineShots = instResult.machineShots || {};
+        const installationShots = instResult.installationShots || {};
 
         // สร้าง map: Part_ID → [{ machine, actualShots, ... }] (เฉพาะ Active)
         partLocationsCache = {};
@@ -128,7 +129,10 @@ window.loadPartsMaster = async function() {
             const carried = parseInt(inst.Carried_Shots) || 0;
             const installShot = parseInt(inst.Install_Shot) || 0;
             const macShots = machineShots[inst.Machine] || 0;
-            const actualShots = carried + Math.max(0, macShots - installShot);
+            const shotState = installationShots[inst.Install_ID] || {};
+            const actualShots = shotState.totalUsedShots !== undefined
+                ? shotState.totalUsedShots
+                : carried + Math.max(0, macShots - installShot);
             const carriedDays = parseInt(inst.Carried_Days) || 0;
             const installDateStr = extractInstallDateStr(inst.Install_Date);
             const daysOnMachine = daysFromInstall(installDateStr);
@@ -138,9 +142,11 @@ window.loadPartsMaster = async function() {
             const checkCount = parseInt(inst.Check_Count) || 0;
             const nextCheckShot = parseInt(inst.Next_Check_Shot) || 0;
             const effectiveLife = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
-            // ใช้ Next_Check_Shot ที่บันทึกจริงจาก Parts_Installation เป็นเกณฑ์เดียวกับ Machine Detail
-            // ห้ามคำนวณ auto จาก Life_Shots เพราะหลังตรวจผ่าน ผู้ใช้สามารถเลื่อนรอบเช็คเป็น Actual + Interval ได้
-            const needsCheck = (nextCheckShot > 0 && actualShots >= nextCheckShot);
+            // ใช้สถานะจาก backend ซึ่งเริ่มรอบใหม่หลัง Last_Check_Date;
+            // ก่อนตรวจครั้งแรกยังใช้ Next_Check_Shot แบบยอดสะสมเดิม
+            const needsCheck = shotState.needsCheck !== undefined
+                ? !!shotState.needsCheck
+                : (nextCheckShot > 0 && actualShots >= nextCheckShot);
             partLocationsCache[pid].push({
                 machine: inst.Machine,
                 actualShots: actualShots,
@@ -398,6 +404,7 @@ window.loadMachineParts = async function(machine) {
         const shotData = await shotRes.json();
         const installations = (instData.data || []).filter(x => String(x.Status || '').trim() === 'Active');
         const totalShots = shotData.totalShots || 0;
+        const installationShots = instData.installationShots || {};
 
         if (installations.length === 0) {
             container.innerHTML = `<div class="text-center py-8">
@@ -413,7 +420,10 @@ window.loadMachineParts = async function(machine) {
             const installShot = parseInt(inst.Install_Shot) || 0;
             const lifeShots = parseInt(inst.Life_Shots) || 0;
             const carried = parseInt(inst.Carried_Shots) || 0;
-            const usedShots = carried + Math.max(0, totalShots - installShot);
+            const shotState = installationShots[inst.Install_ID] || {};
+            const usedShots = shotState.totalUsedShots !== undefined
+                ? shotState.totalUsedShots
+                : carried + Math.max(0, totalShots - installShot);
             // Actual Days = Carried_Days + จำนวนวันที่อยู่บนเครื่องปัจจุบัน
             const carriedDays = parseInt(inst.Carried_Days) || 0;
             const installDateStr = extractInstallDateStr(inst.Install_Date);
@@ -426,9 +436,13 @@ window.loadMachineParts = async function(machine) {
             const effectiveLife = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
             const pct = effectiveLife > 0 ? Math.min((usedShots / effectiveLife) * 100, 100) : 0;
             const remaining = effectiveLife > 0 ? Math.max(effectiveLife - usedShots, 0) : 0;
-            const lastCheckDate = inst.Last_Check_Date ? extractInstallDateStr(inst.Last_Check_Date) : '';
-            const needsCheck = (nextCheckShot > 0 && usedShots >= nextCheckShot);
-            const shotsToNextCheck = nextCheckShot > 0 ? Math.max(0, nextCheckShot - usedShots) : 0;
+            const lastCheckDate = shotState.lastCheckDate || (inst.Last_Check_Date ? extractInstallDateStr(inst.Last_Check_Date) : '');
+            const inspectionShots = shotState.shotsSinceLastCheck !== undefined ? shotState.shotsSinceLastCheck : usedShots;
+            const checkThresholdShots = shotState.checkThresholdShots !== undefined ? shotState.checkThresholdShots : nextCheckShot;
+            const needsCheck = shotState.needsCheck !== undefined
+                ? !!shotState.needsCheck
+                : (nextCheckShot > 0 && usedShots >= nextCheckShot);
+            const shotsToNextCheck = checkThresholdShots > 0 ? Math.max(0, checkThresholdShots - inspectionShots) : 0;
 
             // สถานะ: 🔴 (≥95%) > 🟡 (≥80%) > 🟠 (needsCheck) > 🟢
             let statusColor = 'bg-green-500'; let statusText = '🟢 ปกติ'; let statusTextColor = 'text-green-600';
@@ -452,9 +466,9 @@ window.loadMachineParts = async function(machine) {
                     <span>&nbsp;</span>
                     <span>ระยะเวลาใช้งาน: <b>${actualDays.toLocaleString()}</b> วัน${carriedDays > 0 ? ` (สะสม ${carriedDays.toLocaleString()} วัน)` : ''}</span>
                 </div>
-                ${nextCheckShot > 0 ? `<div class="flex justify-between text-xs text-gray-500 mb-1">
+                ${checkThresholdShots > 0 ? `<div class="flex justify-between text-xs text-gray-500 mb-1">
                     <span>ตรวจเช็คครั้งล่าสุด: ${lastCheckDate || '-'} (ตรวจแล้ว ${checkCount} ครั้ง)</span>
-                    <span class="${needsCheck ? 'text-orange-600 font-bold' : ''}">Next check: <b>${nextCheckShot.toLocaleString()}</b>${needsCheck ? ' (ถึงเกณฑ์แล้ว)' : ` (อีก ${shotsToNextCheck.toLocaleString()} shot)`}</span>
+                    <span class="${needsCheck ? 'text-orange-600 font-bold' : ''}">${lastCheckDate ? 'Shot หลังตรวจล่าสุด' : 'Next check'}: <b>${checkThresholdShots.toLocaleString()}</b>${needsCheck ? ' (ถึงเกณฑ์แล้ว)' : ` (อีก ${shotsToNextCheck.toLocaleString()} shot)`}</span>
                 </div>` : ''}
                 ${lifeShots > 0 ? `<div class="w-full bg-gray-200 rounded-full h-2 mb-1">
                     <div class="${statusColor} h-2 rounded-full transition-all" style="width: ${pct.toFixed(1)}%"></div>

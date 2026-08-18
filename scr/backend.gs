@@ -1598,20 +1598,21 @@ function doPost(e) {
       if (filterPartId && String(obj.Part_ID || "").trim() !== filterPartId) continue;
       results.push(obj);
     }
-    // ถ้าไม่ระบุ machine/part filter → คำนวณ machineShots สำหรับ Active records ทั้งหมด (ใช้ใน Parts Master table)
+    // คำนวณทั้งยอดสะสมและยอดหลังตรวจล่าสุดให้แต่ละ Active installation
+    const todayISO = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+    const installationShots = calcInstallationShotStates(ss, results, todayISO);
     let machineShots = null;
     if (!filterMachine && !filterPartId) {
-      const activeMachines = [];
-      results.forEach(function(r) {
-        if (r.Status === "Active" && r.Machine && activeMachines.indexOf(r.Machine) === -1) {
-          activeMachines.push(r.Machine);
+      machineShots = {};
+      Object.keys(installationShots).forEach(function(installId) {
+        const state = installationShots[installId];
+        if (state.machine && machineShots[state.machine] === undefined) {
+          machineShots[state.machine] = state.totalMachineShots;
         }
       });
-      if (activeMachines.length > 0) {
-        machineShots = calcMultiMachineShots(ss, activeMachines);
-      }
     }
     const response = {status: "success", data: results};
+    response.installationShots = installationShots;
     if (machineShots) response.machineShots = machineShots;
     return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
   }
@@ -2797,41 +2798,52 @@ function doPost(e) {
         const pRows = pSheet.getDataRange().getValues();
         const pH = pRows[0].map(h => String(h).trim());
         const pi = (n) => pH.indexOf(n);
-        const activeMachines = [];
         const activeRows = [];
         for (let i = 1; i < pRows.length; i++) {
           if (String(pRows[i][pi("Status")] || "").trim() !== "Active") continue;
-          const mac = String(pRows[i][pi("Machine")] || "").trim();
-          if (mac && activeMachines.indexOf(mac) === -1) activeMachines.push(mac);
           activeRows.push(pRows[i]);
         }
-        const macShots = activeMachines.length > 0 ? calcMultiMachineShots(ss, activeMachines) : {};
-        activeRows.forEach(r => {
-          const mac = String(r[pi("Machine")] || "").trim();
-          const installShot = parseInt(r[pi("Install_Shot")]) || 0;
-          const carried = parseInt(r[pi("Carried_Shots")]) || 0;
-          const lifeShots = parseInt(r[pi("Life_Shots")]) || 0;
-          const machineShot = macShots[mac] || 0;
-          const actualShots = carried + Math.max(0, machineShot - installShot);
-          const nextCheck = parseInt(r[pi("Next_Check_Shot")]) || 0;
-          const checkCount = parseInt(r[pi("Check_Count")]) || 0;
+        const activeInstallationRows = activeRows.map(function(r) {
+          const row = {};
+          pH.forEach(function(header, idx) { row[header] = r[idx]; });
+          return row;
+        });
+        const todayISO = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+        const shotStates = calcInstallationShotStates(ss, activeInstallationRows, todayISO);
+        activeInstallationRows.forEach(r => {
+          const installId = String(r.Install_ID || "").trim();
+          const state = shotStates[installId] || {};
+          const mac = String(r.Machine || "").trim();
+          const installShot = parseInt(r.Install_Shot) || 0;
+          const carried = parseInt(r.Carried_Shots) || 0;
+          const lifeShots = parseInt(r.Life_Shots) || 0;
+          const actualShots = state.totalUsedShots !== undefined
+            ? state.totalUsedShots
+            : carried + Math.max(0, (state.totalMachineShots || 0) - installShot);
+          const nextCheck = parseInt(r.Next_Check_Shot) || 0;
+          const checkCount = parseInt(r.Check_Count) || 0;
           const effectiveLife = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
           const pct = effectiveLife > 0 ? (actualShots / effectiveLife) * 100 : 0;
-          // เข้าคิว "รอตรวจเช็ค" เมื่อถึงรอบที่ตั้งไว้ (Next_Check_Shot) หรือใช้งานครบ/เกินอายุจริงแล้ว
+          // เข้าคิว "รอตรวจเช็ค" เมื่อ Shot หลังตรวจล่าสุดถึงรอบที่ตั้งไว้
+          // หรือใช้งานครบ/เกินอายุจริงแล้ว
           // (กันเคสที่ไม่เคยตั้ง Check_Interval_Shots ไว้ ทำให้ Next_Check_Shot เป็น 0 ค้างตลอดไป
           //  และอะไหล่ไม่เคยถูกเลื่อนจาก "ใกล้หมดอายุ" ไปคิวตรวจเช็คเลยทั้งที่เกิน 100% แล้ว)
-          const dueByCheckShot = nextCheck > 0 && actualShots >= nextCheck;
+          const dueByCheckShot = !!state.needsCheck;
           const dueByLifeOverage = lifeShots > 0 && pct >= 100;
           const item = {
-            installId: String(r[pi("Install_ID")] || ""),
+            installId: installId,
             machine: mac,
-            partId: String(r[pi("Part_ID")] || ""),
-            partName: String(r[pi("Part_Name")] || ""),
+            partId: String(r.Part_ID || ""),
+            partName: String(r.Part_Name || ""),
             actualShots: actualShots,
+            shotsSinceLastCheck: state.shotsSinceLastCheck !== undefined ? state.shotsSinceLastCheck : actualShots,
             lifeShots: lifeShots,
             effectiveLife: effectiveLife,
             pct: Math.round(pct * 10) / 10,
             nextCheckShot: nextCheck,
+            checkThresholdShots: state.checkThresholdShots !== undefined ? state.checkThresholdShots : nextCheck,
+            checkIntervalShots: state.checkIntervalShots || 0,
+            lastCheckDate: state.lastCheckDate || "",
             checkCount: checkCount,
             checkReason: dueByCheckShot ? "due_shot" : (dueByLifeOverage ? "overdue_life" : "")
           };
@@ -3771,6 +3783,94 @@ function daysBetween(startStr, endStr) {
   }
 }
 
+// แปลงวันที่จาก Google Sheet/ข้อความเป็น yyyy-MM-dd ตาม timezone เดียวกับ Production_Data
+function getSheetDateISO(raw) {
+  if (raw instanceof Date && !isNaN(raw.getTime())) {
+    return Utilities.formatDate(raw, "GMT+7", "yyyy-MM-dd");
+  }
+  return String(raw || "").trim().substring(0, 10);
+}
+
+// คืนวันที่ถัดจากวันที่ตรวจล่าสุด เพื่อไม่รวม production ของวันเดียวกับการตรวจซ้ำ
+function addOneISODate(dateStr) {
+  const match = String(dateStr || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  const next = new Date(Date.UTC(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]), 12, 0, 0));
+  next.setUTCDate(next.getUTCDate() + 1);
+  return Utilities.formatDate(next, "GMT+7", "yyyy-MM-dd");
+}
+
+// สร้างสถานะ Shot ของ installation แต่ละรายการ โดยแยกยอดสะสมสำหรับอายุอะไหล่
+// ออกจากยอด Shot หลังการตรวจล่าสุดสำหรับตัดสินรอบตรวจ
+function calcInstallationShotStates(ss, installations, upToDate) {
+  const activeRows = (installations || []).filter(function(row) {
+    return String(row.Status || "").trim() === "Active" && String(row.Install_ID || "").trim();
+  });
+  const machines = [];
+  activeRows.forEach(function(row) {
+    const machine = String(row.Machine || "").trim();
+    if (machine && machines.indexOf(machine) === -1) machines.push(machine);
+  });
+
+  const currentDate = upToDate || Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+  const cumulativeByMachine = calcMultiMachineShots(ss, machines, "2020-01-01", currentDate);
+  const postCheckRequests = [];
+  activeRows.forEach(function(row) {
+    const lastCheckDate = getSheetDateISO(row.Last_Check_Date);
+    if (lastCheckDate && row.Machine) {
+      postCheckRequests.push({
+        key: String(row.Install_ID),
+        machine: String(row.Machine).trim(),
+        sinceDate: addOneISODate(lastCheckDate),
+        upToDate: currentDate
+      });
+    }
+  });
+  const postCheckByInstall = postCheckRequests.length > 0
+    ? calcMultiMachineShots(ss, postCheckRequests)
+    : {};
+
+  const states = {};
+  activeRows.forEach(function(row) {
+    const installId = String(row.Install_ID).trim();
+    const machine = String(row.Machine || "").trim();
+    const installShot = parseInt(row.Install_Shot) || 0;
+    const carried = parseInt(row.Carried_Shots) || 0;
+    const machineShots = cumulativeByMachine[machine] || 0;
+    const totalUsedShots = carried + Math.max(0, machineShots - installShot);
+    const lastCheckDate = getSheetDateISO(row.Last_Check_Date);
+    const hasLastCheck = !!lastCheckDate;
+    const shotsSinceLastCheck = hasLastCheck
+      ? (postCheckByInstall[installId] || 0)
+      : totalUsedShots;
+    const nextCheckShot = parseInt(row.Next_Check_Shot) || 0;
+    const checkInterval = parseInt(row.Check_Interval_Shots) || 0;
+    const lifeShots = parseInt(row.Life_Shots) || 0;
+    // ก่อนตรวจครั้งแรก Next_Check_Shot เป็นยอดสะสมตามเดิม;
+    // หลังตรวจให้เริ่มนับรอบใหม่จาก Check_Interval_Shots (ค่าเดิมของ flow ตรวจเช็ค)
+    // และ fallback เป็น Next_Check_Shot สำหรับข้อมูลเก่าที่ไม่มี interval เก็บไว้
+    const checkThresholdShots = hasLastCheck
+      ? (checkInterval > 0 ? checkInterval : nextCheckShot)
+      : nextCheckShot;
+
+    states[installId] = {
+      machine: machine,
+      totalMachineShots: machineShots,
+      totalUsedShots: totalUsedShots,
+      shotsSinceLastCheck: shotsSinceLastCheck,
+      lastCheckDate: lastCheckDate,
+      nextCheckShot: nextCheckShot,
+      checkIntervalShots: checkInterval,
+      checkThresholdShots: checkThresholdShots,
+      needsCheck: checkThresholdShots > 0 && shotsSinceLastCheck >= checkThresholdShots,
+      lifeShots: lifeShots,
+      carriedShots: carried,
+      installShot: installShot
+    };
+  });
+  return states;
+}
+
 // คำนวณ Shot สะสมของเครื่อง (FG + NG pcs) ตั้งแต่วันที่ระบุ
 // sinceDate / upToDate: "yyyy-MM-dd" (inclusive ทั้งคู่)
 function calcMachineShots(ss, machine, sinceDate, upToDate) {
@@ -3790,13 +3890,7 @@ function calcMachineShots(ss, machine, sinceDate, upToDate) {
   for (var i = 1; i < pRows.length; i++) {
     var pMach = String(pRows[i][pMachIdx] || "").trim();
     if (pMach !== machine) continue;
-    var pDateRaw = pRows[i][pDateIdx];
-    var pDateStr = "";
-    if (pDateRaw instanceof Date && !isNaN(pDateRaw.getTime())) {
-      pDateStr = Utilities.formatDate(pDateRaw, "GMT+7", "yyyy-MM-dd");
-    } else {
-      pDateStr = String(pDateRaw || "").trim().substring(0, 10);
-    }
+    var pDateStr = getSheetDateISO(pRows[i][pDateIdx]);
     if (pDateStr < sinceDate) continue;
     if (upToDate && pDateStr > upToDate) continue;
     var fg = parseInt(pRows[i][pFgIdx]) || 0;
@@ -3808,28 +3902,59 @@ function calcMachineShots(ss, machine, sinceDate, upToDate) {
   return totalShots;
 }
 
-// คำนวณ Shot สะสมของหลายเครื่องพร้อมกัน (อ่าน Production_Data ครั้งเดียว)
-function calcMultiMachineShots(ss, machineList) {
+// คำนวณ Shot ของหลายเครื่อง/หลาย installation พร้อมกัน (อ่าน Production_Data ครั้งเดียว)
+// รายการปกติใช้ชื่อเครื่อง เช่น ["M1", "M2"] และรองรับ request แบบ
+// {key, machine, sinceDate, upToDate} เพื่อให้แต่ละ installation มีวันเริ่มนับของตัวเอง
+function calcMultiMachineShots(ss, machineList, sinceDate, upToDate) {
+  var requests = (machineList || []).map(function(item, index) {
+    if (item && typeof item === "object") {
+      return {
+        key: String(item.key || item.installId || item.machine || index),
+        machine: String(item.machine || "").trim(),
+        sinceDate: String(item.sinceDate || sinceDate || "").trim(),
+        upToDate: String(item.upToDate || upToDate || "").trim()
+      };
+    }
+    return {
+      key: String(item || "").trim(),
+      machine: String(item || "").trim(),
+      sinceDate: String(sinceDate || "").trim(),
+      upToDate: String(upToDate || "").trim()
+    };
+  });
   var result = {};
-  machineList.forEach(function(m) { result[m] = 0; });
+  requests.forEach(function(req) { result[req.key] = 0; });
   var prodSheet = ss.getSheetByName("Production_Data");
   if (!prodSheet || prodSheet.getLastRow() <= 1) return result;
   var pRows = prodSheet.getDataRange().getValues();
   var pH = pRows[0].map(function(h) { return String(h).trim().toLowerCase(); });
+  var pDateIdx = pH.indexOf("date");
   var pMachIdx = pH.indexOf("machine");
   var pFgIdx = pH.indexOf("fg");
   var pNgIdx = pH.indexOf("ng_total");
   var pProdIdx = pH.indexOf("product");
   if (pMachIdx === -1 || pFgIdx === -1) return result;
+  var rowsByMachine = {};
   for (var i = 1; i < pRows.length; i++) {
     var mac = String(pRows[i][pMachIdx] || "").trim();
-    if (result[mac] === undefined) continue;
-    var fg = parseInt(pRows[i][pFgIdx]) || 0;
-    var ngKg = parseFloat(pRows[i][pNgIdx]) || 0;
-    var prod = String(pRows[i][pProdIdx] || "");
-    var ngPcs = getPcsFromKg(prod, ngKg);
-    result[mac] += (fg + ngPcs);
+    if (!mac) continue;
+    if (!rowsByMachine[mac]) rowsByMachine[mac] = [];
+    rowsByMachine[mac].push(pRows[i]);
   }
+  requests.forEach(function(req) {
+    var machineRows = rowsByMachine[req.machine] || [];
+    machineRows.forEach(function(row) {
+      if ((req.sinceDate || req.upToDate) && pDateIdx === -1) return;
+      var pDateStr = pDateIdx > -1 ? getSheetDateISO(row[pDateIdx]) : "";
+      if (req.sinceDate && pDateStr < req.sinceDate) return;
+      if (req.upToDate && pDateStr > req.upToDate) return;
+      var fg = parseInt(row[pFgIdx]) || 0;
+      var ngKg = parseFloat(row[pNgIdx]) || 0;
+      var prod = String(row[pProdIdx] || "");
+      var ngPcs = getPcsFromKg(prod, ngKg);
+      result[req.key] += (fg + ngPcs);
+    });
+  });
   return result;
 }
 
