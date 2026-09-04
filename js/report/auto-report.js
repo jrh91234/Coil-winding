@@ -402,6 +402,81 @@ window.renderAutoReportContent = async function() {
         sortingBreakdownHtml = `<div class="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center">🗂️ ไม่มีข้อมูลงานคัดแยก (Sorting) ในช่วงวันที่เลือก</div>`;
     }
 
+    // 🌟 ส่วนเสริม: สรุปความคืบหน้าตาม Job Order (แผนการผลิต) 🌟
+    let jobOrderHtml = '';
+    const jobOrders = (data.jobOrders || []).filter(j => j.status !== 'Cancelled');
+    const joActualById = data.jobOrderData || {};
+
+    if (jobOrders.length > 0) {
+        const statusLabelTh = {
+            'Open': 'รอผลิต', 'In Progress': 'กำลังผลิต', 'Completed': 'ผลิตครบแล้ว',
+            'Closed': 'ปิดงาน', 'Cancelled': 'ยกเลิก'
+        };
+        // เรียงตามกำหนดส่ง (ถ้าไม่มีใช้วันที่แผน)
+        const sortedJobs = jobOrders.slice().sort((a, b) => {
+            const da = a.dueDate || a.planDate || '9999-12-31';
+            const db = b.dueDate || b.planDate || '9999-12-31';
+            return da < db ? -1 : (da > db ? 1 : 0);
+        });
+
+        const joTotalTarget = sortedJobs.reduce((s, j) => s + (j.targetQty || 0), 0);
+        const joTotalDone = sortedJobs.reduce((s, j) => s + (j.producedFg || 0), 0);
+        const joTotalPct = joTotalTarget > 0 ? ((joTotalDone / joTotalTarget) * 100).toFixed(1) : '0.0';
+        const joLateCount = sortedJobs.filter(j => j.dueDate && j.dueDate < eDate && (j.status === 'Open' || j.status === 'In Progress')).length;
+
+        jobOrderHtml = `
+        <div class="mt-6 bg-white border border-indigo-200 rounded-lg shadow-sm overflow-hidden page-break-inside-avoid">
+            <div class="bg-indigo-50 border-b border-indigo-200 px-4 py-2 flex justify-between items-center">
+                <h4 class="text-sm font-bold text-indigo-800 flex items-center gap-2">📋 ความคืบหน้าตาม Job Order (แผนการผลิต)</h4>
+                <span class="text-[11px] text-indigo-700">${sortedJobs.length} จ๊อบ · เป้า ${joTotalTarget.toLocaleString()} / ผลิตแล้ว ${joTotalDone.toLocaleString()} (${joTotalPct}%)</span>
+            </div>
+            <table class="w-full text-sm text-left">
+                <thead class="bg-gray-100 text-gray-700 font-bold uppercase text-[11px] border-b">
+                    <tr>
+                        <th class="px-3 py-2 text-left">Job Order</th>
+                        <th class="px-3 py-2 text-left">รุ่นสินค้า</th>
+                        <th class="px-3 py-2 text-center">กำหนดส่ง</th>
+                        <th class="px-3 py-2 text-right">เป้า (ชิ้น)</th>
+                        <th class="px-3 py-2 text-right">ผลิตแล้ว</th>
+                        <th class="px-3 py-2 text-right">ผลิตช่วงนี้</th>
+                        <th class="px-3 py-2 text-right">NG (ชิ้น)</th>
+                        <th class="px-3 py-2 text-right">คงเหลือ</th>
+                        <th class="px-3 py-2 text-right">%</th>
+                        <th class="px-3 py-2 text-center">สถานะ</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">`;
+
+        sortedJobs.forEach(j => {
+            const inRange = joActualById[j.jobOrder] || { fg: 0, ngPcs: 0 };
+            const pct = (j.progressPct || 0).toFixed(1);
+            const isLate = j.dueDate && j.dueDate < eDate && (j.status === 'Open' || j.status === 'In Progress');
+            const pctCls = (j.progressPct || 0) >= 100 ? 'text-green-700 bg-green-50/60'
+                         : ((j.progressPct || 0) >= 50 ? 'text-blue-700' : 'text-amber-700 bg-amber-50/50');
+            jobOrderHtml += `<tr class="${isLate ? 'bg-red-50/50' : ''}">
+                <td class="px-3 py-2 font-bold text-indigo-700">${j.jobOrder}${j.priority && j.priority !== 'Normal' ? ` <span class="text-[10px] text-red-600">[${j.priority}]</span>` : ''}</td>
+                <td class="px-3 py-2 text-gray-800">${j.product || '-'}${j.customer ? `<div class="text-[10px] text-gray-400">${j.customer}${j.poNo ? ' / PO ' + j.poNo : ''}</div>` : ''}</td>
+                <td class="px-3 py-2 text-center text-xs ${isLate ? 'text-red-600 font-bold' : 'text-gray-600'}">${j.dueDate || '-'}${isLate ? ' ⚠️' : ''}</td>
+                <td class="px-3 py-2 text-right font-bold text-gray-700">${(j.targetQty || 0).toLocaleString()}</td>
+                <td class="px-3 py-2 text-right font-bold text-blue-700">${(j.producedFg || 0).toLocaleString()}</td>
+                <td class="px-3 py-2 text-right text-gray-600">${(inRange.fg || 0).toLocaleString()}</td>
+                <td class="px-3 py-2 text-right text-red-600">${Math.round(inRange.ngPcs || 0).toLocaleString()}</td>
+                <td class="px-3 py-2 text-right font-bold ${(j.remainingQty || 0) > 0 ? 'text-amber-700' : 'text-gray-400'}">${(j.remainingQty || 0).toLocaleString()}</td>
+                <td class="px-3 py-2 text-right font-black ${pctCls}">${pct}%</td>
+                <td class="px-3 py-2 text-center text-xs text-gray-700">${statusLabelTh[j.status] || j.status}</td>
+            </tr>`;
+        });
+
+        jobOrderHtml += `</tbody></table>
+            <div class="px-4 py-2 bg-gray-50 border-t border-gray-200 text-[11px] text-gray-600">
+                ℹ️ "ผลิตแล้ว" คือยอดสะสมทั้งหมดของ Job Order นั้น ส่วน "ผลิตช่วงนี้" คือยอดเฉพาะช่วงวันที่ของรายงานฉบับนี้
+                ${joLateCount > 0 ? `· <b class="text-red-600">มี ${joLateCount} จ๊อบเลยกำหนดส่งแล้วแต่ยังผลิตไม่ครบ</b>` : ''}
+            </div>
+        </div>`;
+    } else {
+        jobOrderHtml = `<div class="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center">📋 ไม่มีข้อมูล Job Order / แผนการผลิตในช่วงวันที่เลือก</div>`;
+    }
+
     // 🌟 ส่วนที่ 2: บทวิเคราะห์อัตราการผลิต 🌟
     const getChartImg = (id) => {
         const canvas = document.getElementById(id);
@@ -1064,6 +1139,7 @@ window.renderAutoReportContent = async function() {
                 </div>
                 ${productBreakdownHtml}
                 ${sortingBreakdownHtml}
+                ${jobOrderHtml}
             </div>
 
             <!-- เพิ่มคลาส page-break-inside-avoid ครอบไว้เพื่อไม่ให้หัวข้อขาดจากกราฟ -->

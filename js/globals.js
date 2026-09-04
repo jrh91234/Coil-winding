@@ -18,6 +18,7 @@ const WIDGET_LIST = [
     { id: 'card-stat-yield', label: '% YIELD' },
     { id: 'card-stat-uph', label: 'UPH' },
     { id: 'card-fg-model', label: 'FG & ACH by Model' },
+    { id: 'card-job-orders', label: 'Job Order (แผนการผลิต)' },
     { id: 'card-pareto', label: 'NG Analysis (Pareto)' },
     { id: 'card-simulator', label: 'Yield Simulator' },
     { id: 'card-model-analysis', label: 'Model Analysis' },
@@ -419,6 +420,11 @@ window.switchTab = function(tab) {
     if(tab === 'parts' && typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
     if(tab === 'cost' && typeof window.loadCostModule === 'function') window.loadCostModule();
     if(tab === 'scrap' && typeof window.refreshScrapRecorder === 'function') window.refreshScrapRecorder();
+    if(tab === 'planning' && typeof window.loadJobOrders === 'function') window.loadJobOrders();
+    // เข้าหน้าบันทึกผลิต: โหลด Job Order ที่ยังเปิดอยู่มาให้เลือก (โหลดครั้งแรกครั้งเดียว)
+    if(tab === 'form' && typeof window.loadJobOrders === 'function' && (!window.jobOrderList || window.jobOrderList.length === 0)) {
+        window.loadJobOrders(true);
+    }
 };
 
 function applyPermissions() {
@@ -542,6 +548,7 @@ window.fetchProductionByTimestamp = async function() {
                     <th class="p-2 text-left">เวลา</th>
                     <th class="p-2 text-left">วันที่ผลิต</th>
                     <th class="p-2 text-left">รุ่น</th>
+                    <th class="p-2 text-left">Job Order</th>
                     <th class="p-2 text-left">เครื่อง</th>
                     <th class="p-2 text-center">Shift</th>
                     <th class="p-2 text-left">ชม.</th>
@@ -562,6 +569,7 @@ window.fetchProductionByTimestamp = async function() {
                 <td class="p-2 text-[10px] text-gray-500 font-mono">${r.tsTime || '-'}</td>
                 <td class="p-2 ${dateMismatch ? 'text-orange-600 font-bold' : ''}">${r.prodDate}</td>
                 <td class="p-2">${r.model}</td>
+                <td class="p-2 text-[10px] font-bold text-indigo-700">${r.jobOrder || '-'}</td>
                 <td class="p-2">${r.machine}</td>
                 <td class="p-2 text-center">${r.shift}</td>
                 <td class="p-2 text-[10px]">${r.hour}</td>
@@ -582,8 +590,8 @@ window.fetchProductionByTimestamp = async function() {
 
 window.exportProductionTsCsv = function() {
     if (!_sortTsData.length) return;
-    const headers = ['Type','Batch_ID','Timestamp_Date','Timestamp_Time','Production_Date','Model','Machine','Shift','Hour','Recorder','FG','NG_Kg','NG_Pcs','NG_Symptom'];
-    const rows = _sortTsData.map(r => [r.type, r.batchId, r.tsDate, r.tsTime, r.prodDate, r.model, r.machine, r.shift, r.hour, r.recorder, r.fg, r.ngKg, r.ngPcs, r.ngSymptom || '']);
+    const headers = ['Type','Batch_ID','Job_Order','Timestamp_Date','Timestamp_Time','Production_Date','Model','Machine','Shift','Hour','Recorder','FG','NG_Kg','NG_Pcs','NG_Symptom'];
+    const rows = _sortTsData.map(r => [r.type, r.batchId, r.jobOrder || '', r.tsDate, r.tsTime, r.prodDate, r.model, r.machine, r.shift, r.hour, r.recorder, r.fg, r.ngKg, r.ngPcs, r.ngSymptom || '']);
     let csv = '﻿' + headers.join(',') + '\n';
     rows.forEach(r => { csv += r.map(v => `"${v}"`).join(',') + '\n'; });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

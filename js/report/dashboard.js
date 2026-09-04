@@ -202,6 +202,15 @@ window.loadDashboard = async function() {
 
         currentDashboardData = data;
 
+        if (typeof window.renderJobOrderDashCard === 'function') {
+            window.renderJobOrderDashCard(data);
+        }
+        // เก็บรายการ Job Order ล่าสุดไว้ให้ฟอร์มบันทึกผลิตใช้เลือกได้ทันที
+        if (data.jobOrders && data.jobOrders.length > 0) {
+            window.jobOrderList = data.jobOrders;
+            if (typeof window.refreshAllJobOrderSelects === 'function') window.refreshAllJobOrderSelects();
+        }
+
         if (typeof window.renderCharts === 'function') {
             window.renderCharts(data); 
             window.renderTable(data); 
