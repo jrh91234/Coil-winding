@@ -384,17 +384,6 @@ window.renderProductOptions = function() {
         s.innerHTML = productList.map(p=>`<option value="${p}">${p}</option>`).join('');
         if (productList.includes(cur)) s.value = cur;
     }
-
-    // เติมรายชื่อเครื่องจักรในฟอร์มวางแผน (ใช้ระบุเครื่องที่จะรัน Job Order นี้)
-    const m = document.getElementById('planMachine');
-    if(m && m.options.length <= 1) {
-        let opts = '<option value="">— ไม่ระบุเครื่อง —</option>';
-        for(let i=1; i<=16; i++) {
-            const name = `CWM-${String(i).padStart(2,'0')}`;
-            opts += `<option value="${name}">${name}</option>`;
-        }
-        m.innerHTML = opts;
-    }
 };
 
 window.manageRecorders = function() { 
