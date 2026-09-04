@@ -28,3 +28,12 @@ jobs:
           git fetch origin ${{ github.ref_name }}
           git merge origin/${{ github.ref_name }} --no-ff -m "Auto-merge ${{ github.ref_name }} into main"
           git push origin main
+
+  # The merge above pushes with GITHUB_TOKEN, which never triggers the
+  # push-based deploy workflow, so deploy the freshly merged main here.
+  deploy:
+    needs: auto-merge
+    uses: ./.github/workflows/deploy-apps-script.yml
+    with:
+      ref: main
+    secrets: inherit
