@@ -394,7 +394,7 @@ window.switchTab = function(tab) {
     const role = window.currentUser.role;
 
     // จำกัดสิทธิ์
-    if (role === 'Production' && (tab === 'planning' || tab === 'admin' || tab === 'cost')) return;
+    if (role === 'Production' && (tab === 'admin' || tab === 'cost')) return;
     if (role === 'QC' && (tab === 'planning' || tab === 'admin' || tab === 'packing' || tab === 'parts' || tab === 'cost')) return;
     if (role === 'Planning' && (tab === 'form' || tab === 'rw' || tab === 'admin' || tab === 'maint' || tab === 'rtv' || tab === 'scrap' || tab === 'packing' || tab === 'sort' || tab === 'parts' || tab === 'cost')) return;
     if (role === 'Viewer' && tab !== 'dashboard') return;
@@ -451,7 +451,7 @@ function applyPermissions() {
 
     // 2. กำหนดว่า Role ไหนเห็นเมนูไหนบ้าง
     if (role === 'Production') {
-        allowedMenus = ['tab-inbox', 'tab-form', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-parts', 'tab-rtv', 'tab-scrap', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
+        allowedMenus = ['tab-inbox', 'tab-form', 'tab-planning', 'tab-dashboard', 'tab-rw', 'tab-maint', 'tab-parts', 'tab-rtv', 'tab-scrap', 'tab-packing', ...desktopSortIds, ...mobileSortIds];
         defaultTab = 'form';
     }
     else if (role === 'QC') {
