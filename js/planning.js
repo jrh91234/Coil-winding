@@ -111,15 +111,14 @@ window.renderJobOrderTable = function() {
 
     if (keyword) {
         list = list.filter(j =>
-            [j.jobOrder, j.product, j.customer, j.poNo, j.machine, j.remark]
-                .some(v => String(v || '').toLowerCase().includes(keyword))
+            [j.jobOrder, j.product].some(v => String(v || '').toLowerCase().includes(keyword))
         );
     }
 
-    // เรียงตามกำหนดส่ง (ถ้าไม่มีใช้วันที่แผน) จากใกล้ที่สุดไปไกลที่สุด
+    // เรียงตามวันที่แผน จากเก่าไปใหม่
     list.sort((a, b) => {
-        const da = a.dueDate || a.planDate || '9999-12-31';
-        const db = b.dueDate || b.planDate || '9999-12-31';
+        const da = a.planDate || '9999-12-31';
+        const db = b.planDate || '9999-12-31';
         if (da !== db) return da < db ? -1 : 1;
         return String(a.jobOrder).localeCompare(String(b.jobOrder));
     });
@@ -137,28 +136,20 @@ window.renderJobOrderTable = function() {
         return;
     }
 
-    const todayStr = (typeof getShiftDateStr === 'function') ? getShiftDateStr() : new Date().toISOString().substring(0, 10);
-
     tbody.innerHTML = list.map(j => {
         const pct = Math.min(100, j.progressPct || 0);
         const barColor = pct >= 100 ? 'bg-green-500' : (pct >= 50 ? 'bg-blue-500' : 'bg-amber-500');
         const statusCls = JOB_ORDER_STATUS_CLASS[j.status] || 'bg-gray-100 text-gray-700 border-gray-200';
         const statusText = JOB_ORDER_STATUS_LABEL[j.status] || j.status;
-        const overdue = j.dueDate && j.dueDate < todayStr && (j.status === 'Open' || j.status === 'In Progress');
         const canDelete = (j.producedFg || 0) === 0;
 
         return `
-        <tr class="hover:bg-indigo-50/40 ${overdue ? 'bg-red-50/40' : ''}">
-            <td class="px-3 py-2 font-bold text-indigo-700 whitespace-nowrap">${j.jobOrder}
-                ${j.priority && j.priority !== 'Normal' ? `<span class="ml-1 text-[10px] font-bold text-red-600">[${j.priority}]</span>` : ''}
+        <tr class="hover:bg-indigo-50/40">
+            <td class="px-3 py-2 font-bold text-indigo-700 whitespace-nowrap">${j.jobOrder}</td>
+            <td class="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">${j.planDate || '-'}
+                <div class="text-[10px] text-gray-400">กะ ${j.shift || 'All'}</div>
             </td>
-            <td class="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">
-                ${j.planDate || '-'}
-                ${j.dueDate ? `<div class="${overdue ? 'text-red-600 font-bold' : 'text-gray-400'}">ส่ง: ${j.dueDate}${overdue ? ' ⚠️' : ''}</div>` : ''}
-            </td>
-            <td class="px-3 py-2 text-sm text-gray-800">${j.product || '-'}
-                ${j.customer ? `<div class="text-[10px] text-gray-400">${j.customer}${j.poNo ? ' / PO ' + j.poNo : ''}</div>` : ''}
-            </td>
+            <td class="px-3 py-2 text-sm text-gray-800">${j.product || '-'}</td>
             <td class="px-3 py-2 text-right font-bold text-gray-700">${(j.targetQty || 0).toLocaleString()}</td>
             <td class="px-3 py-2 text-right font-bold text-green-700">${(j.producedFg || 0).toLocaleString()}</td>
             <td class="px-3 py-2 text-right font-bold ${j.remainingQty > 0 ? 'text-amber-700' : 'text-gray-400'}">${(j.remainingQty || 0).toLocaleString()}</td>
@@ -207,15 +198,9 @@ window.editJobOrder = function(no) {
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
     set('planJobOrder', j.jobOrder);
     set('planDate', j.planDate);
-    set('planDueDate', j.dueDate);
     set('planProduct', j.product);
     set('planQty', j.targetQty);
-    set('planMachine', j.machine);
     set('planShift', j.shift || 'All');
-    set('planPriority', j.priority || 'Normal');
-    set('planCustomer', j.customer);
-    set('planPoNo', j.poNo);
-    set('planRemark', j.remark);
 
     const jobInput = document.getElementById('planJobOrder');
     if (jobInput) jobInput.readOnly = true;
@@ -274,8 +259,8 @@ window.renderJobOrderDashCard = function(data) {
     }
 
     const sorted = jobs.slice().sort((a, b) => {
-        const da = a.dueDate || a.planDate || '9999-12-31';
-        const db = b.dueDate || b.planDate || '9999-12-31';
+        const da = a.planDate || '9999-12-31';
+        const db = b.planDate || '9999-12-31';
         return da < db ? -1 : (da > db ? 1 : 0);
     });
 
@@ -321,27 +306,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
                 return;
             }
-            if (val('planDueDate') && val('planDueDate') < val('planDate')) {
-                alert('⚠️ กำหนดส่งต้องไม่ก่อนวันที่แผน');
-                btn.disabled = false; btn.innerText = originalText;
-                btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                return;
-            }
 
             const isEdit = !!window.editingJobOrder;
             const payload = {
                 action: isEdit ? 'UPDATE_PLAN' : 'SAVE_PLAN',
                 jobOrder: isEdit ? window.editingJobOrder : val('planJobOrder'),
                 planDate: val('planDate'),
-                dueDate: val('planDueDate'),
                 product: val('planProduct'),
                 qty: qty,
-                machine: val('planMachine'),
                 shift: val('planShift') || 'All',
-                priority: val('planPriority') || 'Normal',
-                customer: val('planCustomer'),
-                poNo: val('planPoNo'),
-                remark: val('planRemark'),
                 recorder: (window.currentUser && window.currentUser.username) || ''
             };
 

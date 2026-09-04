@@ -47,7 +47,8 @@
 - Frontend: `js/parts.js`, menu "⚙️ จัดการอะไหล่", Machine Detail tab "⚙️ อะไหล่"
 
 ## Production Plan / Job Order System
-- **Plan_Data sheet**: Date, Product, Target_Qty, Shift, Timestamp (5 คอลัมน์แรก = รูปแบบเดิม ห้ามสลับลำดับ) + Job_Order, Due_Date, Machine, Priority, Customer, PO_No, Status, Remark, Recorder, Updated_At
+- **Plan_Data sheet**: Date, Product, Target_Qty, Shift, Timestamp (5 คอลัมน์แรก = รูปแบบเดิม ห้ามสลับลำดับ) + Job_Order, Status, Recorder, Updated_At
+- ฟิลด์ที่ผู้ใช้กรอกมีแค่: Job Order (เว้นว่างได้), วันที่แผน, รุ่น, จำนวน, กะ
 - **Production_Data** เพิ่มคอลัมน์ `Job_Order` (syncHeaders เติมให้อัตโนมัติ)
 - เลข Job Order สร้างอัตโนมัติรูปแบบ `JO-YYMM-001` (running ต่อเดือน) หรือกรอกเองก็ได้ (ห้ามซ้ำ)
 - สถานะ: Open → In Progress → Completed (คำนวณจากยอดผลิตจริง) / Closed, Cancelled (ตั้งค่าเอง) — แผนที่ Cancelled ไม่ถูกนับเป็น Target

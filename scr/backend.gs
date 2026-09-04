@@ -20,8 +20,7 @@ const REQUIRED_COLUMNS = [
 // 5 คอลัมน์แรกต้องคงลำดับเดิมไว้ เพื่อให้ชีตเก่าที่มีอยู่แล้วอ่านได้ตามปกติ
 const PLAN_COLUMNS = [
   "Date", "Product", "Target_Qty", "Shift", "Timestamp",
-  "Job_Order", "Due_Date", "Machine", "Priority", "Customer",
-  "PO_No", "Status", "Remark", "Recorder", "Updated_At"
+  "Job_Order", "Status", "Recorder", "Updated_At"
 ];
 
 const PLAN_STATUS_OPEN = "Open";
@@ -2687,13 +2686,7 @@ function doPost(e) {
       put("Shift", data.shift || "All");
       put("Timestamp", now);
       put("Job_Order", jobOrder);
-      put("Due_Date", data.dueDate || "");
-      put("Machine", data.machine || "");
-      put("Priority", data.priority || "Normal");
-      put("Customer", data.customer || "");
-      put("PO_No", data.poNo || "");
       put("Status", PLAN_STATUS_OPEN);
-      put("Remark", data.remark || "");
       put("Recorder", data.recorder || "");
       put("Updated_At", now);
 
@@ -2728,12 +2721,6 @@ function doPost(e) {
       if (data.product !== undefined) setCell("Product", data.product);
       if (data.qty !== undefined) setCell("Target_Qty", parseInt(data.qty) || 0);
       if (data.shift !== undefined) setCell("Shift", data.shift);
-      if (data.dueDate !== undefined) setCell("Due_Date", data.dueDate);
-      if (data.machine !== undefined) setCell("Machine", data.machine);
-      if (data.priority !== undefined) setCell("Priority", data.priority);
-      if (data.customer !== undefined) setCell("Customer", data.customer);
-      if (data.poNo !== undefined) setCell("PO_No", data.poNo);
-      if (data.remark !== undefined) setCell("Remark", data.remark);
       if (data.status !== undefined) setCell("Status", data.status);
       setCell("Updated_At", new Date().toLocaleString('th-TH'));
 
@@ -4015,15 +4002,9 @@ function getJobOrders_(opts) {
       rowIndex: i + 2,
       jobOrder: jobOrder,
       planDate: planDate,
-      dueDate: getSheetDateISO(get(row, "Due_Date")),
       product: product,
       targetQty: target,
-      machine: String(get(row, "Machine") || "").trim(),
       shift: String(get(row, "Shift") || "All").trim(),
-      priority: String(get(row, "Priority") || "Normal").trim(),
-      customer: String(get(row, "Customer") || "").trim(),
-      poNo: String(get(row, "PO_No") || "").trim(),
-      remark: String(get(row, "Remark") || "").trim(),
       recorder: String(get(row, "Recorder") || "").trim(),
       manualStatus: manualStatus,
       status: status,
