@@ -80,8 +80,13 @@ window.addBatchRow = function() {
     }
     let prodOpts = productList.map(p => `<option value="${p}">${p}</option>`).join('');
 
+    const jobOpts = (typeof window.buildJobOrderOptions === 'function')
+        ? window.buildJobOrderOptions('', '')
+        : '<option value="">— ไม่ระบุ Job Order —</option>';
+
     const div = document.createElement('div');
     div.id = rowId;
+    div.dataset.rowId = rowId;
     div.className = "bg-white p-3 border border-gray-200 rounded-lg shadow-sm flex flex-col md:flex-row gap-3 items-end md:items-center";
     div.innerHTML = `
         <div class="flex-1 w-full">
@@ -91,6 +96,10 @@ window.addBatchRow = function() {
         <div class="flex-1 w-full">
             <label class="text-[10px] text-gray-400 font-bold uppercase">Product</label>
             <select name="productCode" class="product-select-target w-full p-2 border rounded bg-gray-50 text-sm">${prodOpts}</select>
+        </div>
+        <div class="flex-1 w-full">
+            <label class="text-[10px] text-indigo-400 font-bold uppercase">Job Order</label>
+            <select name="jobOrder" class="job-order-select-target w-full p-2 border border-indigo-200 rounded bg-indigo-50/50 text-sm">${jobOpts}</select>
         </div>
         <div class="w-24">
             <label class="text-[10px] text-gray-400 font-bold uppercase">FG</label>
@@ -120,16 +129,41 @@ window.addBatchRow = function() {
         }
     };
 
+    const jSelect = div.querySelector('.job-order-select-target');
+
+    // กรองรายการ Job Order ให้ตรงกับรุ่นที่เลือกในแถวนี้
+    const refreshJobOptions = () => {
+        if (!jSelect || typeof window.buildJobOrderOptions !== 'function') return;
+        jSelect.innerHTML = window.buildJobOrderOptions(jSelect.value, pSelect.value);
+    };
+
     mSelect.addEventListener('change', function() {
         const selectedM = this.value;
         if(selectedM && machineMapping[selectedM]) {
             pSelect.value = machineMapping[selectedM];
             checkProductForFg(); 
         }
+        refreshJobOptions();
     });
 
-    pSelect.addEventListener('change', checkProductForFg);
+    pSelect.addEventListener('change', () => { checkProductForFg(); refreshJobOptions(); });
+
+    // เลือก Job Order แล้วให้รุ่นสินค้าเปลี่ยนตามแผนอัตโนมัติ
+    if (jSelect) {
+        jSelect.addEventListener('change', function() {
+            const job = (typeof window.getJobOrderByNo === 'function') ? window.getJobOrderByNo(this.value) : null;
+            if (job && job.product && job.product !== pSelect.value) {
+                const hasOption = Array.from(pSelect.options).some(o => o.value === job.product);
+                if (hasOption) {
+                    pSelect.value = job.product;
+                    checkProductForFg();
+                }
+            }
+        });
+    }
+
     checkProductForFg();
+    refreshJobOptions();
 };
 
 window.removeBatchRow = function(id) { 
@@ -345,7 +379,22 @@ window.renderRecorderOptions = function() {
 
 window.renderProductOptions = function() { 
     const s = document.getElementById('planProduct'); 
-    if(s) s.innerHTML = productList.map(p=>`<option value="${p}">${p}</option>`).join(''); 
+    if(s) {
+        const cur = s.value;
+        s.innerHTML = productList.map(p=>`<option value="${p}">${p}</option>`).join('');
+        if (productList.includes(cur)) s.value = cur;
+    }
+
+    // เติมรายชื่อเครื่องจักรในฟอร์มวางแผน (ใช้ระบุเครื่องที่จะรัน Job Order นี้)
+    const m = document.getElementById('planMachine');
+    if(m && m.options.length <= 1) {
+        let opts = '<option value="">— ไม่ระบุเครื่อง —</option>';
+        for(let i=1; i<=16; i++) {
+            const name = `CWM-${String(i).padStart(2,'0')}`;
+            opts += `<option value="${name}">${name}</option>`;
+        }
+        m.innerHTML = opts;
+    }
 };
 
 window.manageRecorders = function() { 
@@ -524,6 +573,8 @@ document.getElementById('productionForm').onsubmit = async (e) => {
     for(let div of rowDivs) {
         const machine = div.querySelector('[name="machine"]').value;
         const product = div.querySelector('[name="productCode"]').value;
+        const jobOrderEl = div.querySelector('[name="jobOrder"]');
+        const jobOrder = jobOrderEl ? jobOrderEl.value.trim() : '';
         const fg = parseInt(div.querySelector('[name="fgAmount"]').value) || 0;
         if(!machine) continue;
         const ngDetails = batchNgData[div.id] || [];
@@ -536,7 +587,7 @@ document.getElementById('productionForm').onsubmit = async (e) => {
                 } 
             }
         });
-        items.push({ machine, productCode: product, fgAmount: fg, ngDetails });
+        items.push({ machine, productCode: product, jobOrder, fgAmount: fg, ngDetails });
     }
 
     if(newNgTypes.length > 0) { 
@@ -564,7 +615,16 @@ document.getElementById('productionForm').onsubmit = async (e) => {
                 existingFg = dbData.machineData[item.machine].hourlyFg[hourIdx] || 0;
             }
             let totalFg = existingFg + item.fgAmount;
-            validationMsg += `▶ ${item.machine}:\n   - ยอดในระบบมีแล้ว: ${existingFg} ตัว\n   - กำลังบันทึกเพิ่ม: ${item.fgAmount} ตัว\n   - รวมเป็น: ${totalFg} ตัว\n\n`;
+            const jobInfo = item.jobOrder ? `   - Job Order: ${item.jobOrder}\n` : `   - Job Order: (ไม่ระบุ)\n`;
+            validationMsg += `▶ ${item.machine}:\n${jobInfo}   - ยอดในระบบมีแล้ว: ${existingFg} ตัว\n   - กำลังบันทึกเพิ่ม: ${item.fgAmount} ตัว\n   - รวมเป็น: ${totalFg} ตัว\n\n`;
+
+            // เตือน (ไม่บล็อก) เมื่อยอดที่บันทึกเกินจำนวนคงเหลือของ Job Order
+            if (item.jobOrder && typeof window.getJobOrderByNo === 'function') {
+                const job = window.getJobOrderByNo(item.jobOrder);
+                if (job && job.targetQty > 0 && item.fgAmount > job.remainingQty) {
+                    validationMsg += `   ⚠️ ${item.jobOrder} คงเหลือตามแผนเพียง ${job.remainingQty} ตัว\n\n`;
+                }
+            }
 
             if (totalFg > 2000) {
                 hasError = true;
@@ -616,6 +676,11 @@ document.getElementById('productionForm').onsubmit = async (e) => {
         await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); 
         systemLog('SAVE_PRODUCTION', `บันทึกรายการผลิต ${items.length} รายการ (Batch: ${newBatchId})`);
 
+        // อัปเดตความคืบหน้าของ Job Order หลังบันทึกยอดผลิต
+        if (typeof window.loadJobOrders === 'function') {
+            setTimeout(() => window.loadJobOrders(true), 1500);
+        }
+
         document.getElementById('batchList').innerHTML = ''; 
         batchNgData = {}; 
         window.addBatchRow(); 
@@ -631,37 +696,7 @@ document.getElementById('productionForm').onsubmit = async (e) => {
     } 
 };
 
-document.getElementById('planningForm').onsubmit = async (e) => {
-    e.preventDefault();
-    const btn = document.getElementById('planSubmitBtn');
-    const originalText = btn.innerText;
-    btn.disabled = true;
-    btn.innerText = "⏳ กำลังบันทึกแผน...";
-    btn.classList.add('opacity-50', 'cursor-not-allowed');
-
-    const fd = new FormData(e.target);
-    const payload = { 
-        action: 'SAVE_PLAN', 
-        planDate: fd.get('planDate'), 
-        product: fd.get('planProduct'), 
-        shift: fd.get('planShift'), 
-        qty: fd.get('planQty') 
-    };
-    
-    try {
-        await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', body:JSON.stringify(payload)}); 
-        systemLog('SAVE_PLAN', `บันทึกแผนการผลิต ${fd.get('planProduct')} จำนวน ${fd.get('planQty')} ชิ้น`);
-        alert("✅ บันทึกแผนสำเร็จ"); 
-        e.target.reset();
-        document.getElementById('planDate').value = getShiftDateStr();
-    } catch (error) {
-        alert("❌ เกิดข้อผิดพลาด: " + error.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerText = originalText;
-        btn.classList.remove('opacity-50', 'cursor-not-allowed');
-    }
-};
+// 📅 ฟอร์มวางแผนการผลิต (Job Order) ย้ายไปอยู่ใน js/planning.js แล้ว
 
 // ==========================================
 // 🌟 ระบบแจ้งซ่อม (Maintenance) - ปรับปรุงใหม่

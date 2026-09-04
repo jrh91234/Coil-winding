@@ -87,6 +87,11 @@ function initAppAfterLogin() {
     window.renderRecorderOptions();
     window.renderProductOptions();
 
+    // โหลดรายการ Job Order (แผนการผลิต) ให้ฟอร์มบันทึกผลิตและหน้าวางแผนใช้งาน
+    if (typeof window.loadJobOrders === 'function') {
+        window.loadJobOrders(true);
+    }
+
     // 🌟 เรียกใช้ applyPermissions จาก globals.js 🌟
     if (typeof applyPermissions === 'function') {
         applyPermissions(); 

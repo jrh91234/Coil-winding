@@ -18,6 +18,7 @@
 - `js/globals.js` (426 lines) — Global variables (ngSymptoms, machineMapping, getShiftDateStr with 08:00 cutoff)
 - `js/auth.js` (262 lines) — Authentication
 - `js/packing.js` (366 lines) — Packing module
+- `js/planning.js` — **แผนการผลิต / Job Order**: ฟอร์มสร้าง Job Order, ตารางติดตามความคืบหน้า, ตัวเลือก Job Order ในฟอร์มบันทึกผลิต, การ์ด Job Order บน Dashboard
 - `js/parts.js` (299 lines) — **Parts tracking**: Parts Master CRUD, Installation tracking, Shot Counter, Machine parts tab
 - `scr/backend.gs` (2296 lines) — Google Apps Script backend
 - `index.html` (2018 lines) — Main HTML layout + modals (Parts Manager modal, Daily NG breakdown modal widened to max-w-lg)
@@ -45,6 +46,15 @@
 - Backend actions: GET_PARTS_MASTER, SAVE_PARTS_MASTER, DELETE_PARTS_MASTER, GET_PARTS_INSTALLATION, SAVE_PARTS_INSTALLATION, UPDATE_PARTS_LIFE, GET_MACHINE_SHOTS
 - Frontend: `js/parts.js`, menu "⚙️ จัดการอะไหล่", Machine Detail tab "⚙️ อะไหล่"
 
+## Production Plan / Job Order System
+- **Plan_Data sheet**: Date, Product, Target_Qty, Shift, Timestamp (5 คอลัมน์แรก = รูปแบบเดิม ห้ามสลับลำดับ) + Job_Order, Due_Date, Machine, Priority, Customer, PO_No, Status, Remark, Recorder, Updated_At
+- **Production_Data** เพิ่มคอลัมน์ `Job_Order` (syncHeaders เติมให้อัตโนมัติ)
+- เลข Job Order สร้างอัตโนมัติรูปแบบ `JO-YYMM-001` (running ต่อเดือน) หรือกรอกเองก็ได้ (ห้ามซ้ำ)
+- สถานะ: Open → In Progress → Completed (คำนวณจากยอดผลิตจริง) / Closed, Cancelled (ตั้งค่าเอง) — แผนที่ Cancelled ไม่ถูกนับเป็น Target
+- Backend actions: `GET_JOB_ORDERS` (GET), `SAVE_PLAN`, `UPDATE_PLAN`, `DELETE_PLAN` (POST)
+- Dashboard payload เพิ่ม `jobOrders` (แผน + ยอดสะสม) และ `jobOrderData` (ยอดผลิตเฉพาะช่วงที่เลือก แยกตามเลข Job Order)
+- แสดงผลใน: หน้า Plan (ตาราง + progress bar), การ์ด `card-job-orders` บน Dashboard, Auto Report (ตารางความคืบหน้า), Export CSV, ตาราง Production by Timestamp
+
 ## Architecture Notes
 - All chart functions use `window.functionName` — no ES modules, no imports
 - Shared state: `currentDashboardData`, `charts` object, `machineMapping`
@@ -63,3 +73,4 @@
 - **Modify NG form**: Edit `js/form.js`
 - **Modify parts tracking**: Edit `js/parts.js`
 - **Modify menu/role access**: Edit `js/globals.js` (search `allMenus` / `allowedMenus`)
+- **Modify production plan / Job Order**: Edit `js/planning.js` (frontend) + `scr/backend.gs` (search `SAVE_PLAN` / `getJobOrders_`)

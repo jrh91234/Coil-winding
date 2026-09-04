@@ -194,30 +194,121 @@
         </div>
     </main>
 
-    <!-- SECTION 2: PLANNING -->
-    <main id="section-planning" class="max-w-2xl mx-auto p-4 space-y-4 hidden print-hide">
+    <!-- SECTION 2: PLANNING (Job Order) -->
+    <main id="section-planning" class="max-w-6xl mx-auto p-4 space-y-4 hidden print-hide">
         <div class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-indigo-500">
-            <h1 class="text-lg font-bold text-gray-800 mb-4">📅 วางแผนการผลิต</h1>
+            <h1 class="text-lg font-bold text-gray-800 mb-1">📅 วางแผนการผลิต (Job Order)</h1>
+            <p class="text-xs text-gray-500 mb-4">ข้อมูลขั้นต่ำ: เลข Job Order · รุ่นสินค้า · จำนวนเป้าหมาย — เว้นช่องเลข Job Order ว่างไว้ ระบบจะสร้างให้อัตโนมัติ (รูปแบบ JO-YYMM-001)</p>
             <form id="planningForm" class="space-y-4">
-                <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-100 grid gap-4">
+                <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-100 grid gap-4 md:grid-cols-3">
                     <div>
-                        <label class="block text-xs font-bold text-indigo-800 mb-1">วันที่แผน <span class="text-[10px] text-gray-500 font-normal">(ตัดวัน 08:00น.)</span></label>
+                        <label class="block text-xs font-bold text-indigo-800 mb-1">🔖 เลข Job Order</label>
+                        <input type="text" id="planJobOrder" name="planJobOrder" placeholder="เว้นว่าง = สร้างอัตโนมัติ" class="w-full p-3 border rounded-lg font-bold uppercase">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-indigo-800 mb-1">📅 วันที่แผน <span class="text-[10px] text-gray-500 font-normal">(ตัดวัน 08:00น.)</span></label>
                         <input type="date" id="planDate" name="planDate" required class="w-full p-3 border rounded-lg">
                     </div>
-                    <select id="planProduct" name="planProduct" required class="w-full p-3 border rounded-lg"></select>
-                    <div class="grid grid-cols-2 gap-4">
-                         <select id="planShift" name="planShift" class="p-3 border rounded-lg">
-                             <option value="All">All Shifts</option>
-                             <option value="A">A</option>
-                             <option value="B">B</option>
-                         </select>
-                         <input type="number" id="planQty" name="planQty" placeholder="Target Qty (ชิ้น)" class="p-3 border rounded-lg text-center font-bold">
+                    <div>
+                        <label class="block text-xs font-bold text-indigo-800 mb-1">🚚 กำหนดส่ง (Due Date)</label>
+                        <input type="date" id="planDueDate" name="planDueDate" class="w-full p-3 border rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-indigo-800 mb-1">🏷️ รุ่นสินค้า (Model) *</label>
+                        <select id="planProduct" name="planProduct" required class="w-full p-3 border rounded-lg"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-indigo-800 mb-1">🔢 จำนวนเป้าหมาย (ชิ้น) *</label>
+                        <input type="number" id="planQty" name="planQty" min="1" required placeholder="Target Qty (ชิ้น)" class="w-full p-3 border rounded-lg text-center font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-indigo-800 mb-1">⚙️ เครื่องจักร (ถ้าระบุ)</label>
+                        <select id="planMachine" name="planMachine" class="w-full p-3 border rounded-lg">
+                            <option value="">— ไม่ระบุเครื่อง —</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-indigo-800 mb-1">🕐 กะการผลิต</label>
+                        <select id="planShift" name="planShift" class="w-full p-3 border rounded-lg">
+                            <option value="All">All Shifts</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-indigo-800 mb-1">🚩 ความสำคัญ</label>
+                        <select id="planPriority" name="planPriority" class="w-full p-3 border rounded-lg">
+                            <option value="Normal">Normal (ปกติ)</option>
+                            <option value="High">High (เร่ง)</option>
+                            <option value="Urgent">Urgent (ด่วนมาก)</option>
+                            <option value="Low">Low (ไม่เร่ง)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-indigo-800 mb-1">🏢 ลูกค้า (Customer)</label>
+                        <input type="text" id="planCustomer" name="planCustomer" placeholder="เช่น JR / Customer A" class="w-full p-3 border rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-indigo-800 mb-1">📄 เลข PO</label>
+                        <input type="text" id="planPoNo" name="planPoNo" placeholder="PO No." class="w-full p-3 border rounded-lg">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-bold text-indigo-800 mb-1">📝 หมายเหตุ</label>
+                        <input type="text" id="planRemark" name="planRemark" placeholder="รายละเอียดเพิ่มเติม" class="w-full p-3 border rounded-lg">
                     </div>
                 </div>
-                <button type="submit" id="planSubmitBtn" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition-colors">
-                    บันทึกแผน
-                </button>
+                <div class="flex gap-2">
+                    <button type="submit" id="planSubmitBtn" class="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition-colors">
+                        💾 บันทึกแผน / สร้าง Job Order
+                    </button>
+                    <button type="button" id="planCancelEditBtn" onclick="window.cancelEditJobOrder()" class="hidden px-4 bg-gray-200 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-300 transition-colors">
+                        ยกเลิกแก้ไข
+                    </button>
+                </div>
             </form>
+        </div>
+
+        <!-- รายการ Job Order + ความคืบหน้า -->
+        <div class="bg-white rounded-xl shadow-lg border-t-4 border-indigo-400 overflow-hidden">
+            <div class="p-4 border-b border-gray-100 flex flex-col md:flex-row md:items-center gap-2 md:justify-between">
+                <div>
+                    <h2 class="text-base font-bold text-gray-800">📋 รายการ Job Order</h2>
+                    <p id="joSummary" class="text-[11px] text-gray-500 mt-0.5">-</p>
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                    <select id="joFilterStatus" class="p-2 border rounded-lg text-sm">
+                        <option value="Active">กำลังดำเนินการ</option>
+                        <option value="All">ทั้งหมด</option>
+                        <option value="Open">รอผลิต</option>
+                        <option value="In Progress">กำลังผลิต</option>
+                        <option value="Completed">ผลิตครบแล้ว</option>
+                        <option value="Closed">ปิดงาน</option>
+                        <option value="Cancelled">ยกเลิก</option>
+                    </select>
+                    <input type="text" id="joFilterKeyword" placeholder="🔍 ค้นหา JO / รุ่น / ลูกค้า" class="p-2 border rounded-lg text-sm flex-1 md:flex-none md:w-56">
+                    <button type="button" id="joRefreshBtn" class="px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-sm font-bold hover:bg-indigo-100">🔄 รีเฟรช</button>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 text-gray-600 text-[11px] uppercase font-bold border-b">
+                        <tr>
+                            <th class="px-3 py-2 text-left">Job Order</th>
+                            <th class="px-3 py-2 text-left">วันที่ / กำหนดส่ง</th>
+                            <th class="px-3 py-2 text-left">รุ่นสินค้า</th>
+                            <th class="px-3 py-2 text-right">เป้า</th>
+                            <th class="px-3 py-2 text-right">ผลิตแล้ว</th>
+                            <th class="px-3 py-2 text-right">คงเหลือ</th>
+                            <th class="px-3 py-2 text-center">ความคืบหน้า</th>
+                            <th class="px-3 py-2 text-center">สถานะ</th>
+                            <th class="px-3 py-2 text-center">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="joTableBody" class="divide-y divide-gray-100">
+                        <tr><td colspan="9" class="p-6 text-center text-gray-400 text-sm">กด "รีเฟรช" เพื่อโหลดรายการ Job Order</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </main>
 
@@ -424,6 +515,18 @@
                     <div class="flex-1 overflow-y-auto" id="fgModelList"></div>
                 </div>
                 
+                <div id="card-job-orders" class="widget-card p-4 h-[350px]">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
+                        <h3 class="font-bold text-gray-700 text-sm">📋 Job Order (แผนการผลิต)</h3>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide">⛶</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto" id="jobOrderDashList"></div>
+                </div>
+
                 <div id="card-pareto" class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <div class="flex items-center gap-2">
@@ -1562,7 +1665,8 @@
     <!-- Scripts (แก้เป็นเวอร์ชันเพื่อกัน Cache) -->
     <script src="js/globals.js?v=3.57"></script>
     <script src="js/auth.js?v=3.56"></script>
-    <script src="js/form.js?v=3.56"></script>
+    <script src="js/form.js?v=3.57"></script>
+    <script src="js/planning.js?v=1.0"></script>
     <script src="js/report/widgets.js?v=4.0"></script>
     <script src="js/report/auto-report.js?v=4.5"></script>
     <script src="js/report/export.js?v=4.0"></script>

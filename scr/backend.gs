@@ -13,8 +13,20 @@
 
 const REQUIRED_COLUMNS = [
   "Timestamp", "Date", "Machine", "Shift", "Recorder", 
-  "Product", "Hour", "FG", "NG_Total", "NG_Details_JSON", "Shift_Type", "Batch_ID"
+  "Product", "Hour", "FG", "NG_Total", "NG_Details_JSON", "Shift_Type", "Batch_ID", "Job_Order"
 ];
+
+// คอลัมน์ของชีตแผนการผลิต (Plan_Data)
+// 5 คอลัมน์แรกต้องคงลำดับเดิมไว้ เพื่อให้ชีตเก่าที่มีอยู่แล้วอ่านได้ตามปกติ
+const PLAN_COLUMNS = [
+  "Date", "Product", "Target_Qty", "Shift", "Timestamp",
+  "Job_Order", "Due_Date", "Machine", "Priority", "Customer",
+  "PO_No", "Status", "Remark", "Recorder", "Updated_At"
+];
+
+const PLAN_STATUS_OPEN = "Open";
+const PLAN_STATUS_CLOSED = "Closed";
+const PLAN_STATUS_CANCELLED = "Cancelled";
 
 function capitalizeFirst(str) {
   if (!str) return "";
@@ -340,6 +352,16 @@ function doGet(e) {
     
     if (action === "GET_OPTIONS") {
       return ContentService.createTextOutput(JSON.stringify(getUniqueOptionsFromHistory())).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 📅 รายการ Job Order / แผนการผลิต (พร้อมยอดผลิตจริงและ % ความคืบหน้า)
+    if (action === "GET_JOB_ORDERS") {
+      const jobs = getJobOrders_({
+        start: e.parameter.start || "",
+        end: e.parameter.end || "",
+        includeOpen: String(e.parameter.includeOpen || "true") !== "false"
+      });
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", jobOrders: jobs })).setMimeType(ContentService.MimeType.JSON);
     }
 
     // 🌟 ดึงข้อมูลงานรอ Sort (ปรับปรุงใหม่ให้เข้ากับ Frontend) 🌟
@@ -2582,6 +2604,7 @@ function doPost(e) {
              mapData("NG_Details_JSON", JSON.stringify(ngDetails));
              mapData("Shift_Type", common.shiftType || "Day");
              mapData("Batch_ID", common.batchId || "-");
+             mapData("Job_Order", item.jobOrder || common.jobOrder || "");
 
              sheet.appendRow(newRow);
         });
@@ -2633,20 +2656,120 @@ function doPost(e) {
   }
 
   else if (action === 'SAVE_PLAN') {
-    let sheet = ss.getSheetByName("Plan_Data");
-    if (!sheet) {
-      sheet = ss.insertSheet("Plan_Data");
-      sheet.appendRow(["Date", "Product", "Target_Qty", "Shift", "Timestamp"]);
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      const sheet = getPlanSheet_(true);
+      const cm = planColMap_(sheet);
+
+      const product = String(data.product || "").trim();
+      const qty = parseInt(data.qty) || 0;
+      if (!data.planDate || !product || qty <= 0) {
+        return ContentService.createTextOutput(JSON.stringify({status: "error", message: "กรุณาระบุวันที่ / รุ่นสินค้า / จำนวนให้ครบ"})).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      let jobOrder = String(data.jobOrder || "").trim();
+      if (jobOrder) {
+        if (findPlanRowByJobOrder_(sheet, jobOrder) !== -1) {
+          return ContentService.createTextOutput(JSON.stringify({status: "error", message: "เลข Job Order ซ้ำ: " + jobOrder})).setMimeType(ContentService.MimeType.JSON);
+        }
+      } else {
+        jobOrder = generateJobOrderNo_(sheet, data.planDate);
+      }
+
+      const now = new Date().toLocaleString('th-TH');
+      const newRow = new Array(sheet.getLastColumn()).fill("");
+      const put = (name, value) => { const i = cm.idx(name); if (i !== -1) newRow[i] = value; };
+
+      put("Date", data.planDate);
+      put("Product", product);
+      put("Target_Qty", qty);
+      put("Shift", data.shift || "All");
+      put("Timestamp", now);
+      put("Job_Order", jobOrder);
+      put("Due_Date", data.dueDate || "");
+      put("Machine", data.machine || "");
+      put("Priority", data.priority || "Normal");
+      put("Customer", data.customer || "");
+      put("PO_No", data.poNo || "");
+      put("Status", PLAN_STATUS_OPEN);
+      put("Remark", data.remark || "");
+      put("Recorder", data.recorder || "");
+      put("Updated_At", now);
+
+      sheet.appendRow(newRow);
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Plan Saved", jobOrder: jobOrder})).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+    } finally {
+      lock.releaseLock();
     }
-    sheet.appendRow([
-      data.planDate,          
-      data.product,           
-      parseInt(data.qty) || 0,
-      data.shift || "All",    
-      new Date().toLocaleString('th-TH') 
-    ]);
-    SpreadsheetApp.flush();
-    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Plan Saved"})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // แก้ไขแผน / เปลี่ยนสถานะ Job Order (ปิดงาน, ยกเลิก, เปิดใหม่)
+  else if (action === 'UPDATE_PLAN') {
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      const sheet = getPlanSheet_(false);
+      if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบชีต Plan_Data"})).setMimeType(ContentService.MimeType.JSON);
+
+      const rowIndex = findPlanRowByJobOrder_(sheet, data.jobOrder);
+      if (rowIndex === -1) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบ Job Order: " + data.jobOrder})).setMimeType(ContentService.MimeType.JSON);
+
+      const cm = planColMap_(sheet);
+      const setCell = (name, value) => {
+        const i = cm.idx(name);
+        if (i !== -1 && value !== undefined && value !== null) sheet.getRange(rowIndex, i + 1).setValue(value);
+      };
+
+      if (data.planDate !== undefined) setCell("Date", data.planDate);
+      if (data.product !== undefined) setCell("Product", data.product);
+      if (data.qty !== undefined) setCell("Target_Qty", parseInt(data.qty) || 0);
+      if (data.shift !== undefined) setCell("Shift", data.shift);
+      if (data.dueDate !== undefined) setCell("Due_Date", data.dueDate);
+      if (data.machine !== undefined) setCell("Machine", data.machine);
+      if (data.priority !== undefined) setCell("Priority", data.priority);
+      if (data.customer !== undefined) setCell("Customer", data.customer);
+      if (data.poNo !== undefined) setCell("PO_No", data.poNo);
+      if (data.remark !== undefined) setCell("Remark", data.remark);
+      if (data.status !== undefined) setCell("Status", data.status);
+      setCell("Updated_At", new Date().toLocaleString('th-TH'));
+
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Plan Updated"})).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  // ลบแผนที่ยังไม่มีการผลิตจริง (ถ้ามียอดผลิตแล้วให้ใช้สถานะ Cancelled แทน)
+  else if (action === 'DELETE_PLAN') {
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      const sheet = getPlanSheet_(false);
+      if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบชีต Plan_Data"})).setMimeType(ContentService.MimeType.JSON);
+
+      const rowIndex = findPlanRowByJobOrder_(sheet, data.jobOrder);
+      if (rowIndex === -1) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบ Job Order: " + data.jobOrder})).setMimeType(ContentService.MimeType.JSON);
+
+      const produced = getProducedByJobOrder_()[String(data.jobOrder).trim()];
+      if (produced && produced.fg > 0) {
+        return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Job Order นี้มีการบันทึกผลิตแล้ว ไม่สามารถลบได้ (ให้เปลี่ยนสถานะเป็น Cancelled แทน)"})).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      sheet.deleteRow(rowIndex);
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Plan Deleted"})).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+    } finally {
+      lock.releaseLock();
+    }
   }
 
   else if (action === 'SAVE_ASSIGNMENT') {
@@ -3559,6 +3682,7 @@ function doPost(e) {
       const hourCol = getCol("Hour");
       const recorderCol = getCol("Recorder");
       const ngJsonCol = getCol("NG_Details_JSON");
+      const jobOrderCol = getCol("Job_Order");
 
       if (timestampCol === -1) {
         return ContentService.createTextOutput(JSON.stringify({ success: true, data: [], totals: { fg: 0, ngPcs: 0, ngKg: 0, rows: 0 } })).setMimeType(ContentService.MimeType.JSON);
@@ -3651,6 +3775,7 @@ function doPost(e) {
           shift: shiftCol !== -1 ? String(row[shiftCol] || "") : "",
           hour: hourCol !== -1 ? String(row[hourCol] || "") : "",
           recorder: recorderCol !== -1 ? String(row[recorderCol] || "") : "",
+          jobOrder: jobOrderCol !== -1 ? String(row[jobOrderCol] || "") : "",
           fg: fg,
           ngKg: ngKg,
           ngPcs: ngPcs,
@@ -3753,6 +3878,189 @@ function syncHeaders(sheet) {
   if (missingHeaders.length > 0) {
     sheet.getRange(1, sheet.getLastColumn() + 1, 1, missingHeaders.length).setValues([missingHeaders]);
   }
+}
+
+// ==================================================
+// 📅 ระบบแผนการผลิต / Job Order (Plan_Data)
+// ==================================================
+
+// เปิดชีต Plan_Data พร้อมเติมคอลัมน์ที่ขาดให้ครบ (ไม่ยุ่งกับลำดับคอลัมน์เดิม)
+function getPlanSheet_(createIfMissing) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Plan_Data");
+  if (!sheet) {
+    if (!createIfMissing) return null;
+    sheet = ss.insertSheet("Plan_Data");
+    sheet.appendRow(PLAN_COLUMNS);
+    return sheet;
+  }
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(PLAN_COLUMNS);
+    return sheet;
+  }
+  const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.toString().trim());
+  const missing = PLAN_COLUMNS.filter(h => currentHeaders.indexOf(h) === -1);
+  if (missing.length > 0) {
+    sheet.getRange(1, sheet.getLastColumn() + 1, 1, missing.length).setValues([missing]);
+  }
+  return sheet;
+}
+
+function planColMap_(sheet) {
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const map = {};
+  headers.forEach((h, i) => { map[String(h).trim().toLowerCase()] = i; });
+  return { headers: headers, idx: (name) => { const i = map[name.toLowerCase()]; return (i === undefined) ? -1 : i; } };
+}
+
+// สร้างเลข Job Order อัตโนมัติในรูปแบบ JO-YYMM-001 (running ต่อเดือน)
+function generateJobOrderNo_(sheet, planDateStr) {
+  let base = new Date();
+  if (planDateStr && /^\d{4}-\d{2}-\d{2}/.test(String(planDateStr))) {
+    base = new Date(String(planDateStr).substring(0, 10) + "T00:00:00+07:00");
+  }
+  const prefix = "JO-" + Utilities.formatDate(base, "GMT+7", "yyMM") + "-";
+  let maxRunning = 0;
+  if (sheet.getLastRow() > 1) {
+    const cm = planColMap_(sheet);
+    const joCol = cm.idx("Job_Order");
+    if (joCol !== -1) {
+      const values = sheet.getRange(2, joCol + 1, sheet.getLastRow() - 1, 1).getValues();
+      values.forEach(r => {
+        const v = String(r[0] || "").trim();
+        if (v.indexOf(prefix) === 0) {
+          const n = parseInt(v.substring(prefix.length), 10);
+          if (!isNaN(n) && n > maxRunning) maxRunning = n;
+        }
+      });
+    }
+  }
+  return prefix + String(maxRunning + 1).padStart(3, "0");
+}
+
+// รวมยอดผลิตจริงจาก Production_Data แยกตามเลข Job Order
+function getProducedByJobOrder_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Production_Data");
+  const out = {};
+  if (!sheet || sheet.getLastRow() <= 1) return out;
+
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0].map(h => String(h).trim().toLowerCase());
+  const jobCol = headers.indexOf("job_order");
+  if (jobCol === -1) return out;
+  const fgCol = headers.indexOf("fg");
+  const ngCol = headers.indexOf("ng_total");
+  const prodCol = headers.indexOf("product");
+  const dateCol = headers.indexOf("date");
+  const macCol = headers.indexOf("machine");
+
+  for (let i = 1; i < data.length; i++) {
+    const jo = String(data[i][jobCol] || "").trim();
+    if (!jo) continue;
+    if (!out[jo]) out[jo] = { fg: 0, ngKg: 0, ngPcs: 0, machines: {}, firstDate: "", lastDate: "" };
+    const product = prodCol !== -1 ? String(data[i][prodCol] || "").trim() : "";
+    const fg = parseInt(data[i][fgCol]) || 0;
+    const ngKg = ngCol !== -1 ? (parseFloat(data[i][ngCol]) || 0) : 0;
+    out[jo].fg += fg;
+    out[jo].ngKg += ngKg;
+    out[jo].ngPcs += getPcsFromKg(product, ngKg);
+    if (macCol !== -1) {
+      const mac = String(data[i][macCol] || "").trim();
+      if (mac) out[jo].machines[mac] = (out[jo].machines[mac] || 0) + fg;
+    }
+    if (dateCol !== -1) {
+      const iso = getSheetDateISO(data[i][dateCol]);
+      if (iso) {
+        if (!out[jo].firstDate || iso < out[jo].firstDate) out[jo].firstDate = iso;
+        if (!out[jo].lastDate || iso > out[jo].lastDate) out[jo].lastDate = iso;
+      }
+    }
+  }
+  return out;
+}
+
+// อ่านรายการ Job Order ทั้งหมด พร้อมยอดผลิตจริงและสถานะที่คำนวณแล้ว
+function getJobOrders_(opts) {
+  opts = opts || {};
+  const sheet = getPlanSheet_(false);
+  if (!sheet || sheet.getLastRow() <= 1) return [];
+
+  const cm = planColMap_(sheet);
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  const produced = getProducedByJobOrder_();
+  const get = (row, name) => { const i = cm.idx(name); return i === -1 ? "" : row[i]; };
+
+  const list = [];
+  rows.forEach((row, i) => {
+    const planDate = getSheetDateISO(get(row, "Date"));
+    const product = String(get(row, "Product") || "").trim();
+    const target = parseInt(get(row, "Target_Qty")) || 0;
+    let jobOrder = String(get(row, "Job_Order") || "").trim();
+    if (!jobOrder && !product && !target) return; // แถวว่าง
+
+    const manualStatus = String(get(row, "Status") || "").trim() || PLAN_STATUS_OPEN;
+    const act = produced[jobOrder] || { fg: 0, ngKg: 0, ngPcs: 0, machines: {}, firstDate: "", lastDate: "" };
+    const remaining = Math.max(0, target - act.fg);
+    const progress = target > 0 ? Math.min(999, (act.fg / target) * 100) : 0;
+
+    let status = manualStatus;
+    if (manualStatus !== PLAN_STATUS_CANCELLED && manualStatus !== PLAN_STATUS_CLOSED) {
+      if (target > 0 && act.fg >= target) status = "Completed";
+      else if (act.fg > 0) status = "In Progress";
+      else status = PLAN_STATUS_OPEN;
+    }
+
+    list.push({
+      rowIndex: i + 2,
+      jobOrder: jobOrder,
+      planDate: planDate,
+      dueDate: getSheetDateISO(get(row, "Due_Date")),
+      product: product,
+      targetQty: target,
+      machine: String(get(row, "Machine") || "").trim(),
+      shift: String(get(row, "Shift") || "All").trim(),
+      priority: String(get(row, "Priority") || "Normal").trim(),
+      customer: String(get(row, "Customer") || "").trim(),
+      poNo: String(get(row, "PO_No") || "").trim(),
+      remark: String(get(row, "Remark") || "").trim(),
+      recorder: String(get(row, "Recorder") || "").trim(),
+      manualStatus: manualStatus,
+      status: status,
+      producedFg: act.fg,
+      producedNgPcs: act.ngPcs,
+      producedNgKg: Math.round(act.ngKg * 1000) / 1000,
+      remainingQty: remaining,
+      progressPct: Math.round(progress * 10) / 10,
+      firstProdDate: act.firstDate,
+      lastProdDate: act.lastDate,
+      machinesUsed: Object.keys(act.machines)
+    });
+  });
+
+  if (opts.start && opts.end) {
+    return list.filter(j => {
+      const ref = j.planDate || "";
+      const inPlanRange = ref && ref >= opts.start && ref <= opts.end;
+      const inProdRange = j.lastProdDate && j.firstProdDate &&
+                          !(j.lastProdDate < opts.start || j.firstProdDate > opts.end);
+      const stillOpen = (j.status === PLAN_STATUS_OPEN || j.status === "In Progress");
+      return inPlanRange || inProdRange || (opts.includeOpen && stillOpen);
+    });
+  }
+  return list;
+}
+
+function findPlanRowByJobOrder_(sheet, jobOrder) {
+  if (!jobOrder || sheet.getLastRow() <= 1) return -1;
+  const cm = planColMap_(sheet);
+  const joCol = cm.idx("Job_Order");
+  if (joCol === -1) return -1;
+  const values = sheet.getRange(2, joCol + 1, sheet.getLastRow() - 1, 1).getValues();
+  for (let i = 0; i < values.length; i++) {
+    if (String(values[i][0]).trim() === String(jobOrder).trim()) return i + 2;
+  }
+  return -1;
 }
 
 function getWeightPerPc(productName) {
@@ -4096,11 +4404,17 @@ function getProductionTarget(startDate, endDate) {
   let totalTarget = 0;
   let byProduct = {};
 
+  // หาคอลัมน์ Status เพื่อไม่ให้แผนที่ถูกยกเลิกถูกนับเป็นเป้า
+  const planHeaders = data[0].map(h => String(h).trim().toLowerCase());
+  const statusCol = planHeaders.indexOf("status");
+
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     let rowDate = row[0];
     let rowDateStr = (rowDate instanceof Date) ? Utilities.formatDate(rowDate, "GMT+7", "yyyy-MM-dd") : String(rowDate).trim().substring(0, 10);
-    
+
+    if (statusCol !== -1 && String(row[statusCol]).trim() === PLAN_STATUS_CANCELLED) continue;
+
     if (rowDateStr >= startDate && rowDateStr <= endDate) {
        let target = parseInt(row[1]); 
        let product = "All";
@@ -4153,7 +4467,9 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
     ngLabels: [], ngValuesPcs: [], ngValuesKg: [],
     machineData: {}, productData: {}, dailyTrend: [],
     maintenanceLogs: [], 
-    rtvLogs: []          
+    rtvLogs: [],
+    jobOrderData: {},   // ยอดผลิตจริงแยกตามเลข Job Order ในช่วงที่เลือก
+    jobOrders: []       // รายละเอียดแผน/Job Order (เป้า, ผลิตแล้ว, คงเหลือ, สถานะ)
   };
 
   // --- อ่านข้อมูลแจ้งซ่อม (Maintenance) ---
@@ -4287,6 +4603,20 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
         const ngPcs = getPcsFromKg(product, ngKg);
         const batchId = String(getVal(row, "Batch_ID") || "").trim();
         const isSortPostedRow = batchId.indexOf("SORT-") === 0;
+        const jobOrder = String(getVal(row, "Job_Order") || "").trim();
+
+        if (jobOrder) {
+          if (!result.jobOrderData[jobOrder]) {
+            result.jobOrderData[jobOrder] = { fg: 0, ngPcs: 0, ngKg: 0, products: {}, machines: {}, dates: {} };
+          }
+          const jd = result.jobOrderData[jobOrder];
+          jd.fg += fg;
+          jd.ngKg += ngKg;
+          jd.ngPcs += ngPcs;
+          jd.products[product] = (jd.products[product] || 0) + fg;
+          jd.machines[machine] = (jd.machines[machine] || 0) + fg;
+          jd.dates[rowDateStr] = (jd.dates[rowDateStr] || 0) + fg;
+        }
         
         let details = []; try { const j = getVal(row, "NG_Details_JSON"); if(j) details = JSON.parse(j); } catch (e) {}
 
@@ -4388,6 +4718,11 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
       }
     } catch (e) { console.log("Row error: " + e); }
   });
+
+  // แนบรายการ Job Order (แผน + ยอดจริง) ไปกับ Dashboard เพื่อใช้ในรายงาน
+  try {
+    result.jobOrders = getJobOrders_({ start: startDate, end: endDate, includeOpen: true });
+  } catch (e) { result.jobOrders = []; }
 
   result.ngLabels = Object.keys(ngTempMapPcs);
   result.ngValuesPcs = Object.values(ngTempMapPcs);

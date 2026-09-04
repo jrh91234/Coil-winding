@@ -26,6 +26,7 @@ Read `.ai/PROJECT_CONTEXT.md` for full project structure, rules, and data flow.
 | Model charts, simulator | `js/charts/models.js` |
 | Shared helpers (WPP) | `js/charts/helpers.js` |
 | NG input form | `js/form.js` |
+| แผนการผลิต / Job Order | `js/planning.js` |
 | Auto report content | `js/report/auto-report.js` |
 | Print/CSV export | `js/report/export.js` |
 | Widget manager | `js/report/widgets.js` |

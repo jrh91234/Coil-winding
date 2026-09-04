@@ -121,6 +121,22 @@ window.exportCSV = function() {
         }
     });
     
+    // --- Job Order (แผนการผลิต + ความคืบหน้า) ---
+    const jobOrders = (data.jobOrders || []);
+    if (jobOrders.length > 0) {
+        const joActual = data.jobOrderData || {};
+        csvContent += "\n--- Job Order Progress ---\n";
+        csvContent += "Job Order,Plan Date,Due Date,Product,Customer,PO No,Machine,Target Qty,Produced (Total),Produced (This Range),NG (Pcs This Range),Remaining,% Progress,Status\n";
+        jobOrders.forEach(j => {
+            const inRange = joActual[j.jobOrder] || { fg: 0, ngPcs: 0 };
+            csvContent += [
+                j.jobOrder, j.planDate, j.dueDate, j.product, j.customer, j.poNo, j.machine,
+                j.targetQty, j.producedFg, inRange.fg || 0, Math.round(inRange.ngPcs || 0),
+                j.remainingQty, (j.progressPct || 0).toFixed(1) + '%', j.status
+            ].map(csvCell).join(',') + '\n';
+        });
+    }
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
