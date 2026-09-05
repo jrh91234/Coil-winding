@@ -368,6 +368,8 @@ function doGet(e) {
       const ss = SpreadsheetApp.getActiveSpreadsheet();
       const sheet = ss.getSheetByName("Sorting_Data");
       if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "success", data: [], summaryData: []})).setMimeType(ContentService.MimeType.JSON);
+      // เพิ่มหัวคอลัมน์ Job_Order ให้ชีตทันทีถ้ายังไม่มี (ไม่ต้องรอให้มีคนบันทึก/แก้ไขงานก่อน)
+      ensureColumns(sheet, ["Job_Order"]);
       
       const startDateStr = e.parameter.start || "";
       const endDateStr = e.parameter.end || "";
@@ -718,20 +720,6 @@ function doGet(e) {
 // ==================================================
 // 🌟 POST ROUTE (บันทึกข้อมูล)
 // ==================================================
-/**
- * คืนเลขคอลัมน์ (1-based) ของ Job_Order ในชีต Sorting_Data
- * ถ้ายังไม่มีคอลัมน์นี้ จะเพิ่มหัวคอลัมน์ต่อท้ายให้อัตโนมัติ
- */
-function ensureSortingJobOrderCol_(sheet) {
-  const lastCol = sheet.getLastColumn();
-  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  for (let i = 0; i < headers.length; i++) {
-    if (String(headers[i]).trim().toLowerCase() === "job_order") return i + 1;
-  }
-  sheet.getRange(1, lastCol + 1).setValue("Job_Order");
-  return lastCol + 1;
-}
-
 function doPost(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
@@ -2040,7 +2028,10 @@ function doPost(e) {
           // เลข Job Order จากแผนการผลิต (ผูกงาน Sort เข้ากับ Job Order) - ไม่บังคับกรอก
           const jobOrderVal = String(sortData.jobOrder || "").trim();
           if (jobOrderVal) {
-              sheet.getRange(newRow, ensureSortingJobOrderCol_(sheet)).setValue(jobOrderVal);
+              ensureColumns(sheet, ["Job_Order"]);
+              const joColIdx = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
+                  .findIndex(h => String(h).trim().toLowerCase() === "job_order") + 1;
+              sheet.getRange(newRow, joColIdx).setValue(jobOrderVal);
           }
           SpreadsheetApp.flush();
           logUserAction(sortData.recorder, "System", "SAVE_SORTING", `บันทึกงานรอ Sort ${sortData.product}${jobOrderVal ? " (JO: " + jobOrderVal + ")" : ""}`);
@@ -2085,7 +2076,10 @@ function doPost(e) {
               sheet.getRange(foundRow, remCol).setValue(sortData.remark);
               // แก้ไขเลข Job Order ที่ผูกกับงาน Sort (ส่งค่าว่างมาได้ = ยกเลิกการผูก)
               if (sortData.jobOrder !== undefined) {
-                  sheet.getRange(foundRow, ensureSortingJobOrderCol_(sheet)).setValue(String(sortData.jobOrder || "").trim());
+                  ensureColumns(sheet, ["Job_Order"]);
+                  const joColIdx = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
+                      .findIndex(h => String(h).trim().toLowerCase() === "job_order") + 1;
+                  sheet.getRange(foundRow, joColIdx).setValue(String(sortData.jobOrder || "").trim());
               }
               SpreadsheetApp.flush();
               return ContentService.createTextOutput(JSON.stringify({status: "success", message: "แก้ไขข้อมูลสำเร็จ"})).setMimeType(ContentService.MimeType.JSON);
