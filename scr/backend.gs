@@ -394,6 +394,7 @@ function doGet(e) {
       let closedByCol = getCol("Closed_By"); 
       let closedDateCol = getCol("Closed_Date");
       let sorterCol = getCol("Sorter");
+      let jobOrderCol = getCol("Job_Order");
       let rejectTargetCol = getCol("Reject_Target");
       let qcFgApprovedCol = getCol("QC_FG_Approved");
       let qcNgApprovedCol = getCol("QC_NG_Approved");
@@ -507,6 +508,7 @@ function doGet(e) {
             closedBy: closedByCol > -1 ? r[closedByCol] : "",
             closedDate: cDate,
             sorter: sorterCol > -1 ? r[sorterCol] : "",
+            jobOrder: jobOrderCol > -1 ? String(r[jobOrderCol] || "") : "",
             rejectTarget: rejectTargetCol > -1 ? r[rejectTargetCol] : "",
             qcFgApproved: qcFgApprovedCol > -1 ? String(r[qcFgApprovedCol] || "").toUpperCase() === "TRUE" : false,
             qcNgApproved: qcNgApprovedCol > -1 ? String(r[qcNgApprovedCol] || "").toUpperCase() === "TRUE" : false
@@ -534,7 +536,8 @@ function doGet(e) {
                 ngQty: ngCol > -1 ? r[ngCol] : "",
                 status: currentStatus,
                 sortDate: summaryTargetISO,
-                sorter: sorterCol > -1 ? r[sorterCol] : ""
+                sorter: sorterCol > -1 ? r[sorterCol] : "",
+                jobOrder: jobOrderCol > -1 ? String(r[jobOrderCol] || "") : ""
             });
         }
       }
@@ -715,6 +718,20 @@ function doGet(e) {
 // ==================================================
 // 🌟 POST ROUTE (บันทึกข้อมูล)
 // ==================================================
+/**
+ * คืนเลขคอลัมน์ (1-based) ของ Job_Order ในชีต Sorting_Data
+ * ถ้ายังไม่มีคอลัมน์นี้ จะเพิ่มหัวคอลัมน์ต่อท้ายให้อัตโนมัติ
+ */
+function ensureSortingJobOrderCol_(sheet) {
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  for (let i = 0; i < headers.length; i++) {
+    if (String(headers[i]).trim().toLowerCase() === "job_order") return i + 1;
+  }
+  sheet.getRange(1, lastCol + 1).setValue("Job_Order");
+  return lastCol + 1;
+}
+
 function doPost(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
@@ -2003,7 +2020,7 @@ function doPost(e) {
           if (!sheet) {
               sheet = ss.insertSheet("Sorting_Data");
               // จัดเรียงหัวคอลัมน์ให้ครบ 14 คอลัมน์ (มี Sorter เป็นคนที่ 2 และ Closed_By เป็น QC)
-              sheet.appendRow(["Timestamp", "Job_ID", "Date", "Product", "Symptom", "Qty", "Remark", "Recorder", "Status", "Closed_By", "Closed_Date", "FG_Qty", "NG_Qty", "Sorter"]);
+              sheet.appendRow(["Timestamp", "Job_ID", "Date", "Product", "Symptom", "Qty", "Remark", "Recorder", "Status", "Closed_By", "Closed_Date", "FG_Qty", "NG_Qty", "Sorter", "Job_Order"]);
               // ตั้ง format คอลัมน์ Date (C) และ Closed_Date (K) ให้แสดงเวลาแบบ 24 ชม.
               sheet.getRange("C:C").setNumberFormat("yyyy-MM-dd HH:mm");
               sheet.getRange("K:K").setNumberFormat("yyyy-MM-dd HH:mm");
@@ -2020,8 +2037,13 @@ function doPost(e) {
           // บังคับ format คอลัมน์ Date ให้แสดง 24 ชม. ป้องกัน Google Sheets แปลงเป็น 12 ชม. (เช่น 14:00 → 2:00)
           const newRow = sheet.getLastRow();
           sheet.getRange(newRow, 3).setNumberFormat("yyyy-MM-dd HH:mm");
+          // เลข Job Order จากแผนการผลิต (ผูกงาน Sort เข้ากับ Job Order) - ไม่บังคับกรอก
+          const jobOrderVal = String(sortData.jobOrder || "").trim();
+          if (jobOrderVal) {
+              sheet.getRange(newRow, ensureSortingJobOrderCol_(sheet)).setValue(jobOrderVal);
+          }
           SpreadsheetApp.flush();
-          logUserAction(sortData.recorder, "System", "SAVE_SORTING", `บันทึกงานรอ Sort ${sortData.product}`);
+          logUserAction(sortData.recorder, "System", "SAVE_SORTING", `บันทึกงานรอ Sort ${sortData.product}${jobOrderVal ? " (JO: " + jobOrderVal + ")" : ""}`);
           return ContentService.createTextOutput(JSON.stringify({status: "success", message: "บันทึกสำเร็จ", jobId: newJobId})).setMimeType(ContentService.MimeType.JSON);
       } catch (err) { 
           return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()})).setMimeType(ContentService.MimeType.JSON); 
@@ -2061,6 +2083,10 @@ function doPost(e) {
               sheet.getRange(foundRow, sympCol).setValue(sortData.symptom);
               sheet.getRange(foundRow, qtyCol).setValue(sortData.qty);
               sheet.getRange(foundRow, remCol).setValue(sortData.remark);
+              // แก้ไขเลข Job Order ที่ผูกกับงาน Sort (ส่งค่าว่างมาได้ = ยกเลิกการผูก)
+              if (sortData.jobOrder !== undefined) {
+                  sheet.getRange(foundRow, ensureSortingJobOrderCol_(sheet)).setValue(String(sortData.jobOrder || "").trim());
+              }
               SpreadsheetApp.flush();
               return ContentService.createTextOutput(JSON.stringify({status: "success", message: "แก้ไขข้อมูลสำเร็จ"})).setMimeType(ContentService.MimeType.JSON);
           } else { 
