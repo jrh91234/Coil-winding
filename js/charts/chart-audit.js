@@ -171,6 +171,7 @@ window.buildDailyOutputAudit = function() {
         { key: 'ng', label: 'NG ผลิต (ชิ้น)', align: 'right', type: 'int', mono: true },
         { key: 'sFg', label: 'FG คัดแยก (ชิ้น)', align: 'right', type: 'int', mono: true },
         { key: 'sNg', label: 'NG คัดแยก (ชิ้น)', align: 'right', type: 'int', mono: true },
+        { key: 'pending', label: 'รอ Sort (ชิ้น)', align: 'right', type: 'int', mono: true },
         { key: 'total', label: 'รวมทั้งหมด (ชิ้น)', align: 'right', type: 'int', mono: true },
         { key: 'fgGood', label: 'FG รวม/ดี (ชิ้น)', align: 'right', type: 'int', mono: true },
         { key: 'hours', label: 'ชม.-เครื่อง', align: 'right', type: 'num1', mono: true }
@@ -178,6 +179,7 @@ window.buildDailyOutputAudit = function() {
 
     const rows = S.periods.map(p => ({
         period: p.key, fg: p.fg, ng: p.ng, sFg: p.sFg, sNg: p.sNg,
+        pending: p.pending || 0,
         total: p.total, fgGood: p.fgGood, hours: p.hours
     }));
 
@@ -185,12 +187,16 @@ window.buildDailyOutputAudit = function() {
     const totals = {
         period: 'รวม',
         fg: sum(p => p.fg), ng: sum(p => p.ng), sFg: sum(p => p.sFg), sNg: sum(p => p.sNg),
+        pending: sum(p => p.pending || 0),
         total: sum(p => p.total), fgGood: sum(p => p.fgGood),
         hours: Math.round(sum(p => p.hours) * 10) / 10
     };
 
     const methodology = [
-        '<b>รวมทั้งหมด (ต่อช่วง)</b> = <code class="bg-gray-100 px-1 rounded">FG ผลิต + NG ผลิต + FG คัดแยก + NG คัดแยก</code> (นับเป็นชิ้น) = ความสูงของแท่ง stack · แถว Production_Data ที่มาจาก Batch_ID SORT-* จะไม่ถูกนับซ้ำในฝั่งงานผลิตของกราฟนี้',
+        '<b>รวมทั้งหมด (ต่อช่วง)</b> = <code class="bg-gray-100 px-1 rounded">FG ผลิต + NG ผลิต + FG คัดแยก + NG คัดแยก + รอ Sort</code> (นับเป็นชิ้น) = ความสูงของแท่ง stack · แถว Production_Data ที่มาจาก Batch_ID SORT-* จะไม่ถูกนับซ้ำในฝั่งงานผลิตของกราฟนี้',
+        S.pendingMode !== 'merge'
+            ? '<b>รอ Sort (ยังไม่รู้ผล)</b> = งาน Pending/Rejected ในชีต Sorting <u>ถูกหักออกจาก FG/NG ของช่วงนั้นแล้ว</u> จึงไม่ถูกนับซ้ำ — ใบที่ระบุ "พบที่: FG/RTV" หักจาก <b>FG ผลิต</b> ส่วนอาการที่พบหน้าเครื่องหักจาก <b>NG ผลิต</b> (หักได้ไม่เกินยอดของช่วงนั้น)'
+            : '<b>โหมดรวมใน FG/NG (เดิม)</b> — งานรอ Sort ยังถูกนับรวมอยู่ใน FG/NG ตามที่บันทึกไว้ ไม่มีการแยกก้อน',
         '<b>FG รวม/ดี</b> = <code class="bg-gray-100 px-1 rounded">FG ผลิต + FG คัดแยก</code>',
         '<b>NG (ชิ้น)</b> แปลงจากน้ำหนัก: <code class="bg-gray-100 px-1 rounded">NG ชิ้น = NG Kg ÷ WPP ของรุ่น</code>',
         '<b>ชั่วโมง-เครื่อง</b> = รวม (เครื่อง × ช่วงชั่วโมงที่เดินจริง) ถ่วงด้วยความยาวช่วง (เช่น OT 17:30-18:00 = 0.5 ชม.)',

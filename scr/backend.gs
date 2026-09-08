@@ -4951,6 +4951,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
   const sortResultByMachine = {}; // แยกตามเครื่อง+วัน
   const sortYieldBySymptom = {};  // อัตรา sort แยกตามอาการ: symptom → { fgPcs, ngPcs }
   const pendingByDateSymptom = {}; // pending แยกตามวัน+อาการ: date → [ { symptom, pcs } ]
+  const pendingByDateModel = {};   // pending แยกตามวัน+รุ่น: date → { product → { qty, fromFg, fromNg } }
   let globalSortFg = 0, globalSortNg = 0;
 
   const symptomRawStats = {}; // เก็บค่าดิบของงานคัดแยกตามอาการ
@@ -5006,8 +5007,22 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
             }
           }
           if (pcs > 0) {
-            if (!pendingSortByDate[sDateStr]) pendingSortByDate[sDateStr] = { qty: 0 };
+            // แหล่งที่มาของงานรอคัด: "พบที่: FG/RTV" = ของที่เคยนับเป็น FG ไปแล้ว
+            // (ใช้กติกาเดียวกับตอน QC อนุมัติที่หัก FG ออก) ที่เหลือ = ของที่นับเป็น NG ตั้งแต่หน้าเครื่อง
+            const sRemark = (sCol["remark"] !== undefined) ? String(sRow[sCol["remark"]] || "") : "";
+            const fromFgSide = /พบที่:\s*(FG|RTV)/i.test(sRemark);
+
+            if (!pendingSortByDate[sDateStr]) pendingSortByDate[sDateStr] = { qty: 0, fromFg: 0, fromNg: 0 };
             pendingSortByDate[sDateStr].qty += pcs;
+            if (fromFgSide) pendingSortByDate[sDateStr].fromFg += pcs;
+            else pendingSortByDate[sDateStr].fromNg += pcs;
+
+            // pending แยกตามรุ่น (ใช้กับกราฟ Daily Output ที่กรองรุ่นได้)
+            if (!pendingByDateModel[sDateStr]) pendingByDateModel[sDateStr] = {};
+            if (!pendingByDateModel[sDateStr][prodName]) pendingByDateModel[sDateStr][prodName] = { qty: 0, fromFg: 0, fromNg: 0 };
+            pendingByDateModel[sDateStr][prodName].qty += pcs;
+            if (fromFgSide) pendingByDateModel[sDateStr][prodName].fromFg += pcs;
+            else pendingByDateModel[sDateStr][prodName].fromNg += pcs;
             // pending per symptom per date
             if (!pendingByDateSymptom[sDateStr]) pendingByDateSymptom[sDateStr] = [];
             pendingByDateSymptom[sDateStr].push({ symptom: sSymptom, pcs: pcs });
@@ -5196,6 +5211,10 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
         byModel: outputByModel
       },
       pendingSortQty: pending ? pending.qty : 0,
+      // แยกที่มาของงานรอคัด เพื่อให้กราฟหักยอดออกจากก้อนที่ถูกต้อง (FG หรือ NG)
+      pendingSortFromFg: pending ? (pending.fromFg || 0) : 0,
+      pendingSortFromNg: pending ? (pending.fromNg || 0) : 0,
+      pendingSortByModel: pendingByDateModel[date] || {},
       worstNgRate: worstNgRate,
       bestNgRate: bestNgRate,
       forecastNgRate: forecastNgRate,

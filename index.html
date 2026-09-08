@@ -607,6 +607,10 @@
                                     <option value="pcs">จำนวน (ชิ้น)</option>
                                     <option value="percent">สัดส่วน (%)</option>
                                 </select>
+                                <select id="dailyOutputPendingSelector" onchange="window.renderDailyOutputChart()" class="text-[10px] border rounded p-1 text-gray-600 bg-white print-hide" title="งานที่ส่ง Sort แล้วยังไม่รู้ผล">
+                                    <option value="split" selected>แยกก้อน "รอ Sort"</option>
+                                    <option value="merge">รวมอยู่ใน FG/NG (เดิม)</option>
+                                </select>
                                 <select id="dailyOutputAvgSelector" onchange="window.renderDailyOutputChart()" class="text-[10px] border rounded p-1 text-gray-600 bg-white print-hide">
                                     <option value="off">ไม่มีเส้นเฉลี่ย</option>
                                     <option value="total" selected>เฉลี่ย: รวม</option>
