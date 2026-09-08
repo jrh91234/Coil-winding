@@ -8,6 +8,7 @@
 window.jobOrderList = window.jobOrderList || [];
 window.jobOrderLoading = false;
 window.editingJobOrder = null;
+window.unlinkedSorting = null;   // งาน Sorting ที่ยังไม่ผูกเลข Job Order
 
 const JOB_ORDER_STATUS_LABEL = {
     'Open': 'รอผลิต',
@@ -23,6 +24,39 @@ const JOB_ORDER_STATUS_CLASS = {
     'Completed': 'bg-green-50 text-green-700 border-green-200',
     'Closed': 'bg-slate-200 text-slate-700 border-slate-300',
     'Cancelled': 'bg-red-50 text-red-600 border-red-200'
+};
+
+// -------------------- ยอดของ Job Order (กันนับซ้ำ) --------------------
+// backend ส่งค่าที่กันซ้ำมาแล้ว แต่เผื่อข้อมูลเก่าที่ยังไม่มีฟิลด์ใหม่ ให้คำนวณสำรองที่นี่
+// หลักการ: FG = FG เครื่อง + FG ที่คัดกลับมาได้ | NG สุทธิ = NG เครื่อง − FG ที่คัดกลับมาได้
+//          รอ Sorting เป็น "ส่วนหนึ่งของ NG สุทธิ" ไม่เอาไปบวกเพิ่ม | รวมนับได้ = FG + NG สุทธิ
+window.getJobOrderQty = function(j) {
+    j = j || {};
+    const fg = j.producedFg || 0;
+    const fgSort = j.producedFgFromSort || 0;
+    const ngMachine = (j.ngPcsFromMachine !== undefined) ? j.ngPcsFromMachine : (j.producedNgPcs || 0);
+    const ngNet = (j.producedNgPcs !== undefined && j.ngPcsFromMachine !== undefined)
+        ? j.producedNgPcs
+        : Math.max(0, ngMachine - fgSort);
+    const pending = j.pendingSortPcs || 0;
+    const waitQc = j.waitQcPcs || 0;
+    const sortingOpen = (j.sortingOpenPcs !== undefined) ? j.sortingOpenPcs : (pending + waitQc);
+    const accounted = (j.accountedPcs !== undefined) ? j.accountedPcs : (fg + ngNet);
+    const target = j.targetQty || 0;
+    return {
+        fg: fg,
+        fgFromSort: fgSort,
+        ngNet: ngNet,
+        ngMachine: ngMachine,
+        ngFromSort: j.ngPcsFromSort || 0,
+        pending: pending,
+        waitQc: waitQc,
+        sortingOpen: sortingOpen,
+        accounted: accounted,
+        target: target,
+        shortage: Math.max(0, target - accounted),
+        complete: target > 0 && accounted >= target
+    };
 };
 
 // Job Order ที่ยังรับยอดผลิตได้ (ยังไม่ปิด / ไม่ยกเลิก)
@@ -43,16 +77,17 @@ window.loadJobOrders = async function(silent) {
     window.jobOrderLoading = true;
     const tbody = document.getElementById('joTableBody');
     if (tbody && !silent) {
-        tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-gray-400 text-sm">⏳ กำลังโหลดรายการ Job Order...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" class="p-6 text-center text-gray-400 text-sm">⏳ กำลังโหลดรายการ Job Order...</td></tr>`;
     }
     try {
         const res = await fetch(`${SCRIPT_URL}?action=GET_JOB_ORDERS&_t=${Date.now()}`);
         const data = await res.json();
         window.jobOrderList = (data && data.jobOrders) ? data.jobOrders : [];
+        window.unlinkedSorting = (data && data.unlinkedSorting) ? data.unlinkedSorting : null;
     } catch (e) {
         console.log('Load job orders error:', e);
         if (tbody && !silent) {
-            tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-red-500 text-sm">❌ โหลดรายการไม่สำเร็จ: ${e.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="12" class="p-6 text-center text-red-500 text-sm">❌ โหลดรายการไม่สำเร็จ: ${e.message}</td></tr>`;
         }
     } finally {
         window.jobOrderLoading = false;
@@ -125,14 +160,30 @@ window.renderJobOrderTable = function() {
 
     const summary = document.getElementById('joSummary');
     if (summary) {
-        const totalTarget = list.reduce((s, j) => s + (j.targetQty || 0), 0);
-        const totalDone = list.reduce((s, j) => s + (j.producedFg || 0), 0);
+        const q = list.map(j => window.getJobOrderQty(j));
+        const sum = (key) => q.reduce((s, x) => s + (x[key] || 0), 0);
+        const totalTarget = sum('target');
+        const totalDone = sum('fg');
+        const totalNg = sum('ngNet');
+        const totalPending = sum('sortingOpen');
+        const totalAccounted = sum('accounted');
         const pct = totalTarget > 0 ? ((totalDone / totalTarget) * 100).toFixed(1) : '0.0';
-        summary.innerHTML = `${list.length} รายการ · เป้า ${totalTarget.toLocaleString()} ชิ้น · ผลิตแล้ว ${totalDone.toLocaleString()} ชิ้น (${pct}%)`;
+        const accPct = totalTarget > 0 ? ((totalAccounted / totalTarget) * 100).toFixed(1) : '0.0';
+        summary.innerHTML = `${list.length} รายการ · เป้า ${totalTarget.toLocaleString()} ชิ้น · ผลิตแล้ว ${totalDone.toLocaleString()} ชิ้น (${pct}%)`
+            + ` · NG สุทธิ ${totalNg.toLocaleString()} ชิ้น · รอ Sorting ${totalPending.toLocaleString()} ชิ้น`
+            + ` · <span class="font-bold text-indigo-700">รวมนับได้ ${totalAccounted.toLocaleString()} ชิ้น (${accPct}%)</span>`;
+
+        const u = window.unlinkedSorting;
+        const unlinkedPcs = u ? ((u.pendingPcs || 0) + (u.waitQcPcs || 0)) : 0;
+        if (unlinkedPcs > 0) {
+            summary.innerHTML += `<div class="text-[11px] text-amber-700 mt-0.5">`
+                + `⚠️ มีงาน Sorting ที่ยังไม่ผูกเลข Job Order อีก ${unlinkedPcs.toLocaleString()} ชิ้น (ไม่ถูกรวมในตารางนี้)`
+                + `</div>`;
+        }
     }
 
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-gray-400 text-sm">ไม่พบ Job Order ตามเงื่อนไขที่เลือก</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" class="p-6 text-center text-gray-400 text-sm">ไม่พบ Job Order ตามเงื่อนไขที่เลือก</td></tr>`;
         return;
     }
 
@@ -142,6 +193,17 @@ window.renderJobOrderTable = function() {
         const statusCls = JOB_ORDER_STATUS_CLASS[j.status] || 'bg-gray-100 text-gray-700 border-gray-200';
         const statusText = JOB_ORDER_STATUS_LABEL[j.status] || j.status;
         const canDelete = (j.producedFg || 0) === 0;
+        const q = window.getJobOrderQty(j);
+        const ngTitle = `NG จากเครื่อง ${q.ngMachine.toLocaleString()} ชิ้น`
+            + (q.fgFromSort ? ` · คัดกลับเป็น FG ได้ ${q.fgFromSort.toLocaleString()} ชิ้น` : '')
+            + ` (ไม่นับ NG หลัง Sort ซ้ำ)`;
+        const pendingTitle = `รอคัด ${q.pending.toLocaleString()} ชิ้น · คัดแล้วรอ QC ${q.waitQc.toLocaleString()} ชิ้น`
+            + ` — ยอดนี้เป็นส่วนหนึ่งของ NG สุทธิ ไม่ถูกนับซ้ำ`;
+        const accBadge = q.target <= 0
+            ? '<span class="text-[10px] text-gray-400">ไม่ได้ตั้งเป้า</span>'
+            : (q.complete
+                ? '<span class="text-[10px] font-bold text-green-600">ครบยอด ✓</span>'
+                : `<span class="text-[10px] font-bold text-red-500">ขาด ${q.shortage.toLocaleString()}</span>`);
 
         return `
         <tr class="hover:bg-indigo-50/40">
@@ -151,7 +213,16 @@ window.renderJobOrderTable = function() {
             </td>
             <td class="px-3 py-2 text-sm text-gray-800">${j.product || '-'}</td>
             <td class="px-3 py-2 text-right font-bold text-gray-700">${(j.targetQty || 0).toLocaleString()}</td>
-            <td class="px-3 py-2 text-right font-bold text-green-700">${(j.producedFg || 0).toLocaleString()}</td>
+            <td class="px-3 py-2 text-right font-bold text-green-700">${q.fg.toLocaleString()}
+                ${q.fgFromSort ? `<div class="text-[10px] font-normal text-gray-400">รวมคัดกลับ ${q.fgFromSort.toLocaleString()}</div>` : ''}
+            </td>
+            <td class="px-3 py-2 text-right font-bold ${q.ngNet > 0 ? 'text-red-600' : 'text-gray-400'}" title="${ngTitle}">${q.ngNet.toLocaleString()}</td>
+            <td class="px-3 py-2 text-right font-bold ${q.sortingOpen > 0 ? 'text-amber-600' : 'text-gray-400'}" title="${pendingTitle}">${q.sortingOpen.toLocaleString()}
+                ${q.waitQc ? `<div class="text-[10px] font-normal text-gray-400">รอ QC ${q.waitQc.toLocaleString()}</div>` : ''}
+            </td>
+            <td class="px-3 py-2 text-right font-bold text-indigo-700" title="FG + NG สุทธิ = ยอดที่ออกจากเครื่องจริง (นับครั้งเดียว)">${q.accounted.toLocaleString()}
+                <div class="mt-0.5">${accBadge}</div>
+            </td>
             <td class="px-3 py-2 text-right font-bold ${j.remainingQty > 0 ? 'text-amber-700' : 'text-gray-400'}">${(j.remainingQty || 0).toLocaleString()}</td>
             <td class="px-3 py-2 w-32">
                 <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
@@ -252,6 +323,7 @@ window.renderJobOrderDashCard = function(data) {
 
     const jobs = (data && data.jobOrders ? data.jobOrders : []).filter(j => j.status !== 'Cancelled');
     const actual = (data && data.jobOrderData) ? data.jobOrderData : {};
+    const sortActual = (data && data.jobOrderSortData) ? data.jobOrderSortData : {};
 
     if (jobs.length === 0) {
         box.innerHTML = `<div class="text-center text-gray-400 text-sm py-10">ไม่มี Job Order ในช่วงวันที่เลือก</div>`;
@@ -268,6 +340,14 @@ window.renderJobOrderDashCard = function(data) {
         const pct = Math.min(100, j.progressPct || 0);
         const barColor = pct >= 100 ? 'bg-green-500' : (pct >= 50 ? 'bg-blue-500' : 'bg-amber-500');
         const inRange = actual[j.jobOrder] || { fg: 0 };
+        const inRangeSort = sortActual[j.jobOrder] || null;
+        const q = window.getJobOrderQty(j);
+        const rangePending = inRangeSort ? ((inRangeSort.pendingPcs || 0) + (inRangeSort.waitQcPcs || 0)) : 0;
+        const accBadge = q.target <= 0
+            ? ''
+            : (q.complete
+                ? `<span class="text-green-600 font-bold">ครบยอด ✓</span>`
+                : `<span class="text-red-500 font-bold">ขาด ${q.shortage.toLocaleString()}</span>`);
         return `
         <div class="py-2 border-b border-gray-100 last:border-0">
             <div class="flex justify-between items-center text-xs">
@@ -275,14 +355,31 @@ window.renderJobOrderDashCard = function(data) {
                 <span class="text-gray-500">${j.product || '-'}</span>
             </div>
             <div class="flex justify-between items-center text-[11px] text-gray-500 mt-0.5">
-                <span>ผลิต ${(j.producedFg || 0).toLocaleString()} / ${(j.targetQty || 0).toLocaleString()} ชิ้น${inRange.fg ? ` · ช่วงนี้ ${inRange.fg.toLocaleString()}` : ''}</span>
+                <span>ผลิต ${q.fg.toLocaleString()} / ${q.target.toLocaleString()} ชิ้น${inRange.fg ? ` · ช่วงนี้ ${inRange.fg.toLocaleString()}` : ''}</span>
                 <span class="font-bold">${(j.progressPct || 0).toFixed(1)}%</span>
+            </div>
+            <div class="flex justify-between items-center text-[10px] text-gray-500 mt-0.5 gap-2 flex-wrap"
+                 title="รวมนับได้ = FG + NG สุทธิ (งานรอ Sorting เป็นส่วนหนึ่งของ NG อยู่แล้ว จึงไม่ถูกนับซ้ำ)">
+                <span>
+                    <span class="text-red-500">NG ${q.ngNet.toLocaleString()}</span>
+                    · <span class="text-amber-600">รอ Sorting ${q.sortingOpen.toLocaleString()}</span>${rangePending ? ` (ช่วงนี้ ${rangePending.toLocaleString()})` : ''}
+                </span>
+                <span>รวมนับได้ <span class="font-bold text-indigo-700">${q.accounted.toLocaleString()}</span>${q.target ? ` / ${q.target.toLocaleString()}` : ''} ${accBadge}</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1 overflow-hidden">
                 <div class="${barColor} h-1.5" style="width:${pct}%"></div>
             </div>
         </div>`;
     }).join('');
+
+    // งาน Sorting ที่ยังไม่ผูกเลข Job Order — แจ้งไว้ให้รู้ว่ายอดยังไม่ถูกนับเข้าจ๊อบไหน
+    const noJo = sortActual['__NO_JO__'];
+    const noJoPcs = noJo ? ((noJo.pendingPcs || 0) + (noJo.waitQcPcs || 0)) : 0;
+    if (noJoPcs > 0) {
+        box.innerHTML += `<div class="mt-2 pt-2 border-t border-dashed border-amber-200 text-[10px] text-amber-700">`
+            + `⚠️ งาน Sorting ที่ยังไม่ผูกเลข Job Order ${noJoPcs.toLocaleString()} ชิ้น (ยังไม่ถูกนับเข้าจ๊อบใด)`
+            + `</div>`;
+    }
 };
 
 // -------------------- ผูก event ตอนโหลดหน้า --------------------

@@ -56,6 +56,20 @@
 - Dashboard payload เพิ่ม `jobOrders` (แผน + ยอดสะสม) และ `jobOrderData` (ยอดผลิตเฉพาะช่วงที่เลือก แยกตามเลข Job Order)
 - แสดงผลใน: หน้า Plan (ตาราง + progress bar), การ์ด `card-job-orders` บน Dashboard, Auto Report (ตารางความคืบหน้า), Export CSV, ตาราง Production by Timestamp
 
+### การนับยอด Job Order แบบกันซ้ำ (งานรอ Sorting + NG)
+- Sorting_Data มีคอลัมน์ `Job_Order`; เมื่อ QC อนุมัติ ระบบสร้างแถวใน Production_Data `Batch_ID = "SORT-<Job_ID>"` และผูก `Job_Order` เดิมให้ด้วย
+- Backend: `getProducedByJobOrder_()` แยกยอดแถวปกติ (`fgProd`, `ngPcsProd`) ออกจากแถว SORT- (`fgSort`, `ngPcsSort`)
+- Backend: `getSortingByJobOrder_(opts)` รวมยอด Sorting ต่อ Job Order — **กันซ้ำด้วย `Job_ID` (1 งานนับครั้งเดียว)**
+  - `Pending`/`Rejected` → `pendingPcs` (รอคัด) · `Wait QC` → `waitQcPcs` (คัดแล้วรอ QC) · `Completed` → เก็บอ้างอิงเท่านั้น (ยอดอยู่ในแถว SORT- แล้ว)
+  - งานที่ยังไม่ผูกเลข Job Order รวมไว้ที่คีย์ `__NO_JO__`
+- Backend: `summarizeJobOrderQty_(act, sort)` — สูตรกลาง (ห้ามคำนวณซ้ำที่อื่น):
+  - `producedFg = fgProd + fgSort`
+  - `ngNetPcs = max(0, ngPcsProd − fgSort)` — **ไม่บวก `ngPcsSort` ซ้ำ** เพราะ NG หลัง Sort เป็นส่วนหนึ่งของ NG ตอนผลิตอยู่แล้ว
+  - `sortingOpenPcs = pendingPcs + waitQcPcs` — เป็น**ส่วนหนึ่งของ** `ngNetPcs` ไม่ใช่ยอดใหม่
+  - `accountedPcs = producedFg + ngNetPcs = fgProd + ngPcsProd` (ยอดที่ออกจากเครื่องจริง) → ใช้ตัดสิน "ยอดครบหรือไม่" เทียบกับ `targetQty`
+- Payload: `jobOrders[]` เพิ่ม `ngPcsFromMachine/ngPcsFromSort/pendingSortPcs/waitQcPcs/sortingOpenPcs/accountedPcs/qtyComplete`, dashboard เพิ่ม `jobOrderSortData`, GET_JOB_ORDERS เพิ่ม `unlinkedSorting`
+- Frontend: `window.getJobOrderQty(j)` ใน `js/planning.js` เป็นตัวกลางอ่านค่าเหล่านี้ (มี fallback สำหรับข้อมูลเก่า) — ใช้ทั้งตาราง Plan, การ์ด Dashboard, Auto Report, CSV
+
 ## Architecture Notes
 - All chart functions use `window.functionName` — no ES modules, no imports
 - Shared state: `currentDashboardData`, `charts` object, `machineMapping`

@@ -419,15 +419,24 @@ window.renderAutoReportContent = async function() {
             return da < db ? -1 : (da > db ? 1 : 0);
         });
 
+        const joQty = (j) => (typeof window.getJobOrderQty === 'function')
+            ? window.getJobOrderQty(j)
+            : { fg: j.producedFg || 0, ngNet: j.producedNgPcs || 0, sortingOpen: j.sortingOpenPcs || 0,
+                accounted: j.accountedPcs || 0, target: j.targetQty || 0,
+                shortage: Math.max(0, (j.targetQty || 0) - (j.accountedPcs || 0)),
+                complete: (j.targetQty || 0) > 0 && (j.accountedPcs || 0) >= (j.targetQty || 0) };
         const joTotalTarget = sortedJobs.reduce((s, j) => s + (j.targetQty || 0), 0);
         const joTotalDone = sortedJobs.reduce((s, j) => s + (j.producedFg || 0), 0);
+        const joTotalNg = sortedJobs.reduce((s, j) => s + joQty(j).ngNet, 0);
+        const joTotalPending = sortedJobs.reduce((s, j) => s + joQty(j).sortingOpen, 0);
+        const joTotalAccounted = sortedJobs.reduce((s, j) => s + joQty(j).accounted, 0);
         const joTotalPct = joTotalTarget > 0 ? ((joTotalDone / joTotalTarget) * 100).toFixed(1) : '0.0';
 
         jobOrderHtml = `
         <div class="mt-6 bg-white border border-indigo-200 rounded-lg shadow-sm overflow-hidden page-break-inside-avoid">
             <div class="bg-indigo-50 border-b border-indigo-200 px-4 py-2 flex justify-between items-center">
                 <h4 class="text-sm font-bold text-indigo-800 flex items-center gap-2">📋 ความคืบหน้าตาม Job Order (แผนการผลิต)</h4>
-                <span class="text-[11px] text-indigo-700">${sortedJobs.length} จ๊อบ · เป้า ${joTotalTarget.toLocaleString()} / ผลิตแล้ว ${joTotalDone.toLocaleString()} (${joTotalPct}%)</span>
+                <span class="text-[11px] text-indigo-700">${sortedJobs.length} จ๊อบ · เป้า ${joTotalTarget.toLocaleString()} / ผลิตแล้ว ${joTotalDone.toLocaleString()} (${joTotalPct}%) · NG สุทธิ ${joTotalNg.toLocaleString()} · รอ Sorting ${joTotalPending.toLocaleString()} · รวมนับได้ ${joTotalAccounted.toLocaleString()}</span>
             </div>
             <table class="w-full text-sm text-left">
                 <thead class="bg-gray-100 text-gray-700 font-bold uppercase text-[11px] border-b">
@@ -438,7 +447,9 @@ window.renderAutoReportContent = async function() {
                         <th class="px-3 py-2 text-right">เป้า (ชิ้น)</th>
                         <th class="px-3 py-2 text-right">ผลิตแล้ว</th>
                         <th class="px-3 py-2 text-right">ผลิตช่วงนี้</th>
-                        <th class="px-3 py-2 text-right">NG (ชิ้น)</th>
+                        <th class="px-3 py-2 text-right">NG สุทธิ (ชิ้น)</th>
+                        <th class="px-3 py-2 text-right">รอ Sorting</th>
+                        <th class="px-3 py-2 text-right">รวมนับได้</th>
                         <th class="px-3 py-2 text-right">คงเหลือ</th>
                         <th class="px-3 py-2 text-right">%</th>
                         <th class="px-3 py-2 text-center">สถานะ</th>
@@ -448,6 +459,7 @@ window.renderAutoReportContent = async function() {
 
         sortedJobs.forEach(j => {
             const inRange = joActualById[j.jobOrder] || { fg: 0, ngPcs: 0 };
+            const q = joQty(j);
             const pct = (j.progressPct || 0).toFixed(1);
             const pctCls = (j.progressPct || 0) >= 100 ? 'text-green-700 bg-green-50/60'
                          : ((j.progressPct || 0) >= 50 ? 'text-blue-700' : 'text-amber-700 bg-amber-50/50');
@@ -458,7 +470,11 @@ window.renderAutoReportContent = async function() {
                 <td class="px-3 py-2 text-right font-bold text-gray-700">${(j.targetQty || 0).toLocaleString()}</td>
                 <td class="px-3 py-2 text-right font-bold text-blue-700">${(j.producedFg || 0).toLocaleString()}</td>
                 <td class="px-3 py-2 text-right text-gray-600">${(inRange.fg || 0).toLocaleString()}</td>
-                <td class="px-3 py-2 text-right text-red-600">${Math.round(inRange.ngPcs || 0).toLocaleString()}</td>
+                <td class="px-3 py-2 text-right text-red-600">${q.ngNet.toLocaleString()}</td>
+                <td class="px-3 py-2 text-right text-amber-600">${q.sortingOpen.toLocaleString()}</td>
+                <td class="px-3 py-2 text-right font-bold text-indigo-700">${q.accounted.toLocaleString()}
+                    ${q.target > 0 ? (q.complete ? '<span class="text-[10px] text-green-600 font-bold"> ครบ</span>' : `<span class="text-[10px] text-red-500 font-bold"> ขาด ${q.shortage.toLocaleString()}</span>`) : ''}
+                </td>
                 <td class="px-3 py-2 text-right font-bold ${(j.remainingQty || 0) > 0 ? 'text-amber-700' : 'text-gray-400'}">${(j.remainingQty || 0).toLocaleString()}</td>
                 <td class="px-3 py-2 text-right font-black ${pctCls}">${pct}%</td>
                 <td class="px-3 py-2 text-center text-xs text-gray-700">${statusLabelTh[j.status] || j.status}</td>
@@ -467,7 +483,8 @@ window.renderAutoReportContent = async function() {
 
         jobOrderHtml += `</tbody></table>
             <div class="px-4 py-2 bg-gray-50 border-t border-gray-200 text-[11px] text-gray-600">
-                ℹ️ "ผลิตแล้ว" คือยอดสะสมทั้งหมดของ Job Order นั้น ส่วน "ผลิตช่วงนี้" คือยอดเฉพาะช่วงวันที่ของรายงานฉบับนี้
+                ℹ️ "ผลิตแล้ว" คือยอดสะสมทั้งหมดของ Job Order นั้น ส่วน "ผลิตช่วงนี้" คือยอดเฉพาะช่วงวันที่ของรายงานฉบับนี้<br>
+                ℹ️ "รวมนับได้" = ผลิตแล้ว (FG) + NG สุทธิ — ใช้ดูว่ายอดของ Job Order ครบตามเป้าหรือยัง โดยงานที่ยังรอ Sorting นับรวมอยู่ใน NG สุทธิแล้ว จึงไม่ถูกนับซ้ำ
             </div>
         </div>`;
     } else {
