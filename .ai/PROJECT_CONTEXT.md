@@ -37,6 +37,11 @@
 - Frontend `data.machineData[mac].sortData[date]` = above object
 - Frontend `data.machineData[mac].daily[date]` = { fg, ngPcs, ngBreakdown: {symptom: count} }
 - `data.dynamicSymptomWeights` = { symptom: fgRate } from sort history
+- **งานรอ Sort ในกราฟ Daily Output**: `dailyTrend[].pendingSortFromFg` / `pendingSortFromNg` / `pendingSortByModel[model] = {qty, fromFg, fromNg}`
+  - แยกที่มาด้วย remark `พบที่: FG|RTV` (กติกาเดียวกับตอน QC อนุมัติที่หัก FG) → `fromFg`, ที่เหลือ = `fromNg`
+  - กราฟ Daily Output (`js/charts/models.js`) หัก `fromFg` ออกจากแท่ง FG (งานผลิต) และ `fromNg` ออกจากแท่ง NG (งานผลิต) แล้วแสดงเป็นก้อน **"รอ Sort (ยังไม่รู้ผล)"** สีม่วง → ความสูงแท่งรวมเท่าเดิม ไม่นับซ้ำ
+  - หักได้ไม่เกินยอดของช่วงนั้น (ใบงานอาจลงคนละวันกับวันผลิต) ส่วนที่หักไม่ได้ = `pendExtra` แจ้งใน tooltip
+  - สลับโหมดได้ที่ `dailyOutputPendingSelector` (`split` = ค่าเริ่มต้น / `merge` = แบบเดิม)
 - **Coil changes**: `data.dailyTrend[].coilChanges` (total), `data.dailyTrend[].coilChangesByMachine` (per machine) — from RawMaterial sheet
 
 ## Spare Parts Tracking System

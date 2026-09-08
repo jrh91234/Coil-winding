@@ -383,6 +383,9 @@ window.getDailyOutputSeries = function() {
     const avgMode = avgSel ? avgSel.value : 'off';
     const hoursSel = document.getElementById('dailyOutputHoursSelector');
     const hoursMode = hoursSel ? hoursSel.value : 'off';
+    // แยกงานที่ส่ง Sort แล้วยังไม่รู้ผล ออกมาเป็นก้อนของตัวเอง (หักออกจาก FG/NG ตามที่มา)
+    const pendingSel = document.getElementById('dailyOutputPendingSelector');
+    const pendingMode = pendingSel ? pendingSel.value : 'split';
 
     const trendData = data.dailyTrend || [];
 
@@ -403,7 +406,7 @@ window.getDailyOutputSeries = function() {
     const order = [];
     const grp = {};
     trendData.forEach(d => {
-        let fg, ng, sFg, sNg, hrs;
+        let fg, ng, sFg, sNg, hrs, pendFromFg, pendFromNg;
         if (model === 'all') {
             const outputProd = d.dailyOutputProduction || null;
             fg = outputProd ? (outputProd.fg || 0) : (d.fg || 0);
@@ -411,6 +414,10 @@ window.getDailyOutputSeries = function() {
             sFg = (d.sortYield && d.sortYield.fg) || 0;
             sNg = (d.sortYield && d.sortYield.ng) || 0;
             hrs = d.workHours || 0;
+            pendFromFg = d.pendingSortFromFg || 0;
+            pendFromNg = (d.pendingSortFromNg !== undefined)
+                ? d.pendingSortFromNg
+                : Math.max(0, (d.pendingSortQty || 0) - (d.pendingSortFromFg || 0));
         } else {
             const outputByModel = d.dailyOutputProduction && d.dailyOutputProduction.byModel;
             const m = (outputByModel && outputByModel[model]) || (d.byModel && d.byModel[model]);
@@ -420,48 +427,74 @@ window.getDailyOutputSeries = function() {
             sFg = sm ? (sm.fg || 0) : 0;
             sNg = sm ? (sm.ng || 0) : 0;
             hrs = (d.workHoursByModel && d.workHoursByModel[model]) || 0;
+            const pm = d.pendingSortByModel && d.pendingSortByModel[model];
+            pendFromFg = pm ? (pm.fromFg || 0) : 0;
+            pendFromNg = pm ? (pm.fromNg || 0) : 0;
         }
         let key = d.date;
         if (period === 'week') key = getWeekStart(d.date);
         else if (period === 'month') key = String(d.date).substring(0, 7);
-        if (!(key in grp)) { grp[key] = { fg: 0, ng: 0, sFg: 0, sNg: 0, hours: 0 }; order.push(key); }
+        if (!(key in grp)) { grp[key] = { fg: 0, ng: 0, sFg: 0, sNg: 0, hours: 0, pendFromFg: 0, pendFromNg: 0 }; order.push(key); }
         grp[key].fg += fg;
         grp[key].ng += ng;
         grp[key].sFg += sFg;
         grp[key].sNg += sNg;
         grp[key].hours += hrs;
+        grp[key].pendFromFg += pendFromFg;
+        grp[key].pendFromNg += pendFromNg;
     });
 
     const labels = order;
     const periods = [];
-    const fgData = [], ngData = [], sortFgData = [], sortNgData = [];
+    const fgData = [], ngData = [], sortFgData = [], sortNgData = [], pendingData = [];
     const totalPcsData = [], fgPcsData = [], hoursData = [];
     order.forEach(k => {
-        const fg = grp[k].fg, ng = grp[k].ng, sFg = grp[k].sFg, sNg = grp[k].sNg;
+        let fg = grp[k].fg, ng = grp[k].ng;
+        const sFg = grp[k].sFg, sNg = grp[k].sNg;
         const hours = Math.round(grp[k].hours * 10) / 10;
-        const grand = fg + ng + sFg + sNg;
-        periods.push({ key: k, fg, ng, sFg, sNg, hours, total: grand, fgGood: fg + sFg });
+
+        // งานที่ส่ง Sort แล้วยังไม่รู้ผล → หักออกจากก้อนที่มันเคยถูกนับไว้
+        //   "พบที่ FG/RTV" → หักจาก FG (งานผลิต) | อาการที่พบหน้าเครื่อง → หักจาก NG (งานผลิต)
+        // หักได้ไม่เกินยอดของช่วงนั้น (ใบงานอาจลงวันที่หลังวันผลิต) — ส่วนที่หักไม่ได้เก็บไว้ที่ pendExtra
+        let pending = 0, cutFromFg = 0, cutFromNg = 0, pendExtra = 0;
+        if (pendingMode !== 'merge') {
+            const wantFg = grp[k].pendFromFg || 0;
+            const wantNg = grp[k].pendFromNg || 0;
+            cutFromFg = Math.min(fg, wantFg);
+            cutFromNg = Math.min(ng, wantNg);
+            pendExtra = (wantFg - cutFromFg) + (wantNg - cutFromNg);
+            fg -= cutFromFg;
+            ng -= cutFromNg;
+            pending = wantFg + wantNg;
+        }
+
+        const grand = fg + ng + sFg + sNg + pending;
+        periods.push({ key: k, fg, ng, sFg, sNg, pending, cutFromFg, cutFromNg, pendExtra,
+                       hours, total: grand, fgGood: fg + sFg });
         totalPcsData.push(grand);
         fgPcsData.push(fg + sFg);
         hoursData.push(hours);
         if (mode === 'percent') {
-            fgData.push(grand > 0 ? parseFloat(((fg/grand)*100).toFixed(1)) : 0);
-            ngData.push(grand > 0 ? parseFloat(((ng/grand)*100).toFixed(1)) : 0);
-            sortFgData.push(grand > 0 ? parseFloat(((sFg/grand)*100).toFixed(1)) : 0);
-            sortNgData.push(grand > 0 ? parseFloat(((sNg/grand)*100).toFixed(1)) : 0);
+            const pctOf = (v) => grand > 0 ? parseFloat(((v/grand)*100).toFixed(1)) : 0;
+            fgData.push(pctOf(fg));
+            ngData.push(pctOf(ng));
+            sortFgData.push(pctOf(sFg));
+            sortNgData.push(pctOf(sNg));
+            pendingData.push(pctOf(pending));
         } else {
             fgData.push(fg);
             ngData.push(ng);
             sortFgData.push(sFg);
             sortNgData.push(sNg);
+            pendingData.push(pending);
         }
     });
 
     const avgTotal = totalPcsData.length ? totalPcsData.reduce((a, b) => a + b, 0) / totalPcsData.length : 0;
     const avgFg = fgPcsData.length ? fgPcsData.reduce((a, b) => a + b, 0) / fgPcsData.length : 0;
 
-    return { model, period, mode, avgMode, hoursMode, labels, periods,
-             fgData, ngData, sortFgData, sortNgData, totalPcsData, fgPcsData, hoursData, avgTotal, avgFg };
+    return { model, period, mode, avgMode, hoursMode, pendingMode, labels, periods,
+             fgData, ngData, sortFgData, sortNgData, pendingData, totalPcsData, fgPcsData, hoursData, avgTotal, avgFg };
 };
 
 window.renderDailyOutputChart = function() {
@@ -479,6 +512,9 @@ window.renderDailyOutputChart = function() {
     const mode = S.mode, period = S.period, avgMode = S.avgMode, hoursMode = S.hoursMode;
     const labels = S.labels;
     const fgData = S.fgData, ngData = S.ngData, sortFgData = S.sortFgData, sortNgData = S.sortNgData;
+    const pendingData = S.pendingData || [];
+    const periods = S.periods || [];
+    const hasPending = pendingData.some(v => v > 0);
     const totalPcsData = S.totalPcsData, fgPcsData = S.fgPcsData, hoursData = S.hoursData;
 
     if (charts.dailyOutput) charts.dailyOutput.destroy();
@@ -594,6 +630,10 @@ window.renderDailyOutputChart = function() {
         {label:'FG (คัดแยก)', data:sortFgData, backgroundColor:'#10b981', borderRadius: 2},
         {label:'NG (คัดแยก)', data:sortNgData, backgroundColor:'#f59e0b', borderRadius: 2}
     ];
+    if (hasPending) {
+        // ก้อนงานที่ส่ง Sort แล้วยังไม่รู้ผล — ถูกหักออกจาก FG/NG ด้านบนแล้ว จึงไม่นับซ้ำ
+        chartDatasets.push({label:'รอ Sort (ยังไม่รู้ผล)', data:pendingData, backgroundColor:'#a855f7', borderRadius: 2});
+    }
     if (hoursMode !== 'off') {
         chartDatasets.push({
             type: 'line',
@@ -640,7 +680,15 @@ window.renderDailyOutputChart = function() {
                          },
                          footer: function(items) {
                              const idx = items[0].dataIndex;
-                             return 'รวมทั้งหมด: ' + (totalPcsData[idx] || 0).toLocaleString() + ' ชิ้น';
+                             const lines = ['รวมทั้งหมด: ' + (totalPcsData[idx] || 0).toLocaleString() + ' ชิ้น'];
+                             const p = periods[idx];
+                             if (p && p.pending > 0) {
+                                 lines.push(`รอ Sort ${p.pending.toLocaleString()} ชิ้น — หักจาก FG ${p.cutFromFg.toLocaleString()} · หักจาก NG ${p.cutFromNg.toLocaleString()}`);
+                                 if (p.pendExtra > 0) {
+                                     lines.push(`⚠️ อีก ${p.pendExtra.toLocaleString()} ชิ้น เป็นใบงานที่ลงวันที่นี้ แต่ยอดผลิตอยู่วันอื่น (หักไม่ได้)`);
+                                 }
+                             }
+                             return lines;
                          }
                      }
                  },
