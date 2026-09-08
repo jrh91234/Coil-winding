@@ -62,7 +62,8 @@
 - แสดงผลใน: หน้า Plan (ตาราง + progress bar), การ์ด `card-job-orders` บน Dashboard, Auto Report (ตารางความคืบหน้า), Export CSV, ตาราง Production by Timestamp
 
 ### การนับยอด Job Order แบบกันซ้ำ (งานรอ Sorting + NG)
-- Sorting_Data มีคอลัมน์ `Job_Order`; เมื่อ QC อนุมัติ ระบบสร้างแถวใน Production_Data `Batch_ID = "SORT-<Job_ID>"` และผูก `Job_Order` เดิมให้ด้วย
+- Sorting_Data มีคอลัมน์ `Job_Order`; เมื่อ QC อนุมัติ ระบบสร้างแถวใน Production_Data `Batch_ID = "SORT-<Job_ID>"` และผูก `Job_Order` ลงไปด้วยเสมอ
+  - ถ้าใบงาน Sorting ไม่ได้ระบุเลข → ย้อนหาแถวผลิตล่าสุดของ **เครื่อง + รุ่น** เดียวกัน (ไม่เกิน 60 วันก่อนวันคัด, ข้ามแถว `SORT-`) แล้วใช้เลขนั้น พร้อม backfill กลับไปที่ใบงาน Sorting
 - Backend: `getProducedByJobOrder_()` แยกยอดแถวปกติ (`fgProd`, `ngPcsProd`) ออกจากแถว SORT- (`fgSort`, `ngPcsSort`)
 - Backend: `getSortingByJobOrder_(opts)` รวมยอด Sorting ต่อ Job Order — **กันซ้ำด้วย `Job_ID` (1 งานนับครั้งเดียว)**
   - `Pending`/`Rejected` → `pendingPcs` (รอคัด) · `Wait QC` → `waitQcPcs` (คัดแล้วรอ QC) · `Completed` → เก็บอ้างอิงเท่านั้น (ยอดอยู่ในแถว SORT- แล้ว)
