@@ -378,7 +378,7 @@ function doGet(e) {
       const sheet = ss.getSheetByName("Sorting_Data");
       if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: "success", data: [], summaryData: []})).setMimeType(ContentService.MimeType.JSON);
       // เพิ่มหัวคอลัมน์ Job_Order ให้ชีตทันทีถ้ายังไม่มี (ไม่ต้องรอให้มีคนบันทึก/แก้ไขงานก่อน)
-      ensureColumns(sheet, ["Job_Order"]);
+      ensureColumns(sheet, ["Job_Order", "Found_At"]);
       
       const startDateStr = e.parameter.start || "";
       const endDateStr = e.parameter.end || "";
@@ -406,6 +406,7 @@ function doGet(e) {
       let closedDateCol = getCol("Closed_Date");
       let sorterCol = getCol("Sorter");
       let jobOrderCol = getCol("Job_Order");
+      let foundAtCol = getCol("Found_At");
       let rejectTargetCol = getCol("Reject_Target");
       let qcFgApprovedCol = getCol("QC_FG_Approved");
       let qcNgApprovedCol = getCol("QC_NG_Approved");
@@ -520,6 +521,7 @@ function doGet(e) {
             closedDate: cDate,
             sorter: sorterCol > -1 ? r[sorterCol] : "",
             jobOrder: jobOrderCol > -1 ? String(r[jobOrderCol] || "") : "",
+            foundAt: foundAtCol > -1 ? String(r[foundAtCol] || "") : "",
             rejectTarget: rejectTargetCol > -1 ? r[rejectTargetCol] : "",
             qcFgApproved: qcFgApprovedCol > -1 ? String(r[qcFgApprovedCol] || "").toUpperCase() === "TRUE" : false,
             qcNgApproved: qcNgApprovedCol > -1 ? String(r[qcNgApprovedCol] || "").toUpperCase() === "TRUE" : false
@@ -2034,13 +2036,22 @@ function doPost(e) {
           // บังคับ format คอลัมน์ Date ให้แสดง 24 ชม. ป้องกัน Google Sheets แปลงเป็น 12 ชม. (เช่น 14:00 → 2:00)
           const newRow = sheet.getLastRow();
           sheet.getRange(newRow, 3).setNumberFormat("yyyy-MM-dd HH:mm");
-          // เลข Job Order จากแผนการผลิต (ผูกงาน Sort เข้ากับ Job Order) - ไม่บังคับกรอก
+          // เลข Job Order จากแผนการผลิต (ผูกงาน Sort เข้ากับ Job Order)
           const jobOrderVal = String(sortData.jobOrder || "").trim();
           if (jobOrderVal) {
               ensureColumns(sheet, ["Job_Order"]);
               const joColIdx = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
                   .findIndex(h => String(h).trim().toLowerCase() === "job_order") + 1;
               sheet.getRange(newRow, joColIdx).setValue(jobOrderVal);
+          }
+          // ขั้นตอนที่พบของเสีย — เก็บเป็นคอลัมน์จริง ไม่ต้องแกะจากข้อความใน Remark
+          // (ใช้ตัดสินว่ายอดนี้เคยถูกนับเป็น FG แล้วหรือยัง → ดู getSortingByJobOrder_)
+          const foundAtVal = String(sortData.foundAt || "").trim();
+          if (foundAtVal) {
+              ensureColumns(sheet, ["Found_At"]);
+              const faColIdx = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
+                  .findIndex(h => String(h).trim().toLowerCase() === "found_at") + 1;
+              sheet.getRange(newRow, faColIdx).setValue(foundAtVal);
           }
           SpreadsheetApp.flush();
           logUserAction(sortData.recorder, "System", "SAVE_SORTING", `บันทึกงานรอ Sort ${sortData.product}${jobOrderVal ? " (JO: " + jobOrderVal + ")" : ""}`);
@@ -2089,6 +2100,13 @@ function doPost(e) {
                   const joColIdx = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
                       .findIndex(h => String(h).trim().toLowerCase() === "job_order") + 1;
                   sheet.getRange(foundRow, joColIdx).setValue(String(sortData.jobOrder || "").trim());
+              }
+              // ขั้นตอนที่พบของเสีย (คอลัมน์ Found_At)
+              if (sortData.foundAt !== undefined) {
+                  ensureColumns(sheet, ["Found_At"]);
+                  const faColIdx = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
+                      .findIndex(h => String(h).trim().toLowerCase() === "found_at") + 1;
+                  sheet.getRange(foundRow, faColIdx).setValue(String(sortData.foundAt || "").trim());
               }
               SpreadsheetApp.flush();
               return ContentService.createTextOutput(JSON.stringify({status: "success", message: "แก้ไขข้อมูลสำเร็จ"})).setMimeType(ContentService.MimeType.JSON);
@@ -2268,7 +2286,12 @@ function doPost(e) {
                       // แปลง FG_Qty เป็นชิ้น (สำหรับ FG ใน Production_Data)
                       // ถ้าพบที่ FG หรือ RTV → NG มาจากของที่เคยนับเป็น FG แล้ว → ต้องหัก FG ออกเท่ากับ NG ที่พบ
                       let fgPcs = 0;
-                      const isFoundAtFGorRTV = /พบที่:\s*(FG|RTV)/i.test(remarkStr);
+                      // ขั้นตอนที่พบ: อ่านจากคอลัมน์ Found_At ก่อน ถ้าไม่มีค่อยแกะจากข้อความใน Remark
+                      const foundAtColIdx = getCol("Found_At");
+                      const foundAtStr = foundAtColIdx !== -1 ? String(sortRow[foundAtColIdx] || "").trim() : "";
+                      const isFoundAtFGorRTV = foundAtStr
+                          ? /(FG|RTV)/i.test(foundAtStr)
+                          : /พบที่:\s*[^\]]*?(FG|RTV)/i.test(remarkStr);
                       if (isFoundAtFGorRTV) {
                           // หัก FG ออก = จำนวน NG (ชิ้น) ที่พบจาก FG เดิม
                           fgPcs = -getPcsFromKg(sortProduct, ngKg);
@@ -4134,9 +4157,11 @@ function getSortingByJobOrder_(opts) {
     //   พบระหว่างผลิต = ยังไม่เคยถูกบันทึกทั้ง FG และ NG → ไม่ต้องหักจากที่ไหน
     const foundAtVal = foundAtCol !== -1 ? String(row[foundAtCol] || "").trim() : "";
     const remarkVal = remarkCol !== -1 ? String(row[remarkCol] || "") : "";
+    // ค่าที่ผู้ใช้เลือกอาจเป็น "FG", "RTV", "คลัง FG" ฯลฯ — ถือว่ามาจากฝั่ง FG ทั้งหมด
+    // ส่วน "ระหว่างกระบวนการผลิต" ไม่มีคำว่า FG/RTV จึงถูกจัดเป็นของที่พบระหว่างผลิต
     const fromFgSide = foundAtVal
-      ? /^(FG|RTV)$/i.test(foundAtVal)
-      : /พบที่:\s*(FG|RTV)/i.test(remarkVal);
+      ? /(FG|RTV)/i.test(foundAtVal)
+      : /พบที่:\s*[^\]]*?(FG|RTV)/i.test(remarkVal);
 
     if (!out[jo]) out[jo] = {
       pendingPcs: 0, pendingFromFg: 0, pendingFromLine: 0, pendingBySymptom: {}, pendingJobs: 0,

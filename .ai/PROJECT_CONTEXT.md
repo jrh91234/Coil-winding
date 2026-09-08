@@ -65,6 +65,9 @@
 - Sorting_Data มีคอลัมน์ `Job_Order`; เมื่อ QC อนุมัติ ระบบสร้างแถวใน Production_Data `Batch_ID = "SORT-<Job_ID>"` และผูก `Job_Order` ลงไปด้วยเสมอ
   - ถ้าใบงาน Sorting ไม่ได้ระบุเลข → ย้อนหาแถวผลิตล่าสุดของ **เครื่อง + รุ่น** เดียวกัน (ไม่เกิน 60 วันก่อนวันคัด, ข้ามแถว `SORT-`) แล้วใช้เลขนั้น พร้อม backfill กลับไปที่ใบงาน Sorting
 - Backend: `getProducedByJobOrder_()` แยกยอดแถวปกติ (`fgProd`, `ngPcsProd`) ออกจากแถว SORT- (`fgSort`, `ngPcsSort`)
+- Sorting_Data มีคอลัมน์ `Found_At` (ขั้นตอนที่พบ) — ส่งมาจากระบบ Sorting (`jrh91234/CWM-sorting-system-`) ผ่าน `SAVE_SORTING`/`EDIT_SORTING`
+  - ค่าที่มีคำว่า FG/RTV = เคยนับเป็น FG แล้ว → หักออกจาก FG · ค่าอื่น (เช่น "ระหว่างกระบวนการผลิต") = ยอดใหม่
+  - ถ้าแถวเก่าไม่มีค่า ระบบ fallback ไปอ่าน `[พบที่: ...]` ใน Remark เหมือนเดิม
 - Backend: `getSortingByJobOrder_(opts)` รวมยอด Sorting ต่อ Job Order — **กันซ้ำด้วย `Job_ID` (1 งานนับครั้งเดียว)**
   - `Pending`/`Rejected` → `pendingPcs` (รอคัด) · `Wait QC` → `waitQcPcs` (คัดแล้วรอ QC) · `Completed` → เก็บอ้างอิงเท่านั้น (ยอดอยู่ในแถว SORT- แล้ว)
   - งานที่ยังไม่ผูกเลข Job Order รวมไว้ที่คีย์ `__NO_JO__`
