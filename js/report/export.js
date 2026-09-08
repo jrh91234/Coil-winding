@@ -126,12 +126,16 @@ window.exportCSV = function() {
     if (jobOrders.length > 0) {
         const joActual = data.jobOrderData || {};
         csvContent += "\n--- Job Order Progress ---\n";
-        csvContent += "Job Order,Plan Date,Product,Shift,Target Qty,Produced (Total),Produced (This Range),NG (Pcs This Range),Remaining,% Progress,Status\n";
+        csvContent += "Job Order,Plan Date,Product,Shift,Target Qty,Produced (Total),Produced (This Range),NG Net (Pcs),Pending Sorting (Pcs),Accounted (FG+NG Net),Qty Complete,Remaining,% Progress,Status\n";
         jobOrders.forEach(j => {
             const inRange = joActual[j.jobOrder] || { fg: 0, ngPcs: 0 };
+            const q = (typeof window.getJobOrderQty === 'function')
+                ? window.getJobOrderQty(j)
+                : { ngNet: j.producedNgPcs || 0, sortingOpen: j.sortingOpenPcs || 0, accounted: j.accountedPcs || 0, complete: false };
             csvContent += [
                 j.jobOrder, j.planDate, j.product, j.shift,
-                j.targetQty, j.producedFg, inRange.fg || 0, Math.round(inRange.ngPcs || 0),
+                j.targetQty, j.producedFg, inRange.fg || 0, q.ngNet, q.sortingOpen, q.accounted,
+                q.complete ? 'Yes' : 'No',
                 j.remainingQty, (j.progressPct || 0).toFixed(1) + '%', j.status
             ].map(csvCell).join(',') + '\n';
         });
