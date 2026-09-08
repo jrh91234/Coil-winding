@@ -2391,12 +2391,58 @@ function doPost(e) {
                               // ค้นหาแถวเดิมที่มี Batch_ID ตรงกัน (กรณี recall)
                               const batchIdx = getProdCol("Batch_ID");
                               let existingProdRow = -1;
+                              const prodAllData = prodSheet.getDataRange().getValues();
                               if (batchIdx !== -1) {
-                                  const prodAllData = prodSheet.getDataRange().getValues();
                                   for (let p = prodAllData.length - 1; p >= 1; p--) {
                                       if (String(prodAllData[p][batchIdx] || "").trim() === batchId) {
                                           existingProdRow = p + 1;
                                           break;
+                                      }
+                                  }
+                              }
+
+                              // เลข Job Order ที่จะบันทึกลง Production_Data
+                              // 1) ใช้เลขจากใบงาน Sorting ถ้ามี
+                              // 2) ถ้าใบงานไม่ได้ระบุ → ย้อนหาแถวผลิตล่าสุดของ เครื่อง+รุ่น เดียวกัน (ไม่เกิน 60 วันก่อนวันคัด)
+                              //    เพื่อให้ยอดที่คัดได้/NG หลังคัด กลับไปอยู่กับ Job Order เดิมของล็อตนั้น
+                              let resolvedJobOrder = sortJobOrder;
+                              if (!resolvedJobOrder) {
+                                  try {
+                                      const jIdx = getProdCol("Job_Order");
+                                      const mIdx = getProdCol("Machine");
+                                      const pIdx = getProdCol("Product");
+                                      const dIdx = getProdCol("Date");
+                                      const bIdx = batchIdx;
+                                      if (jIdx !== -1 && mIdx !== -1 && pIdx !== -1 && dIdx !== -1) {
+                                          const minDate = new Date(dateStr + "T00:00:00");
+                                          minDate.setDate(minDate.getDate() - 60);
+                                          const minDateStr = Utilities.formatDate(minDate, "GMT+7", "yyyy-MM-dd");
+                                          for (let p = prodAllData.length - 1; p >= 1; p--) {
+                                              const jo = String(prodAllData[p][jIdx] || "").trim();
+                                              if (!jo) continue;
+                                              // ข้ามแถวที่ระบบสร้างจากการคัดแยก (ไม่ใช่แถวผลิตจริง)
+                                              if (bIdx !== -1 && String(prodAllData[p][bIdx] || "").indexOf("SORT-") === 0) continue;
+                                              const rowMachine = String(prodAllData[p][mIdx] || "").trim().replace(/\([AB]\)$/, "").trim();
+                                              if (rowMachine !== baseMachine) continue;
+                                              if (String(prodAllData[p][pIdx] || "").trim() !== sortProduct) continue;
+                                              const rowDate = getSheetDateISO(prodAllData[p][dIdx]);
+                                              if (!rowDate || rowDate > dateStr || rowDate < minDateStr) continue;
+                                              resolvedJobOrder = jo;
+                                              break;
+                                          }
+                                      }
+                                  } catch (joErr) {
+                                      console.error("Resolve Job Order for sorted lot error: " + joErr.toString());
+                                  }
+                                  // เขียนเลขที่หาเจอกลับไปที่ใบงาน Sorting ด้วย เพื่อให้ใบงานผูกกับ Job Order ถาวร
+                                  if (resolvedJobOrder) {
+                                      try {
+                                          ensureColumns(sheet, ["Job_Order"]);
+                                          const sortHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+                                          const joColIdx = sortHeaders.findIndex(h => String(h).trim().toLowerCase() === "job_order");
+                                          if (joColIdx !== -1) sheet.getRange(foundRow, joColIdx + 1).setValue(resolvedJobOrder);
+                                      } catch (backfillErr) {
+                                          console.error("Backfill Job_Order to Sorting_Data error: " + backfillErr.toString());
                                       }
                                   }
                               }
@@ -2421,7 +2467,7 @@ function doPost(e) {
                                       updateCell("NG_Details_JSON", JSON.stringify(ngDetails));
                                       updateCell("Shift_Type", shiftType);
                                       // ผูกยอดหลัง Sort กลับไปที่ Job Order เดิม (ถ้ามี) เพื่อให้ยอดของ Job Order ครบ
-                                      if (sortJobOrder) updateCell("Job_Order", sortJobOrder);
+                                      if (resolvedJobOrder) updateCell("Job_Order", resolvedJobOrder);
                                   } else {
                                       const newRow = new Array(freshHeaders.length).fill("");
                                       const mapData = (colName, value) => { const idx = getProdCol(colName); if (idx !== -1) newRow[idx] = value; };
@@ -2438,7 +2484,7 @@ function doPost(e) {
                                       mapData("NG_Details_JSON", JSON.stringify(ngDetails));
                                       mapData("Shift_Type", shiftType);
                                       mapData("Batch_ID", batchId);
-                                      if (sortJobOrder) mapData("Job_Order", sortJobOrder);
+                                      if (resolvedJobOrder) mapData("Job_Order", resolvedJobOrder);
 
                                       prodSheet.appendRow(newRow);
                                   }
