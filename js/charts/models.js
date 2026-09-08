@@ -453,23 +453,22 @@ window.getDailyOutputSeries = function() {
         const sFg = grp[k].sFg, sNg = grp[k].sNg;
         const hours = Math.round(grp[k].hours * 10) / 10;
 
-        // งานที่ส่ง Sort แล้วยังไม่รู้ผล → หักออกจากก้อนที่มันเคยถูกนับไว้
-        //   "พบที่ FG/RTV" → หักจาก FG (งานผลิต) | อาการที่พบหน้าเครื่อง → หักจาก NG (งานผลิต)
-        // หักได้ไม่เกินยอดของช่วงนั้น (ใบงานอาจลงวันที่หลังวันผลิต) — ส่วนที่หักไม่ได้เก็บไว้ที่ pendExtra
-        let pending = 0, cutFromFg = 0, cutFromNg = 0, pendExtra = 0;
+        // งานที่ส่ง Sort แล้วยังไม่รู้ผล — ยึด "ขั้นตอนที่พบ" ว่ายอดนั้นเคยถูกบันทึกไว้แล้วหรือยัง
+        //   พบระหว่างผลิต → ยังไม่เคยบันทึกเป็น FG/NG → เป็นก้อนใหม่ ไม่หักจากที่ไหน
+        //   พบที่ FG/RTV  → เคยนับเป็น FG แล้ว → หักออกจากแท่ง FG (งานผลิต)
+        // หักได้ไม่เกิน FG ของช่วงนั้น (ใบงานอาจลงคนละวันกับวันผลิต) ส่วนที่หักไม่ได้เก็บไว้ที่ pendExtra
+        let pending = 0, cutFromFg = 0, fromLine = 0, pendExtra = 0;
         if (pendingMode !== 'merge') {
             const wantFg = grp[k].pendFromFg || 0;
-            const wantNg = grp[k].pendFromNg || 0;
+            fromLine = grp[k].pendFromNg || 0;   // พบระหว่างผลิต
             cutFromFg = Math.min(fg, wantFg);
-            cutFromNg = Math.min(ng, wantNg);
-            pendExtra = (wantFg - cutFromFg) + (wantNg - cutFromNg);
+            pendExtra = wantFg - cutFromFg;
             fg -= cutFromFg;
-            ng -= cutFromNg;
-            pending = wantFg + wantNg;
+            pending = wantFg + fromLine;
         }
 
         const grand = fg + ng + sFg + sNg + pending;
-        periods.push({ key: k, fg, ng, sFg, sNg, pending, cutFromFg, cutFromNg, pendExtra,
+        periods.push({ key: k, fg, ng, sFg, sNg, pending, cutFromFg, fromLine, pendExtra,
                        hours, total: grand, fgGood: fg + sFg });
         totalPcsData.push(grand);
         fgPcsData.push(fg + sFg);
@@ -683,9 +682,9 @@ window.renderDailyOutputChart = function() {
                              const lines = ['รวมทั้งหมด: ' + (totalPcsData[idx] || 0).toLocaleString() + ' ชิ้น'];
                              const p = periods[idx];
                              if (p && p.pending > 0) {
-                                 lines.push(`รอ Sort ${p.pending.toLocaleString()} ชิ้น — หักจาก FG ${p.cutFromFg.toLocaleString()} · หักจาก NG ${p.cutFromNg.toLocaleString()}`);
+                                 lines.push(`รอ Sort ${p.pending.toLocaleString()} ชิ้น — พบระหว่างผลิต ${(p.fromLine || 0).toLocaleString()} (ยอดใหม่) · พบที่ FG/RTV ${p.cutFromFg.toLocaleString()} (หักจาก FG แล้ว)`);
                                  if (p.pendExtra > 0) {
-                                     lines.push(`⚠️ อีก ${p.pendExtra.toLocaleString()} ชิ้น เป็นใบงานที่ลงวันที่นี้ แต่ยอดผลิตอยู่วันอื่น (หักไม่ได้)`);
+                                     lines.push(`⚠️ ของที่พบที่ FG อีก ${p.pendExtra.toLocaleString()} ชิ้น หักจากวันนี้ไม่ได้ (ยอด FG อยู่วันอื่น)`);
                                  }
                              }
                              return lines;

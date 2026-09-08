@@ -27,31 +27,40 @@ const JOB_ORDER_STATUS_CLASS = {
 };
 
 // -------------------- ยอดของ Job Order (กันนับซ้ำ) --------------------
-// backend ส่งค่าที่กันซ้ำมาแล้ว แต่เผื่อข้อมูลเก่าที่ยังไม่มีฟิลด์ใหม่ ให้คำนวณสำรองที่นี่
-// หลักการ: FG = FG เครื่อง + FG ที่คัดกลับมาได้ | NG สุทธิ = NG เครื่อง − FG ที่คัดกลับมาได้
-//          รอ Sorting เป็น "ส่วนหนึ่งของ NG สุทธิ" ไม่เอาไปบวกเพิ่ม | รวมนับได้ = FG + NG สุทธิ
+// ยึด "ขั้นตอนที่พบของเสีย" เป็นตัวตัดสิน (backend คำนวณมาให้แล้ว — ที่นี่มี fallback สำหรับ payload เก่า)
+//   พบระหว่างผลิต → ยังไม่เคยบันทึกที่ไหน → ยอดรอคัดเป็นก้อนใหม่ ไม่หักจาก FG/NG
+//   พบที่ FG/RTV  → เคยนับเป็น FG แล้ว → หักออกจาก FG ของจ๊อบนั้น
+//   คัดเสร็จ      → กลายเป็น FG (คัดกลับได้) + NG (ของเสียจริง) และออกจากก้อนรอคัด
+//   รวมนับได้ = FG + NG + รอ Sorting  (สามก้อนไม่ซ้ำกัน)
 window.getJobOrderQty = function(j) {
     j = j || {};
-    const fg = j.producedFg || 0;
     const fgSort = j.producedFgFromSort || 0;
-    const ngMachine = (j.ngPcsFromMachine !== undefined) ? j.ngPcsFromMachine : (j.producedNgPcs || 0);
-    const ngNet = (j.producedNgPcs !== undefined && j.ngPcsFromMachine !== undefined)
-        ? j.producedNgPcs
-        : Math.max(0, ngMachine - fgSort);
     const pending = j.pendingSortPcs || 0;
     const waitQc = j.waitQcPcs || 0;
     const sortingOpen = (j.sortingOpenPcs !== undefined) ? j.sortingOpenPcs : (pending + waitQc);
-    const accounted = (j.accountedPcs !== undefined) ? j.accountedPcs : (fg + ngNet);
+    const openFromFg = j.sortingOpenFromFg || 0;
+    const openFromLine = (j.sortingOpenFromLine !== undefined)
+        ? j.sortingOpenFromLine
+        : Math.max(0, sortingOpen - openFromFg);
+    const fgBooked = (j.producedFgBooked !== undefined) ? j.producedFgBooked : (j.producedFg || 0);
+    const fg = (j.producedFgBooked !== undefined) ? (j.producedFg || 0) : Math.max(0, fgBooked - openFromFg);
+    const ngMachine = (j.ngPcsFromMachine !== undefined) ? j.ngPcsFromMachine : (j.producedNgPcs || 0);
+    const ngFromSort = j.ngPcsFromSort || 0;
+    const ngNet = (j.ngPcsFromMachine !== undefined) ? (ngMachine + ngFromSort) : (j.producedNgPcs || 0);
+    const accounted = (j.accountedPcs !== undefined) ? j.accountedPcs : (fg + ngNet + sortingOpen);
     const target = j.targetQty || 0;
     return {
         fg: fg,
+        fgBooked: fgBooked,
         fgFromSort: fgSort,
         ngNet: ngNet,
         ngMachine: ngMachine,
-        ngFromSort: j.ngPcsFromSort || 0,
+        ngFromSort: ngFromSort,
         pending: pending,
         waitQc: waitQc,
         sortingOpen: sortingOpen,
+        openFromFg: openFromFg,
+        openFromLine: openFromLine,
         accounted: accounted,
         target: target,
         shortage: Math.max(0, target - accounted),
@@ -194,11 +203,11 @@ window.renderJobOrderTable = function() {
         const statusText = JOB_ORDER_STATUS_LABEL[j.status] || j.status;
         const canDelete = (j.producedFg || 0) === 0;
         const q = window.getJobOrderQty(j);
-        const ngTitle = `NG จากเครื่อง ${q.ngMachine.toLocaleString()} ชิ้น`
-            + (q.fgFromSort ? ` · คัดกลับเป็น FG ได้ ${q.fgFromSort.toLocaleString()} ชิ้น` : '')
-            + ` (ไม่นับ NG หลัง Sort ซ้ำ)`;
+        const ngTitle = `NG หน้าเครื่อง ${q.ngMachine.toLocaleString()} ชิ้น`
+            + ` · NG หลังคัด ${q.ngFromSort.toLocaleString()} ชิ้น (คนละก้อน ไม่ทับกัน)`;
         const pendingTitle = `รอคัด ${q.pending.toLocaleString()} ชิ้น · คัดแล้วรอ QC ${q.waitQc.toLocaleString()} ชิ้น`
-            + ` — ยอดนี้เป็นส่วนหนึ่งของ NG สุทธิ ไม่ถูกนับซ้ำ`;
+            + ` — พบระหว่างผลิต ${q.openFromLine.toLocaleString()} (ยอดใหม่)`
+            + ` · พบที่ FG/RTV ${q.openFromFg.toLocaleString()} (หักออกจาก FG แล้ว)`;
         const accBadge = q.target <= 0
             ? '<span class="text-[10px] text-gray-400">ไม่ได้ตั้งเป้า</span>'
             : (q.complete
@@ -213,14 +222,15 @@ window.renderJobOrderTable = function() {
             </td>
             <td class="px-3 py-2 text-sm text-gray-800">${j.product || '-'}</td>
             <td class="px-3 py-2 text-right font-bold text-gray-700">${(j.targetQty || 0).toLocaleString()}</td>
-            <td class="px-3 py-2 text-right font-bold text-green-700">${q.fg.toLocaleString()}
+            <td class="px-3 py-2 text-right font-bold text-green-700" title="บันทึกไว้ ${q.fgBooked.toLocaleString()} ชิ้น${q.openFromFg ? ` · หักที่ส่งคัด (พบที่ FG/RTV) ${q.openFromFg.toLocaleString()} ชิ้น` : ''}">${q.fg.toLocaleString()}
                 ${q.fgFromSort ? `<div class="text-[10px] font-normal text-gray-400">รวมคัดกลับ ${q.fgFromSort.toLocaleString()}</div>` : ''}
+                ${q.openFromFg ? `<div class="text-[10px] font-normal text-amber-600">หักส่งคัด -${q.openFromFg.toLocaleString()}</div>` : ''}
             </td>
             <td class="px-3 py-2 text-right font-bold ${q.ngNet > 0 ? 'text-red-600' : 'text-gray-400'}" title="${ngTitle}">${q.ngNet.toLocaleString()}</td>
             <td class="px-3 py-2 text-right font-bold ${q.sortingOpen > 0 ? 'text-amber-600' : 'text-gray-400'}" title="${pendingTitle}">${q.sortingOpen.toLocaleString()}
                 ${q.waitQc ? `<div class="text-[10px] font-normal text-gray-400">รอ QC ${q.waitQc.toLocaleString()}</div>` : ''}
             </td>
-            <td class="px-3 py-2 text-right font-bold text-indigo-700" title="FG + NG สุทธิ = ยอดที่ออกจากเครื่องจริง (นับครั้งเดียว)">${q.accounted.toLocaleString()}
+            <td class="px-3 py-2 text-right font-bold text-indigo-700" title="FG + NG + รอ Sorting = ยอดที่ออกจากเครื่องจริง (สามก้อนไม่ซ้ำกัน)">${q.accounted.toLocaleString()}
                 <div class="mt-0.5">${accBadge}</div>
             </td>
             <td class="px-3 py-2 text-right font-bold ${j.remainingQty > 0 ? 'text-amber-700' : 'text-gray-400'}">${(j.remainingQty || 0).toLocaleString()}</td>
@@ -359,7 +369,7 @@ window.renderJobOrderDashCard = function(data) {
                 <span class="font-bold">${(j.progressPct || 0).toFixed(1)}%</span>
             </div>
             <div class="flex justify-between items-center text-[10px] text-gray-500 mt-0.5 gap-2 flex-wrap"
-                 title="รวมนับได้ = FG + NG สุทธิ (งานรอ Sorting เป็นส่วนหนึ่งของ NG อยู่แล้ว จึงไม่ถูกนับซ้ำ)">
+                 title="รวมนับได้ = FG + NG + รอ Sorting — งานที่พบระหว่างผลิตเป็นยอดใหม่ ส่วนที่พบที่ FG/RTV ถูกหักออกจาก FG แล้ว จึงไม่ซ้ำกัน">
                 <span>
                     <span class="text-red-500">NG ${q.ngNet.toLocaleString()}</span>
                     · <span class="text-amber-600">รอ Sorting ${q.sortingOpen.toLocaleString()}</span>${rangePending ? ` (ช่วงนี้ ${rangePending.toLocaleString()})` : ''}

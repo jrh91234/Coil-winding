@@ -39,8 +39,8 @@
 - `data.dynamicSymptomWeights` = { symptom: fgRate } from sort history
 - **งานรอ Sort ในกราฟ Daily Output**: `dailyTrend[].pendingSortFromFg` / `pendingSortFromNg` / `pendingSortByModel[model] = {qty, fromFg, fromNg}`
   - แยกที่มาด้วย remark `พบที่: FG|RTV` (กติกาเดียวกับตอน QC อนุมัติที่หัก FG) → `fromFg`, ที่เหลือ = `fromNg`
-  - กราฟ Daily Output (`js/charts/models.js`) หัก `fromFg` ออกจากแท่ง FG (งานผลิต) และ `fromNg` ออกจากแท่ง NG (งานผลิต) แล้วแสดงเป็นก้อน **"รอ Sort (ยังไม่รู้ผล)"** สีม่วง → ความสูงแท่งรวมเท่าเดิม ไม่นับซ้ำ
-  - หักได้ไม่เกินยอดของช่วงนั้น (ใบงานอาจลงคนละวันกับวันผลิต) ส่วนที่หักไม่ได้ = `pendExtra` แจ้งใน tooltip
+  - กราฟ Daily Output (`js/charts/models.js`) หักเฉพาะ `fromFg` ออกจากแท่ง FG (งานผลิต) ส่วน `fromNg` (= พบระหว่างผลิต) เป็นยอดใหม่ ไม่หักจากที่ไหน แล้วแสดงรวมเป็นก้อน **"รอ Sort (ยังไม่รู้ผล)"** สีม่วง
+  - หัก FG ได้ไม่เกินยอด FG ของช่วงนั้น (ใบงานอาจลงคนละวันกับวันผลิต) ส่วนที่หักไม่ได้ = `pendExtra` แจ้งใน tooltip
   - สลับโหมดได้ที่ `dailyOutputPendingSelector` (`split` = ค่าเริ่มต้น / `merge` = แบบเดิม)
 - **Coil changes**: `data.dailyTrend[].coilChanges` (total), `data.dailyTrend[].coilChangesByMachine` (per machine) — from RawMaterial sheet
 
@@ -68,11 +68,15 @@
 - Backend: `getSortingByJobOrder_(opts)` รวมยอด Sorting ต่อ Job Order — **กันซ้ำด้วย `Job_ID` (1 งานนับครั้งเดียว)**
   - `Pending`/`Rejected` → `pendingPcs` (รอคัด) · `Wait QC` → `waitQcPcs` (คัดแล้วรอ QC) · `Completed` → เก็บอ้างอิงเท่านั้น (ยอดอยู่ในแถว SORT- แล้ว)
   - งานที่ยังไม่ผูกเลข Job Order รวมไว้ที่คีย์ `__NO_JO__`
-- Backend: `summarizeJobOrderQty_(act, sort)` — สูตรกลาง (ห้ามคำนวณซ้ำที่อื่น):
-  - `producedFg = fgProd + fgSort`
-  - `ngNetPcs = max(0, ngPcsProd − fgSort)` — **ไม่บวก `ngPcsSort` ซ้ำ** เพราะ NG หลัง Sort เป็นส่วนหนึ่งของ NG ตอนผลิตอยู่แล้ว
-  - `sortingOpenPcs = pendingPcs + waitQcPcs` — เป็น**ส่วนหนึ่งของ** `ngNetPcs` ไม่ใช่ยอดใหม่
-  - `accountedPcs = producedFg + ngNetPcs = fgProd + ngPcsProd` (ยอดที่ออกจากเครื่องจริง) → ใช้ตัดสิน "ยอดครบหรือไม่" เทียบกับ `targetQty`
+- Backend: `summarizeJobOrderQty_(act, sort)` — สูตรกลาง (ห้ามคำนวณซ้ำที่อื่น) **ยึด "ขั้นตอนที่พบของเสีย"**:
+  - พบ**ระหว่างผลิต** → ยังไม่เคยบันทึกเป็น FG หรือ NG → ยอดรอคัดเป็นก้อนใหม่ ไม่หักจากที่ไหน
+  - พบที่ **FG/RTV** → เคยนับเป็น FG แล้ว → หักออกจาก FG ของจ๊อบนั้น
+  - **คัดเสร็จ (QC อนุมัติ)** → แถว SORT- ลง FG ที่คัดได้ + NG จริง และงานออกจากก้อนรอคัดเอง
+  - `producedFg = (fgProd + fgSort) − (pendingFromFg + waitQcFromFg)`
+  - `ngNetPcs = ngPcsProd + ngPcsSort` (คนละก้อน ไม่ทับกัน)
+  - `sortingOpenPcs = pendingPcs + waitQcPcs`
+  - `accountedPcs = producedFg + ngNetPcs + sortingOpenPcs` → ใช้ตัดสิน "ยอดครบหรือไม่" เทียบกับ `targetQty`
+  - ตรวจแล้วทุกสถานะ (ผลิตล้วน / รอคัด / คัดเสร็จ / พบที่ FG / รอ QC) ผลรวมคงที่เท่ายอดที่ออกจากเครื่อง
 - Payload: `jobOrders[]` เพิ่ม `ngPcsFromMachine/ngPcsFromSort/pendingSortPcs/waitQcPcs/sortingOpenPcs/accountedPcs/qtyComplete`, dashboard เพิ่ม `jobOrderSortData`, GET_JOB_ORDERS เพิ่ม `unlinkedSorting`
 - Frontend: `window.getJobOrderQty(j)` ใน `js/planning.js` เป็นตัวกลางอ่านค่าเหล่านี้ (มี fallback สำหรับข้อมูลเก่า) — ใช้ทั้งตาราง Plan, การ์ด Dashboard, Auto Report, CSV
 
