@@ -4094,6 +4094,8 @@ function getSortingByJobOrder_(opts) {
   const fgCol = idx("fg_qty");
   const ngCol = idx("ng_qty");
   const dateCol = idx("date");
+  const remarkCol = idx("remark");
+  const foundAtCol = idx("found_at");   // คอลัมน์ทางเลือก ถ้าระบบ Sorting เพิ่มให้ในอนาคต
 
   const seenJobIds = {};   // กันแถวซ้ำของงานคัดเดียวกัน
 
@@ -4127,9 +4129,18 @@ function getSortingByJobOrder_(opts) {
     const pParts = productStr.split(" : ");
     const prodName = pParts[1] ? pParts[1].trim() : productStr;
 
+    // ขั้นตอนที่พบของเสีย — ตัวตัดสินว่ายอดนี้เคยถูกบันทึกไว้ที่ไหนแล้วหรือยัง
+    //   พบที่ FG/RTV = เคยนับเป็น FG ไปแล้ว → ต้องหักออกจาก FG ของ Job Order นั้น
+    //   พบระหว่างผลิต = ยังไม่เคยถูกบันทึกทั้ง FG และ NG → ไม่ต้องหักจากที่ไหน
+    const foundAtVal = foundAtCol !== -1 ? String(row[foundAtCol] || "").trim() : "";
+    const remarkVal = remarkCol !== -1 ? String(row[remarkCol] || "") : "";
+    const fromFgSide = foundAtVal
+      ? /^(FG|RTV)$/i.test(foundAtVal)
+      : /พบที่:\s*(FG|RTV)/i.test(remarkVal);
+
     if (!out[jo]) out[jo] = {
-      pendingPcs: 0, pendingBySymptom: {}, pendingJobs: 0,
-      waitQcPcs: 0, waitQcFgPcs: 0, waitQcNgPcs: 0, waitQcJobs: 0,
+      pendingPcs: 0, pendingFromFg: 0, pendingFromLine: 0, pendingBySymptom: {}, pendingJobs: 0,
+      waitQcPcs: 0, waitQcFromFg: 0, waitQcFromLine: 0, waitQcFgPcs: 0, waitQcNgPcs: 0, waitQcJobs: 0,
       completedFgPcs: 0, completedNgPcs: 0, completedJobs: 0
     };
     const agg = out[jo];
@@ -4138,6 +4149,7 @@ function getSortingByJobOrder_(opts) {
       const pcs = toPcs(qtyCol !== -1 ? row[qtyCol] : 0, prodName);
       if (pcs > 0) {
         agg.pendingPcs += pcs;
+        if (fromFgSide) agg.pendingFromFg += pcs; else agg.pendingFromLine += pcs;
         agg.pendingJobs++;
         const symptom = sympCol !== -1 ? String(row[sympCol] || "").trim() : "";
         if (symptom) agg.pendingBySymptom[symptom] = (agg.pendingBySymptom[symptom] || 0) + pcs;
@@ -4145,9 +4157,11 @@ function getSortingByJobOrder_(opts) {
     } else if (status === "Wait QC") {
       const fgPcs = toPcs(fgCol !== -1 ? row[fgCol] : 0, prodName);
       const ngPcs = toPcs(ngCol !== -1 ? row[ngCol] : 0, prodName);
+      const totPcs = fgPcs + ngPcs;
       agg.waitQcFgPcs += fgPcs;
       agg.waitQcNgPcs += ngPcs;
-      agg.waitQcPcs += (fgPcs + ngPcs);
+      agg.waitQcPcs += totPcs;
+      if (fromFgSide) agg.waitQcFromFg += totPcs; else agg.waitQcFromLine += totPcs;
       agg.waitQcJobs++;
     } else if (status === "Completed") {
       // นับไว้เพื่ออ้างอิงเท่านั้น — ยอดนี้อยู่ใน Production_Data (แถว SORT-) แล้ว
@@ -4160,11 +4174,16 @@ function getSortingByJobOrder_(opts) {
 }
 
 // สรุปยอดของ Job Order แบบไม่นับซ้ำ (ใช้ร่วมกันทั้ง getJobOrders_ และ Dashboard)
-// หลักการนับ:
-//   ผลิตแล้ว (FG)  = FG จากเครื่อง + FG ที่คัดกลับมาได้ (แถว SORT-)
-//   NG สุทธิ       = NG จากเครื่อง − FG ที่คัดกลับมาได้   → ไม่บวก NG จากแถว SORT- ซ้ำ
-//   รอ Sorting     = งาน Pending/Rejected + Wait QC → เป็น "ส่วนหนึ่งของ NG สุทธิ" ไม่ใช่ยอดใหม่
-//   รวมนับได้      = FG + NG สุทธิ = ยอดที่ออกจากเครื่องจริง (ใช้เทียบกับเป้าว่าครบหรือยัง)
+// ยึด "ขั้นตอนที่พบของเสีย" เป็นตัวตัดสินว่ายอดนั้นเคยถูกบันทึกไว้แล้วหรือยัง:
+//   • พบระหว่างผลิต → ยังไม่เคยบันทึกเป็น FG หรือ NG เลย → ยอดรอคัดเป็น "ก้อนใหม่" ไม่ต้องหักจากที่ไหน
+//   • พบที่ FG/RTV  → เคยนับเป็น FG ไปแล้ว → ต้องหักออกจาก FG ของ Job Order นั้น แล้วย้ายมาอยู่ก้อนรอคัด
+//   • คัดเสร็จ (QC อนุมัติ) → ระบบลงแถว SORT- ใน Production_Data ให้เอง = FG ที่คัดได้ + NG จริง
+//     งานนั้นจึงออกจากก้อนรอคัดโดยอัตโนมัติ (สถานะเป็น Completed)
+// สูตร:
+//   FG        = FG เครื่อง + FG จากแถว SORT-  − งานรอคัดที่พบที่ FG/RTV
+//   NG        = NG เครื่อง + NG จากแถว SORT-   (คนละก้อนกัน ไม่ทับกัน)
+//   รอ Sorting = Pending/Rejected + Wait QC
+//   รวมนับได้  = FG + NG + รอ Sorting  → ทั้งสามก้อนไม่ซ้ำกัน
 function summarizeJobOrderQty_(act, sort) {
   act = act || {};
   sort = sort || {};
@@ -4172,29 +4191,34 @@ function summarizeJobOrderQty_(act, sort) {
   const fgSort = act.fgSort || 0;
   const ngPcsProd = act.ngPcsProd || 0;
   const ngPcsSort = act.ngPcsSort || 0;
-  const fgTotal = fgProd + fgSort;
-
-  // FG ที่คัดกลับมาได้ ถือว่าออกจากกอง NG แล้ว จึงหักออกจาก NG (fgSort ติดลบ = เจอ NG เพิ่มจากของ FG เดิม)
-  const ngNetPcs = Math.max(0, ngPcsProd - fgSort);
 
   const pendingSortPcs = sort.pendingPcs || 0;
   const waitQcPcs = sort.waitQcPcs || 0;
   const sortingOpenPcs = pendingSortPcs + waitQcPcs;
 
+  // ส่วนที่พบที่ FG/RTV และยังคัดไม่เสร็จ → หักออกจาก FG (ของยังอยู่ในยอด FG เดิม)
+  const openFromFg = (sort.pendingFromFg || 0) + (sort.waitQcFromFg || 0);
+  const openFromLine = Math.max(0, sortingOpenPcs - openFromFg);
+
+  const fgBooked = fgProd + fgSort;
+  const fgTotal = Math.max(0, fgBooked - openFromFg);
+  const ngNetPcs = ngPcsProd + ngPcsSort;
+
   return {
     producedFg: fgTotal,
+    producedFgBooked: fgBooked,              // ยอด FG ตามที่บันทึกไว้ (ก่อนหักของที่ส่งคัด)
     producedFgFromMachine: fgProd,
     producedFgFromSort: fgSort,
-    producedNgPcsRaw: ngPcsProd + ngPcsSort,   // ยอดดิบ (นับซ้ำ) เก็บไว้อ้างอิง
+    producedNgPcsRaw: ngPcsProd + ngPcsSort,
     ngPcsFromMachine: ngPcsProd,
     ngPcsFromSort: ngPcsSort,
     ngNetPcs: ngNetPcs,
     pendingSortPcs: pendingSortPcs,
     waitQcPcs: waitQcPcs,
     sortingOpenPcs: sortingOpenPcs,
-    // ส่วนของ NG ที่ยังคัดไม่เสร็จ — ไม่เกิน NG สุทธิ (กันตัวเลขเกินจากข้อมูลที่ไม่ตรงกัน)
-    pendingWithinNgPcs: Math.min(sortingOpenPcs, ngNetPcs),
-    accountedPcs: fgTotal + ngNetPcs
+    sortingOpenFromFg: openFromFg,           // ส่วนที่หักออกจาก FG
+    sortingOpenFromLine: openFromLine,       // ส่วนที่พบระหว่างผลิต (ยอดใหม่)
+    accountedPcs: fgTotal + ngNetPcs + sortingOpenPcs
   };
 }
 
@@ -4227,16 +4251,16 @@ function getJobOrders_(opts) {
     };
     const srt = sorting[jobOrder] || null;
     const qty = summarizeJobOrderQty_(act, srt);
-    const remaining = Math.max(0, target - act.fg);
-    const progress = target > 0 ? Math.min(999, (act.fg / target) * 100) : 0;
+    const remaining = Math.max(0, target - qty.producedFg);
+    const progress = target > 0 ? Math.min(999, (qty.producedFg / target) * 100) : 0;
     // ยอดครบหรือไม่: เทียบ "รวมนับได้ (FG + NG สุทธิ)" กับเป้า
     const accountedRemaining = Math.max(0, target - qty.accountedPcs);
     const accountedPct = target > 0 ? Math.min(999, (qty.accountedPcs / target) * 100) : 0;
 
     let status = manualStatus;
     if (manualStatus !== PLAN_STATUS_CANCELLED && manualStatus !== PLAN_STATUS_CLOSED) {
-      if (target > 0 && act.fg >= target) status = "Completed";
-      else if (act.fg > 0) status = "In Progress";
+      if (target > 0 && qty.producedFg >= target) status = "Completed";
+      else if (qty.producedFg > 0 || qty.sortingOpenPcs > 0) status = "In Progress";
       else status = PLAN_STATUS_OPEN;
     }
 
@@ -4250,22 +4274,24 @@ function getJobOrders_(opts) {
       recorder: String(get(row, "Recorder") || "").trim(),
       manualStatus: manualStatus,
       status: status,
-      producedFg: act.fg,
+      producedFg: qty.producedFg,               // FG หลังหักงานที่พบที่ FG/RTV แล้วยังคัดไม่เสร็จ
       producedFgFromMachine: qty.producedFgFromMachine,
       producedFgFromSort: qty.producedFgFromSort,
-      producedNgPcs: qty.ngNetPcs,              // NG สุทธิ (ไม่นับ NG หลัง Sort ซ้ำ)
-      producedNgPcsRaw: qty.producedNgPcsRaw,   // ยอดดิบก่อนกันซ้ำ (อ้างอิง)
+      producedNgPcs: qty.ngNetPcs,              // NG เครื่อง + NG หลังคัด (คนละก้อน ไม่ทับกัน)
+      producedNgPcsRaw: qty.producedNgPcsRaw,
       ngPcsFromMachine: qty.ngPcsFromMachine,
       ngPcsFromSort: qty.ngPcsFromSort,
       producedNgKg: Math.round(act.ngKg * 1000) / 1000,
       pendingSortPcs: qty.pendingSortPcs,       // งานรอคัด (Pending/Rejected)
       waitQcPcs: qty.waitQcPcs,                 // คัดแล้วรอ QC
       sortingOpenPcs: qty.sortingOpenPcs,       // รวมงาน Sorting ที่ยังไม่ปิด
-      pendingWithinNgPcs: qty.pendingWithinNgPcs,
+      sortingOpenFromFg: qty.sortingOpenFromFg,
+      sortingOpenFromLine: qty.sortingOpenFromLine,
+      producedFgBooked: qty.producedFgBooked,
       pendingBySymptom: srt ? srt.pendingBySymptom : {},
       sortedFgPcs: srt ? srt.completedFgPcs : 0,
       sortedNgPcs: srt ? srt.completedNgPcs : 0,
-      accountedPcs: qty.accountedPcs,           // FG + NG สุทธิ = ยอดที่ออกจากเครื่องจริง
+      accountedPcs: qty.accountedPcs,           // FG + NG + รอ Sorting = ยอดที่ออกจากเครื่องจริง
       accountedRemainingQty: accountedRemaining,
       accountedPct: Math.round(accountedPct * 10) / 10,
       qtyComplete: target > 0 && qty.accountedPcs >= target,
@@ -4970,7 +4996,8 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
   // สรุปยอด Job Order ในช่วงที่เลือกแบบไม่นับซ้ำ (NG หลัง Sort อยู่ใน NG ตอนผลิตแล้ว)
   Object.keys(result.jobOrderData).forEach(jo => {
     const jd = result.jobOrderData[jo];
-    jd.ngNetPcs = Math.max(0, jd.ngPcsProd - jd.fgSort);
+    // NG จากเครื่องและ NG หลังคัด เป็นคนละก้อน (ของที่ส่งคัดยังไม่เคยถูกบันทึกเป็น NG)
+    jd.ngNetPcs = jd.ngPcsProd + jd.ngPcsSort;
     jd.accountedPcs = jd.fg + jd.ngNetPcs;
   });
 
