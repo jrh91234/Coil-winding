@@ -707,6 +707,21 @@ const ctxQC = document.getElementById('qcTrendChart');
                 }
             }
 
+            // 🌟 2.5 เส้น/แท่งจำนวน NG (ชิ้น) — ใช้แกน Y ขวา เทียบกับ % NG Rate 🌟
+            datasets.push({
+                label: 'จำนวน NG (ชิ้น)',
+                data: displayTrendData.map(d => d.ngPcs || 0),
+                borderColor: 'rgba(37, 99, 235, 0.85)',
+                backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                borderWidth: 2,
+                pointRadius: 2,
+                pointStyle: 'rect',
+                fill: false,
+                tension: 0.2,
+                yAxisID: 'yQty',
+                order: 5
+            });
+
             // 🌟 3. สร้างกราฟ Chart.js 🌟
             charts.qcTrend = new Chart(ctxQC, {
                 type: 'line',
@@ -724,6 +739,14 @@ const ctxQC = document.getElementById('qcTrendChart');
                             min: 0.1,
                             max: 100,
                             ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 }
+                        },
+                        yQty: {
+                            type: 'linear',
+                            position: 'right',
+                            beginAtZero: true,
+                            grid: { drawOnChartArea: false },
+                            title: { display: true, text: 'จำนวน NG (ชิ้น)' },
+                            ticks: { callback: v => Number(v).toLocaleString() }
                         }
                     },
                     layout: { padding: { top: 20 } },
@@ -738,6 +761,14 @@ const ctxQC = document.getElementById('qcTrendChart');
                         },
                         tooltip: {
                             callbacks: {
+                                label: function(ctx) {
+                                    const v = ctx.parsed.y;
+                                    if (v === null || v === undefined) return null;
+                                    if (ctx.dataset.yAxisID === 'yQty') {
+                                        return `${ctx.dataset.label}: ${Math.round(v).toLocaleString()} ชิ้น`;
+                                    }
+                                    return `${ctx.dataset.label}: ${v.toFixed(2)}%`;
+                                },
                                 afterBody: function(tooltipItems) {
                                     const idx = tooltipItems[0].dataIndex;
                                     const d = displayTrendData[idx];
