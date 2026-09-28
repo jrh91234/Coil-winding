@@ -51,6 +51,53 @@ function splitPhotoUrls(raw) {
 }
 
 // ==================================================
+// 🔄 PM หมุนเวียนกะ A/B — กะที่ทำรอบนี้ รอบหน้าจะส่งต่อให้อีกกะ เพื่อความยุติธรรม
+// ==================================================
+const PM_SHIFTS = ["A", "B"];
+
+function normalizePmShift(v) {
+  const s = String(v || "").replace(/กะ/g, "").trim().toUpperCase();
+  return PM_SHIFTS.indexOf(s) > -1 ? s : "";
+}
+
+function nextPmShift(shift) {
+  return shift === "A" ? "B" : "A";
+}
+
+// เติมคอลัมน์ Assigned_Shift ให้แผน Active ที่ยังไม่มีกะ (แผนเก่า / แผนที่เพิ่มในชีทเอง)
+// กระจายสลับ A/B ในหัวข้อเดียวกันตามลำดับเครื่อง เพื่อไม่ให้งานหัวข้อเดียวกันไปกองที่กะเดียว
+function ensurePmPlanShifts(pmSheet) {
+  ensureColumns(pmSheet, ["Assigned_Shift"]);
+  const rows = pmSheet.getDataRange().getValues();
+  const h = rows[0].map(x => String(x).trim());
+  const col = h.indexOf("Assigned_Shift");
+  const statusCol = h.indexOf("Status"), taskCol = h.indexOf("Task_Name"), machineCol = h.indexOf("Machine");
+  const counts = {}, pending = {};
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][statusCol] || "").trim() !== "Active") continue;
+    const key = String(rows[i][taskCol] || "").trim().toLowerCase();
+    if (!counts[key]) counts[key] = { A: 0, B: 0 };
+    const s = normalizePmShift(rows[i][col]);
+    if (s) counts[key][s]++;
+    else (pending[key] = pending[key] || []).push({ i: i, machine: String(rows[i][machineCol] || "") });
+  }
+  let changed = false;
+  Object.keys(pending).forEach(key => {
+    pending[key].sort((a, b) => a.machine < b.machine ? -1 : a.machine > b.machine ? 1 : 0).forEach(p => {
+      const s = counts[key].A <= counts[key].B ? "A" : "B";
+      rows[p.i][col] = s;
+      counts[key][s]++;
+      changed = true;
+    });
+  });
+  if (changed && rows.length > 1) {
+    pmSheet.getRange(2, col + 1, rows.length - 1, 1).setValues(rows.slice(1).map(r => [r[col]]));
+    SpreadsheetApp.flush();
+  }
+  return rows;
+}
+
+// ==================================================
 // 🗂️ ประวัติงาน PM — ใช้ร่วมกันระหว่าง GET_PM_HISTORY และ EXPORT_PM_HISTORY_PDF
 // ==================================================
 function collectPmHistory(ss, data) {
@@ -111,7 +158,9 @@ function collectPmHistory(ss, data) {
         const taskName = String(logRows[i][li("Task_Name")] || "");
         const doneBy = String(logRows[i][li("Done_By")] || "");
         const note = li("Note") > -1 ? String(logRows[i][li("Note")] || "") : "";
-        if (keyword && (taskName + " " + machine + " " + doneBy + " " + note + " " + planId + " " + logId).toLowerCase().indexOf(keyword) === -1) continue;
+        const doneShift = li("Done_Shift") > -1 ? normalizePmShift(logRows[i][li("Done_Shift")]) : "";
+        const shiftLabel = doneShift ? "กะ " + doneShift : "";
+        if (keyword && (taskName + " " + machine + " " + doneBy + " " + shiftLabel + " " + note + " " + planId + " " + logId).toLowerCase().indexOf(keyword) === -1) continue;
 
         const info = planInfo[planId] || {};
         logs.push({
@@ -126,6 +175,8 @@ function collectPmHistory(ss, data) {
           dueDate: asDate(logRows[i][li("Due_Date")]),
           doneDate: doneDate,
           doneBy: doneBy,
+          doneShift: doneShift,
+          assignedShift: li("Assigned_Shift") > -1 ? normalizePmShift(logRows[i][li("Assigned_Shift")]) : "",
           status: String(logRows[i][li("Status")] || ""),
           approvedBy: li("Approved_By") > -1 ? String(logRows[i][li("Approved_By")] || "") : "",
           approvedDate: li("Approved_Date") > -1 ? asDate(logRows[i][li("Approved_Date")]) : "",
@@ -189,7 +240,7 @@ function buildPmHistoryReportHtml(logs, stats, meta) {
       '<td>' + pmHtmlEscape(l.taskName) + (l.planType ? ' <span class="tag">' + pmHtmlEscape(l.planType) + '</span>' : '') +
         (l.frequency ? '<div class="sub">ความถี่: ' + pmHtmlEscape(l.frequency) + '</div>' : '') + '</td>' +
       '<td class="c">' + pmHtmlEscape(l.dueDate) + '</td>' +
-      '<td class="c">' + pmHtmlEscape(l.doneBy) + '</td>' +
+      '<td class="c">' + pmHtmlEscape(l.doneBy) + (l.doneShift ? '<div class="sub">กะ ' + pmHtmlEscape(l.doneShift) + '</div>' : '') + '</td>' +
       '<td class="c ' + (l.daysDiff > 0 ? 'late' : 'ontime') + '">' + (l.daysDiff > 0 ? 'ช้า ' + l.daysDiff + ' วัน' : 'ตรงเวลา') + '</td>' +
       '<td>' + pmHtmlEscape(l.note) + '</td>' +
       '<td class="c">' + (photos || '<span class="sub">ไม่มีรูป</span>') + '</td>' +
@@ -3099,7 +3150,7 @@ function doPost(e) {
     if (role !== "Viewer") try {
       const pmSheet = ss.getSheetByName("Maintenance_Plan");
       if (pmSheet && pmSheet.getLastRow() > 1) {
-        const pmRows = pmSheet.getDataRange().getValues();
+        const pmRows = ensurePmPlanShifts(pmSheet);
         const pmH = pmRows[0].map(h => String(h).trim());
         const pi = (n) => pmH.indexOf(n);
         for (let i = 1; i < pmRows.length; i++) {
@@ -3121,6 +3172,7 @@ function doPost(e) {
             taskName: String(pmRows[i][pi("Task_Name")] || ""),
             frequency: String(pmRows[i][pi("Frequency")] || ""),
             assignedTo: assignedTo,
+            assignedShift: normalizePmShift(pmRows[i][pi("Assigned_Shift")]),
             dueDate: dueDate,
             daysOverdue: daysOverdue,
             note: String(pmRows[i][pi("Note")] || ""),
@@ -3158,15 +3210,16 @@ function doPost(e) {
 
     const pmSheet = ss.getSheetByName("Maintenance_Plan");
     if (!pmSheet) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบชีท Maintenance_Plan"})).setMimeType(ContentService.MimeType.JSON);
-    const pmRows = pmSheet.getDataRange().getValues();
+    const pmRows = ensurePmPlanShifts(pmSheet);
     const pmH = pmRows[0].map(h => String(h).trim());
     const pi = (n) => pmH.indexOf(n);
-    let planRow = -1, machine = "", taskName = "", dueDate = "";
+    let planRow = -1, machine = "", taskName = "", dueDate = "", assignedShift = "";
     for (let i = 1; i < pmRows.length; i++) {
       if (String(pmRows[i][pi("Plan_ID")] || "").trim() === planId) {
         planRow = i + 1;
         machine = String(pmRows[i][pi("Machine")] || "");
         taskName = String(pmRows[i][pi("Task_Name")] || "");
+        assignedShift = normalizePmShift(pmRows[i][pi("Assigned_Shift")]);
         const dd = pmRows[i][pi("Next_Due_Date")];
         dueDate = (dd instanceof Date) ? Utilities.formatDate(dd, "GMT+7", "yyyy-MM-dd") : String(dd || "").substring(0, 10);
         break;
@@ -3174,14 +3227,40 @@ function doPost(e) {
     }
     if (planRow === -1) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบแผน " + planId})).setMimeType(ContentService.MimeType.JSON);
 
+    // กะที่ทำจริง (หน้าเว็บเวอร์ชันเก่าไม่ส่งมา → ถือว่ากะที่ได้รับมอบหมายเป็นคนทำ)
+    const doneShift = normalizePmShift(data.shift) || assignedShift;
+    const nextShift = doneShift ? nextPmShift(doneShift) : "";
+
     let logSheet = ss.getSheetByName("Maintenance_Log");
     if (!logSheet) {
       logSheet = ss.insertSheet("Maintenance_Log");
-      logSheet.appendRow(["Log_ID", "Plan_ID", "Machine", "Task_Name", "Due_Date", "Done_Date", "Done_By", "Status", "Approved_By", "Approved_Date", "Photo_URLs", "Note", "Days_Diff"]);
+      logSheet.appendRow(["Log_ID", "Plan_ID", "Machine", "Task_Name", "Due_Date", "Done_Date", "Done_By", "Status", "Approved_By", "Approved_Date", "Photo_URLs", "Note", "Days_Diff", "Done_Shift", "Assigned_Shift"]);
     }
+    ensureColumns(logSheet, ["Done_Shift", "Assigned_Shift"]);
+    const logH = logSheet.getRange(1, 1, 1, logSheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
     const logId = "PML-" + Utilities.formatDate(now, "GMT+7", "yyMMddHHmmss") + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
     const daysDiff = dueDate ? daysBetween(dueDate, doneDate) : 0;
-    logSheet.appendRow([logId, planId, machine, taskName, dueDate, doneDate, doneBy, "Approved", doneBy, doneDate, photoUrl, note, daysDiff]);
+    const logRow = new Array(logH.length).fill("");
+    const setLog = (name, val) => { const c = logH.indexOf(name); if (c > -1) logRow[c] = val; };
+    setLog("Log_ID", logId);
+    setLog("Plan_ID", planId);
+    setLog("Machine", machine);
+    setLog("Task_Name", taskName);
+    setLog("Due_Date", dueDate);
+    setLog("Done_Date", doneDate);
+    setLog("Done_By", doneBy);
+    setLog("Status", "Approved");
+    setLog("Approved_By", doneBy);
+    setLog("Approved_Date", doneDate);
+    setLog("Photo_URLs", photoUrl);
+    setLog("Note", note);
+    setLog("Days_Diff", daysDiff);
+    setLog("Done_Shift", doneShift);
+    setLog("Assigned_Shift", assignedShift);
+    logSheet.appendRow(logRow);
+
+    // ส่งต่อรอบหน้าให้อีกกะ
+    if (nextShift) pmSheet.getRange(planRow, pi("Assigned_Shift") + 1).setValue(nextShift);
 
     // อัพเดต Next_Due_Date ใน Maintenance_Plan ทันที
     const pmH2 = pmRows[0].map(h => String(h).trim());
@@ -3204,7 +3283,7 @@ function doPost(e) {
     SpreadsheetApp.flush();
 
     logUserAction(doneBy, data.role || "Production", "COMPLETE_PM_TASK", "แผน " + planId + " เครื่อง " + machine);
-    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "บันทึกเสร็จเรียบร้อย", logId: logId})).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "บันทึกเสร็จเรียบร้อย" + (nextShift ? "\nรอบถัดไปของงานนี้เป็นของ กะ " + nextShift : ""), logId: logId, doneShift: doneShift, nextShift: nextShift})).setMimeType(ContentService.MimeType.JSON);
   }
 
   // === APPROVE_PM_TASK — หัวหน้าอนุมัติ ===
@@ -3290,7 +3369,7 @@ function doPost(e) {
 
     // เพิ่มคอลัมน์ที่ยังไม่มีในชีทเดิมโดยอัตโนมัติ (สำหรับชีทที่สร้างไว้ก่อนหน้านี้)
     let pmH = pmSheet.getRange(1, 1, 1, pmSheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
-    ["Instruction", "Reference_Photo_URL"].forEach(col => {
+    ["Instruction", "Reference_Photo_URL", "Assigned_Shift"].forEach(col => {
       if (pmH.indexOf(col) === -1) {
         pmSheet.getRange(1, pmH.length + 1).setValue(col);
         pmH.push(col);
@@ -3314,6 +3393,8 @@ function doPost(e) {
     const assignedTo = String(data.assignedTo || "").trim();
     const note = String(data.note || "").trim();
     const instruction = String(data.instruction || "").trim();
+    // เลือกกะเริ่มต้นเอง → สลับ A/B ไล่ตามเครื่องที่เลือก, ไม่เลือก → ให้ระบบกระจายให้สมดุลภายหลัง
+    const startShift = normalizePmShift(data.startShift);
 
     const planIds = machines.map((machine, idx) => {
       const now = new Date();
@@ -3332,10 +3413,12 @@ function doPost(e) {
       setCol("Reference_Photo_URL", photoUrl);
       setCol("Status", "Active");
       setCol("Next_Due_Date", nextDueDate);
+      setCol("Assigned_Shift", startShift ? (idx % 2 === 0 ? startShift : nextPmShift(startShift)) : "");
       pmSheet.appendRow(row);
       return planId;
     });
     SpreadsheetApp.flush();
+    if (!startShift) ensurePmPlanShifts(pmSheet);
 
     logUserAction(data.username || "Unknown", data.role || "", "ADD_PM_PLAN", "เพิ่มแผน PM: " + taskName + " (" + machines.join(", ") + ")");
     return ContentService.createTextOutput(JSON.stringify({status: "success", message: "เพิ่มแผน PM สำเร็จ " + planIds.length + " เครื่อง", planIds: planIds, photoUrls: photoUrls})).setMimeType(ContentService.MimeType.JSON);
@@ -3377,7 +3460,7 @@ function doPost(e) {
     try {
       const pmSheet = ss.getSheetByName("Maintenance_Plan");
       if (pmSheet && pmSheet.getLastRow() > 1) {
-        const pmRows = pmSheet.getDataRange().getValues();
+        const pmRows = ensurePmPlanShifts(pmSheet);
         const pmH = pmRows[0].map(h => String(h).trim());
         const pi = (n) => pmH.indexOf(n);
         for (let i = 1; i < pmRows.length; i++) {
@@ -3392,6 +3475,7 @@ function doPost(e) {
             frequency: String(pmRows[i][pi("Frequency")] || ""),
             intervalValue: parseInt(pmRows[i][pi("Interval_Value")]) || 0,
             assignedTo: String(pmRows[i][pi("Assigned_To")] || ""),
+            assignedShift: normalizePmShift(pmRows[i][pi("Assigned_Shift")]),
             nextDueDate: (dd instanceof Date) ? Utilities.formatDate(dd, "GMT+7", "yyyy-MM-dd") : String(dd || "").substring(0, 10),
             lastDoneDate: (ld instanceof Date) ? Utilities.formatDate(ld, "GMT+7", "yyyy-MM-dd") : String(ld || "").substring(0, 10)
           });
@@ -3415,6 +3499,8 @@ function doPost(e) {
             dueDate: (dd instanceof Date) ? Utilities.formatDate(dd, "GMT+7", "yyyy-MM-dd") : String(dd || "").substring(0, 10),
             doneDate: (done instanceof Date) ? Utilities.formatDate(done, "GMT+7", "yyyy-MM-dd") : String(done || "").substring(0, 10),
             doneBy: String(logRows[i][li("Done_By")] || ""),
+            doneShift: li("Done_Shift") > -1 ? normalizePmShift(logRows[i][li("Done_Shift")]) : "",
+            assignedShift: li("Assigned_Shift") > -1 ? normalizePmShift(logRows[i][li("Assigned_Shift")]) : "",
             status: String(logRows[i][li("Status")] || ""),
             note: li("Note") > -1 ? String(logRows[i][li("Note")] || "") : "",
             photoUrls: li("Photo_URLs") > -1 ? splitPhotoUrls(logRows[i][li("Photo_URLs")]) : [],
@@ -3431,8 +3517,24 @@ function doPost(e) {
     const overdue = plans.filter(p => p.nextDueDate && p.nextDueDate <= Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd")).length;
     const avgLateDays = late > 0 ? Math.round(approved.filter(l => l.daysDiff > 0).reduce((s, l) => s + l.daysDiff, 0) / late * 10) / 10 : 0;
 
+    // สรุปแยกตามกะ (เดือนนี้) — ใช้ยืนยันว่า PM กระจายเท่ากันทั้ง 2 กะ
+    const todayStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+    const monthPrefix = todayStr.substring(0, 7);
+    const shiftStats = {};
+    PM_SHIFTS.forEach(s => {
+      const done = approved.filter(l => l.doneShift === s && l.doneDate.substring(0, 7) === monthPrefix);
+      const mine = plans.filter(p => p.assignedShift === s);
+      shiftStats[s] = {
+        doneMonth: done.length,
+        onTimeMonth: done.filter(l => l.daysDiff <= 0).length,
+        coverMonth: done.filter(l => l.assignedShift && l.assignedShift !== s).length,
+        planned: mine.length,
+        overdue: mine.filter(p => p.nextDueDate && p.nextDueDate <= todayStr).length
+      };
+    });
+
     return ContentService.createTextOutput(JSON.stringify({
-      status: "success", plans: plans, logs: logs,
+      status: "success", plans: plans, logs: logs, shiftStats: shiftStats, month: monthPrefix,
       stats: { total: approved.length, onTime: onTime, late: late, overdue: overdue, avgLateDays: avgLateDays, adherencePct: approved.length > 0 ? Math.round(onTime / approved.length * 1000) / 10 : 100 }
     })).setMimeType(ContentService.MimeType.JSON);
   }

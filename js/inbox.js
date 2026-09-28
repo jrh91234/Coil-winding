@@ -2,6 +2,53 @@
 let inboxData = null;
 let inboxActiveCategory = 'all';
 
+// === 🔄 PM หมุนเวียนกะ A/B — กะที่ทำรอบนี้ รอบหน้าระบบส่งต่อให้อีกกะ ===
+const PM_SHIFT_LIST = ['A', 'B'];
+let inboxPmShiftFilter = '';
+try { inboxPmShiftFilter = localStorage.getItem('pmInboxShiftFilter') || ''; } catch (e) { /* ใช้ค่าเริ่มต้น */ }
+
+function pmShiftBadge(shift, prefix) {
+    if (!shift) return '';
+    const cls = shift === 'A' ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-800';
+    return `<span class="${cls} text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap">${prefix || ''}กะ ${shift}</span>`;
+}
+
+function pmDoneByText(l) {
+    return (l.doneBy || '-') + (l.doneShift ? ` (กะ ${l.doneShift})` : '');
+}
+
+function pmIsCover(l) {
+    return !!(l.doneShift && l.assignedShift && l.doneShift !== l.assignedShift);
+}
+
+function pmShiftStorageKey() {
+    const u = window.currentUser || {};
+    return 'pmShift_' + (u.username || u.name || 'user');
+}
+
+function getSavedPmShift() {
+    try { return localStorage.getItem(pmShiftStorageKey()) || ''; } catch (e) { return ''; }
+}
+
+function savePmShift(shift) {
+    try { localStorage.setItem(pmShiftStorageKey(), shift); } catch (e) { /* ไม่บังคับ */ }
+}
+
+window.setInboxPmShiftFilter = function(shift) {
+    inboxPmShiftFilter = shift;
+    try { localStorage.setItem('pmInboxShiftFilter', shift); } catch (e) { /* ไม่บังคับ */ }
+    renderInboxList('pmTasks');
+};
+
+function renderPmShiftFilterBar(tasks) {
+    const opts = [{ key: '', label: 'ทุกกะ', count: tasks.length }]
+        .concat(PM_SHIFT_LIST.map(s => ({ key: s, label: `กะ ${s}`, count: tasks.filter(t => t.assignedShift === s).length })));
+    return `<div class="flex flex-wrap items-center gap-2 mb-3">
+        <span class="text-xs font-bold text-gray-500">🔄 งานของกะ:</span>
+        ${opts.map(o => `<button onclick="window.setInboxPmShiftFilter('${o.key}')" class="text-xs font-bold px-3 py-1 rounded-full border ${inboxPmShiftFilter === o.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}">${o.label} (${o.count})</button>`).join('')}
+    </div>`;
+}
+
 window.inboxCloseJob = function(jobId) {
     const job = inboxData && inboxData.categories.maintenance.find(m => m.jobId === jobId);
     if (!job) { alert('ไม่พบข้อมูลงาน ' + jobId); return; }
@@ -110,8 +157,14 @@ function renderInboxList(category) {
         cats[category].forEach(d => items.push({ type: category, data: d }));
     }
 
+    let headerHtml = '';
+    if (category === 'pmTasks') {
+        headerHtml = renderPmShiftFilterBar(cats.pmTasks || []);
+        if (inboxPmShiftFilter) items = items.filter(it => it.data.assignedShift === inboxPmShiftFilter);
+    }
+
     if (items.length === 0) {
-        container.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-gray-400">
+        container.innerHTML = headerHtml + `<div class="flex flex-col items-center justify-center h-64 text-gray-400">
             <div class="text-5xl mb-3">✅</div>
             <div class="text-lg font-bold">ไม่มีรายการค้าง</div>
             <div class="text-sm">หมวดนี้ว่างเปล่า — ทุกอย่างเรียบร้อย</div>
@@ -119,7 +172,7 @@ function renderInboxList(category) {
         return;
     }
 
-    container.innerHTML = items.map((item, idx) => renderInboxItem(item, idx)).join('');
+    container.innerHTML = headerHtml + items.map((item, idx) => renderInboxItem(item, idx)).join('');
 }
 
 function renderInboxItem(item, idx) {
@@ -252,6 +305,7 @@ function renderPmTaskItem(d) {
                     <span class="font-bold text-gray-800 text-sm">${d.taskName}</span>
                     <span class="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full">${d.planType}</span>
                     <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded-full font-mono">${d.machine}</span>
+                    ${pmShiftBadge(d.assignedShift, '🔄 ')}
                 </div>
                 <div class="text-xs text-gray-600">กำหนด: <b>${d.dueDate}</b> · <span class="${d.daysOverdue >= 3 ? 'text-red-600 font-bold' : 'text-indigo-600'}">${daysLabel}</span></div>
                 <div class="text-[10px] text-gray-400 mt-1">ความถี่: ${d.frequency} · ${d.planId}${d.note ? ' · ' + d.note : ''}</div>
@@ -274,6 +328,7 @@ window.openPmCompleteModal = function(planId) {
     const refPhotoHtml = refPhotos.length
         ? `<div class="mt-2 flex flex-wrap gap-2">${refPhotos.map((u, i) => `<a href="${u}" target="_blank" class="text-xs font-bold text-indigo-700 underline">📸 ดูรูปอ้างอิงวิธีทำ${refPhotos.length > 1 ? ' ' + (i + 1) : ''}</a>`).join('')}</div>`
         : '';
+    const savedShift = getSavedPmShift();
     // มือถือ: ใช้ flex column + body เลื่อนได้ เพื่อไม่ให้ปุ่มยืนยัน/ยกเลิกตกขอบจอเมื่อเนื้อหายาว
     const html = `<div id="modal-pm-complete" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-3 sm:p-4">
         <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl flex flex-col overflow-hidden" style="max-height: 90vh; max-height: 90dvh;">
@@ -286,6 +341,16 @@ window.openPmCompleteModal = function(planId) {
                     <div class="text-indigo-600 text-xs">${task.machine} · ${task.planType} · กำหนด ${task.dueDate}</div>
                     ${task.instruction ? `<div class="text-gray-700 text-xs mt-2 whitespace-pre-line">📝 ${task.instruction}</div>` : ''}
                     ${refPhotoHtml}
+                </div>
+                <div class="mb-3">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">👷 กะที่ทำ (บังคับ)</label>
+                    <div class="grid grid-cols-2 gap-2">${PM_SHIFT_LIST.map(s => `
+                        <label class="cursor-pointer">
+                            <input type="radio" name="pm-shift" value="${s}" class="peer sr-only" ${savedShift === s ? 'checked' : ''} onchange="window.updatePmShiftHint()">
+                            <div class="text-center py-2 rounded-lg border-2 border-gray-200 font-bold text-sm text-gray-500 peer-checked:border-indigo-600 peer-checked:bg-indigo-50 peer-checked:text-indigo-700">กะ ${s}</div>
+                        </label>`).join('')}
+                    </div>
+                    <div id="pm-shift-hint" data-assigned="${task.assignedShift || ''}" class="text-[11px] mt-1 text-gray-500"></div>
                 </div>
                 <div class="mb-3">
                     <label class="block text-sm font-bold text-gray-700 mb-1">📸 แนบรูปถ่าย (บังคับ)</label>
@@ -304,6 +369,7 @@ window.openPmCompleteModal = function(planId) {
         </div>
     </div>`;
     document.body.insertAdjacentHTML('beforeend', html);
+    window.updatePmShiftHint();
     document.getElementById('pm-photo').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -316,7 +382,25 @@ window.openPmCompleteModal = function(planId) {
     });
 };
 
+window.updatePmShiftHint = function() {
+    const hint = document.getElementById('pm-shift-hint');
+    if (!hint) return;
+    const assigned = hint.dataset.assigned;
+    const picked = document.querySelector('input[name="pm-shift"]:checked')?.value || '';
+    const parts = [];
+    if (assigned) parts.push(`รอบนี้เป็นของ <b>กะ ${assigned}</b>`);
+    if (picked) {
+        if (assigned && picked !== assigned) parts.push(`<span class="text-orange-600 font-bold">⚠️ กะ ${picked} ทำแทน</span>`);
+        parts.push(`รอบถัดไปจะส่งต่อให้ <b>กะ ${picked === 'A' ? 'B' : 'A'}</b>`);
+    } else {
+        parts.push('<span class="text-red-500">กรุณาเลือกกะที่ทำ</span>');
+    }
+    hint.innerHTML = '🔄 ' + parts.join(' · ');
+};
+
 window.submitPmComplete = async function(planId) {
+    const shift = document.querySelector('input[name="pm-shift"]:checked')?.value || '';
+    if (!shift) { alert('กรุณาเลือกกะที่ทำงานนี้'); return; }
     const photoInput = document.getElementById('pm-photo');
     if (!photoInput || !photoInput.files[0]) { alert('กรุณาแนบรูปถ่าย'); return; }
     const btn = document.getElementById('btn-pm-submit');
@@ -337,11 +421,13 @@ window.submitPmComplete = async function(planId) {
                 username: window.currentUser?.name || window.currentUser?.username || 'Unknown',
                 role: window.currentUser?.role || '',
                 note: document.getElementById('pm-note').value,
+                shift: shift,
                 imageBase64: imageBase64
             })
         });
         const result = await res.json();
         if (result.status === 'success') {
+            savePmShift(shift);
             alert(result.message);
             document.getElementById('modal-pm-complete')?.remove();
             window.loadInbox();
@@ -406,6 +492,8 @@ window.openAddPmPlanModal = function() {
     if (noteInput) noteInput.value = '';
     const instructionInput = document.getElementById('pmplan-instruction');
     if (instructionInput) instructionInput.value = '';
+    const startShiftInput = document.getElementById('pmplan-startshift');
+    if (startShiftInput) startShiftInput.value = '';
     const intervalInput = document.getElementById('pmplan-interval');
     if (intervalInput) intervalInput.value = '';
     document.getElementById('pmplan-interval-wrap').classList.add('hidden');
@@ -499,6 +587,7 @@ window.submitAddPmPlan = async function() {
     const assignedTo = document.getElementById('pmplan-assignedto').value.trim();
     const note = document.getElementById('pmplan-note').value.trim();
     const instruction = document.getElementById('pmplan-instruction').value.trim();
+    const startShift = document.getElementById('pmplan-startshift')?.value || '';
     const photoFiles = pmPlanPhotoFiles.slice(0, PM_PLAN_MAX_PHOTOS);
 
     if (machines.length === 0 || !taskName || !nextDueDate) {
@@ -536,7 +625,7 @@ window.submitAddPmPlan = async function() {
                 action: 'ADD_PM_PLAN',
                 machines, planType, taskName, frequency,
                 intervalValue: intervalValue || 0,
-                nextDueDate, assignedTo, note, instruction,
+                nextDueDate, assignedTo, note, instruction, startShift,
                 imagesBase64,
                 imageBase64: imagesBase64[0] || '', // เผื่อ backend เวอร์ชันเก่า
                 username: window.currentUser?.username || window.currentUser?.name || '',
@@ -641,6 +730,23 @@ function renderGanttChart(container, data) {
         <div class="bg-indigo-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-indigo-700">${stats.adherencePct}%</div><div class="text-xs text-indigo-600">On-time Rate</div></div>
     </div>`;
 
+    // สรุปแยกกะ — เดือนนี้แต่ละกะทำไปเท่าไร และถือรอบถัดไปอยู่กี่งาน
+    const shiftStats = data.shiftStats || {};
+    if (Object.keys(shiftStats).length) {
+        statsHtml += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">${PM_SHIFT_LIST.map(s => {
+            const st = shiftStats[s] || {};
+            return `<div class="bg-white border rounded-lg p-3 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2">${pmShiftBadge(s, '🔄 ')}<span class="text-xs text-gray-500">เดือนนี้</span></div>
+                <div class="flex gap-4 text-center text-xs">
+                    <div><div class="text-lg font-bold text-gray-800">${st.doneMonth || 0}</div><div class="text-gray-500">ทำแล้ว</div></div>
+                    <div><div class="text-lg font-bold text-green-700">${st.onTimeMonth || 0}</div><div class="text-gray-500">ตรงเวลา</div></div>
+                    <div><div class="text-lg font-bold text-orange-600">${st.coverMonth || 0}</div><div class="text-gray-500">ทำแทนอีกกะ</div></div>
+                    <div><div class="text-lg font-bold text-indigo-700">${st.planned || 0}</div><div class="text-gray-500">รอบถัดไป${st.overdue ? ` <span class="text-red-600 font-bold">(ค้าง ${st.overdue})</span>` : ''}</div></div>
+                </div>
+            </div>`;
+        }).join('')}</div>`;
+    }
+
     // สร้าง header วันที่
     const months = [];
     const dayHeaders = [];
@@ -694,7 +800,7 @@ function renderGanttChart(container, data) {
                 const doneD = toDate(l.doneDate);
                 if (doneD && d.getTime() === doneD.getTime()) {
                     const color = l.status === 'Approved' ? (l.daysDiff <= 0 ? 'bg-green-500' : 'bg-orange-500') : l.status === 'Wait Approve' ? 'bg-yellow-400' : 'bg-gray-400';
-                    marker = `<div class="absolute inset-0 flex items-center justify-center cursor-pointer" onclick="window.openPmLogDetail('${escapePmAttr(l.logId)}')"><div class="w-3 h-3 ${color} rounded-sm border border-white shadow hover:scale-150 transition-transform" title="${l.status} (${l.daysDiff > 0 ? '+' + l.daysDiff + ' วัน' : 'ตรงเวลา'}) — คลิกดูรายละเอียด"></div></div>`;
+                    marker = `<div class="absolute inset-0 flex items-center justify-center cursor-pointer" onclick="window.openPmLogDetail('${escapePmAttr(l.logId)}')"><div class="w-3 h-3 ${color} rounded-sm border border-white shadow hover:scale-150 transition-transform" title="${l.status} (${l.daysDiff > 0 ? '+' + l.daysDiff + ' วัน' : 'ตรงเวลา'})${l.doneShift ? ' · ทำโดยกะ ' + l.doneShift : ''} — คลิกดูรายละเอียด"></div></div>`;
                 }
             });
 
@@ -710,7 +816,7 @@ function renderGanttChart(container, data) {
             <div class="shrink-0 w-48 p-1.5 border-r bg-white sticky left-0 z-10 flex items-start justify-between gap-1">
                 <div class="min-w-0">
                     <div class="text-xs font-bold text-gray-800 truncate">${plan.taskName}${overdueLabel}</div>
-                    <div class="text-[9px] text-gray-400">${plan.machine} · ${plan.frequency} · ${plan.assignedTo || '-'}</div>
+                    <div class="text-[9px] text-gray-400">${plan.machine} · ${plan.frequency}${plan.assignedTo ? ' · ' + plan.assignedTo : ''} ${pmShiftBadge(plan.assignedShift)}</div>
                 </div>
                 <button data-plan-id="${escapePmAttr(plan.planId)}" data-task-name="${escapePmAttr(plan.taskName)}" data-machine="${escapePmAttr(plan.machine)}" onclick="window.deletePmPlan(this)" title="ลบแผนนี้" class="shrink-0 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm">🗑️</button>
             </div>
@@ -897,8 +1003,10 @@ function renderPmHistoryItem(l) {
                     ${l.planType ? `<span class="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full">${l.planType}</span>` : ''}
                     <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded-full font-mono">${l.machine}</span>
                     ${badge}
+                    ${pmShiftBadge(l.doneShift)}
+                    ${pmIsCover(l) ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded-full font-bold">ทำแทนกะ ${l.assignedShift}</span>` : ''}
                 </div>
-                <div class="text-xs text-gray-600">ทำเมื่อ: <b>${l.doneDate || '-'}</b> · กำหนด: ${l.dueDate || '-'} · ผู้ทำ: <b>${l.doneBy || '-'}</b></div>
+                <div class="text-xs text-gray-600">ทำเมื่อ: <b>${l.doneDate || '-'}</b> · กำหนด: ${l.dueDate || '-'} · ผู้ทำ: <b>${pmDoneByText(l)}</b></div>
                 ${l.note ? `<div class="text-xs text-gray-600 bg-gray-50 p-2 rounded mt-2 whitespace-pre-line">📝 ${l.note}</div>` : ''}
                 ${photoHtml}
                 <div class="text-[10px] text-gray-400 mt-2">${l.logId} · ${l.planId}${l.frequency ? ' · ' + l.frequency : ''}</div>
@@ -957,7 +1065,7 @@ window.openPmLogDetail = async function(logId) {
                 <div class="grid grid-cols-2 gap-2 text-xs">
                     <div class="bg-gray-50 p-2 rounded"><div class="text-gray-500">กำหนด</div><div class="font-bold text-gray-800">${log.dueDate || '-'}</div></div>
                     <div class="bg-gray-50 p-2 rounded"><div class="text-gray-500">ทำเสร็จ</div><div class="font-bold text-gray-800">${log.doneDate || '-'}</div></div>
-                    <div class="bg-gray-50 p-2 rounded"><div class="text-gray-500">ผู้ทำ</div><div class="font-bold text-gray-800">${log.doneBy || '-'}</div></div>
+                    <div class="bg-gray-50 p-2 rounded"><div class="text-gray-500">ผู้ทำ</div><div class="font-bold text-gray-800">${pmDoneByText(log)}${pmIsCover(log) ? ` <span class="text-orange-600">· ทำแทนกะ ${log.assignedShift}</span>` : ''}</div></div>
                     <div class="${late ? 'bg-orange-50' : 'bg-green-50'} p-2 rounded"><div class="text-gray-500">สถานะ</div><div class="font-bold ${late ? 'text-orange-700' : 'text-green-700'}">${late ? 'ช้า ' + log.daysDiff + ' วัน' : 'ตรงเวลา'}</div></div>
                 </div>
                 ${log.note ? `<div class="text-xs text-gray-700 bg-gray-50 p-2 rounded whitespace-pre-line">📝 หมายเหตุ: ${log.note}</div>` : ''}
@@ -1013,7 +1121,7 @@ window.printPmHistoryReport = function() {
             <td class="c">${pmEscapeHtml(l.machine)}</td>
             <td>${pmEscapeHtml(l.taskName)}${l.planType ? ` <span class="tag">${pmEscapeHtml(l.planType)}</span>` : ''}${l.frequency ? `<div class="sub">ความถี่: ${pmEscapeHtml(l.frequency)}</div>` : ''}</td>
             <td class="c">${pmEscapeHtml(l.dueDate)}</td>
-            <td class="c">${pmEscapeHtml(l.doneBy)}</td>
+            <td class="c">${pmEscapeHtml(pmDoneByText(l))}</td>
             <td class="c ${l.daysDiff > 0 ? 'late' : 'ontime'}">${l.daysDiff > 0 ? 'ช้า ' + l.daysDiff + ' วัน' : 'ตรงเวลา'}</td>
             <td>${pmEscapeHtml(l.note)}</td>
             <td class="c">${photos || '<span class="sub">ไม่มีรูป</span>'}</td>
@@ -1084,13 +1192,13 @@ window.exportPmHistoryCSV = function() {
     if (logs.length === 0) { alert('ไม่มีข้อมูลให้ export — กรุณาค้นหาก่อน'); return; }
 
     const q = (v) => '"' + String(v === null || v === undefined ? '' : v).replace(/"/g, '""') + '"';
-    const header = ['Log_ID', 'Plan_ID', 'วันที่ทำ', 'เครื่องจักร', 'ชื่องาน', 'ประเภท', 'ความถี่', 'วันครบกำหนด', 'ผู้ทำ', 'สถานะ', 'ช้า (วัน)', 'หมายเหตุ', 'ลิงก์รูปหลังทำเสร็จ'];
+    const header = ['Log_ID', 'Plan_ID', 'วันที่ทำ', 'เครื่องจักร', 'ชื่องาน', 'ประเภท', 'ความถี่', 'วันครบกำหนด', 'ผู้ทำ', 'กะที่ทำ', 'กะที่ได้รับมอบหมาย', 'สถานะ', 'ช้า (วัน)', 'หมายเหตุ', 'ลิงก์รูปหลังทำเสร็จ'];
     let csv = `# รายงานประวัติการซ่อมบำรุง (PM) — ${pmHistoryFilterLabel()}\n`;
     csv += header.map(q).join(',') + '\n';
     logs.forEach(l => {
         csv += [
             l.logId, l.planId, l.doneDate, l.machine, l.taskName, l.planType, l.frequency,
-            l.dueDate, l.doneBy, l.daysDiff > 0 ? 'ช้ากว่ากำหนด' : 'ตรงเวลา', l.daysDiff > 0 ? l.daysDiff : 0,
+            l.dueDate, l.doneBy, l.doneShift || '', l.assignedShift || '', l.daysDiff > 0 ? 'ช้ากว่ากำหนด' : 'ตรงเวลา', l.daysDiff > 0 ? l.daysDiff : 0,
             l.note, (l.photoUrls || []).join(' | ')
         ].map(q).join(',') + '\n';
     });
