@@ -743,25 +743,36 @@ const ctxQC = document.getElementById('qcTrendChart');
                     maintainAspectRatio: false,
                     scales: {
                         x: { offset: true },
+                        // 📈 สไตล์กราฟหุ้น: แบ่ง 2 หน้าต่างบนแกนเดียวกัน (stacked scales)
+                        // หน้าต่างบน (3/4) = % NG Rate, หน้าต่างล่าง (1/4) = ยอดผลิต FG + NG (Stack)
                         y: {
                             type: 'logarithmic',
+                            position: 'left',
+                            stack: 'qcPanes',
+                            stackWeight: 3,
+                            weight: 1, // weight มากกว่า = อยู่ด้านบน
                             min: 0.1,
                             max: 100,
-                            ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 }
+                            border: { color: '#9ca3af' },
+                            ticks: { callback: v => v <= 0.1 ? '' : v + '%', autoSkip: true, maxTicksLimit: 10 }
                         },
                         yQty: {
                             type: 'linear',
-                            position: 'right',
+                            position: 'left',
+                            stack: 'qcPanes',
+                            stackWeight: 1,
+                            weight: 0,
                             beginAtZero: true,
                             stacked: true,
-                            grid: { drawOnChartArea: false },
-                            title: { display: true, text: 'ยอดผลิต / NG (ชิ้น)' },
-                            ticks: { callback: v => Number(v).toLocaleString() }
+                            border: { color: '#9ca3af' },
+                            title: { display: true, text: 'ชิ้น' },
+                            ticks: { callback: v => Number(v).toLocaleString(), maxTicksLimit: 4 }
                         }
                     },
                     layout: { padding: { top: 20 } },
                     plugins: {
                         zoom: {
+                            limits: { yQty: { min: 0 } },
                             pan: { enabled: true, mode: 'xy' },
                             zoom: {
                                 wheel: { enabled: true },
