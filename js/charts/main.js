@@ -754,7 +754,9 @@ const ctxQC = document.getElementById('qcTrendChart');
                             min: 0.1,
                             max: 100,
                             border: { color: '#9ca3af' },
-                            ticks: { callback: v => v <= 0.1 ? '' : v + '%', autoSkip: true, maxTicksLimit: 10 }
+                            ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 },
+                            // ซ่อน tick ล่างสุดของหน้าต่างบน ไม่ให้ชนกับ tick บนสุดของหน้าต่างล่าง (รวมตอน zoom/pan)
+                            afterTickToLabelConversion: axis => { if (axis.ticks.length > 1) axis.ticks[0].label = ''; }
                         },
                         yQty: {
                             type: 'linear',
@@ -766,7 +768,10 @@ const ctxQC = document.getElementById('qcTrendChart');
                             stacked: true,
                             border: { color: '#9ca3af' },
                             title: { display: true, text: 'ชิ้น' },
-                            ticks: { callback: v => Number(v).toLocaleString(), maxTicksLimit: 4 }
+                            grace: '15%',
+                            ticks: { callback: v => Number(v).toLocaleString(), maxTicksLimit: 4 },
+                            // ซ่อน tick บนสุดของหน้าต่างล่าง (อยู่ตรงรอยต่อกับหน้าต่างบน)
+                            afterTickToLabelConversion: axis => { if (axis.ticks.length > 1) axis.ticks[axis.ticks.length - 1].label = ''; }
                         }
                     },
                     layout: { padding: { top: 20 } },
