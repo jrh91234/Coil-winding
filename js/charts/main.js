@@ -912,6 +912,8 @@ const ctxQC = document.getElementById('qcTrendChart');
 
 
 // 🔢 ปิด/เปิด ตัวเลข % บนกราฟ Daily NG Rate Trend
+// ค่าเริ่มต้น = ปิดตัวเลข (ตัวเลขจะขึ้นเฉพาะจุดที่เส้น crosshair พาดผ่าน)
+if (window.qcTrendShowLabels === undefined) window.qcTrendShowLabels = false;
 window.toggleQcTrendLabels = function() {
     window.qcTrendShowLabels = window.qcTrendShowLabels === false;
     const btn = document.getElementById('qcLabelToggleBtn');
