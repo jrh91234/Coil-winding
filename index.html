@@ -674,7 +674,9 @@
                                 </select>
                                 <button id="ngTrendLabelToggle" onclick="window.toggleNgTrendLabels()" class="text-[10px] border rounded px-2 py-1 text-gray-500 bg-white hover:bg-blue-50 print-hide" title="แสดง/ซ่อนตัวเลข">🏷️ ตัวเลข</button>
                                 <button id="ngTrendShowAll" onclick="window.ngTrendShowAll()" class="text-[10px] border rounded px-2 py-1 text-gray-500 bg-white hover:bg-green-50 print-hide hidden" title="แสดงทุกเส้น">👁️ แสดงทั้งหมด</button>
+                                <button onclick="document.getElementById('ngTrendHelp').classList.toggle('hidden')" class="text-[10px] border rounded px-2 py-1 text-gray-500 bg-white hover:bg-blue-50 print-hide" title="อธิบายรายการคำนวณ">ℹ️ วิธีคำนวณ</button>
                             </div>
+                            <div id="ngTrendHelp" class="hidden text-[10px] text-gray-600 bg-blue-50 border border-blue-100 rounded p-2 mt-1 max-w-2xl leading-relaxed"></div>
                         </div>
                         <div class="flex gap-2">
                             <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide">↕</button>
@@ -683,6 +685,7 @@
                         </div>
                     </div>
                     <div class="flex-1 relative w-full min-h-[250px]"><canvas id="ngSymptomTrendChart"></canvas></div>
+                    <div id="ngTrendLegend" class="mt-1"></div>
                 </div>
                 
                 <div id="card-ng-machine" class="widget-card p-4 h-[350px]">
@@ -1660,7 +1663,7 @@
     <script src="js/charts/helpers.js?v=4.0"></script>
     <script src="js/charts/draw-tool.js?v=4.0"></script>
     <script src="js/charts/models.js?v=4.1"></script>
-    <script src="js/charts/ng-trend.js?v=4.2"></script>
+    <script src="js/charts/ng-trend.js?v=4.3"></script>
     <script src="js/charts/main.js?v=5.1"></script>
     <script src="js/charts/table-machine.js?v=4.1"></script>
     <script src="js/charts/popups.js?v=4.0"></script>
