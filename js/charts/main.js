@@ -750,7 +750,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                             type: 'linear',
                             position: 'left',
                             stack: 'qcPanes',
-                            stackWeight: 3,
+                            stackWeight: (window.qcPaneWeights || {}).y ?? 3, // ปรับได้โดยลากแถบคั่นระหว่างหน้าต่าง
                             weight: 2, // weight มากกว่า = อยู่ด้านบน
                             min: 0, // เริ่มจาก 0 และแสดงเลข 0
                             beginAtZero: true, // คงฐาน 0 แม้ถูก reset zoom (ลบ min/max)
@@ -774,7 +774,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                             type: 'linear',
                             position: 'left',
                             stack: 'qcPanes',
-                            stackWeight: 1,
+                            stackWeight: (window.qcPaneWeights || {}).q ?? 1,
                             weight: 0,
                             min: 0, // เริ่มจาก 0 และแสดงเลข 0
                             beginAtZero: true,
@@ -986,42 +986,103 @@ window.qcCrosshairPlugin = {
     }
 };
 
-// ↕ ลากขึ้นลงแยกหน้าต่างของกราฟ Daily NG Rate Trend (หน้าต่างบน=y, หน้าต่างล่าง=yQty)
+// ↕ ลากเมาส์บนกราฟ Daily NG Rate Trend (หน้าต่างบน=y, หน้าต่างล่าง=yQty)
+//  - ลากในพื้นที่กราฟ        : เลื่อนขึ้นลงเฉพาะหน้าต่างนั้น (ซ้าย-ขวา plugin zoom เลื่อนพร้อมกัน)
+//  - ลากที่แกนซ้าย (ตัวเลข)   : ยืด/หดความสูงของกราฟหน้าต่างนั้น (ฐาน 0 คงที่) ลากขึ้น = สูงขึ้น
+//  - ลากที่แถบคั่นระหว่างหน้าต่าง : ปรับสัดส่วนความสูงหน้าต่างบน/ล่าง
 window.initQcPanePan = function(canvas) {
     if (!canvas || canvas.$qcPanePanInit) return;
     canvas.$qcPanePanInit = true;
     let drag = null;
+    let cursorSet = false;
 
-    canvas.addEventListener('pointerdown', function(e) {
-        const chart = Chart.getChart(canvas);
-        if (!chart || e.button !== 0 || chart.$drawMode) return;
-        const zoomOpts = chart.options.plugins && chart.options.plugins.zoom;
-        if (zoomOpts && zoomOpts.pan && zoomOpts.pan.enabled === false) return;
+    // หาว่าตำแหน่งเมาส์อยู่ส่วนไหน
+    function hitTest(chart, e) {
         const rect = canvas.getBoundingClientRect();
         const px = e.clientX - rect.left, py = e.clientY - rect.top;
         const a = chart.chartArea;
-        if (px < a.left || px > a.right) return;
-        const id = ['y', 'yQty'].find(k => chart.scales[k] && py >= chart.scales[k].top && py <= chart.scales[k].bottom);
-        if (!id) return; // อยู่ในช่องว่างระหว่างหน้าต่าง
-        const sc = chart.scales[id];
-        drag = { id, startY: e.clientY, min: sc.min, max: sc.max, height: sc.bottom - sc.top };
-    });
+        const S = chart.scales;
+        if (!S.y || !S.yQty || px < 0 || px > a.right) return null;
+        const inScale = id => py >= S[id].top && py <= S[id].bottom;
+        const inGap = py > S.y.bottom && py < S.yQty.top;
+        if (px < a.left) {
+            const id = ['y', 'yQty'].find(inScale);
+            if (id) return { type: 'scale', id };
+            if (inGap) return { type: 'resize' };
+            return null;
+        }
+        if (inGap) return { type: 'resize' };
+        const id = ['y', 'yQty'].find(inScale);
+        return id ? { type: 'pan', id } : null;
+    }
+
+    // ดักใน capture phase ที่ element แม่ เพื่อให้ลากแกน/แถบคั่นไม่ไปถึง plugin zoom (กันกราฟเลื่อนซ้าย-ขวาตาม)
+    (canvas.parentElement || document).addEventListener('pointerdown', function(e) {
+        if (e.target !== canvas) return;
+        const chart = Chart.getChart(canvas);
+        if (!chart || e.button !== 0 || chart.$drawMode) return;
+        const hit = hitTest(chart, e);
+        if (!hit) return;
+        if (hit.type === 'pan') {
+            const zoomOpts = chart.options.plugins && chart.options.plugins.zoom;
+            if (zoomOpts && zoomOpts.pan && zoomOpts.pan.enabled === false) return;
+        } else {
+            e.stopPropagation();
+            document.body.style.userSelect = 'none'; // กันลากแล้วเลือกข้อความในหน้า
+        }
+        const S = chart.scales;
+        drag = { type: hit.type, id: hit.id, startY: e.clientY };
+        if (hit.type === 'resize') {
+            drag.topH = S.y.bottom - S.y.top;
+            drag.botH = S.yQty.bottom - S.yQty.top;
+            drag.wSum = (chart.options.scales.y.stackWeight || 3) + (chart.options.scales.yQty.stackWeight || 1);
+        } else {
+            const sc = S[hit.id];
+            drag.min = sc.min; drag.max = sc.max; drag.height = sc.bottom - sc.top;
+        }
+    }, true);
 
     window.addEventListener('pointermove', function(e) {
-        if (!drag) return;
         const chart = Chart.getChart(canvas);
+        if (!drag) {
+            // เปลี่ยน cursor ตามส่วนที่เมาส์ชี้
+            if (!chart || chart.$drawMode || e.buttons) return;
+            const hit = hitTest(chart, e);
+            const cur = hit && hit.type === 'scale' ? 'ns-resize' : hit && hit.type === 'resize' ? 'row-resize' : '';
+            if (cur) { canvas.style.cursor = cur; cursorSet = true; }
+            else if (cursorSet) { canvas.style.cursor = ''; cursorSet = false; }
+            return;
+        }
         if (!chart) { drag = null; return; }
-        const range = drag.max - drag.min;
-        // ลากลง = เลื่อนไปดูค่าที่สูงขึ้น
-        let min = drag.min + (e.clientY - drag.startY) * (range / drag.height);
-        if (min < 0) min = 0; // ไม่ต่ำกว่า 0
-        const opts = chart.options.scales[drag.id];
-        opts.min = min;
-        opts.max = min + range;
+        const dy = e.clientY - drag.startY;
+        const o = chart.options.scales;
+        if (drag.type === 'pan') {
+            const range = drag.max - drag.min;
+            // ลากลง = เลื่อนไปดูค่าที่สูงขึ้น
+            let min = drag.min + dy * (range / drag.height);
+            if (min < 0) min = 0; // ไม่ต่ำกว่า 0
+            o[drag.id].min = min;
+            o[drag.id].max = min + range;
+        } else if (drag.type === 'scale') {
+            // ลากขึ้น = กราฟสูงขึ้น (ช่วงค่าแคบลง) / ลากลง = ต่ำลง (ช่วงค่ากว้างขึ้น), ฐานล่างคงที่
+            const f = Math.min(Math.max(Math.exp(dy * 0.005), 0.02), 50);
+            o[drag.id].min = drag.min;
+            o[drag.id].max = drag.min + (drag.max - drag.min) * f;
+        } else if (drag.type === 'resize') {
+            const total = drag.topH + drag.botH;
+            const top = Math.min(Math.max(drag.topH + dy, total * 0.15), total * 0.85);
+            const wy = drag.wSum * top / total;
+            o.y.stackWeight = wy;
+            o.yQty.stackWeight = drag.wSum - wy;
+            window.qcPaneWeights = { y: o.y.stackWeight, q: o.yQty.stackWeight };
+        }
         chart.update('none');
     });
 
-    const end = () => { drag = null; };
+    const end = () => {
+        if (drag && drag.type !== 'pan') document.body.style.userSelect = '';
+        drag = null;
+    };
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', end);
 };
