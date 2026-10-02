@@ -143,7 +143,7 @@ window.renderNgTrendChart = function() {
 
     charts.ngSymptomTrend = new Chart(ctxNgTrend, {
         type: 'line',
-        plugins: activePlugins,
+        plugins: activePlugins.concat(window.qcCrosshairPlugin ? [window.qcCrosshairPlugin] : []),
         data: {
             labels: trendData.map(d=>d.date),
             datasets: trendDatasets
