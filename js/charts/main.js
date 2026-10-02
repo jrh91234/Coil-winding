@@ -754,6 +754,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                             min: 0, // เริ่มจาก 0 และแสดงเลข 0
                             grace: '10%',
                             border: { color: '#9ca3af' },
+                            title: { display: true, text: '% NG Rate' },
                             ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 }
                         },
                         // ช่องว่างคั่นระหว่าง 2 หน้าต่าง ให้ตัวเลขแกนบน/ล่างอยู่คนละจุด ไม่ชนกัน
@@ -776,7 +777,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                             min: 0, // เริ่มจาก 0 และแสดงเลข 0
                             stacked: true,
                             border: { color: '#9ca3af' },
-                            title: { display: true, text: 'ชิ้น' },
+                            title: { display: true, text: 'ยอดผลิต (ชิ้น)', font: { size: 11 } },
                             grace: '15%',
                             ticks: { callback: v => Number(v).toLocaleString(), maxTicksLimit: 4 }
                         }
