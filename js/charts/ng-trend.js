@@ -69,6 +69,7 @@ window.renderNgTrendChart = function() {
         // เส้นรวม (Production + Setup)
         trendDatasets.push({
             label: type,
+            ngKey: type, ngSetupOnly: false,
             data: trendData.map(d => {
                 if (!d.ngBreakdown) return 0;
                 // รวม base + Setup ของ type นี้
@@ -97,6 +98,7 @@ window.renderNgTrendChart = function() {
         if (setupTotals[type] > 0) {
             trendDatasets.push({
                 label: type + ' (Setup)',
+                ngKey: type, ngSetupOnly: true,
                 data: trendData.map(d => {
                     if (!d.ngBreakdown) return 0;
                     let setupPcs = 0;
@@ -124,6 +126,18 @@ window.renderNgTrendChart = function() {
         }
     });
     
+    // จำนวนชิ้นเสียดิบของแต่ละเส้นต่อวัน ไว้แสดงรายการคำนวณใน tooltip
+    trendDatasets.forEach(ds => {
+        ds.rawPcs = trendData.map(d => {
+            let n = 0;
+            if (d.ngBreakdown) Object.keys(d.ngBreakdown).forEach(k => {
+                const parsed = window.parseSetupType(k);
+                if (parsed.base === ds.ngKey && (!ds.ngSetupOnly || parsed.isSetup)) n += d.ngBreakdown[k];
+            });
+            return n;
+        });
+    });
+
     const commonOpts = { 
          responsive: true, 
          maintainAspectRatio: false,
@@ -271,46 +285,7 @@ window.renderNgTrendChart = function() {
             layout: { padding: { top: 20, right: 20 } },
             plugins: {
                 ...commonOpts.plugins,
-                legend: {
-                    display: true,
-                    position: 'bottom',
-                    labels: { boxWidth: 12, font: {size: 10} },
-                    onClick: function(e, legendItem, legend) {
-                        const chart = legend.chart;
-                        const ci = legendItem.datasetIndex;
-                        const showAllBtn = document.getElementById('ngTrendShowAll');
-
-                        if (e.native.ctrlKey || e.native.shiftKey || e.native.metaKey) {
-                            // Ctrl/Shift/Cmd+คลิก = toggle เส้นนั้นเพิ่ม/ลด
-                            const isVisible = chart.isDatasetVisible(ci);
-                            chart.setDatasetVisibility(ci, !isVisible);
-                            // เช็คว่ายังมีเส้นซ่อนอยู่หรือไม่
-                            const anyHidden = chart.data.datasets.some((ds, i) => !chart.isDatasetVisible(i));
-                            if (showAllBtn) showAllBtn.classList.toggle('hidden', !anyHidden);
-                        } else {
-                            // คลิกปกติ = isolate / show all
-                            const allHidden = chart.data.datasets.every((ds, i) => i === ci ? false : !chart.isDatasetVisible(i));
-
-                            if (allHidden) {
-                                chart.data.datasets.forEach((ds, i) => {
-                                    chart.setDatasetVisibility(i, true);
-                                });
-                                if (showAllBtn) showAllBtn.classList.add('hidden');
-                            } else {
-                                chart.data.datasets.forEach((ds, i) => {
-                                    chart.setDatasetVisibility(i, i === ci);
-                                });
-                                if (showAllBtn) showAllBtn.classList.remove('hidden');
-                            }
-                        }
-                        // จำเส้นที่แสดงอยู่ไว้ ใช้ตอนเปลี่ยนฟิวเตอร์ (null = แสดงทั้งหมด)
-                        const anyHiddenNow = chart.data.datasets.some((ds, i) => !chart.isDatasetVisible(i));
-                        window._ngTrendVisible = anyHiddenNow
-                            ? new Set(chart.data.datasets.filter((ds, i) => chart.isDatasetVisible(i)).map(ds => ds.label))
-                            : null;
-                        chart.update();
-                    }
-                },
+                legend: { display: false }, // ใช้ Legend แบบ HTML แทน (ngTrendRenderLegend) เพราะอาการเยอะ
                 tooltip: {
                     mode: 'index',
                     intersect: false,
@@ -322,7 +297,25 @@ window.renderNgTrendChart = function() {
                     },
                     callbacks: {
                         label: function(context) {
-                            return `${context.dataset.label}: ${context.parsed.y}${mode === 'percent' ? '%' : ' ชิ้น'}`;
+                            const pcs = (context.dataset.rawPcs || [])[context.dataIndex];
+                            if (mode === 'percent') {
+                                return `${context.dataset.label}: ${context.parsed.y}%` + (pcs != null ? ` · ${pcs.toLocaleString()} ชิ้น` : '');
+                            }
+                            return `${context.dataset.label}: ${context.parsed.y} ชิ้น`;
+                        },
+                        // รายการคำนวณ: ยอดผลิตของวันนั้น + สูตร + ตัวอย่างจากเส้นบนสุด
+                        footer: function(items) {
+                            if (!items.length) return '';
+                            const d = trendData[items[0].dataIndex] || {};
+                            const fg = d.fg || 0, ng = d.ng || 0, total = fg + ng;
+                            const lines = [`ยอดผลิตวันนี้ = FG ${fg.toLocaleString()} + NG ${ng.toLocaleString()} = ${total.toLocaleString()} ชิ้น`];
+                            if (mode === 'percent') {
+                                const top = items[0];
+                                const pcs = (top.dataset.rawPcs || [])[top.dataIndex];
+                                lines.push('% = ชิ้นเสียของอาการ ÷ ยอดผลิต × 100');
+                                if (pcs != null && total > 0) lines.push(`เช่น ${top.dataset.label}: ${pcs.toLocaleString()} ÷ ${total.toLocaleString()} × 100 = ${top.parsed.y}%`);
+                            }
+                            return lines;
                         }
                     }
                 },
@@ -344,6 +337,16 @@ window.renderNgTrendChart = function() {
 
     // 🖊️ เครื่องมือตีเส้นบนกราฟ (TradingView style) — js/charts/draw-tool.js
     if (window.initChartDrawTool) window.initChartDrawTool(charts.ngSymptomTrend, 'ngSymptomTrend', { suffix: mode === 'percent' ? '%' : '' });
+
+    // Legend แบบกะทัดรัด + คำอธิบายรายการคำนวณ (ปุ่ม ℹ️)
+    window.ngTrendRenderLegend();
+    const helpBox = document.getElementById('ngTrendHelp');
+    if (helpBox) {
+        const scope = selectedMac === 'all' ? 'ทุกเครื่องรวมกัน' : 'เครื่อง ' + selectedMac;
+        helpBox.innerHTML = mode === 'percent'
+            ? `<b>% เทียบยอดผลิต</b> = ชิ้นเสียของอาการนั้น ÷ (FG + NG ของวันนั้น) × 100<br>• นับเป็นชิ้น (ไม่ถ่วงน้ำหนัก Kg) · ขอบเขต: ${scope}<br>• เส้นประ (Setup) = ส่วนที่เสียตอน Setup ซึ่งรวมอยู่ในเส้นหลักแล้ว ไม่ต้องบวกซ้ำ<br>• วางเมาส์บนกราฟเพื่อดูรายการคำนวณรายวัน (ยอดผลิต + ตัวอย่างสูตร)`
+            : `<b>จำนวนเสีย (ชิ้น)</b> = ชิ้นเสียของอาการนั้นในวันนั้น · ขอบเขต: ${scope}<br>• เส้นประ (Setup) = ส่วนที่เสียตอน Setup ซึ่งรวมอยู่ในเส้นหลักแล้ว ไม่ต้องบวกซ้ำ<br>• วางเมาส์บนกราฟเพื่อดูยอดผลิตของวันนั้น`;
+    }
 
     // ปุ่ม "แสดงทั้งหมด" โชว์เมื่อมีการล็อกอาการอยู่
     const showAllBtnInit = document.getElementById('ngTrendShowAll');
@@ -379,5 +382,83 @@ window.ngTrendShowAll = function() {
     }
     const showAllBtn = document.getElementById('ngTrendShowAll');
     if (showAllBtn) showAllBtn.classList.add('hidden');
+    window.ngTrendRenderLegend();
 };
 
+
+
+// 🏷️ Legend แบบ HTML กะทัดรัด: รวมเส้นหลัก + เส้น (Setup) ของอาการเดียวกันเป็น 1 ชิป
+//  - คลิก = เลือกดูเฉพาะอาการนั้น (คลิกซ้ำ = แสดงทั้งหมด) · Ctrl/Shift+คลิก = เพิ่ม/ลดทีละอาการ
+//  - ค่าเริ่มต้นแสดงชิปอาการที่เสียมากสุด 10 อันดับ (หรือเฉพาะที่เลือกไว้) กด "ดูทั้งหมด" เพื่อขยาย
+window.ngTrendRenderLegend = function() {
+    const chart = charts.ngSymptomTrend;
+    const box = document.getElementById('ngTrendLegend');
+    if (!chart || !box) return;
+    const LIMIT = 10;
+    const groups = [];
+    const byKey = {};
+    chart.data.datasets.forEach((ds, i) => {
+        const key = ds.ngKey !== undefined ? ds.ngKey : ds.label;
+        if (!byKey[key]) { byKey[key] = { key, color: ds.borderColor, idx: [] }; groups.push(byKey[key]); }
+        byKey[key].idx.push(i);
+    });
+    const isOn = g => g.idx.some(i => chart.isDatasetVisible(i));
+    const locked = !!window._ngTrendVisible;
+    const expanded = !!window._ngTrendLegendExpanded;
+    let shown = groups;
+    if (!expanded) shown = locked ? groups.filter(isOn) : groups.slice(0, LIMIT);
+
+    box.innerHTML = '';
+    box.className = 'mt-1 flex flex-wrap gap-1 items-center overflow-y-auto' + (expanded ? ' max-h-32' : '');
+    shown.forEach(g => {
+        const on = isOn(g);
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'inline-flex items-center gap-1 text-[10px] border rounded px-1.5 py-0.5 bg-white hover:bg-gray-50 max-w-[260px]' + (on ? '' : ' opacity-40 line-through');
+        b.title = g.key + (g.idx.length > 1 ? ' (รวมเส้น Setup)' : '') + '\nคลิก = ดูเฉพาะอาการนี้ · Ctrl/Shift+คลิก = เพิ่ม/ลด';
+        const dot = document.createElement('span');
+        dot.style.cssText = 'display:inline-block;width:10px;height:10px;border-radius:2px;flex:none;background:' + g.color;
+        const txt = document.createElement('span');
+        txt.className = 'truncate';
+        txt.textContent = g.key;
+        b.appendChild(dot); b.appendChild(txt);
+        if (g.idx.length > 1) {
+            const s = document.createElement('span');
+            s.className = 'text-gray-400 flex-none';
+            s.textContent = '+S';
+            b.appendChild(s);
+        }
+        b.addEventListener('click', ev => window.ngTrendLegendClick(g.key, ev.ctrlKey || ev.shiftKey || ev.metaKey));
+        box.appendChild(b);
+    });
+    if (groups.length > shown.length || expanded) {
+        const t = document.createElement('button');
+        t.type = 'button';
+        t.className = 'text-[10px] border rounded px-2 py-0.5 text-blue-600 bg-blue-50 hover:bg-blue-100 flex-none';
+        t.textContent = expanded ? '▲ ย่อ' : `▼ ดูทั้งหมด (${groups.length})`;
+        t.addEventListener('click', () => { window._ngTrendLegendExpanded = !expanded; window.ngTrendRenderLegend(); });
+        box.appendChild(t);
+    }
+};
+
+window.ngTrendLegendClick = function(key, multi) {
+    const chart = charts.ngSymptomTrend;
+    if (!chart) return;
+    const all = chart.data.datasets;
+    const inGroup = ds => (ds.ngKey !== undefined ? ds.ngKey : ds.label) === key;
+    const idx = all.map((ds, i) => inGroup(ds) ? i : -1).filter(i => i >= 0);
+    if (multi) {
+        const on = idx.some(i => chart.isDatasetVisible(i));
+        idx.forEach(i => chart.setDatasetVisibility(i, !on));
+    } else {
+        const onlyThis = idx.every(i => chart.isDatasetVisible(i)) && all.every((ds, i) => idx.includes(i) || !chart.isDatasetVisible(i));
+        all.forEach((ds, i) => chart.setDatasetVisibility(i, onlyThis ? true : idx.includes(i)));
+    }
+    // จำเส้นที่แสดงอยู่ไว้ ใช้ตอนเปลี่ยนฟิวเตอร์ (null = แสดงทั้งหมด)
+    const anyHidden = all.some((ds, i) => !chart.isDatasetVisible(i));
+    window._ngTrendVisible = anyHidden ? new Set(all.filter((ds, i) => chart.isDatasetVisible(i)).map(ds => ds.label)) : null;
+    const showAllBtn = document.getElementById('ngTrendShowAll');
+    if (showAllBtn) showAllBtn.classList.toggle('hidden', !anyHidden);
+    chart.update();
+    window.ngTrendRenderLegend();
+};
