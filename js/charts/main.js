@@ -707,19 +707,28 @@ const ctxQC = document.getElementById('qcTrendChart');
                 }
             }
 
-            // 🌟 2.5 เส้น/แท่งจำนวน NG (ชิ้น) — ใช้แกน Y ขวา เทียบกับ % NG Rate 🌟
+            // 🌟 2.5 แท่ง Stack: ยอดผลิต FG (ล่าง) + NG (บน) หน่วยชิ้น — ใช้แกน Y ขวา 🌟
             datasets.push({
-                label: 'จำนวน NG (ชิ้น)',
-                data: displayTrendData.map(d => d.ngPcs || 0),
-                borderColor: 'rgba(37, 99, 235, 0.85)',
-                backgroundColor: 'rgba(37, 99, 235, 0.08)',
-                borderWidth: 2,
-                pointRadius: 2,
-                pointStyle: 'rect',
-                fill: false,
-                tension: 0.2,
+                type: 'bar',
+                label: 'ยอดผลิต FG (ชิ้น)',
+                data: displayTrendData.map(d => d.fgPcs || 0),
+                backgroundColor: 'rgba(59, 130, 246, 0.25)',
+                borderColor: 'rgba(59, 130, 246, 0.5)',
+                borderWidth: 1,
+                stack: 'qty',
                 yAxisID: 'yQty',
-                order: 5
+                order: 10
+            });
+            datasets.push({
+                type: 'bar',
+                label: 'NG (ชิ้น)',
+                data: displayTrendData.map(d => d.ngPcs || 0),
+                backgroundColor: 'rgba(239, 68, 68, 0.6)',
+                borderColor: 'rgba(220, 38, 38, 0.8)',
+                borderWidth: 1,
+                stack: 'qty',
+                yAxisID: 'yQty',
+                order: 10
             });
 
             // 🌟 3. สร้างกราฟ Chart.js 🌟
@@ -744,8 +753,9 @@ const ctxQC = document.getElementById('qcTrendChart');
                             type: 'linear',
                             position: 'right',
                             beginAtZero: true,
+                            stacked: true,
                             grid: { drawOnChartArea: false },
-                            title: { display: true, text: 'จำนวน NG (ชิ้น)' },
+                            title: { display: true, text: 'ยอดผลิต / NG (ชิ้น)' },
                             ticks: { callback: v => Number(v).toLocaleString() }
                         }
                     },
@@ -789,6 +799,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                         datalabels: {
                             display: function(ctx) {
                                 if (ctx.datasetIndex !== 0) return false;
+                                if (window.qcTrendShowLabels === false) return false;
                                 const c = ctx.chart.canvas.closest('.widget-card');
                                 return c ? c.classList.contains('maximized-card') : true;
                             },
@@ -868,3 +879,17 @@ const ctxQC = document.getElementById('qcTrendChart');
     }
 };
 
+
+// 🔢 ปิด/เปิด ตัวเลข % บนกราฟ Daily NG Rate Trend
+window.toggleQcTrendLabels = function() {
+    window.qcTrendShowLabels = window.qcTrendShowLabels === false;
+    const btn = document.getElementById('qcLabelToggleBtn');
+    if (btn) {
+        btn.textContent = window.qcTrendShowLabels ? '🔢 ตัวเลข: เปิด' : '🔢 ตัวเลข: ปิด';
+        btn.classList.toggle('bg-blue-50', window.qcTrendShowLabels);
+        btn.classList.toggle('text-blue-700', window.qcTrendShowLabels);
+        btn.classList.toggle('bg-white', !window.qcTrendShowLabels);
+        btn.classList.toggle('text-gray-500', !window.qcTrendShowLabels);
+    }
+    if (typeof charts !== 'undefined' && charts.qcTrend) charts.qcTrend.update();
+};
