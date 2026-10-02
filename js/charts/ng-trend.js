@@ -141,6 +141,11 @@ window.renderNgTrendChart = function() {
     // 🌟 ตัวแปรสำหรับตั้งเวลาเพื่อแยกการคลิก 1 ครั้ง / 2 ครั้ง 🌟
     let ngTrendClickTimer = null;
 
+    // 🔒 คงอาการที่เลือกไว้ (Legend) แม้เปลี่ยนฟิวเตอร์ด้านบน — รีเซ็ตเมื่อกด "แสดงทั้งหมด"
+    // window._ngTrendVisible = null (แสดงทุกเส้น) หรือ Set ของชื่อเส้นที่เลือกให้แสดง
+    const lockedVisible = window._ngTrendVisible;
+    if (lockedVisible) trendDatasets.forEach(ds => { ds.hidden = !lockedVisible.has(ds.label); });
+
     charts.ngSymptomTrend = new Chart(ctxNgTrend, {
         type: 'line',
         plugins: activePlugins.concat(window.qcCrosshairPlugin ? [window.qcCrosshairPlugin] : []),
@@ -298,6 +303,11 @@ window.renderNgTrendChart = function() {
                                 if (showAllBtn) showAllBtn.classList.remove('hidden');
                             }
                         }
+                        // จำเส้นที่แสดงอยู่ไว้ ใช้ตอนเปลี่ยนฟิวเตอร์ (null = แสดงทั้งหมด)
+                        const anyHiddenNow = chart.data.datasets.some((ds, i) => !chart.isDatasetVisible(i));
+                        window._ngTrendVisible = anyHiddenNow
+                            ? new Set(chart.data.datasets.filter((ds, i) => chart.isDatasetVisible(i)).map(ds => ds.label))
+                            : null;
                         chart.update();
                     }
                 },
@@ -335,6 +345,10 @@ window.renderNgTrendChart = function() {
     // 🖊️ เครื่องมือตีเส้นบนกราฟ (TradingView style) — js/charts/draw-tool.js
     if (window.initChartDrawTool) window.initChartDrawTool(charts.ngSymptomTrend, 'ngSymptomTrend', { suffix: mode === 'percent' ? '%' : '' });
 
+    // ปุ่ม "แสดงทั้งหมด" โชว์เมื่อมีการล็อกอาการอยู่
+    const showAllBtnInit = document.getElementById('ngTrendShowAll');
+    if (showAllBtnInit) showAllBtnInit.classList.toggle('hidden', !window._ngTrendVisible);
+
     // อัพเดทสถานะปุ่ม toggle label
     const lblBtn = document.getElementById('ngTrendLabelToggle');
     if (lblBtn) {
@@ -356,6 +370,7 @@ window.toggleNgTrendLabels = function() {
 
 // 🌟 แสดงทุกเส้นกลับมา
 window.ngTrendShowAll = function() {
+    window._ngTrendVisible = null; // ปลดล็อกอาการที่เลือกไว้
     if (charts.ngSymptomTrend) {
         charts.ngSymptomTrend.data.datasets.forEach((ds, i) => {
             charts.ngSymptomTrend.setDatasetVisibility(i, true);
