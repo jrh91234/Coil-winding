@@ -787,6 +787,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                     },
                     layout: { padding: { top: 20 } },
                     plugins: {
+                        qcCrosshair: { refreshOnMove: () => window.qcTrendShowLabels === false },
                         zoom: {
                             limits: { y: { min: 0 }, yQty: { min: 0 } },
                             // pan แนวนอนผ่าน plugin (2 หน้าต่างเลื่อนพร้อมกัน), pan แนวตั้งแยกหน้าต่างด้วย initQcPanePan
@@ -931,13 +932,15 @@ window.toggleQcTrendLabels = function() {
 // ➕ Crosshair: เส้นแนวตั้งตามเมาส์ ลากยาวตั้งแต่บนสุดถึงล่างสุด (ผ่านทั้ง 2 หน้าต่าง)
 window.qcCrosshairPlugin = {
     id: 'qcCrosshair',
-    afterEvent(chart, args) {
+    afterEvent(chart, args, opts) {
         const e = args.event;
+        // refreshOnMove (scriptable): กราฟที่ต้อง update ทุกครั้งที่เส้นเลื่อนข้ามจุด เช่น โหมดปิดตัวเลขของ qcTrend
+        const needUpdate = !!(opts && opts.refreshOnMove);
         const clear = () => {
             if (chart.$crosshairX == null) return;
             chart.$crosshairX = null; chart.$crosshairIdx = null;
             // โหมดปิดตัวเลข: ต้อง update เพื่อให้ datalabels ซ่อนตัวเลขของจุดเดิม
-            if (window.qcTrendShowLabels === false) chart.update('none'); else args.changed = true;
+            if (needUpdate) chart.update('none'); else args.changed = true;
         };
         if (e.type === 'mouseout') { clear(); return; }
         if (e.type !== 'mousemove') return;
@@ -950,7 +953,7 @@ window.qcCrosshairPlugin = {
         if (idx === chart.$crosshairIdx) return;
         chart.$crosshairIdx = idx;
         chart.$crosshairX = xs.getPixelForValue(idx);
-        if (window.qcTrendShowLabels === false) chart.update('none'); else args.changed = true;
+        if (needUpdate) chart.update('none'); else args.changed = true;
     },
     afterDatasetsDraw(chart) {
         if (chart.$crosshairX == null) return;

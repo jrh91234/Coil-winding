@@ -652,7 +652,7 @@ window.renderDailyOutputChart = function() {
 
     charts.dailyOutput = new Chart(ctxDaily, {
          type: 'bar',
-         plugins: activePlugins.concat([totalLabelPlugin, avgLinePlugin]),
+         plugins: activePlugins.concat([totalLabelPlugin, avgLinePlugin], window.qcCrosshairPlugin ? [window.qcCrosshairPlugin] : []),
          data: {
              labels: labels,
              datasets: chartDatasets
