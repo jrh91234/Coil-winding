@@ -738,6 +738,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                     labels: displayTrendData.map(d=>d.date),
                     datasets: datasets
                 },
+                plugins: [window.qcCrosshairPlugin],
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
@@ -752,10 +753,11 @@ const ctxQC = document.getElementById('qcTrendChart');
                             stackWeight: 3,
                             weight: 2, // weight มากกว่า = อยู่ด้านบน
                             min: 0, // เริ่มจาก 0 และแสดงเลข 0
+                            beginAtZero: true, // คงฐาน 0 แม้ถูก reset zoom (ลบ min/max)
                             grace: '10%',
                             border: { color: '#9ca3af' },
                             title: { display: true, text: '% NG Rate' },
-                            ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 }
+                            ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10, includeBounds: false }
                         },
                         // ช่องว่างคั่นระหว่าง 2 หน้าต่าง ให้ตัวเลขแกนบน/ล่างอยู่คนละจุด ไม่ชนกัน
                         yGap: {
@@ -775,18 +777,20 @@ const ctxQC = document.getElementById('qcTrendChart');
                             stackWeight: 1,
                             weight: 0,
                             min: 0, // เริ่มจาก 0 และแสดงเลข 0
+                            beginAtZero: true,
                             stacked: true,
                             border: { color: '#9ca3af' },
                             title: { display: true, text: 'ยอดผลิต (ชิ้น)', font: { size: 11 } },
                             grace: '15%',
-                            ticks: { callback: v => Number(v).toLocaleString(), maxTicksLimit: 4 }
+                            ticks: { callback: v => Number(v).toLocaleString(), maxTicksLimit: 4, includeBounds: false }
                         }
                     },
                     layout: { padding: { top: 20 } },
                     plugins: {
                         zoom: {
                             limits: { y: { min: 0 }, yQty: { min: 0 } },
-                            pan: { enabled: true, mode: 'xy' },
+                            // pan แนวนอนผ่าน plugin (2 หน้าต่างเลื่อนพร้อมกัน), pan แนวตั้งแยกหน้าต่างด้วย initQcPanePan
+                            pan: { enabled: true, mode: 'x' },
                             zoom: {
                                 wheel: { enabled: true },
                                 pinch: { enabled: true },
@@ -844,6 +848,8 @@ const ctxQC = document.getElementById('qcTrendChart');
 
             // 🖊️ เครื่องมือตีเส้นบนกราฟ (TradingView style) — js/charts/draw-tool.js
             if (window.initChartDrawTool) window.initChartDrawTool(charts.qcTrend, 'qcTrend');
+            // ↕ ลากขึ้นลงแยกหน้าต่าง (บน/ล่าง) — ลากซ้ายขวายังเลื่อนพร้อมกัน
+            if (window.initQcPanePan) window.initQcPanePan(ctxQC);
          }
 
          window.renderNgTrendChart();
@@ -916,4 +922,82 @@ window.toggleQcTrendLabels = function() {
         btn.classList.toggle('text-gray-500', !window.qcTrendShowLabels);
     }
     if (typeof charts !== 'undefined' && charts.qcTrend) charts.qcTrend.update();
+};
+
+
+// ➕ Crosshair: เส้นแนวตั้งตามเมาส์ ลากยาวตั้งแต่บนสุดถึงล่างสุด (ผ่านทั้ง 2 หน้าต่าง)
+window.qcCrosshairPlugin = {
+    id: 'qcCrosshair',
+    afterEvent(chart, args) {
+        const e = args.event;
+        if (e.type === 'mouseout') {
+            if (chart.$crosshairX != null) { chart.$crosshairX = null; args.changed = true; }
+            return;
+        }
+        if (e.type !== 'mousemove') return;
+        const xs = chart.scales.x;
+        if (!args.inChartArea || !xs) {
+            if (chart.$crosshairX != null) { chart.$crosshairX = null; args.changed = true; }
+            return;
+        }
+        // snap เข้ากลางแท่ง/จุดของวันที่ใกล้ที่สุด
+        const last = chart.data.labels.length - 1;
+        let idx = Math.round(xs.getValueForPixel(e.x));
+        idx = Math.max(Math.max(0, Math.ceil(xs.min)), Math.min(Math.min(last, Math.floor(xs.max)), idx));
+        const px = xs.getPixelForValue(idx);
+        if (px !== chart.$crosshairX) { chart.$crosshairX = px; args.changed = true; }
+    },
+    afterDatasetsDraw(chart) {
+        if (chart.$crosshairX == null) return;
+        const { ctx, chartArea: a } = chart;
+        ctx.save();
+        ctx.beginPath();
+        ctx.setLineDash([4, 3]);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(75, 85, 99, 0.7)';
+        ctx.moveTo(chart.$crosshairX, a.top);
+        ctx.lineTo(chart.$crosshairX, a.bottom);
+        ctx.stroke();
+        ctx.restore();
+    }
+};
+
+// ↕ ลากขึ้นลงแยกหน้าต่างของกราฟ Daily NG Rate Trend (หน้าต่างบน=y, หน้าต่างล่าง=yQty)
+window.initQcPanePan = function(canvas) {
+    if (!canvas || canvas.$qcPanePanInit) return;
+    canvas.$qcPanePanInit = true;
+    let drag = null;
+
+    canvas.addEventListener('pointerdown', function(e) {
+        const chart = Chart.getChart(canvas);
+        if (!chart || e.button !== 0 || chart.$drawMode) return;
+        const zoomOpts = chart.options.plugins && chart.options.plugins.zoom;
+        if (zoomOpts && zoomOpts.pan && zoomOpts.pan.enabled === false) return;
+        const rect = canvas.getBoundingClientRect();
+        const px = e.clientX - rect.left, py = e.clientY - rect.top;
+        const a = chart.chartArea;
+        if (px < a.left || px > a.right) return;
+        const id = ['y', 'yQty'].find(k => chart.scales[k] && py >= chart.scales[k].top && py <= chart.scales[k].bottom);
+        if (!id) return; // อยู่ในช่องว่างระหว่างหน้าต่าง
+        const sc = chart.scales[id];
+        drag = { id, startY: e.clientY, min: sc.min, max: sc.max, height: sc.bottom - sc.top };
+    });
+
+    window.addEventListener('pointermove', function(e) {
+        if (!drag) return;
+        const chart = Chart.getChart(canvas);
+        if (!chart) { drag = null; return; }
+        const range = drag.max - drag.min;
+        // ลากลง = เลื่อนไปดูค่าที่สูงขึ้น
+        let min = drag.min + (e.clientY - drag.startY) * (range / drag.height);
+        if (min < 0) min = 0; // ไม่ต่ำกว่า 0
+        const opts = chart.options.scales[drag.id];
+        opts.min = min;
+        opts.max = min + range;
+        chart.update('none');
+    });
+
+    const end = () => { drag = null; };
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
 };
