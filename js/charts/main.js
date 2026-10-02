@@ -827,7 +827,8 @@ const ctxQC = document.getElementById('qcTrendChart');
                         datalabels: {
                             display: function(ctx) {
                                 if (ctx.datasetIndex !== 0) return false;
-                                if (window.qcTrendShowLabels === false) return false;
+                                // โหมดปิดตัวเลข: แสดงเฉพาะจุดที่เส้นแนวตั้ง (crosshair) พาดผ่าน
+                                if (window.qcTrendShowLabels === false) return ctx.chart.$crosshairIdx === ctx.dataIndex;
                                 const c = ctx.chart.canvas.closest('.widget-card');
                                 return c ? c.classList.contains('maximized-card') : true;
                             },
@@ -930,34 +931,55 @@ window.qcCrosshairPlugin = {
     id: 'qcCrosshair',
     afterEvent(chart, args) {
         const e = args.event;
-        if (e.type === 'mouseout') {
-            if (chart.$crosshairX != null) { chart.$crosshairX = null; args.changed = true; }
-            return;
-        }
+        const clear = () => {
+            if (chart.$crosshairX == null) return;
+            chart.$crosshairX = null; chart.$crosshairIdx = null;
+            // โหมดปิดตัวเลข: ต้อง update เพื่อให้ datalabels ซ่อนตัวเลขของจุดเดิม
+            if (window.qcTrendShowLabels === false) chart.update('none'); else args.changed = true;
+        };
+        if (e.type === 'mouseout') { clear(); return; }
         if (e.type !== 'mousemove') return;
         const xs = chart.scales.x;
-        if (!args.inChartArea || !xs) {
-            if (chart.$crosshairX != null) { chart.$crosshairX = null; args.changed = true; }
-            return;
-        }
+        if (!args.inChartArea || !xs) { clear(); return; }
         // snap เข้ากลางแท่ง/จุดของวันที่ใกล้ที่สุด
         const last = chart.data.labels.length - 1;
         let idx = Math.round(xs.getValueForPixel(e.x));
         idx = Math.max(Math.max(0, Math.ceil(xs.min)), Math.min(Math.min(last, Math.floor(xs.max)), idx));
-        const px = xs.getPixelForValue(idx);
-        if (px !== chart.$crosshairX) { chart.$crosshairX = px; args.changed = true; }
+        if (idx === chart.$crosshairIdx) return;
+        chart.$crosshairIdx = idx;
+        chart.$crosshairX = xs.getPixelForValue(idx);
+        if (window.qcTrendShowLabels === false) chart.update('none'); else args.changed = true;
     },
     afterDatasetsDraw(chart) {
         if (chart.$crosshairX == null) return;
         const { ctx, chartArea: a } = chart;
+        const x = chart.$crosshairX;
         ctx.save();
         ctx.beginPath();
         ctx.setLineDash([4, 3]);
         ctx.lineWidth = 1;
         ctx.strokeStyle = 'rgba(75, 85, 99, 0.7)';
-        ctx.moveTo(chart.$crosshairX, a.top);
-        ctx.lineTo(chart.$crosshairX, a.bottom);
+        ctx.moveTo(x, a.top);
+        ctx.lineTo(x, a.bottom);
         ctx.stroke();
+        ctx.restore();
+
+        // วันที่แนวตั้งที่ขอบบนสุด ยาวตามเส้น
+        const text = String(chart.data.labels[chart.$crosshairIdx] ?? '');
+        if (!text) return;
+        ctx.save();
+        ctx.font = 'bold 11px sans-serif';
+        const w = ctx.measureText(text).width + 12; // ความยาวป้าย (แนวตั้ง)
+        const h = 18;                                // ความกว้างป้าย
+        const cx = Math.min(Math.max(x, a.left + h / 2), a.right - h / 2);
+        ctx.fillStyle = 'rgba(31, 41, 55, 0.88)';
+        ctx.fillRect(cx - h / 2, a.top, h, w);
+        ctx.translate(cx, a.top + w / 2);
+        ctx.rotate(Math.PI / 2); // อ่านจากบนลงล่าง
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 0, 0);
         ctx.restore();
     }
 };
