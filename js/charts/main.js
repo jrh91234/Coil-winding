@@ -746,13 +746,13 @@ const ctxQC = document.getElementById('qcTrendChart');
                         // 📈 สไตล์กราฟหุ้น: แบ่ง 2 หน้าต่างบนแกนเดียวกัน (stacked scales)
                         // หน้าต่างบน (3/4) = % NG Rate, หน้าต่างล่าง (1/4) = ยอดผลิต FG + NG (Stack)
                         y: {
-                            type: 'logarithmic',
+                            type: 'linear',
                             position: 'left',
                             stack: 'qcPanes',
                             stackWeight: 3,
                             weight: 2, // weight มากกว่า = อยู่ด้านบน
-                            min: 0.1,
-                            max: 100,
+                            min: 0, // เริ่มจาก 0 และแสดงเลข 0
+                            grace: '10%',
                             border: { color: '#9ca3af' },
                             ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 }
                         },
@@ -773,7 +773,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                             stack: 'qcPanes',
                             stackWeight: 1,
                             weight: 0,
-                            beginAtZero: true,
+                            min: 0, // เริ่มจาก 0 และแสดงเลข 0
                             stacked: true,
                             border: { color: '#9ca3af' },
                             title: { display: true, text: 'ชิ้น' },
@@ -784,7 +784,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                     layout: { padding: { top: 20 } },
                     plugins: {
                         zoom: {
-                            limits: { yQty: { min: 0 } },
+                            limits: { y: { min: 0 }, yQty: { min: 0 } },
                             pan: { enabled: true, mode: 'xy' },
                             zoom: {
                                 wheel: { enabled: true },
