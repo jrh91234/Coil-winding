@@ -750,13 +750,22 @@ const ctxQC = document.getElementById('qcTrendChart');
                             position: 'left',
                             stack: 'qcPanes',
                             stackWeight: 3,
-                            weight: 1, // weight มากกว่า = อยู่ด้านบน
+                            weight: 2, // weight มากกว่า = อยู่ด้านบน
                             min: 0.1,
                             max: 100,
                             border: { color: '#9ca3af' },
-                            ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 },
-                            // ซ่อน tick ล่างสุดของหน้าต่างบน ไม่ให้ชนกับ tick บนสุดของหน้าต่างล่าง (รวมตอน zoom/pan)
-                            afterTickToLabelConversion: axis => { if (axis.ticks.length > 1) axis.ticks[0].label = ''; }
+                            ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 }
+                        },
+                        // ช่องว่างคั่นระหว่าง 2 หน้าต่าง ให้ตัวเลขแกนบน/ล่างอยู่คนละจุด ไม่ชนกัน
+                        yGap: {
+                            type: 'linear',
+                            position: 'left',
+                            stack: 'qcPanes',
+                            stackWeight: 0.3,
+                            weight: 1,
+                            grid: { display: false },
+                            ticks: { display: false },
+                            border: { display: false }
                         },
                         yQty: {
                             type: 'linear',
@@ -769,9 +778,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                             border: { color: '#9ca3af' },
                             title: { display: true, text: 'ชิ้น' },
                             grace: '15%',
-                            ticks: { callback: v => Number(v).toLocaleString(), maxTicksLimit: 4 },
-                            // ซ่อน tick บนสุดของหน้าต่างล่าง (อยู่ตรงรอยต่อกับหน้าต่างบน)
-                            afterTickToLabelConversion: axis => { if (axis.ticks.length > 1) axis.ticks[axis.ticks.length - 1].label = ''; }
+                            ticks: { callback: v => Number(v).toLocaleString(), maxTicksLimit: 4 }
                         }
                     },
                     layout: { padding: { top: 20 } },
