@@ -90,10 +90,11 @@ window.showTrendDayBreakdown = function(d) {
                 html += '<div class="px-3 py-1 space-y-1">';
                 sympEntries.forEach(([symp, pcs]) => {
                     const pct = item.ngPcs > 0 ? ((pcs / item.ngPcs) * 100).toFixed(0) : 0;
+                    const pctDay = d.ngPcs > 0 ? ((pcs / d.ngPcs) * 100).toFixed(1) : '0.0';
                     const isRollChange = symp.toLowerCase().includes('เปลี่ยนม้วน') || symp.toLowerCase().includes('roll change');
                     html += `<div class="flex justify-between text-xs text-gray-600">
                         <span>${symp}</span>
-                        <span class="font-mono whitespace-nowrap ml-2">${pcs.toLocaleString()} ชิ้น <span class="text-gray-400">(${pct}%)</span></span>
+                        <span class="font-mono whitespace-nowrap ml-2">${pcs.toLocaleString()} ชิ้น <span class="text-gray-400">(${pct}% เครื่อง)</span> <span class="text-red-500">(${pctDay}% ของวัน)</span></span>
                     </div>`;
                     if (isRollChange && macCoils > 0) {
                         const avg = (pcs / macCoils).toFixed(1);
