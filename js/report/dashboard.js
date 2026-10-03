@@ -164,9 +164,16 @@ window.loadDashboard = async function() {
         document.getElementById('stat-achievement').innerText = ach + "%";
         document.getElementById('progress-achievement').style.width = Math.min(ach, 100) + "%";
         
+        // Yield ถ่วงน้ำหนัก Kg (ตรงกับ NG Rate ในกราฟ) — ถ้าไม่มีข้อมูล Kg ใช้จำนวนชิ้นแทน
+        const totalKg = fgKg + ngKg;
+        const useKg = totalKg > 0;
         const total = fg + ngPcs;
-        const yieldVal = total > 0 ? ((fg / total) * 100).toFixed(2) : 0;
+        const yieldVal = useKg
+            ? ((fgKg / totalKg) * 100).toFixed(2)
+            : (total > 0 ? ((fg / total) * 100).toFixed(2) : 0);
         document.getElementById('stat-yield').innerText = yieldVal + "%";
+        const yieldSubEl = document.getElementById('stat-yield-sub');
+        if (yieldSubEl) yieldSubEl.innerText = useKg ? 'ถ่วงน้ำหนัก Kg' : 'จากชิ้นงานทั้งหมด';
         
         let workDays = data.datesFound ? Object.keys(data.datesFound).length : 0;
         if (workDays === 0) {
