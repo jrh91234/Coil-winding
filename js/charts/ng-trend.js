@@ -160,6 +160,29 @@ window.renderNgTrendChart = function() {
     const lockedVisible = window._ngTrendVisible;
     if (lockedVisible) trendDatasets.forEach(ds => { ds.hidden = !lockedVisible.has(ds.label); });
 
+    // 📊 แท่ง Stack ยอดผลิต FG + NG (ชิ้น) หน้าต่างล่าง เหมือนกราฟ Daily NG Rate Trend
+    // (isQty = ไม่รวมใน Legend / การเลือกอาการ — แสดงเสมอ)
+    trendDatasets.push({
+        type: 'bar', isQty: true,
+        label: 'ยอดผลิต FG (ชิ้น)',
+        data: trendData.map(d => d.fg || 0),
+        backgroundColor: 'rgba(59, 130, 246, 0.25)',
+        borderColor: 'rgba(59, 130, 246, 0.5)',
+        borderWidth: 1,
+        stack: 'qty', yAxisID: 'yQty', order: 10,
+        datalabels: { display: false }
+    });
+    trendDatasets.push({
+        type: 'bar', isQty: true,
+        label: 'NG (ชิ้น)',
+        data: trendData.map(d => d.ng || 0),
+        backgroundColor: 'rgba(239, 68, 68, 0.6)',
+        borderColor: 'rgba(220, 38, 38, 0.8)',
+        borderWidth: 1,
+        stack: 'qty', yAxisID: 'yQty', order: 10,
+        datalabels: { display: false }
+    });
+
     charts.ngSymptomTrend = new Chart(ctxNgTrend, {
         type: 'line',
         plugins: activePlugins.concat(window.qcCrosshairPlugin ? [window.qcCrosshairPlugin] : []),
@@ -180,6 +203,7 @@ window.renderNgTrendChart = function() {
                 const index = element.index;
                 
                 const dateStr = chart.data.labels[index];
+                if (chart.data.datasets[datasetIndex].isQty) return; // แท่งยอดผลิต ไม่มี breakdown
                 const symptom = chart.data.datasets[datasetIndex].label;
                 const val = chart.data.datasets[datasetIndex].data[index];
 
@@ -271,7 +295,8 @@ window.renderNgTrendChart = function() {
             },
             scales: {
                 x: { offset: true },
-                y: mode === 'percent' ? {
+                // 📈 2 หน้าต่างบนแกนเดียวกัน: บน = อาการ NG, ล่าง = ยอดผลิต FG + NG (ชิ้น)
+                y: Object.assign({ position: 'left', stack: 'ngPanes', stackWeight: 3, weight: 2 }, mode === 'percent' ? {
                     type: 'logarithmic',
                     min: 0.1,
                     max: 100,
@@ -280,6 +305,18 @@ window.renderNgTrendChart = function() {
                 } : {
                     beginAtZero: true,
                     title: { display: true, text: 'จำนวน (ชิ้น)' }
+                }),
+                yGap: {
+                    type: 'linear', position: 'left', stack: 'ngPanes', stackWeight: 0.3, weight: 1,
+                    grid: { display: false }, ticks: { display: false }, border: { display: false }
+                },
+                yQty: {
+                    type: 'linear', position: 'left', stack: 'ngPanes', stackWeight: 1, weight: 0,
+                    min: 0, beginAtZero: true, stacked: true,
+                    border: { color: '#9ca3af' },
+                    title: { display: true, text: 'ยอดผลิต (ชิ้น)', font: { size: 11 } },
+                    grace: '15%',
+                    ticks: { callback: v => Number(v).toLocaleString(), maxTicksLimit: 4, includeBounds: false }
                 }
             },
             layout: { padding: { top: 20, right: 20 } },
@@ -293,7 +330,8 @@ window.renderNgTrendChart = function() {
                         return b.raw - a.raw; 
                     },
                     filter: function(tooltipItem) {
-                        return tooltipItem.raw > 0;
+                        // แท่งยอดผลิตสรุปอยู่ใน footer แล้ว
+                        return tooltipItem.raw > 0 && !tooltipItem.dataset.isQty;
                     },
                     callbacks: {
                         label: function(context) {
@@ -398,6 +436,7 @@ window.ngTrendRenderLegend = function() {
     const groups = [];
     const byKey = {};
     chart.data.datasets.forEach((ds, i) => {
+        if (ds.isQty) return;
         const key = ds.ngKey !== undefined ? ds.ngKey : ds.label;
         if (!byKey[key]) { byKey[key] = { key, color: ds.borderColor, idx: [] }; groups.push(byKey[key]); }
         byKey[key].idx.push(i);
@@ -444,19 +483,21 @@ window.ngTrendRenderLegend = function() {
 window.ngTrendLegendClick = function(key, multi) {
     const chart = charts.ngSymptomTrend;
     if (!chart) return;
-    const all = chart.data.datasets;
+    // เฉพาะเส้นอาการ — แท่งยอดผลิต (isQty) แสดงเสมอ ไม่ยุ่งกับการเลือก
     const inGroup = ds => (ds.ngKey !== undefined ? ds.ngKey : ds.label) === key;
-    const idx = all.map((ds, i) => inGroup(ds) ? i : -1).filter(i => i >= 0);
+    const idx = chart.data.datasets.map((ds, i) => (!ds.isQty && inGroup(ds)) ? i : -1).filter(i => i >= 0);
     if (multi) {
         const on = idx.some(i => chart.isDatasetVisible(i));
         idx.forEach(i => chart.setDatasetVisibility(i, !on));
     } else {
-        const onlyThis = idx.every(i => chart.isDatasetVisible(i)) && all.every((ds, i) => idx.includes(i) || !chart.isDatasetVisible(i));
-        all.forEach((ds, i) => chart.setDatasetVisibility(i, onlyThis ? true : idx.includes(i)));
+        const lineIdx = chart.data.datasets.map((ds, i) => ds.isQty ? -1 : i).filter(i => i >= 0);
+        const onlyThis = idx.every(i => chart.isDatasetVisible(i)) && lineIdx.every(i => idx.includes(i) || !chart.isDatasetVisible(i));
+        lineIdx.forEach(i => chart.setDatasetVisibility(i, onlyThis ? true : idx.includes(i)));
     }
     // จำเส้นที่แสดงอยู่ไว้ ใช้ตอนเปลี่ยนฟิวเตอร์ (null = แสดงทั้งหมด)
-    const anyHidden = all.some((ds, i) => !chart.isDatasetVisible(i));
-    window._ngTrendVisible = anyHidden ? new Set(all.filter((ds, i) => chart.isDatasetVisible(i)).map(ds => ds.label)) : null;
+    const visLines = chart.data.datasets.map((ds, i) => ({ ds, i })).filter(o => !o.ds.isQty);
+    const anyHidden = visLines.some(o => !chart.isDatasetVisible(o.i));
+    window._ngTrendVisible = anyHidden ? new Set(visLines.filter(o => chart.isDatasetVisible(o.i)).map(o => o.ds.label)) : null;
     const showAllBtn = document.getElementById('ngTrendShowAll');
     if (showAllBtn) showAllBtn.classList.toggle('hidden', !anyHidden);
     chart.update();
