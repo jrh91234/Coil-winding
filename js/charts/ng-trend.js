@@ -64,28 +64,35 @@ window.renderNgTrendChart = function() {
     const lineColors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6'];
 
     let trendDatasets = [];
+    // แปลงจำนวนชิ้นเป็นค่าที่แสดง (ชิ้น หรือ % เทียบยอดผลิตของวัน)
+    const toVal = (pcs, d) => {
+        if (mode !== 'percent') return pcs;
+        const total = (d.fg || 0) + (d.ng || 0);
+        if (total <= 0) return 0;
+        return Math.min(parseFloat(((pcs / total) * 100).toFixed(2)), 100);
+    };
     uniqueNgTypes.forEach((type, idx) => {
         const color = lineColors[idx % lineColors.length];
-        // เส้นรวม (Production + Setup)
+        const hasSetup = setupTotals[type] > 0;
+        // แยกชิ้นเสียของอาการนี้ต่อวันเป็น Setup / ไม่ใช่ Setup (ไม่ใช่ Setup = รวมอาการปกติ)
+        const split = trendData.map(d => {
+            let setup = 0, prod = 0;
+            Object.keys(d.ngBreakdown || {}).forEach(k => {
+                const parsed = window.parseSetupType(k);
+                if (parsed.base !== type) return;
+                if (parsed.isSetup) setup += d.ngBreakdown[k]; else prod += d.ngBreakdown[k];
+            });
+            return { setup, prod };
+        });
+        const fullData = trendData.map((d, i) => toVal(split[i].setup + split[i].prod, d));
+        // แท่งอาการปกติ + แท่ง Setup ซ้อน (stack) บนแท่งเดียวกันของอาการนั้น
         trendDatasets.push({
             label: type,
             ngKey: type, ngSetupOnly: false,
-            data: trendData.map(d => {
-                if (!d.ngBreakdown) return 0;
-                // รวม base + Setup ของ type นี้
-                let rawPcs = 0;
-                Object.keys(d.ngBreakdown).forEach(k => {
-                    const parsed = window.parseSetupType(k);
-                    if (parsed.base === type) rawPcs += d.ngBreakdown[k];
-                });
-                if (mode === 'percent') {
-                    const total = (d.fg || 0) + (d.ng || 0);
-                    if (total <= 0) return 0;
-                    return Math.min(parseFloat(((rawPcs / total) * 100).toFixed(2)), 100);
-                }
-                return rawPcs;
-            }),
-            type: 'bar',
+            type: 'bar', stack: 'sym-' + type,
+            data: hasSetup ? trendData.map((d, i) => toVal(split[i].prod, d)) : fullData,
+            fullData, splitSetup: hasSetup,
+            labelVals: hasSetup ? null : fullData, // ตัวเลขรวมไปแสดงที่แท่งบนสุด (Setup)
             borderColor: color,
             backgroundColor: color + 'cc',
             borderWidth: 1,
@@ -93,26 +100,14 @@ window.renderNgTrendChart = function() {
             order: 1
         });
 
-        // เส้น Setup แยก (ถ้ามี) - เส้นประ
-        if (setupTotals[type] > 0) {
+        if (hasSetup) {
             trendDatasets.push({
                 label: type + ' (Setup)',
                 ngKey: type, ngSetupOnly: true,
-                data: trendData.map(d => {
-                    if (!d.ngBreakdown) return 0;
-                    let setupPcs = 0;
-                    Object.keys(d.ngBreakdown).forEach(k => {
-                        const parsed = window.parseSetupType(k);
-                        if (parsed.isSetup && parsed.base === type) setupPcs += d.ngBreakdown[k];
-                    });
-                    if (mode === 'percent') {
-                        const total = (d.fg || 0) + (d.ng || 0);
-                        if (total <= 0) return 0;
-                        return Math.min(parseFloat(((setupPcs / total) * 100).toFixed(2)), 100);
-                    }
-                    return setupPcs;
-                }),
-                type: 'bar',
+                type: 'bar', stack: 'sym-' + type,
+                data: trendData.map((d, i) => toVal(split[i].setup, d)),
+                fullData,
+                labelVals: fullData,
                 borderColor: color,
                 backgroundColor: color + '40',
                 borderWidth: 1.5,
@@ -129,7 +124,8 @@ window.renderNgTrendChart = function() {
             let n = 0;
             if (d.ngBreakdown) Object.keys(d.ngBreakdown).forEach(k => {
                 const parsed = window.parseSetupType(k);
-                if (parsed.base === ds.ngKey && (!ds.ngSetupOnly || parsed.isSetup)) n += d.ngBreakdown[k];
+                if (parsed.base !== ds.ngKey) return;
+                if (ds.ngSetupOnly ? parsed.isSetup : !(ds.splitSetup && parsed.isSetup)) n += d.ngBreakdown[k];
             });
             return n;
         });
@@ -201,8 +197,9 @@ window.renderNgTrendChart = function() {
                 
                 const dateStr = chart.data.labels[index];
                 if (chart.data.datasets[datasetIndex].isQty) return; // แท่งยอดผลิต ไม่มี breakdown
-                const symptom = chart.data.datasets[datasetIndex].label;
-                const val = chart.data.datasets[datasetIndex].data[index];
+                const clickedDs = chart.data.datasets[datasetIndex];
+                const symptom = clickedDs.ngKey !== undefined ? clickedDs.ngKey : clickedDs.label;
+                const val = (clickedDs.fullData || clickedDs.data)[index];
 
                 if (val === 0) return; // ไม่แสดงถ้าค่าเป็น 0
 
@@ -293,7 +290,7 @@ window.renderNgTrendChart = function() {
             scales: {
                 x: { offset: true },
                 // 📈 2 หน้าต่างบนแกนเดียวกัน: บน = อาการ NG, ล่าง = ยอดผลิต FG + NG (ชิ้น)
-                y: Object.assign({ position: 'left', stack: 'ngPanes', stackWeight: 3, weight: 2 }, mode === 'percent' ? {
+                y: Object.assign({ position: 'left', stack: 'ngPanes', stackWeight: 3, weight: 2, stacked: true }, mode === 'percent' ? {
                     beginAtZero: true,
                     grace: '10%',
                     title: { display: true, text: '% เทียบยอดผลิต' },
@@ -356,7 +353,8 @@ window.renderNgTrendChart = function() {
                 },
                 datalabels: {
                     display: function(ctx) {
-                        if (ctx.dataset.data[ctx.dataIndex] <= 0) return false;
+                        // ตัวเลขรวม (ปกติ + Setup) แสดงที่แท่งบนสุดของ stack เท่านั้น
+                        if (!ctx.dataset.labelVals || !(ctx.dataset.labelVals[ctx.dataIndex] > 0)) return false;
                         // โหมดปิดตัวเลข: แสดงเฉพาะจุดที่เส้นแนวตั้ง (crosshair) พาดผ่าน
                         if (!window._ngTrendLabelsOn) return ctx.chart.$crosshairIdx === ctx.dataIndex;
                         return true;
@@ -367,7 +365,10 @@ window.renderNgTrendChart = function() {
                         return context.dataset.borderColor;
                     },
                     font: { weight: 'bold', size: 11 },
-                    formatter: (value) => value > 0 ? value + (mode === 'percent' ? '%' : '') : null
+                    formatter: (value, ctx) => {
+                        const v = ctx.dataset.labelVals ? ctx.dataset.labelVals[ctx.dataIndex] : value;
+                        return v > 0 ? v + (mode === 'percent' ? '%' : '') : null;
+                    }
                 }
             }
         }
@@ -382,8 +383,8 @@ window.renderNgTrendChart = function() {
     if (helpBox) {
         const scope = selectedMac === 'all' ? 'ทุกเครื่องรวมกัน' : 'เครื่อง ' + selectedMac;
         helpBox.innerHTML = mode === 'percent'
-            ? `<b>% เทียบยอดผลิต</b> = ชิ้นเสียของอาการนั้น ÷ (FG + NG ของวันนั้น) × 100<br>• นับเป็นชิ้น (ไม่ถ่วงน้ำหนัก Kg) · ขอบเขต: ${scope}<br>• แท่งสีจางขอบประ (Setup) = ส่วนที่เสียตอน Setup ซึ่งรวมอยู่ในแท่งหลักแล้ว ไม่ต้องบวกซ้ำ<br>• วางเมาส์บนกราฟเพื่อดูรายการคำนวณรายวัน (ยอดผลิต + ตัวอย่างสูตร)`
-            : `<b>จำนวนเสีย (ชิ้น)</b> = ชิ้นเสียของอาการนั้นในวันนั้น · ขอบเขต: ${scope}<br>• แท่งสีจางขอบประ (Setup) = ส่วนที่เสียตอน Setup ซึ่งรวมอยู่ในแท่งหลักแล้ว ไม่ต้องบวกซ้ำ<br>• วางเมาส์บนกราฟเพื่อดูยอดผลิตของวันนั้น`;
+            ? `<b>% เทียบยอดผลิต</b> = ชิ้นเสียของอาการนั้น ÷ (FG + NG ของวันนั้น) × 100<br>• นับเป็นชิ้น (ไม่ถ่วงน้ำหนัก Kg) · ขอบเขต: ${scope}<br>• ส่วนสีจางขอบประ (Setup) = ส่วนที่เสียตอน Setup ซ้อนอยู่บนแท่งอาการเดียวกัน (แท่งรวม = อาการปกติ + Setup) ไม่ต้องบวกซ้ำ<br>• วางเมาส์บนกราฟเพื่อดูรายการคำนวณรายวัน (ยอดผลิต + ตัวอย่างสูตร)`
+            : `<b>จำนวนเสีย (ชิ้น)</b> = ชิ้นเสียของอาการนั้นในวันนั้น · ขอบเขต: ${scope}<br>• ส่วนสีจางขอบประ (Setup) = ส่วนที่เสียตอน Setup ซ้อนอยู่บนแท่งอาการเดียวกัน (แท่งรวม = อาการปกติ + Setup) ไม่ต้องบวกซ้ำ<br>• วางเมาส์บนกราฟเพื่อดูยอดผลิตของวันนั้น`;
     }
 
     // ปุ่ม "แสดงทั้งหมด" โชว์เมื่อมีการล็อกอาการอยู่
