@@ -85,13 +85,12 @@ window.renderNgTrendChart = function() {
                 }
                 return rawPcs;
             }),
+            type: 'bar',
             borderColor: color,
-            backgroundColor: color,
-            tension: 0.3,
-            borderWidth: 2,
-            pointRadius: 3,
-            pointHoverRadius: 6,
-            fill: false
+            backgroundColor: color + 'cc',
+            borderWidth: 1,
+            maxBarThickness: 22,
+            order: 1
         });
 
         // เส้น Setup แยก (ถ้ามี) - เส้นประ
@@ -113,15 +112,13 @@ window.renderNgTrendChart = function() {
                     }
                     return setupPcs;
                 }),
+                type: 'bar',
                 borderColor: color,
                 backgroundColor: color + '40',
-                tension: 0.3,
                 borderWidth: 1.5,
                 borderDash: [5, 3],
-                pointRadius: 2,
-                pointHoverRadius: 5,
-                pointStyle: 'triangle',
-                fill: false
+                maxBarThickness: 22,
+                order: 1
             });
         }
     });
@@ -184,7 +181,7 @@ window.renderNgTrendChart = function() {
     });
 
     charts.ngSymptomTrend = new Chart(ctxNgTrend, {
-        type: 'line',
+        type: 'bar',
         plugins: activePlugins.concat(window.qcCrosshairPlugin ? [window.qcCrosshairPlugin] : []),
         data: {
             labels: trendData.map(d=>d.date),
@@ -297,9 +294,8 @@ window.renderNgTrendChart = function() {
                 x: { offset: true },
                 // 📈 2 หน้าต่างบนแกนเดียวกัน: บน = อาการ NG, ล่าง = ยอดผลิต FG + NG (ชิ้น)
                 y: Object.assign({ position: 'left', stack: 'ngPanes', stackWeight: 3, weight: 2 }, mode === 'percent' ? {
-                    type: 'logarithmic',
-                    min: 0.1,
-                    max: 100,
+                    beginAtZero: true,
+                    grace: '10%',
                     title: { display: true, text: '% เทียบยอดผลิต' },
                     ticks: { callback: v => v + '%', autoSkip: true, maxTicksLimit: 10 }
                 } : {
@@ -365,7 +361,8 @@ window.renderNgTrendChart = function() {
                         if (!window._ngTrendLabelsOn) return ctx.chart.$crosshairIdx === ctx.dataIndex;
                         return true;
                     },
-                    align: 'top',
+                    anchor: 'end',
+                    align: 'end',
                     color: function(context) {
                         return context.dataset.borderColor;
                     },
@@ -385,8 +382,8 @@ window.renderNgTrendChart = function() {
     if (helpBox) {
         const scope = selectedMac === 'all' ? 'ทุกเครื่องรวมกัน' : 'เครื่อง ' + selectedMac;
         helpBox.innerHTML = mode === 'percent'
-            ? `<b>% เทียบยอดผลิต</b> = ชิ้นเสียของอาการนั้น ÷ (FG + NG ของวันนั้น) × 100<br>• นับเป็นชิ้น (ไม่ถ่วงน้ำหนัก Kg) · ขอบเขต: ${scope}<br>• เส้นประ (Setup) = ส่วนที่เสียตอน Setup ซึ่งรวมอยู่ในเส้นหลักแล้ว ไม่ต้องบวกซ้ำ<br>• วางเมาส์บนกราฟเพื่อดูรายการคำนวณรายวัน (ยอดผลิต + ตัวอย่างสูตร)`
-            : `<b>จำนวนเสีย (ชิ้น)</b> = ชิ้นเสียของอาการนั้นในวันนั้น · ขอบเขต: ${scope}<br>• เส้นประ (Setup) = ส่วนที่เสียตอน Setup ซึ่งรวมอยู่ในเส้นหลักแล้ว ไม่ต้องบวกซ้ำ<br>• วางเมาส์บนกราฟเพื่อดูยอดผลิตของวันนั้น`;
+            ? `<b>% เทียบยอดผลิต</b> = ชิ้นเสียของอาการนั้น ÷ (FG + NG ของวันนั้น) × 100<br>• นับเป็นชิ้น (ไม่ถ่วงน้ำหนัก Kg) · ขอบเขต: ${scope}<br>• แท่งสีจางขอบประ (Setup) = ส่วนที่เสียตอน Setup ซึ่งรวมอยู่ในแท่งหลักแล้ว ไม่ต้องบวกซ้ำ<br>• วางเมาส์บนกราฟเพื่อดูรายการคำนวณรายวัน (ยอดผลิต + ตัวอย่างสูตร)`
+            : `<b>จำนวนเสีย (ชิ้น)</b> = ชิ้นเสียของอาการนั้นในวันนั้น · ขอบเขต: ${scope}<br>• แท่งสีจางขอบประ (Setup) = ส่วนที่เสียตอน Setup ซึ่งรวมอยู่ในแท่งหลักแล้ว ไม่ต้องบวกซ้ำ<br>• วางเมาส์บนกราฟเพื่อดูยอดผลิตของวันนั้น`;
     }
 
     // ปุ่ม "แสดงทั้งหมด" โชว์เมื่อมีการล็อกอาการอยู่
