@@ -163,6 +163,7 @@ window.renderNgTrendChart = function() {
         borderColor: 'rgba(59, 130, 246, 0.5)',
         borderWidth: 1,
         stack: 'qty', yAxisID: 'yQty', order: 10,
+        grouped: false, // ไม่นับรวมในการแบ่งช่องกับแท่งอาการ — ให้อยู่กึ่งกลางวันที่ตรงกับแท่งด้านบน
         datalabels: { display: false }
     });
     trendDatasets.push({
@@ -173,6 +174,7 @@ window.renderNgTrendChart = function() {
         borderColor: 'rgba(220, 38, 38, 0.8)',
         borderWidth: 1,
         stack: 'qty', yAxisID: 'yQty', order: 10,
+        grouped: false, // ไม่นับรวมในการแบ่งช่องกับแท่งอาการ — ให้อยู่กึ่งกลางวันที่ตรงกับแท่งด้านบน
         datalabels: { display: false }
     });
 
