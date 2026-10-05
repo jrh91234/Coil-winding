@@ -947,6 +947,7 @@
                         <option value="รอวัตถุดิบ (Material Shortage)">📦 รอวัตถุดิบ (Material Shortage)</option>
                         <option value="ตั้งค่าเครื่อง (Setup/Changeover)">🔧 ตั้งค่าเครื่อง (Setup/Changeover)</option>
                         <option value="ทำความสะอาด (Cleaning)">🧹 ทำความสะอาด (Cleaning)</option>
+                        <option value="ปัญหาคุณภาพ (Quality Issue)">🔍 ปัญหาคุณภาพ (Quality Issue)</option>
                         <option value="อื่นๆ (Others)">❓ อื่นๆ (Others)</option>
                     </select>
                 </div>
@@ -2402,6 +2403,7 @@
                     if(log.issueType.includes('Machine Breakdown')) badgeColor = 'bg-red-100 text-red-700 border border-red-200';
                     else if(log.issueType.includes('PM') || log.issueType.includes('AM')) badgeColor = 'bg-blue-100 text-blue-700 border border-blue-200';
                     else if(log.issueType.includes('Material')) badgeColor = 'bg-yellow-100 text-yellow-700 border border-yellow-200';
+                    else if(log.issueType.includes('Quality')) badgeColor = 'bg-purple-100 text-purple-700 border border-purple-200';
 
                     let dateShow = log.date ? log.date + ' ' : '';
                     let timeShow = dateShow + sTime + (eTime ? ' - ' + eTime : ' (รอดำเนินการ)');
