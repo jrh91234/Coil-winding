@@ -322,6 +322,7 @@ window.renderNgTrendChart = function() {
             layout: { padding: { top: 20, right: 20 } },
             plugins: {
                 ...commonOpts.plugins,
+                qcCrosshair: { refreshOnMove: () => !window._ngTrendLabelsOn },
                 legend: { display: false }, // ใช้ Legend แบบ HTML แทน (ngTrendRenderLegend) เพราะอาการเยอะ
                 tooltip: {
                     mode: 'index',
@@ -359,8 +360,10 @@ window.renderNgTrendChart = function() {
                 },
                 datalabels: {
                     display: function(ctx) {
-                        if (!window._ngTrendLabelsOn) return false;
-                        return ctx.dataset.data[ctx.dataIndex] > 0;
+                        if (ctx.dataset.data[ctx.dataIndex] <= 0) return false;
+                        // โหมดปิดตัวเลข: แสดงเฉพาะจุดที่เส้นแนวตั้ง (crosshair) พาดผ่าน
+                        if (!window._ngTrendLabelsOn) return ctx.chart.$crosshairIdx === ctx.dataIndex;
+                        return true;
                     },
                     align: 'top',
                     color: function(context) {
