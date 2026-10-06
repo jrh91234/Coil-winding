@@ -143,8 +143,34 @@ function ensurePmPlanShifts(pmSheet) {
   });
   if (changed && rows.length > 1) {
     pmSheet.getRange(2, col + 1, rows.length - 1, 1).setValues(rows.slice(1).map(r => [r[col]]));
-    SpreadsheetApp.flush();
+    changed = false;
   }
+
+  // ซิงค์วันครบกำหนดทั้งกลุ่มให้ตรงกัน (แผนเก่าที่เครื่องแต่ละเครื่องวันไม่เท่ากัน)
+  //  - ถ้ารอบนี้ถึงกำหนดแล้ว: เครื่องที่ยังค้างทุกเครื่อง = วันครบกำหนดของรอบนี้ (วันที่เก่าสุด),
+  //    เครื่องที่ทำไปแล้ว = รอบนี้ + ความถี่
+  //  - ถ้ายังไม่ถึงกำหนดเลย: ทุกเครื่อง = วันที่เร็วสุดของกลุ่ม
+  const dueCol = ix("Next_Due_Date");
+  if (dueCol > -1) {
+    const todayStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+    Object.keys(groups).forEach(key => {
+      const idxs = groups[key];
+      let cycleDue = "";
+      idxs.forEach(i => { const d = pmDateStr(rows[i][dueCol]); if (d && (!cycleDue || d < cycleDue)) cycleDue = d; });
+      if (!cycleDue) return;
+      idxs.forEach(i => {
+        const cur = pmDateStr(rows[i][dueCol]);
+        let want = cycleDue;
+        if (cycleDue <= todayStr && cur > todayStr) want = pmAddFrequency(cycleDue, rows[i][ix("Frequency")], rows[i][ix("Interval_Value")]);
+        if (cur !== want) {
+          pmSheet.getRange(i + 1, dueCol + 1).setValue(want);
+          rows[i][dueCol] = want;
+          changed = true;
+        }
+      });
+    });
+  }
+  if (changed) SpreadsheetApp.flush();
   return rows;
 }
 
