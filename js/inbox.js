@@ -2,7 +2,7 @@
 let inboxData = null;
 let inboxActiveCategory = 'all';
 
-// === 🔄 PM หมุนเวียนกะ A/B — กะที่ทำรอบนี้ รอบหน้าระบบส่งต่อให้อีกกะ ===
+// === 🔄 PM หมุนเวียนกะ A/B — งานชื่อเดียวกันทุกเครื่องอยู่กะเดียวกัน ทำครบทุกเครื่องแล้วรอบหน้าส่งต่ออีกกะ ===
 const PM_SHIFT_LIST = ['A', 'B'];
 let inboxPmShiftFilter = '';
 try { inboxPmShiftFilter = localStorage.getItem('pmInboxShiftFilter') || ''; } catch (e) { /* ใช้ค่าเริ่มต้น */ }
@@ -388,10 +388,11 @@ window.updatePmShiftHint = function() {
     const assigned = hint.dataset.assigned;
     const picked = document.querySelector('input[name="pm-shift"]:checked')?.value || '';
     const parts = [];
-    if (assigned) parts.push(`รอบนี้เป็นของ <b>กะ ${assigned}</b>`);
+    if (assigned) parts.push(`งานนี้ทั้งรอบเป็นของ <b>กะ ${assigned}</b>`);
     if (picked) {
         if (assigned && picked !== assigned) parts.push(`<span class="text-orange-600 font-bold">⚠️ กะ ${picked} ทำแทน</span>`);
-        parts.push(`รอบถัดไปจะส่งต่อให้ <b>กะ ${picked === 'A' ? 'B' : 'A'}</b>`);
+        const owner = assigned || picked;
+        parts.push(`ทำครบทุกเครื่องแล้ว รอบถัดไปเป็นของ <b>กะ ${owner === 'A' ? 'B' : 'A'}</b>`);
     } else {
         parts.push('<span class="text-red-500">กรุณาเลือกกะที่ทำ</span>');
     }
