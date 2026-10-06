@@ -865,7 +865,7 @@ function renderGanttChart(container, data) {
 // 🗂️ ประวัติแผน PM ที่ทำ/ปิดงานไปแล้ว — ย้อนกลับมาตรวจดูได้
 // ==================================================
 let pmHistoryData = null;
-let pmHistoryFilters = { machine: '', fromDate: '', toDate: '', keyword: '' };
+let pmHistoryFilters = { machine: '', shift: '', fromDate: '', toDate: '', keyword: '' };
 
 function pmHistoryDefaultRange() {
     // ใช้วันที่ปฏิทินจริง (ไม่ใช้ cutoff 08:00) เพราะ Maintenance_Log บันทึกด้วยวันที่ปฏิทิน
@@ -882,7 +882,7 @@ window.showPmHistory = async function(keepFilters) {
     if (!container) return;
     if (!keepFilters) {
         const range = pmHistoryDefaultRange();
-        pmHistoryFilters = { machine: '', fromDate: range.fromDate, toDate: range.toDate, keyword: '' };
+        pmHistoryFilters = { machine: '', shift: '', fromDate: range.fromDate, toDate: range.toDate, keyword: '' };
     }
     container.innerHTML = '<div class="flex items-center justify-center h-64 text-gray-400 animate-pulse">⏳ กำลังโหลดประวัติ PM...</div>';
 
@@ -894,6 +894,7 @@ window.showPmHistory = async function(keepFilters) {
                 fromDate: pmHistoryFilters.fromDate,
                 toDate: pmHistoryFilters.toDate,
                 machine: pmHistoryFilters.machine,
+                shift: pmHistoryFilters.shift,
                 keyword: pmHistoryFilters.keyword
             })
         });
@@ -909,6 +910,7 @@ window.showPmHistory = async function(keepFilters) {
 window.applyPmHistoryFilter = function() {
     pmHistoryFilters = {
         machine: document.getElementById('pmhist-machine')?.value || '',
+        shift: document.getElementById('pmhist-shift')?.value || '',
         fromDate: document.getElementById('pmhist-from')?.value || '',
         toDate: document.getElementById('pmhist-to')?.value || '',
         keyword: document.getElementById('pmhist-keyword')?.value.trim() || ''
@@ -931,10 +933,17 @@ function renderPmHistory(container, data) {
             <h3 class="font-bold text-sm text-gray-700 flex items-center gap-2">🗂️ ประวัติ PM ที่ทำแล้ว</h3>
             <button onclick="window.showPmGantt()" class="text-xs font-bold text-indigo-600 hover:underline">📊 กลับไป Gantt</button>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
             <div>
                 <label class="block text-[11px] font-bold text-gray-500 mb-0.5">เครื่องจักร</label>
                 <select id="pmhist-machine" class="w-full p-2 text-sm border border-gray-300 rounded-lg bg-white">${machineOptions}</select>
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-gray-500 mb-0.5">กะที่ทำ</label>
+                <select id="pmhist-shift" class="w-full p-2 text-sm border border-gray-300 rounded-lg bg-white">
+                    <option value="">ทุกกะ</option>
+                    ${PM_SHIFT_LIST.map(s => `<option value="${s}" ${pmHistoryFilters.shift === s ? 'selected' : ''}>กะ ${s}</option>`).join('')}
+                </select>
             </div>
             <div>
                 <label class="block text-[11px] font-bold text-gray-500 mb-0.5">ตั้งแต่วันที่</label>
@@ -1090,6 +1099,7 @@ function pmHistoryFilterLabel() {
     const parts = [];
     parts.push(`ช่วงวันที่: ${pmHistoryFilters.fromDate || 'ทั้งหมด'} ถึง ${pmHistoryFilters.toDate || 'ทั้งหมด'}`);
     parts.push(`เครื่องจักร: ${pmHistoryFilters.machine || 'ทุกเครื่อง'}`);
+    parts.push(`กะ: ${pmHistoryFilters.shift || 'ทุกกะ'}`);
     if (pmHistoryFilters.keyword) parts.push(`คำค้น: ${pmHistoryFilters.keyword}`);
     return parts.join(' · ');
 }
@@ -1229,6 +1239,7 @@ window.downloadPmHistoryPdf = async function() {
                 fromDate: pmHistoryFilters.fromDate,
                 toDate: pmHistoryFilters.toDate,
                 machine: pmHistoryFilters.machine,
+                shift: pmHistoryFilters.shift,
                 keyword: pmHistoryFilters.keyword,
                 username: (window.currentUser && (window.currentUser.name || window.currentUser.username)) || '',
                 role: (window.currentUser && window.currentUser.role) || ''
