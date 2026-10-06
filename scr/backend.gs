@@ -104,6 +104,7 @@ function collectPmHistory(ss, data) {
   const fromDate = String(data.fromDate || "").trim().substring(0, 10);
   const toDate = String(data.toDate || "").trim().substring(0, 10);
   const machineFilter = String(data.machine || "").trim();
+  const shiftFilter = normalizePmShift(data.shift);
   const keyword = String(data.keyword || "").trim().toLowerCase();
   const logIdFilter = String(data.logId || "").trim();
   const limit = parseInt(data.limit) || 500;
@@ -160,6 +161,7 @@ function collectPmHistory(ss, data) {
         const note = li("Note") > -1 ? String(logRows[i][li("Note")] || "") : "";
         const doneShift = li("Done_Shift") > -1 ? normalizePmShift(logRows[i][li("Done_Shift")]) : "";
         const shiftLabel = doneShift ? "กะ " + doneShift : "";
+        if (!logIdFilter && shiftFilter && doneShift !== shiftFilter) continue;
         if (keyword && (taskName + " " + machine + " " + doneBy + " " + shiftLabel + " " + note + " " + planId + " " + logId).toLowerCase().indexOf(keyword) === -1) continue;
 
         const info = planInfo[planId] || {};
@@ -225,7 +227,7 @@ function pmDriveThumb(url) {
 function buildPmHistoryReportHtml(logs, stats, meta) {
   const adherence = stats.total > 0 ? Math.round(stats.onTime / stats.total * 1000) / 10 : 0;
   const filterLine = "ช่วงวันที่: " + (meta.fromDate || "ทั้งหมด") + " ถึง " + (meta.toDate || "ทั้งหมด") +
-    " · เครื่องจักร: " + (meta.machine || "ทุกเครื่อง") + (meta.keyword ? " · คำค้น: " + meta.keyword : "");
+    " · เครื่องจักร: " + (meta.machine || "ทุกเครื่อง") + " · กะ: " + (meta.shift ? meta.shift : "ทุกกะ") + (meta.keyword ? " · คำค้น: " + meta.keyword : "");
   const printedAt = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy HH:mm");
 
   const rows = logs.map(function(l, idx) {
@@ -3693,6 +3695,7 @@ function doPost(e) {
         fromDate: String(data.fromDate || ""),
         toDate: String(data.toDate || ""),
         machine: String(data.machine || ""),
+        shift: normalizePmShift(data.shift),
         keyword: String(data.keyword || ""),
         printedBy: String(data.username || "")
       });
