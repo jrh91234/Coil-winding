@@ -1504,6 +1504,137 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({status: "success", data: results})).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // --- Daily Check: OK 1st Part Workstation Check list (ตรวจทุกเครื่อง ทุกกะ) ---
+  const DAILY_CHECK_HEADERS = ["Check_ID", "Timestamp", "Shift_Date", "Shift", "Check_Time", "Machine", "Product", "Check_Type",
+    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
+    "Result", "Inspector", "Recorded_By", "Remark", "Supervisor", "Confirmed_At"];
+  const jsonOut_ = function(obj) { return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON); };
+
+  if (action === "SAVE_DAILY_CHECK") {
+    const machine = String(data.machine || "").trim();
+    const shiftDate = String(data.shiftDate || "").trim();
+    const shift = String(data.shift || "").trim();
+    if (!machine || !/^\d{4}-\d{2}-\d{2}$/.test(shiftDate) || (shift !== "Day" && shift !== "Night")) {
+      return jsonOut_({status: "error", message: "ข้อมูลเครื่อง/วันที่/กะ ไม่ถูกต้อง"});
+    }
+    const items = data.items || {};
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      let sheet = ss.getSheetByName("Daily_Check");
+      if (!sheet) {
+        sheet = ss.insertSheet("Daily_Check");
+        sheet.appendRow(DAILY_CHECK_HEADERS);
+        sheet.setFrozenRows(1);
+      }
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      DAILY_CHECK_HEADERS.forEach(function(h) {
+        if (headers.indexOf(h) === -1) {
+          sheet.getRange(1, headers.length + 1).setValue(h);
+          headers.push(h);
+        }
+      });
+      const now = new Date();
+      const checkId = "DC-" + Utilities.formatDate(now, "GMT+7", "yyyyMMdd") + "-" + Utilities.getUuid().substring(0, 8).toUpperCase();
+      const rowMap = {
+        Check_ID: checkId,
+        Timestamp: Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss"),
+        Shift_Date: "'" + shiftDate,                       // เก็บเป็นข้อความ กันชีตแปลงเป็น Date
+        Shift: shift,
+        Check_Time: "'" + String(data.checkTime || Utilities.formatDate(now, "GMT+7", "HH:mm")),
+        Machine: machine,
+        Product: data.product || "",
+        Check_Type: data.checkType || "",
+        Result: data.result === "NOK" ? "NOK" : "OK",
+        Inspector: data.inspector || "",
+        Recorded_By: data.username || "",
+        Remark: data.remark || "",
+        Supervisor: "",
+        Confirmed_At: ""
+      };
+      for (let k = 1; k <= 11; k++) rowMap["C" + k] = String(items["C" + k] || "");
+      sheet.appendRow(headers.map(h => rowMap.hasOwnProperty(h) ? rowMap[h] : ""));
+      SpreadsheetApp.flush();
+      logUserAction(data.username || data.inspector || "System", data.role || "User", "SAVE_DAILY_CHECK", "Daily Check: " + checkId + " | " + machine + " | " + shiftDate + " " + shift + " | " + rowMap.Result);
+      return jsonOut_({status: "success", checkId: checkId});
+    } catch (err) {
+      return jsonOut_({status: "error", message: err.toString()});
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  if (action === "GET_DAILY_CHECKS") {
+    const sheet = ss.getSheetByName("Daily_Check");
+    if (!sheet) return jsonOut_({status: "success", data: []});
+    const rows = sheet.getDataRange().getValues();
+    if (rows.length <= 1) return jsonOut_({status: "success", data: []});
+    const headers = rows[0].map(h => String(h).trim());
+    const dateFrom = String(data.dateFrom || "").trim();
+    const dateTo = String(data.dateTo || "").trim();
+    const filterMc = String(data.machine || "").trim();
+    const results = [];
+    for (let i = 1; i < rows.length; i++) {
+      const obj = {};
+      headers.forEach(function(h, idx) {
+        let v = rows[i][idx];
+        if (v instanceof Date) {
+          v = h === "Check_Time" ? Utilities.formatDate(v, ss.getSpreadsheetTimeZone(), "HH:mm")
+            : h === "Shift_Date" ? Utilities.formatDate(v, "GMT+7", "yyyy-MM-dd")
+            : Utilities.formatDate(v, "GMT+7", "yyyy-MM-dd HH:mm:ss");
+        }
+        obj[h] = v !== undefined && v !== null ? v : "";
+      });
+      if (!obj.Check_ID) continue;
+      const d = String(obj.Shift_Date || "").substring(0, 10);
+      if (dateFrom && d < dateFrom) continue;
+      if (dateTo && d > dateTo) continue;
+      if (filterMc && String(obj.Machine) !== filterMc) continue;
+      results.push(obj);
+    }
+    results.sort(function(a, b) {
+      return String(b.Shift_Date).localeCompare(String(a.Shift_Date)) || String(b.Timestamp || "").localeCompare(String(a.Timestamp || ""));
+    });
+    return jsonOut_({status: "success", data: results});
+  }
+
+  if (action === "CONFIRM_DAILY_CHECK" || action === "DELETE_DAILY_CHECK") {
+    const checkId = String(data.checkId || "").trim();
+    if (!checkId) return jsonOut_({status: "error", message: "ไม่พบรหัสรายการ"});
+    if (action === "DELETE_DAILY_CHECK" && data.role !== "Admin") return jsonOut_({status: "error", message: "เฉพาะ Admin เท่านั้นที่ลบได้"});
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      const sheet = ss.getSheetByName("Daily_Check");
+      if (!sheet) return jsonOut_({status: "error", message: "ไม่พบชีต Daily_Check"});
+      const rows = sheet.getDataRange().getValues();
+      const headers = rows[0].map(h => String(h).trim());
+      const idCol = headers.indexOf("Check_ID");
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][idCol] || "").trim() !== checkId) continue;
+        if (action === "DELETE_DAILY_CHECK") {
+          sheet.deleteRow(i + 1);
+          logUserAction(data.username || "System", data.role || "User", "DELETE_DAILY_CHECK", "ลบ Daily Check: " + checkId);
+        } else {
+          const supCol = headers.indexOf("Supervisor");
+          const atCol = headers.indexOf("Confirmed_At");
+          if (supCol === -1 || atCol === -1) return jsonOut_({status: "error", message: "ไม่พบคอลัมน์ Supervisor/Confirmed_At"});
+          if (String(rows[i][supCol] || "").trim()) return jsonOut_({status: "error", message: "รายการนี้ยืนยันไปแล้วโดย " + rows[i][supCol]});
+          sheet.getRange(i + 1, supCol + 1).setValue(data.supervisor || data.username || "");
+          sheet.getRange(i + 1, atCol + 1).setValue(Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss"));
+          logUserAction(data.username || "System", data.role || "User", "CONFIRM_DAILY_CHECK", "ยืนยัน Daily Check: " + checkId);
+        }
+        SpreadsheetApp.flush();
+        return jsonOut_({status: "success"});
+      }
+      return jsonOut_({status: "error", message: "ไม่พบรายการ"});
+    } catch (err) {
+      return jsonOut_({status: "error", message: err.toString()});
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
   // --- ส่วนที่ 2.5: ระบบงานเคลม RTV ---
 
   // --- ระบบ Tracking อะไหล่เครื่องจักร (Parts Tracking) ---
