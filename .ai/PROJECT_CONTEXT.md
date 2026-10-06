@@ -83,6 +83,13 @@
 - Payload: `jobOrders[]` เพิ่ม `ngPcsFromMachine/ngPcsFromSort/pendingSortPcs/waitQcPcs/sortingOpenPcs/accountedPcs/qtyComplete`, dashboard เพิ่ม `jobOrderSortData`, GET_JOB_ORDERS เพิ่ม `unlinkedSorting`
 - Frontend: `window.getJobOrderQty(j)` ใน `js/planning.js` เป็นตัวกลางอ่านค่าเหล่านี้ (มี fallback สำหรับข้อมูลเก่า) — ใช้ทั้งตาราง Plan, การ์ด Dashboard, Auto Report, CSV
 
+## Daily Check (OK 1st Part Workstation Check list)
+- Frontend: `js/dailycheck.js` + `section-dailycheck` ใน index.html, เมนู `tab-dailycheck` (Admin / Production / QC)
+- ตรวจทุกเครื่อง CWM-01..16 ทุกกะ (Day 08:00-20:00 / Night 20:00-08:00, วันที่กะตัดรอบ 08:00 ตาม getShiftDateStr) — ตารางสถานะเครื่องต่อกะ (เขียว OK / แดง NOK / เทา ยังไม่ตรวจ)
+- 11 ข้อตรวจตามแบบฟอร์ม (C1..C10 + C11 ชิ้นงานตัวสุดท้าย) ค่า OK / NOK / N/A · มี NOK → ผล NOK และต้องกรอก Remark (Recovery plan)
+- Sheet `Daily_Check`: Check_ID, Timestamp, Shift_Date, Shift, Check_Time, Machine, Product, Check_Type, C1..C11, Result, Inspector, Recorded_By, Remark, Supervisor, Confirmed_At (สร้างอัตโนมัติ)
+- Backend actions (POST): `SAVE_DAILY_CHECK`, `GET_DAILY_CHECKS` (dateFrom/dateTo/machine), `CONFIRM_DAILY_CHECK` (หัวหน้างานยืนยัน), `DELETE_DAILY_CHECK` (Admin)
+
 ## Architecture Notes
 - All chart functions use `window.functionName` — no ES modules, no imports
 - Shared state: `currentDashboardData`, `charts` object, `machineMapping`
