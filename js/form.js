@@ -320,8 +320,9 @@ window.saveCurrentNgInputs = function() {
         const remark = row.querySelector('.ng-input-remark').value;
         if (type && qty > 0) {
             // validate: Setup ต้องเลือกอาการย่อย
-            if (type.trim().toLowerCase() === 'setup' && setupSelect) {
-                setupSelect.style.borderColor = 'red';
+            // (รวมแถวที่พิมพ์ "Setup" เองผ่าน "ระบุอาการอื่น" ซึ่งไม่มี dropdown อาการย่อย)
+            if (type.trim().toLowerCase() === 'setup') {
+                (setupSelect || nameInput || row).style.borderColor = 'red';
                 setupValidationError = true;
                 return; // ข้ามแถวนี้ — จะ abort หลังจบ loop
             }
@@ -332,7 +333,7 @@ window.saveCurrentNgInputs = function() {
 
     // ถ้ามีแถว Setup ที่ยังไม่เลือกอาการย่อย → ยกเลิกการบันทึกทั้งหมด (กันข้อมูลหาย)
     if (setupValidationError) {
-        alert('กรุณาเลือกอาการ Setup ว่าเป็นอาการอะไร (ช่องที่ขอบแดง)');
+        alert('กรุณาเลือกอาการ Setup ว่าเป็นอาการอะไร (ช่องที่ขอบแดง)\nหากเพิ่มผ่าน "ระบุอาการอื่น" ห้ามใช้ชื่อ Setup เปล่าๆ ให้ใช้แถว Setup ด้านบนแล้วเลือกอาการย่อยแทน');
         return false;
     }
 
