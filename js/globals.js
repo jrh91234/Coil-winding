@@ -1,6 +1,8 @@
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyt3Bf_2h21BBcCHQSjizowy_kD5vsoUqgaC_YmVjLuQybJO1BBRt3eaSM0PuKEFfvruw/exec";
         
-let ngSymptoms = ["ลวดถลอก (Scratched)", "พันหลวม (Loose)", "รอบไม่ครบ (Turn Error)", "ขาผิดรูป (Lead Deform)", "Setup", "อื่นๆ (Others)"];
+// อาการ NG ต้องมาจาก Cloud เท่านั้น (ไม่มีค่า default ในเครื่อง)
+let ngSymptoms = [];
+let ngSymptomsLoaded = false;
 let productList = ["S1B29288-JR (10A)", "S1B71819-JR (16A)", "S1B29292-JR (20A)", "51207080HC-JR (25/32A)"];
 let recorderList = ["พนักงาน 1", "พนักงาน 2"];
 
@@ -152,12 +154,11 @@ window.fetchOptions = async function() {
         }
         
         if (data.ngTypes && data.ngTypes.length > 0) {
-            ngSymptoms = normalizeNgSymptomMasterList([...ngSymptoms, ...data.ngTypes]);
+            ngSymptoms = normalizeNgSymptomMasterList(data.ngTypes);
+            ngSymptomsLoaded = true;
             if (typeof window.renderRtvSymptomsOptions === 'function') {
                 window.renderRtvSymptomsOptions();
             }
-        } else {
-            ngSymptoms = normalizeNgSymptomMasterList(ngSymptoms);
         }
         
         if (data.machineMapping) {
