@@ -172,11 +172,24 @@ window.removeBatchRow = function(id) {
     delete batchNgData[id]; 
 };
 
-window.openNgModal = function(rowId) {
+window.openNgModal = async function(rowId) {
     currentRowIdForNg = rowId;
     const modal = document.getElementById('modal-ng');
     const list = document.getElementById('modal-ng-list');
     list.innerHTML = '';
+
+    // บังคับใช้อาการจาก Cloud เท่านั้น: ถ้ายังไม่โหลด ให้ดึงใหม่ก่อนแสดง
+    if (!ngSymptomsLoaded) {
+        list.innerHTML = '<div class="text-center text-gray-500 text-sm py-4">⏳ กำลังโหลดรายการอาการจาก Cloud...</div>';
+        modal.classList.remove('hidden');
+        await window.fetchOptions();
+        if (currentRowIdForNg !== rowId) return;
+        list.innerHTML = '';
+        if (!ngSymptomsLoaded) {
+            list.innerHTML = '<div class="text-center text-red-600 text-sm py-4">❌ โหลดรายการอาการจาก Cloud ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วเปิดใหม่</div>';
+            return;
+        }
+    }
 
     ngSymptoms.forEach(s => {
         const isSetup = s.trim().toLowerCase() === 'setup';
@@ -577,10 +590,6 @@ document.getElementById('productionForm').onsubmit = async (e) => {
             }
         });
         items.push({ machine, productCode: product, jobOrder, fgAmount: fg, ngDetails });
-    }
-
-    if(newNgTypes.length > 0) { 
-        ngSymptoms = [...ngSymptoms, ...newNgTypes]; 
     }
 
     if(items.length === 0) { 
