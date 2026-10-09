@@ -2494,6 +2494,9 @@ function doPost(e) {
                       cellUpdates.forEach(u => sheet.getRange(u.row, u.col).setValue(u.value));
                       SpreadsheetApp.flush();
                       logUserAction(data.closedBy, "System", "SUBMIT_QC", `ส่งงาน ${data.jobId} ให้ QC ตรวจ`);
+
+                      // บันทึกประวัติการส่งยอดคัดลงชีต Sort_Log (ใช้ทำรายงานประเมินรายกะ) — ห้ามทำให้การส่งยอดล้ม
+                      try { appendSortLog_(ss, data, rows[foundRow - 1], getCol, now); } catch (sortLogErr) { console.error("appendSortLog_ error: " + sortLogErr); }
                   }
               }
               if (finalStatus === "Completed") {
@@ -3943,6 +3946,35 @@ function doPost(e) {
       for (let i = monthData.length - 1; i >= 0; i--) {
         if (String(monthData[i][0]).trim() === monthVal) { sheet.deleteRow(i + 2); break; }
       }
+      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  // ===================== ประเมินผลงานคัดรายกะ (Sort Shift Evaluation) =====================
+
+  if (action === "GET_SORT_EVAL_DATA") {
+    try {
+      return ContentService.createTextOutput(JSON.stringify(getSortEvalData_(ss, String(data.start || ""), String(data.end || "")))).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  if (action === "SAVE_SORT_TARGETS") {
+    try {
+      if (data.role !== "Admin") return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "เฉพาะ Admin เท่านั้นที่ตั้งเป้าได้" })).setMimeType(ContentService.MimeType.JSON);
+      const headers = ["Model", "Pcs_Per_Hour", "Updated_By", "Updated_At"];
+      let sheet = ss.getSheetByName("Sort_Target");
+      if (!sheet) { sheet = ss.insertSheet("Sort_Target"); sheet.appendRow(headers); }
+      if (sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
+      const now = new Date();
+      const items = (Array.isArray(data.items) ? data.items : [])
+        .map(it => [String(it.model || "").trim(), parseFloat(it.pcsPerHour) || 0, data.updatedBy || "", now])
+        .filter(row => row[0] && row[1] > 0);
+      if (items.length > 0) sheet.getRange(2, 1, items.length, headers.length).setValues(items);
+      logUserAction(data.updatedBy || "Admin", "Admin", "SAVE_SORT_TARGETS", "บันทึกเป้าคัดงาน " + items.length + " รายการ");
       return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
       return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
@@ -5716,4 +5748,149 @@ function debugSheetData() {
   }
 
   return { status: "DEBUG_V3.55_Auth", summary: stats, last10Rows: detailedAnalysis };
+}
+
+
+// ==================================================
+// 🎯 ประเมินผลงานคัดรายกะ (Sort Shift Evaluation)
+// ==================================================
+// Sort_Log เก็บทุกครั้งที่ผู้คัดส่งยอดให้ QC (1 แถวต่อ 1 ครั้ง) — เก็บเฉพาะยอดที่คัดในรอบนั้น
+// (งานตีกลับที่คัดซ้ำจะนับเฉพาะยอดที่คัดเพิ่ม ไม่นับยอดเดิมซ้ำ)
+function appendSortLog_(ss, data, sortRow, getCol, now) {
+  const headers = ["Sorted_At", "Job_ID", "Sorter", "Product", "Job_Qty", "FG_Sorted", "NG_Sorted", "Is_Resubmit"];
+  let sheet = ss.getSheetByName("Sort_Log");
+  if (!sheet) { sheet = ss.insertSheet("Sort_Log"); sheet.appendRow(headers); }
+  const prodIdx = getCol("Product");
+  const qtyIdx = getCol("Qty");
+  // ยอดที่คัดในรอบนี้ ส่งมาจากหน้าเว็บ (sortedFgQty/sortedNgQty) — ถ้าไม่มี (หน้าเว็บเวอร์ชันเก่า) ใช้ยอดที่ส่ง QC
+  const fgSorted = data.sortedFgQty !== undefined ? data.sortedFgQty : (data.fgQty || "");
+  const ngSorted = data.sortedNgQty !== undefined ? data.sortedNgQty : (data.ngQty || "");
+  sheet.appendRow([
+    now,
+    data.jobId,
+    data.closedBy || "",
+    prodIdx > -1 ? String(sortRow[prodIdx] || "") : "",
+    qtyIdx > -1 ? String(sortRow[qtyIdx] || "") : "",
+    String(fgSorted),
+    String(ngSorted),
+    data.isResubmit ? "TRUE" : "FALSE"
+  ]);
+}
+
+// แปลงค่าวันเวลาจากชีต (Date object, "d/m/yyyy H:mm[:ss]" พ.ศ./ค.ศ., หรือ "yyyy-MM-dd HH:mm") → "yyyy-MM-dd HH:mm" (GMT+7)
+function toSortIsoDateTime_(val) {
+  if (!val) return "";
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return "";
+    let iso = Utilities.formatDate(val, "GMT+7", "yyyy-MM-dd HH:mm");
+    const y = parseInt(iso.substring(0, 4), 10);
+    if (y > 2500) iso = String(y - 543) + iso.substring(4);
+    return iso;
+  }
+  const str = String(val).trim().replace(",", "");
+  const parts = str.split(/\s+/);
+  const d = parts[0] || "";
+  let t = parts[1] || "00:00";
+  const tp = t.split(":");
+  t = String(parseInt(tp[0], 10) || 0).padStart(2, "0") + ":" + String(parseInt(tp[1], 10) || 0).padStart(2, "0");
+  let yyyy, mm, dd;
+  if (d.indexOf("/") > -1) {
+    const p = d.split("/");
+    if (p.length !== 3) return "";
+    dd = p[0]; mm = p[1]; yyyy = p[2];
+    if (yyyy.length === 2) yyyy = "20" + yyyy;
+  } else if (d.indexOf("-") > -1) {
+    const p = d.split("-");
+    if (p.length < 3) return "";
+    yyyy = p[0]; mm = p[1]; dd = p[2];
+  } else {
+    return "";
+  }
+  let y = parseInt(yyyy, 10);
+  if (y > 2500) y -= 543;
+  return y + "-" + String(parseInt(mm, 10)).padStart(2, "0") + "-" + String(parseInt(dd, 10)).padStart(2, "0") + " " + t;
+}
+
+// ข้อมูลดิบสำหรับรายงานประเมินรายกะ — การคำนวณเป้า/ผลงานทำที่หน้าเว็บ (shift-report.html)
+// start/end = "yyyy-MM-dd" (วันของกะ) — กะ Night ล้นไปเช้าวันถัดไป จึงดึงเผื่ออีก 1 วัน
+function getSortEvalData_(ss, start, end) {
+  const addDays = function(iso, n) {
+    const dt = new Date(iso + "T00:00:00+07:00");
+    dt.setDate(dt.getDate() + n);
+    return Utilities.formatDate(dt, "GMT+7", "yyyy-MM-dd");
+  };
+  if (!start || !end) {
+    const today = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+    start = start || today; end = end || today;
+  }
+  const fromIso = addDays(start, -1);
+  const toIso = addDays(end, 2); // < toIso
+
+  // 1) ประวัติการส่งยอดคัด
+  const logs = [];
+  let firstLogAt = "";
+  const logSheet = ss.getSheetByName("Sort_Log");
+  if (logSheet && logSheet.getLastRow() > 1) {
+    const rows = logSheet.getDataRange().getValues();
+    const h = rows[0].map(x => String(x).trim());
+    const c = name => h.indexOf(name);
+    for (let i = 1; i < rows.length; i++) {
+      const at = toSortIsoDateTime_(rows[i][c("Sorted_At")]);
+      if (!at) continue;
+      if (!firstLogAt || at < firstLogAt) firstLogAt = at;
+      if (at < fromIso || at >= toIso) continue;
+      logs.push({
+        sortedAt: at,
+        jobId: String(rows[i][c("Job_ID")] || ""),
+        sorter: String(rows[i][c("Sorter")] || ""),
+        product: String(rows[i][c("Product")] || ""),
+        fgSorted: String(rows[i][c("FG_Sorted")] || ""),
+        ngSorted: String(rows[i][c("NG_Sorted")] || ""),
+        isResubmit: String(rows[i][c("Is_Resubmit")] || "").toUpperCase() === "TRUE"
+      });
+    }
+  }
+
+  // 2) งานรอ Sort ที่เกี่ยวข้อง (ไว้หางานค้างตอนเริ่มกะ + งานที่เข้ามาระหว่างกะ)
+  const jobs = [];
+  const sortSheet = ss.getSheetByName("Sorting_Data");
+  if (sortSheet && sortSheet.getLastRow() > 1) {
+    const rows = sortSheet.getDataRange().getValues();
+    const h = rows[0].map(x => String(x).trim().toLowerCase());
+    const c = name => h.indexOf(name.toLowerCase());
+    const jobCol = c("Job_ID"), dateCol = c("Date"), prodCol = c("Product"), qtyCol = c("Qty");
+    const statCol = c("Status"), closedCol = c("Closed_Date");
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const status = String(r[statCol] || "").trim();
+      if (!status) continue;
+      const regAt = toSortIsoDateTime_(r[dateCol]);
+      if (!regAt || regAt >= toIso) continue;
+      const closedAt = closedCol > -1 ? toSortIsoDateTime_(r[closedCol]) : "";
+      // งานที่ปิดไปนานแล้วก่อนช่วงรายงาน ไม่ต้องส่งกลับ
+      if (status !== "Pending" && status !== "Rejected" && closedAt && closedAt < fromIso) continue;
+      jobs.push({
+        jobId: String(r[jobCol] || ""),
+        regAt: regAt,
+        product: String(r[prodCol] || ""),
+        qty: String(r[qtyCol] || ""),
+        status: status,
+        closedAt: closedAt
+      });
+    }
+  }
+
+  // 3) เป้าชิ้น/ชม. ของแต่ละรุ่น
+  const targets = [];
+  const tSheet = ss.getSheetByName("Sort_Target");
+  if (tSheet && tSheet.getLastRow() > 1) {
+    const rows = tSheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      const model = String(rows[i][0] || "").trim();
+      const pcsPerHour = parseFloat(rows[i][1]) || 0;
+      if (model && pcsPerHour > 0) targets.push({ model: model, pcsPerHour: pcsPerHour });
+    }
+  }
+
+  return { status: "success", logs: logs, jobs: jobs, targets: targets, firstLogAt: firstLogAt };
 }
