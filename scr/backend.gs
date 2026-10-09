@@ -5857,6 +5857,7 @@ function getSortEvalData_(ss, start, end) {
   // 2) งานรอ Sort ที่เกี่ยวข้อง (ไว้หางานค้างตอนเริ่มกะ + งานที่เข้ามาระหว่างกะ)
   const jobs = [];
   const symptomByJob = {};
+  const modelSet = {}, symptomSet = {}; // รายการรุ่น/อาการที่มีในระบบ ไว้ทำ dropdown ตั้งเป้า
   const sortSheet = ss.getSheetByName("Sorting_Data");
   if (sortSheet && sortSheet.getLastRow() > 1) {
     const rows = sortSheet.getDataRange().getValues();
@@ -5868,6 +5869,10 @@ function getSortEvalData_(ss, start, end) {
       const r = rows[i];
       const symptom = sympCol > -1 ? String(r[sympCol] || "").trim() : "";
       if (r[jobCol]) symptomByJob[String(r[jobCol])] = symptom;
+      if (symptom) symptomSet[symptom] = true;
+      const prodStr = String(r[prodCol] || "");
+      const model = (prodStr.indexOf(" : ") > -1 ? prodStr.split(" : ")[1] : prodStr).trim();
+      if (model) modelSet[model] = true;
       const status = String(r[statCol] || "").trim();
       if (!status) continue;
       const regAt = toSortIsoDateTime_(r[dateCol]);
@@ -5907,5 +5912,12 @@ function getSortEvalData_(ss, start, end) {
     }
   }
 
-  return { status: "success", logs: logs, jobs: jobs, targets: targets, firstLogAt: firstLogAt };
+  // อาการ NG จาก master list เดียวกับหน้าลงงานรอ Sort (GET_OPTIONS)
+  try { (getUniqueOptionsFromHistory().ngTypes || []).forEach(function(sy) { if (sy) symptomSet[String(sy).trim()] = true; }); } catch (optErr) {}
+
+  return {
+    status: "success", logs: logs, jobs: jobs, targets: targets, firstLogAt: firstLogAt,
+    models: Object.keys(modelSet).sort(),
+    symptoms: Object.keys(symptomSet).sort()
+  };
 }
