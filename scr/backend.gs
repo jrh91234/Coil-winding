@@ -3965,14 +3965,17 @@ function doPost(e) {
   if (action === "SAVE_SORT_TARGETS") {
     try {
       if (data.role !== "Admin") return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "เฉพาะ Admin เท่านั้นที่ตั้งเป้าได้" })).setMimeType(ContentService.MimeType.JSON);
-      const headers = ["Model", "Pcs_Per_Hour", "Updated_By", "Updated_At"];
+      // เป้าแยกตาม รุ่น × อาการ NG (ช่องว่าง/ค่า * = ใช้กับทุกรุ่นหรือทุกอาการ)
+      const headers = ["Model", "Symptom", "Pcs_Per_Hour", "Updated_By", "Updated_At"];
       let sheet = ss.getSheetByName("Sort_Target");
-      if (!sheet) { sheet = ss.insertSheet("Sort_Target"); sheet.appendRow(headers); }
+      if (!sheet) sheet = ss.insertSheet("Sort_Target");
       if (sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
+      if (sheet.getLastColumn() > headers.length) sheet.getRange(1, headers.length + 1, 1, sheet.getLastColumn() - headers.length).clearContent();
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
       const now = new Date();
       const items = (Array.isArray(data.items) ? data.items : [])
-        .map(it => [String(it.model || "").trim(), parseFloat(it.pcsPerHour) || 0, data.updatedBy || "", now])
-        .filter(row => row[0] && row[1] > 0);
+        .map(it => [String(it.model || "").trim(), String(it.symptom || "").trim(), parseFloat(it.pcsPerHour) || 0, data.updatedBy || "", now])
+        .filter(row => row[0] && row[2] > 0);
       if (items.length > 0) sheet.getRange(2, 1, items.length, headers.length).setValues(items);
       logUserAction(data.updatedBy || "Admin", "Admin", "SAVE_SORT_TARGETS", "บันทึกเป้าคัดงาน " + items.length + " รายการ");
       return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
@@ -5853,15 +5856,18 @@ function getSortEvalData_(ss, start, end) {
 
   // 2) งานรอ Sort ที่เกี่ยวข้อง (ไว้หางานค้างตอนเริ่มกะ + งานที่เข้ามาระหว่างกะ)
   const jobs = [];
+  const symptomByJob = {};
   const sortSheet = ss.getSheetByName("Sorting_Data");
   if (sortSheet && sortSheet.getLastRow() > 1) {
     const rows = sortSheet.getDataRange().getValues();
     const h = rows[0].map(x => String(x).trim().toLowerCase());
     const c = name => h.indexOf(name.toLowerCase());
     const jobCol = c("Job_ID"), dateCol = c("Date"), prodCol = c("Product"), qtyCol = c("Qty");
-    const statCol = c("Status"), closedCol = c("Closed_Date");
+    const statCol = c("Status"), closedCol = c("Closed_Date"), sympCol = c("Symptom");
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i];
+      const symptom = sympCol > -1 ? String(r[sympCol] || "").trim() : "";
+      if (r[jobCol]) symptomByJob[String(r[jobCol])] = symptom;
       const status = String(r[statCol] || "").trim();
       if (!status) continue;
       const regAt = toSortIsoDateTime_(r[dateCol]);
@@ -5873,6 +5879,7 @@ function getSortEvalData_(ss, start, end) {
         jobId: String(r[jobCol] || ""),
         regAt: regAt,
         product: String(r[prodCol] || ""),
+        symptom: symptom,
         qty: String(r[qtyCol] || ""),
         status: status,
         closedAt: closedAt
@@ -5880,15 +5887,23 @@ function getSortEvalData_(ss, start, end) {
     }
   }
 
-  // 3) เป้าชิ้น/ชม. ของแต่ละรุ่น
+  // ใส่อาการ NG ให้แต่ละ log จากชีต Sorting_Data (เป้าแยกตาม รุ่น × อาการ)
+  logs.forEach(function(l) { l.symptom = symptomByJob[l.jobId] || ""; });
+
+  // 3) เป้าชิ้น/ชม. ของแต่ละรุ่น × อาการ NG
   const targets = [];
   const tSheet = ss.getSheetByName("Sort_Target");
   if (tSheet && tSheet.getLastRow() > 1) {
     const rows = tSheet.getDataRange().getValues();
+    const h = rows[0].map(x => String(x).trim());
+    const mCol = h.indexOf("Model");
+    const sCol = h.indexOf("Symptom");
+    const rCol = h.indexOf("Pcs_Per_Hour");
     for (let i = 1; i < rows.length; i++) {
-      const model = String(rows[i][0] || "").trim();
-      const pcsPerHour = parseFloat(rows[i][1]) || 0;
-      if (model && pcsPerHour > 0) targets.push({ model: model, pcsPerHour: pcsPerHour });
+      const model = String(rows[i][mCol > -1 ? mCol : 0] || "").trim();
+      const symptom = sCol > -1 ? String(rows[i][sCol] || "").trim() : "";
+      const pcsPerHour = parseFloat(rows[i][rCol > -1 ? rCol : 1]) || 0;
+      if (model && pcsPerHour > 0) targets.push({ model: model, symptom: symptom, pcsPerHour: pcsPerHour });
     }
   }
 
