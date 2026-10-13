@@ -119,7 +119,10 @@
                     <div class="relative" style="height:300px"><canvas id="cost-pie-chart"></canvas></div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm border p-4">
-                    <h3 class="text-sm font-bold text-gray-700 mb-2">แนวโน้มรายเดือน</h3>
+                    <div class="flex justify-between items-center mb-2 gap-2 flex-wrap">
+                        <h3 class="text-sm font-bold text-gray-700">แนวโน้มต้นทุน / กำไร</h3>
+                        <div class="chart-period-switch" data-period-chart="costTrend" data-periods="month,quarter,year"></div>
+                    </div>
                     <div class="relative" style="height:300px"><canvas id="cost-trend-chart"></canvas></div>
                 </div>
             </div>
@@ -130,6 +133,7 @@
             </div>
         `;
 
+        if (window.renderPeriodSwitches) window.renderPeriodSwitches(container);
         renderPLTable(latestMonth);
         renderDLStaffSection();
         renderCharts(latestMonth);
@@ -281,23 +285,42 @@
     function renderTrendChart() {
         const ctx = document.getElementById('cost-trend-chart');
         if (!ctx) return;
-        const labels = costData.map(d => String(d.Month || ''));
+        if (costChartInstances.trend) { costChartInstances.trend.destroy(); delete costChartInstances.trend; }
+        // 📅 รายเดือน / ไตรมาส / ปี — รวมยอดของทุกเดือนในช่วง (helpers.js)
+        const period = window.getChartPeriod ? window.getChartPeriod('costTrend', ['month', 'quarter', 'year']) : 'month';
+        let rows = costData.map(d => {
+            const c = calc(d);
+            return { month: String(d.Month || ''), sale: v(d, 'Sale'), cogs: c.cogs, grossProfit: c.grossProfit, eat: c.eat };
+        });
+        if (period !== 'month' && window.groupRowsByPeriod) {
+            rows = window.groupRowsByPeriod(rows, period, r => r.month,
+                () => ({ sale: 0, cogs: 0, grossProfit: 0, eat: 0 }),
+                (acc, r) => { acc.sale += r.sale; acc.cogs += r.cogs; acc.grossProfit += r.grossProfit; acc.eat += r.eat; });
+        }
+        const labels = rows.map(r => r.label || r.month);
         const datasets = [
-            { label: 'Sale', data: costData.map(d => v(d, 'Sale')), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.1)', fill: true, tension: 0.3 },
-            { label: 'COGS', data: costData.map(d => calc(d).cogs), borderColor: '#ef4444', borderDash: [5, 5], tension: 0.3 },
-            { label: 'Gross Profit', data: costData.map(d => calc(d).grossProfit), borderColor: '#22c55e', tension: 0.3 },
-            { label: 'EAT', data: costData.map(d => calc(d).eat), borderColor: '#8b5cf6', tension: 0.3 }
+            { label: 'Sale', data: rows.map(r => r.sale), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.1)', fill: true, tension: 0.3 },
+            { label: 'COGS', data: rows.map(r => r.cogs), borderColor: '#ef4444', borderDash: [5, 5], tension: 0.3 },
+            { label: 'Gross Profit', data: rows.map(r => r.grossProfit), borderColor: '#22c55e', tension: 0.3 },
+            { label: 'EAT', data: rows.map(r => r.eat), borderColor: '#8b5cf6', tension: 0.3 }
         ];
         costChartInstances.trend = new Chart(ctx, {
             type: 'line',
             data: { labels, datasets },
             options: {
                 responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } }, datalabels: { display: false } },
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { size: 10 } } }, datalabels: { display: false },
+                    tooltip: { callbacks: { title: (items) => {
+                        const r = items.length ? rows[items[0].dataIndex] : null;
+                        return r ? (r.title || r.month) : '';
+                    } } }
+                },
                 scales: { y: { beginAtZero: true } }
             }
         });
     }
+    if (window.registerChartPeriod) window.registerChartPeriod('costTrend', renderTrendChart);
 
     function renderWaterfallChart(c) {
         const ctx = document.getElementById('cost-waterfall-chart');

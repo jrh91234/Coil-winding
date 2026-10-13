@@ -162,7 +162,7 @@ window.buildDailyOutputAudit = function() {
     const shiftFilter = qMeta ? qMeta.shift : (document.getElementById('filterShift')?.value || 'All');
     const shiftTypeFilter = qMeta ? qMeta.shiftType : (document.getElementById('filterShiftType')?.value || 'All');
     const isStale = (typeof window.isFilterStale === 'function') && window.isFilterStale();
-    const periodLabelMap = { day: 'รายวัน', week: 'รายสัปดาห์ (เริ่มจันทร์)', month: 'รายเดือน' };
+    const periodLabelMap = { day: 'รายวัน', week: 'รายสัปดาห์ (เริ่มจันทร์)', month: 'รายเดือน', quarter: 'รายไตรมาส', year: 'รายปี' };
     const modeLabelMap = { pcs: 'จำนวน (ชิ้น)', percent: 'สัดส่วน (%)' };
 
     const columns = [
@@ -178,7 +178,7 @@ window.buildDailyOutputAudit = function() {
     ];
 
     const rows = S.periods.map(p => ({
-        period: p.key, fg: p.fg, ng: p.ng, sFg: p.sFg, sNg: p.sNg,
+        period: window.formatPeriodTitle ? window.formatPeriodTitle(p.key, S.period) : p.key, fg: p.fg, ng: p.ng, sFg: p.sFg, sNg: p.sNg,
         pending: p.pending || 0,
         total: p.total, fgGood: p.fgGood, hours: p.hours
     }));
@@ -201,7 +201,7 @@ window.buildDailyOutputAudit = function() {
         '<b>NG (ชิ้น)</b> แปลงจากน้ำหนัก: <code class="bg-gray-100 px-1 rounded">NG ชิ้น = NG Kg ÷ WPP ของรุ่น</code>',
         '<b>ชั่วโมง-เครื่อง</b> = รวม (เครื่อง × ช่วงชั่วโมงที่เดินจริง) ถ่วงด้วยความยาวช่วง (เช่น OT 17:30-18:00 = 0.5 ชม.)',
         `<b>เส้นเฉลี่ย</b> = ค่าเฉลี่ยทุกช่วงที่แสดง → เฉลี่ยรวม = <b>${Math.round(S.avgTotal).toLocaleString()}</b> ชิ้น, เฉลี่ย FG = <b>${Math.round(S.avgFg).toLocaleString()}</b> ชิ้น`,
-        'การแบ่งวันยึด <b>กะ 08:00</b> (ก่อน 8 โมงเช้านับเป็นวันก่อนหน้า) · สัปดาห์เริ่มวันจันทร์ · เดือนตาม yyyy-MM'
+        'การแบ่งวันยึด <b>กะ 08:00</b> (ก่อน 8 โมงเช้านับเป็นวันก่อนหน้า) · สัปดาห์เริ่มวันจันทร์ · เดือนตาม yyyy-MM · ไตรมาส Q1=ม.ค.-มี.ค. · ปีตามปฏิทิน'
     ];
 
     const summary = [
