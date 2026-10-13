@@ -436,11 +436,36 @@ window.renderMachineDailyTrend = function() {
     if (fromDate && toDate && fromDate > toDate) { const t = fromDate; fromDate = toDate; toDate = t; }
     if (machineDailyChartInst) { machineDailyChartInst.destroy(); machineDailyChartInst = null; }
 
-    const dailyData = mData.daily || {};
+    let dailyData = mData.daily || {};
     const allKeys = Object.keys(dailyData).sort();
-    const dailyKeys = allKeys.filter(k => (!fromDate || k >= fromDate) && (!toDate || k <= toDate));
+    let dailyKeys = allKeys.filter(k => (!fromDate || k >= fromDate) && (!toDate || k <= toDate));
+    const dayCount = dailyKeys.length;
 
-    const sortData = mData.sortData || {};
+    let sortData = mData.sortData || {};
+
+    // 📅 รวมเป็นรายสัปดาห์ / เดือน / ไตรมาส / ปี (แบบกราฟหุ้น) — รวมยอดทุกวันในช่วง แล้วคำนวณ % ใหม่จากยอดรวม
+    const mdPeriod = window.getChartPeriod ? window.getChartPeriod('machineDaily') : 'day';
+    let periodRows = null;
+    if (mdPeriod !== 'day' && window.groupRowsByPeriod) {
+        const srcDaily = dailyData, srcSort = sortData;
+        periodRows = window.groupRowsByPeriod(dailyKeys, mdPeriod, k => k,
+            () => ({ d: { fg: 0, ngPcs: 0, ngBreakdown: {} }, sd: { pendingPcs: 0, fgPcs: 0, ngPcs: 0 } }),
+            (acc, k) => {
+                const d = srcDaily[k] || {};
+                acc.d.fg += d.fg || 0;
+                acc.d.ngPcs += d.ngPcs !== undefined ? d.ngPcs : (d.ng || 0);
+                window.mergeNumberMap(acc.d.ngBreakdown, d.ngBreakdown);
+                const sd = srcSort[k];
+                if (sd) {
+                    acc.sd.pendingPcs += sd.pendingPcs || 0;
+                    acc.sd.fgPcs += sd.fgPcs || 0;
+                    acc.sd.ngPcs += sd.ngPcs || 0;
+                }
+            });
+        dailyData = {}; sortData = {};
+        periodRows.forEach(r => { dailyData[r.key] = r.d; sortData[r.key] = r.sd; });
+        dailyKeys = periodRows.map(r => r.key);
+    }
     // 🔴 แก้ไข data.globalSortNgRatio เป็น currentDashboardData
     const globalSortNgRatio = ((typeof currentDashboardData !== 'undefined' && currentDashboardData.globalSortNgRatio) ? currentDashboardData.globalSortNgRatio : 50) / 100;
 
@@ -522,7 +547,7 @@ window.renderMachineDailyTrend = function() {
 
     const dailyDatasets = [
         {
-            type: 'line', label: '% Yield รายวัน', data: dailyYields,
+            type: 'line', label: mdPeriod === 'day' ? '% Yield รายวัน' : '% Yield ' + ((window.CHART_PERIODS || []).find(p => p.value === mdPeriod) || {}).title, data: dailyYields,
             borderColor: '#10b981', backgroundColor: '#10b981', yAxisID: 'y1', tension: 0.3, borderWidth: 2
         }
     ];
@@ -553,7 +578,7 @@ window.renderMachineDailyTrend = function() {
     machineDailyChartInst = new Chart(document.getElementById('machineDailyTrendChart').getContext('2d'), {
         type: 'bar',
         data: {
-            labels: dailyKeys,
+            labels: periodRows ? periodRows.map(r => r.label) : dailyKeys,
             datasets: dailyDatasets
         },
         options: {
@@ -566,8 +591,12 @@ window.renderMachineDailyTrend = function() {
                 const index = element.index;
                 
                 if (chart.data.datasets[datasetIndex].label === 'NG (เสียเป็นชิ้น)') {
-                    const dateStr = chart.data.labels[index];
-                    window.showDailyNgBreakdown(window.currentSelectedMachine, dateStr);
+                    if (periodRows) {
+                        const r = periodRows[index];
+                        if (r) window.showDailyNgBreakdown(window.currentSelectedMachine, r.dates, r.title);
+                    } else {
+                        window.showDailyNgBreakdown(window.currentSelectedMachine, chart.data.labels[index]);
+                    }
                 }
             },
             scales: {
@@ -576,6 +605,15 @@ window.renderMachineDailyTrend = function() {
                 y1: { beginAtZero: true, max: 100, position: 'right', grid: { display: false } }
             },
             plugins: {
+                tooltip: {
+                    callbacks: {
+                        title: function(items) {
+                            if (!items.length) return '';
+                            const r = periodRows ? periodRows[items[0].dataIndex] : null;
+                            return r ? r.title : items[0].label;
+                        }
+                    }
+                },
                 zoom: {
                     pan: { enabled: true, mode: 'xy' },
                     zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
@@ -597,7 +635,10 @@ window.renderMachineDailyTrend = function() {
     if (info) {
         info.innerHTML = dailyKeys.length === 0
             ? '<span class="text-red-600 font-bold">ไม่มีข้อมูลในช่วงที่เลือก</span>'
-            : `แสดง <b>${dailyKeys.length}</b> วัน (จากทั้งหมด ${allKeys.length} วันที่โหลดไว้)`;
+            : `แสดง <b>${dayCount}</b> วัน${periodRows ? ` รวมเป็น <b>${periodRows.length}</b> ช่วง` : ''} (จากทั้งหมด ${allKeys.length} วันที่โหลดไว้)`;
     }
 };
 
+
+// 📅 ปุ่มสลับ วัน/สัปดาห์/เดือน/ไตรมาส/ปี ของกราฟเทรนด์ในหน้ารายละเอียดเครื่อง
+if (window.registerChartPeriod) window.registerChartPeriod('machineDaily', () => window.renderMachineDailyTrend());

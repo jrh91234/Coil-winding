@@ -42,6 +42,19 @@ window.renderNgTrendChart = function() {
             };
         });
     }
+
+    // 📅 รวมเป็นรายสัปดาห์ / เดือน / ไตรมาส / ปี (แบบกราฟหุ้น) — รวมชิ้นเสียแต่ละอาการ + ยอดผลิตของช่วงนั้น
+    const ngPeriod = window.getChartPeriod ? window.getChartPeriod('ngTrend') : 'day';
+    if (ngPeriod !== 'day' && window.groupRowsByPeriod) {
+        trendData = window.groupRowsByPeriod(trendData, ngPeriod, d => d.date,
+            () => ({ ngBreakdown: {}, fg: 0, ng: 0 }),
+            (acc, d) => {
+                window.mergeNumberMap(acc.ngBreakdown, d.ngBreakdown);
+                acc.fg += d.fg || 0;
+                acc.ng += d.ng || 0;
+            });
+    }
+    const periodWord = ngPeriod === 'day' ? 'วัน' : (window.CHART_PERIODS.find(p => p.value === ngPeriod) || {}).short || 'ช่วง';
     
     // รวม Setup เข้ากับอาการหลัก + เก็บ setup แยก
     let ngTypeTotals = {};
@@ -182,7 +195,7 @@ window.renderNgTrendChart = function() {
         type: 'bar',
         plugins: activePlugins.concat(window.qcCrosshairPlugin ? [window.qcCrosshairPlugin] : []),
         data: {
-            labels: trendData.map(d=>d.date),
+            labels: trendData.map(d => d.label || d.date),
             datasets: trendDatasets
         },
         options: {
@@ -197,7 +210,9 @@ window.renderNgTrendChart = function() {
                 const datasetIndex = element.datasetIndex;
                 const index = element.index;
                 
-                const dateStr = chart.data.labels[index];
+                const row = trendData[index] || {};
+                const dateStr = row.title || row.date || chart.data.labels[index];
+                const dateList = row.dates || [row.date];
                 if (chart.data.datasets[datasetIndex].isQty) return; // แท่งยอดผลิต ไม่มี breakdown
                 const clickedDs = chart.data.datasets[datasetIndex];
                 const symptom = clickedDs.ngKey !== undefined ? clickedDs.ngKey : clickedDs.label;
@@ -231,18 +246,20 @@ window.renderNgTrendChart = function() {
                         // ถ้ากรองรายเครื่องอยู่ แสดงเฉพาะเครื่องนั้น
                         for (const [mac, mData] of Object.entries(currentDashboardData.machineData)) {
                             if (selectedMac !== 'all' && mac !== selectedMac) continue;
-                            if (mData.daily && mData.daily[dateStr] && mData.daily[dateStr].ngBreakdown) {
-                                const bd = mData.daily[dateStr].ngBreakdown;
+                            // รวมทุกวันในช่วงที่เลือก (รายวัน = วันเดียว)
+                            let mPcs = 0;
+                            dateList.forEach(dt => {
+                                const bd = mData.daily && mData.daily[dt] && mData.daily[dt].ngBreakdown;
+                                if (!bd) return;
                                 // รวม base + Setup ของอาการนี้
-                                let mPcs = 0;
                                 Object.keys(bd).forEach(k => {
                                     const parsed = window.parseSetupType(k);
                                     if (parsed.base === symptom) mPcs += bd[k];
                                 });
-                                if (mPcs > 0) {
-                                    machineBreakdown.push({ machine: mac, pcs: mPcs });
-                                    totalPcs += mPcs;
-                                }
+                            });
+                            if (mPcs > 0) {
+                                machineBreakdown.push({ machine: mac, pcs: mPcs });
+                                totalPcs += mPcs;
                             }
                         }
                         
@@ -330,6 +347,10 @@ window.renderNgTrendChart = function() {
                         return tooltipItem.raw > 0 && !tooltipItem.dataset.isQty;
                     },
                     callbacks: {
+                        title: function(items) {
+                            const d = items.length ? trendData[items[0].dataIndex] : null;
+                            return d ? (d.title || d.date) : '';
+                        },
                         label: function(context) {
                             const pcs = (context.dataset.rawPcs || [])[context.dataIndex];
                             if (mode === 'percent') {
@@ -342,7 +363,7 @@ window.renderNgTrendChart = function() {
                             if (!items.length) return '';
                             const d = trendData[items[0].dataIndex] || {};
                             const fg = d.fg || 0, ng = d.ng || 0, total = fg + ng;
-                            const lines = [`ยอดผลิตวันนี้ = FG ${fg.toLocaleString()} + NG ${ng.toLocaleString()} = ${total.toLocaleString()} ชิ้น`];
+                            const lines = [`ยอดผลิต${periodWord}นี้ = FG ${fg.toLocaleString()} + NG ${ng.toLocaleString()} = ${total.toLocaleString()} ชิ้น`];
                             if (mode === 'percent') {
                                 const top = items[0];
                                 const pcs = (top.dataset.rawPcs || [])[top.dataIndex];
@@ -377,7 +398,7 @@ window.renderNgTrendChart = function() {
     });
 
     // 🖊️ เครื่องมือตีเส้นบนกราฟ (TradingView style) — js/charts/draw-tool.js
-    if (window.initChartDrawTool) window.initChartDrawTool(charts.ngSymptomTrend, 'ngSymptomTrend', { suffix: mode === 'percent' ? '%' : '' });
+    if (window.initChartDrawTool) window.initChartDrawTool(charts.ngSymptomTrend, ngPeriod === 'day' ? 'ngSymptomTrend' : 'ngSymptomTrend_' + ngPeriod, { suffix: mode === 'percent' ? '%' : '' });
 
     // Legend แบบกะทัดรัด + คำอธิบายรายการคำนวณ (ปุ่ม ℹ️)
     window.ngTrendRenderLegend();
@@ -506,3 +527,6 @@ window.ngTrendLegendClick = function(key, multi) {
     chart.update();
     window.ngTrendRenderLegend();
 };
+
+// 📅 ปุ่มสลับ วัน/สัปดาห์/เดือน/ไตรมาส/ปี ของกราฟ Trend อาการ NG
+if (window.registerChartPeriod) window.registerChartPeriod('ngTrend', () => window.renderNgTrendChart());

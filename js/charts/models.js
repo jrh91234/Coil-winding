@@ -377,8 +377,8 @@ window.getDailyOutputSeries = function() {
         model = modelSel.value;
     }
 
-    const periodSel = document.getElementById('dailyOutputPeriodSelector');
-    const period = periodSel ? periodSel.value : 'day';
+    // 📅 วัน/สัปดาห์/เดือน/ไตรมาส/ปี — ปุ่มสลับกลาง (helpers.js)
+    const period = window.getChartPeriod ? window.getChartPeriod('dailyOutput') : 'day';
     const avgSel = document.getElementById('dailyOutputAvgSelector');
     const avgMode = avgSel ? avgSel.value : 'off';
     const hoursSel = document.getElementById('dailyOutputHoursSelector');
@@ -388,19 +388,6 @@ window.getDailyOutputSeries = function() {
     const pendingMode = pendingSel ? pendingSel.value : 'split';
 
     const trendData = data.dailyTrend || [];
-
-    // คืนค่าวันจันทร์ของสัปดาห์นั้น (yyyy-MM-dd) ใช้เป็น key รายสัปดาห์
-    const getWeekStart = (dateStr) => {
-        const dt = new Date(dateStr + 'T00:00:00');
-        if (isNaN(dt.getTime())) return dateStr;
-        const day = dt.getDay();
-        const diff = (day === 0 ? -6 : 1 - day);
-        dt.setDate(dt.getDate() + diff);
-        const y = dt.getFullYear();
-        const mm = String(dt.getMonth() + 1).padStart(2, '0');
-        const dd = String(dt.getDate()).padStart(2, '0');
-        return `${y}-${mm}-${dd}`;
-    };
 
     // รวมยอด FG/NG (งานผลิต + งานคัดแยก) + ชั่วโมง ตามรุ่นที่เลือก แล้วจัดกลุ่มตามช่วงเวลา
     const order = [];
@@ -431,9 +418,7 @@ window.getDailyOutputSeries = function() {
             pendFromFg = pm ? (pm.fromFg || 0) : 0;
             pendFromNg = pm ? (pm.fromNg || 0) : 0;
         }
-        let key = d.date;
-        if (period === 'week') key = getWeekStart(d.date);
-        else if (period === 'month') key = String(d.date).substring(0, 7);
+        const key = window.getPeriodKey ? window.getPeriodKey(d.date, period) : d.date;
         if (!(key in grp)) { grp[key] = { fg: 0, ng: 0, sFg: 0, sNg: 0, hours: 0, pendFromFg: 0, pendFromNg: 0 }; order.push(key); }
         grp[key].fg += fg;
         grp[key].ng += ng;
@@ -444,7 +429,7 @@ window.getDailyOutputSeries = function() {
         grp[key].pendFromNg += pendFromNg;
     });
 
-    const labels = order;
+    const labels = order.map(k => window.formatPeriodLabel ? window.formatPeriodLabel(k, period) : k);
     const periods = [];
     const fgData = [], ngData = [], sortFgData = [], sortNgData = [], pendingData = [];
     const totalPcsData = [], fgPcsData = [], hoursData = [];
@@ -666,10 +651,9 @@ window.renderDailyOutputChart = function() {
                  tooltip: {
                      callbacks: {
                          title: function(items) {
-                             const lbl = items[0].label;
-                             if (period === 'week') return 'สัปดาห์เริ่ม ' + lbl;
-                             if (period === 'month') return 'เดือน ' + lbl;
-                             return lbl;
+                             const p = periods[items[0].dataIndex];
+                             if (p && window.formatPeriodTitle) return window.formatPeriodTitle(p.key, period);
+                             return items[0].label;
                          },
                          label: function(context) {
                              if (context.dataset.yAxisID === 'yHours') {
@@ -706,3 +690,6 @@ window.renderDailyOutputChart = function() {
          } 
     });
 };
+
+// 📅 ปุ่มสลับ วัน/สัปดาห์/เดือน/ไตรมาส/ปี ของกราฟ Daily Output
+if (window.registerChartPeriod) window.registerChartPeriod('dailyOutput', () => window.renderDailyOutputChart());

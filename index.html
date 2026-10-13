@@ -382,6 +382,10 @@
                 <input type="date" id="startDate" class="w-full md:w-auto p-2 border rounded text-sm">
                 <input type="date" id="endDate" class="w-full md:w-auto p-2 border rounded text-sm">
                 <button onclick="window.toggleAllTime()" id="btnAllTime" class="w-full md:w-auto px-3 py-2 border rounded text-sm font-bold transition-colors bg-white text-gray-600 border-gray-300 hover:bg-amber-50">All Time</button>
+                <div class="w-full md:w-auto flex items-center gap-1 p-1.5 border rounded bg-white" title="เปลี่ยนมุมมองของทุกกราฟที่มีแกนเวลาพร้อมกัน">
+                    <span class="text-[11px] font-bold text-gray-600 whitespace-nowrap">📅 ทุกกราฟ:</span>
+                    <div class="chart-period-switch print-hide" data-period-chart="__all" title="ดูข้อมูลรายวัน / สัปดาห์ / เดือน / ไตรมาส / ปี"></div>
+                </div>
                 <select id="filterShift" class="w-full md:w-auto p-2 border rounded text-sm">
                     <option value="All">All Shift</option>
                     <option value="A">A</option>
@@ -599,11 +603,7 @@
                                 <select id="dailyOutputModelSelector" onchange="window.renderDailyOutputChart()" class="text-[10px] border rounded p-1 text-gray-600 bg-white print-hide">
                                     <option value="all">ทุกรุ่น (รวม)</option>
                                 </select>
-                                <select id="dailyOutputPeriodSelector" onchange="window.renderDailyOutputChart()" class="text-[10px] border rounded p-1 text-gray-600 bg-white print-hide">
-                                    <option value="day">รายวัน</option>
-                                    <option value="week">รายสัปดาห์</option>
-                                    <option value="month">รายเดือน</option>
-                                </select>
+                                <div class="chart-period-switch print-hide" data-period-chart="dailyOutput" title="ดูข้อมูลรายวัน / สัปดาห์ / เดือน / ไตรมาส / ปี"></div>
                                 <select id="dailyOutputSelector" onchange="window.renderDailyOutputChart()" class="text-[10px] border rounded p-1 text-gray-600 bg-white print-hide">
                                     <option value="pcs">จำนวน (ชิ้น)</option>
                                     <option value="percent">สัดส่วน (%)</option>
@@ -648,7 +648,8 @@
                             <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide">⛶</button>
                         </div>
                     </div>
-                   <div class="w-full flex justify-end items-center gap-2 mb-1 print-hide">
+                   <div class="w-full flex flex-wrap justify-end items-center gap-2 mb-1 print-hide">
+                            <div class="chart-period-switch print-hide" data-period-chart="qcTrend" title="ดูข้อมูลรายวัน / สัปดาห์ / เดือน / ไตรมาส / ปี"></div>
                             <button id="qcLabelToggleBtn" onclick="window.toggleQcTrendLabels()" class="text-[10px] border rounded px-2 py-1 bg-white text-gray-500 hover:bg-blue-50" title="ปิด/เปิด ตัวเลขบนกราฟ">🔢 ตัวเลข: ปิด</button>
                             <select id="qcModelSelector" onchange="if(typeof window.renderCharts === 'function') window.renderCharts(currentDashboardData);" class="text-[10px] border rounded p-1 text-gray-600 bg-white hover:bg-blue-50">
                                 <option value="all">รวมทุกรุ่น (All)</option>
@@ -665,7 +666,8 @@
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <div class="flex flex-col gap-1">
                             <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">📈 Trend อาการ NG</h3>
-                            <div class="flex gap-1 mt-1">
+                            <div class="flex flex-wrap gap-1 mt-1">
+                                <div class="chart-period-switch print-hide" data-period-chart="ngTrend" title="ดูข้อมูลรายวัน / สัปดาห์ / เดือน / ไตรมาส / ปี"></div>
                                 <select id="ngTrendSelector" onchange="window.renderNgTrendChart()" class="text-[10px] border rounded p-1 text-gray-600 bg-white print-hide">
                                     <option value="pcs">จำนวนเสีย (ชิ้น)</option>
                                     <option value="percent">% เทียบยอดผลิต</option>
@@ -1046,6 +1048,7 @@
                         <button onclick="window.setMachineDailyRangePreset(30)" class="px-2 py-1 rounded bg-white border border-blue-300 text-blue-700 font-bold hover:bg-blue-100">30 วัน</button>
                         <button onclick="window.setMachineDailyRangePreset(90)" class="px-2 py-1 rounded bg-white border border-blue-300 text-blue-700 font-bold hover:bg-blue-100">90 วัน</button>
                         <button onclick="window.setMachineDailyRangePreset(0)" class="px-2 py-1 rounded bg-white border border-gray-300 text-gray-700 font-bold hover:bg-gray-100">ทั้งหมด</button>
+                        <div class="chart-period-switch print-hide" data-period-chart="machineDaily" title="ดูข้อมูลรายวัน / สัปดาห์ / เดือน / ไตรมาส / ปี"></div>
                         <span id="md-daily-range-info" class="text-gray-500 ml-auto"></span>
                     </div>
                     <div class="text-xs text-blue-600 mb-1 hidden text-right font-bold" id="daily-chart-hint">💡 คลิกที่แท่ง NG สีแดงเพื่อดูรายละเอียดอาการเสีย</div>
@@ -1763,15 +1766,15 @@
     <script src="js/report/auto-report.js?v=4.6"></script>
     <script src="js/report/export.js?v=4.1"></script>
     <script src="js/report/dashboard.js?v=4.2"></script>
-    <script src="js/charts/helpers.js?v=4.0"></script>
+    <script src="js/charts/helpers.js?v=4.1"></script>
     <script src="js/charts/draw-tool.js?v=4.0"></script>
-    <script src="js/charts/models.js?v=4.1"></script>
-    <script src="js/charts/ng-trend.js?v=4.3"></script>
-    <script src="js/charts/main.js?v=5.1"></script>
-    <script src="js/charts/table-machine.js?v=4.1"></script>
-    <script src="js/charts/popups.js?v=4.0"></script>
+    <script src="js/charts/models.js?v=4.2"></script>
+    <script src="js/charts/ng-trend.js?v=4.4"></script>
+    <script src="js/charts/main.js?v=5.2"></script>
+    <script src="js/charts/table-machine.js?v=4.2"></script>
+    <script src="js/charts/popups.js?v=4.1"></script>
     <script src="js/charts/audit.js?v=4.0"></script>
-    <script src="js/charts/chart-audit.js?v=4.1"></script>
+    <script src="js/charts/chart-audit.js?v=4.2"></script>
     <script src="js/packing.js?v=3.56"></script>
     <!-- 🔍 MODAL: ตรวจเช็คอะไหล่ (Parts Inspection) -->
     <div id="modal-check-part" class="fixed inset-0 bg-black bg-opacity-50 z-[70] hidden flex items-center justify-center p-4 print-hide">
@@ -1874,7 +1877,7 @@
     <script src="js/dailycheck.js?v=1.0"></script>
     <script src="js/parts.js?v=5.3"></script>
     <script src="js/inbox.js?v=2.6"></script>
-    <script src="js/cost.js?v=1.1"></script>
+    <script src="js/cost.js?v=1.2"></script>
 
     <!-- Script ทั่วไปสำหรับ UI ย่อยๆ -->
     <script>

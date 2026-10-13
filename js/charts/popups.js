@@ -1,15 +1,21 @@
-window.showDailyNgBreakdown = function(machine, date) {
+// date = วันที่เดียว หรือ array ของวันที่ (กราฟที่รวมเป็นสัปดาห์/เดือน/ไตรมาส/ปี) · titleLabel = ชื่อช่วงที่แสดงบนหัว popup
+window.showDailyNgBreakdown = function(machine, date, titleLabel) {
     if (!currentDashboardData || !currentDashboardData.machineData[machine]) return;
-    const dailyData = currentDashboardData.machineData[machine].daily[date];
+    const mDaily = currentDashboardData.machineData[machine].daily || {};
+    const dates = Array.isArray(date) ? date : [date];
+    let breakdown = null;
+    dates.forEach(dt => {
+        const day = mDaily[dt];
+        if (day && day.ngBreakdown) breakdown = window.mergeNumberMap(breakdown || {}, day.ngBreakdown);
+    });
 
-    if (!dailyData || !dailyData.ngBreakdown) {
+    if (!breakdown) {
         alert("ไม่พบข้อมูล Breakdown สำหรับวันนี้ (อาจเป็นข้อมูลเก่าก่อนการอัปเดตระบบ)");
         return;
     }
 
-    const breakdown = dailyData.ngBreakdown;
     const container = document.getElementById('daily-ng-content');
-    document.getElementById('daily-ng-title').innerText = `🗑️ NG Breakdown: ${machine} (${date})`;
+    document.getElementById('daily-ng-title').innerText = `🗑️ NG Breakdown: ${machine} (${titleLabel || dates.join(', ')})`;
 
     // รวม Setup เข้ากับอาการหลัก
     const bdSep = window.separateSetupData(breakdown);

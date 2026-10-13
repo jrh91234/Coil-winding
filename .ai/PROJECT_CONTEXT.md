@@ -44,6 +44,14 @@
   - สลับโหมดได้ที่ `dailyOutputPendingSelector` (`split` = ค่าเริ่มต้น / `merge` = แบบเดิม)
 - **Coil changes**: `data.dailyTrend[].coilChanges` (total), `data.dailyTrend[].coilChangesByMachine` (per machine) — from RawMaterial sheet
 
+## มุมมองช่วงเวลาของกราฟ (วัน / สัปดาห์ / เดือน / ไตรมาส / ปี) — แบบกราฟหุ้น
+- Helper กลางใน `js/charts/helpers.js`: `getPeriodKey`, `formatPeriodLabel`, `formatPeriodTitle`, `groupRowsByPeriod`, `mergeNumberMap`, `getChartPeriod`, `setChartPeriod`, `registerChartPeriod`, `renderPeriodSwitches`
+- ปุ่มสลับ = `<div class="chart-period-switch" data-period-chart="KEY" [data-periods="month,quarter,year"]>` (helper วาดปุ่มให้) · ค่าที่เลือกเก็บใน localStorage `chartPeriods`
+- `KEY = '__all'` (แถบตัวกรองบน Dashboard) = เปลี่ยนทุกกราฟพร้อมกัน
+- กราฟที่รองรับ: `qcTrend` (main.js), `ngTrend` (ng-trend.js), `dailyOutput` (models.js), `machineDaily` (table-machine.js), `costTrend` (cost.js — ข้อมูลรายเดือน เลือกได้ เดือน/ไตรมาส/ปี)
+- กติกา: รวมยอด (Kg / ชิ้น) ของทุกวันในช่วงก่อน แล้วค่อยคำนวณ % ใหม่จากยอดรวม — **ห้ามเฉลี่ย % รายวัน**
+- กราฟใหม่ที่มีแกนเวลา: ใช้ `getChartPeriod(KEY)` + `groupRowsByPeriod` แล้ว `registerChartPeriod(KEY, renderFn)` และวางปุ่มใน index.html
+
 ## Spare Parts Tracking System
 - **Parts_Master sheet**: Part_ID, Part_Name, Category, Life_Shots (adjustable), Unit_Cost, Supplier, Remark
 - **Parts_Installation sheet**: Install_ID, Machine, Part_ID, Part_Name, Install_Date, Install_Shot, Life_Shots, Status (Active/Replaced), Maint_Job_ID, Recorder, Replaced_Date

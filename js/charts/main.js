@@ -609,6 +609,58 @@ const ctxQC = document.getElementById('qcTrendChart');
                     }
                 });
 
+                return {
+                    date: dateStr,
+                    fgKg: mFgKg, ngKg: mNgKg, fgPcs: mFgPcs, ngPcs: mNgPcs,
+                    pendingSortQty: mPendingPcs,
+                    pendingKg: mPendingKg,
+                    ngBreakdownKg: modelNgBreakdownKg,
+                    pendingByMachine: pendingByMachine,
+                    ngByMachine: ngByMachine,
+                    coilChanges: originalDay.coilChanges || 0,
+                    coilChangesByMachine: originalDay.coilChangesByMachine || {}
+                };
+            });
+
+            // 📅 รวมเป็นรายสัปดาห์ / เดือน / ไตรมาส / ปี (แบบกราฟหุ้น) — รวม Kg/ชิ้น แล้วคำนวณ % ใหม่จากยอดรวม
+            const qcPeriod = window.getChartPeriod ? window.getChartPeriod('qcTrend') : 'day';
+            if (qcPeriod !== 'day' && window.groupRowsByPeriod) {
+                // รวมรายการรายเครื่องของหลายวันเป็นเครื่องละ 1 แถว
+                const mergeByMachine = (list, qtyKey) => {
+                    const map = {};
+                    list.forEach(it => {
+                        const m = map[it.machine] || (map[it.machine] = Object.assign({}, it, { symptoms: {} }, { [qtyKey]: 0, fgPcs: 0 }));
+                        m[qtyKey] += it[qtyKey] || 0;
+                        m.fgPcs += it.fgPcs || 0;
+                        if (it.estimated) m.estimated = true;
+                        window.mergeNumberMap(m.symptoms, it.symptoms);
+                    });
+                    return Object.values(map);
+                };
+                displayTrendData = window.groupRowsByPeriod(displayTrendData, qcPeriod, r => r.date,
+                    () => ({ fgKg: 0, ngKg: 0, fgPcs: 0, ngPcs: 0, pendingSortQty: 0, pendingKg: 0,
+                             ngBreakdownKg: {}, ngList: [], pendList: [], coilChanges: 0, coilChangesByMachine: {} }),
+                    (acc, r) => {
+                        acc.fgKg += r.fgKg; acc.ngKg += r.ngKg;
+                        acc.fgPcs += r.fgPcs; acc.ngPcs += r.ngPcs;
+                        acc.pendingSortQty += r.pendingSortQty; acc.pendingKg += r.pendingKg;
+                        window.mergeNumberMap(acc.ngBreakdownKg, r.ngBreakdownKg);
+                        acc.ngList.push(...r.ngByMachine);
+                        acc.pendList.push(...r.pendingByMachine);
+                        acc.coilChanges += r.coilChanges;
+                        window.mergeNumberMap(acc.coilChangesByMachine, r.coilChangesByMachine);
+                    }
+                ).map(g => Object.assign(g, {
+                    date: g.title, // ใช้เป็นหัว popup รายละเอียด
+                    ngByMachine: mergeByMachine(g.ngList, 'ngPcs'),
+                    pendingByMachine: mergeByMachine(g.pendList, 'pendingPcs')
+                }));
+            }
+
+            // คำนวณ % NG / Worst / Best / Forecast ของแต่ละจุด (ใช้สูตรเดียวกันทั้งรายวันและรายช่วง)
+            displayTrendData.forEach(d => {
+                const mFgKg = d.fgKg, mNgKg = d.ngKg, mPendingKg = d.pendingKg;
+                const modelNgBreakdownKg = d.ngBreakdownKg || {};
                 const totalKg = mFgKg + mNgKg;
                 const ngRate = totalKg > 0 ? (mNgKg / totalKg) * 100 : 0;
                 let worstNgRate = null; let bestNgRate = null; let forecastNgRate = null;
@@ -642,17 +694,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                     // ไม่ใช้ Global Fallback — ถ้าไม่มีข้อมูลจริงก็ไม่พยากรณ์
                 }
 
-                return {
-                    date: dateStr,
-                    fgKg: mFgKg, ngKg: mNgKg, fgPcs: mFgPcs, ngPcs: mNgPcs,
-                    pendingSortQty: mPendingPcs,
-                    pendingKg: mPendingKg, projectedNgKg: projectedNgKg,
-                    ngRate: ngRate, worstNgRate: worstNgRate, bestNgRate: bestNgRate, forecastNgRate: forecastNgRate,
-                    pendingByMachine: pendingByMachine,
-                    ngByMachine: ngByMachine,
-                    coilChanges: originalDay.coilChanges || 0,
-                    coilChangesByMachine: originalDay.coilChangesByMachine || {}
-                };
+                Object.assign(d, { ngRate, worstNgRate, bestNgRate, forecastNgRate, projectedNgKg });
             });
 
             const hasPendingSort = displayTrendData.some(d => d.pendingSortQty > 0);
@@ -735,7 +777,7 @@ const ctxQC = document.getElementById('qcTrendChart');
             charts.qcTrend = new Chart(ctxQC, {
                 type: 'line',
                 data: {
-                    labels: displayTrendData.map(d=>d.date),
+                    labels: displayTrendData.map(d => d.label || d.date),
                     datasets: datasets
                 },
                 plugins: [window.qcCrosshairPlugin],
@@ -800,6 +842,10 @@ const ctxQC = document.getElementById('qcTrendChart');
                         },
                         tooltip: {
                             callbacks: {
+                                title: function(items) {
+                                    const d = items.length ? displayTrendData[items[0].dataIndex] : null;
+                                    return d ? (d.title || d.date) : '';
+                                },
                                 label: function(ctx) {
                                     const v = ctx.parsed.y;
                                     if (v === null || v === undefined) return null;
@@ -849,7 +895,7 @@ const ctxQC = document.getElementById('qcTrendChart');
             });
 
             // 🖊️ เครื่องมือตีเส้นบนกราฟ (TradingView style) — js/charts/draw-tool.js
-            if (window.initChartDrawTool) window.initChartDrawTool(charts.qcTrend, 'qcTrend');
+            if (window.initChartDrawTool) window.initChartDrawTool(charts.qcTrend, qcPeriod === 'day' ? 'qcTrend' : 'qcTrend_' + qcPeriod); // เส้นที่ตีแยกตามช่วงเวลา
             // ↕ ลากขึ้นลงแยกหน้าต่าง (บน/ล่าง) — ลากซ้ายขวายังเลื่อนพร้อมกัน
             if (window.initQcPanePan) window.initQcPanePan(ctxQC);
          }
@@ -1089,3 +1135,8 @@ window.initQcPanePan = function(canvas) {
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', end);
 };
+
+// 📅 ปุ่มสลับ วัน/สัปดาห์/เดือน/ไตรมาส/ปี ของกราฟ Daily NG Rate Trend
+if (window.registerChartPeriod) window.registerChartPeriod('qcTrend', () => {
+    if (typeof currentDashboardData !== 'undefined' && currentDashboardData) window.renderCharts(currentDashboardData);
+});
