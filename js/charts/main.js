@@ -652,6 +652,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                     }
                 ).map(g => Object.assign(g, {
                     date: g.title, // ใช้เป็นหัว popup รายละเอียด
+                    periodWord: (window.CHART_PERIODS.find(p => p.value === qcPeriod) || {}).short || 'ช่วง', // "ของเดือน" แทน "ของวัน" ใน popup
                     ngByMachine: mergeByMachine(g.ngList, 'ngPcs'),
                     pendingByMachine: mergeByMachine(g.pendList, 'pendingPcs')
                 }));
