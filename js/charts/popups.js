@@ -66,7 +66,10 @@ window.showTrendDayBreakdown = function(d) {
     titleEl.innerText = `📋 รายละเอียด: ${d.date}`;
     let html = '';
 
-    // === ส่วนที่ 1: สรุปยอดรวมวันนี้ ===
+    // หน่วยช่วงเวลา: วัน / สัปดาห์ / เดือน / ไตรมาส / ปี (กราฟที่รวมเป็นช่วงส่ง d.periodWord มา)
+    const periodWord = d.periodWord || 'วัน';
+
+    // === ส่วนที่ 1: สรุปยอดรวมของช่วงนี้ ===
     html += `<div class="bg-gray-50 rounded-lg p-3 mb-3 grid grid-cols-2 gap-2 text-xs">
         <div><span class="text-gray-500">FG:</span> <b class="text-blue-700">${(d.fgPcs || 0).toLocaleString()} ชิ้น</b></div>
         <div><span class="text-gray-500">NG:</span> <b class="text-red-700">${(d.ngPcs || 0).toLocaleString()} ชิ้น</b></div>
@@ -100,7 +103,7 @@ window.showTrendDayBreakdown = function(d) {
                     const isRollChange = symp.toLowerCase().includes('เปลี่ยนม้วน') || symp.toLowerCase().includes('roll change');
                     html += `<div class="flex justify-between text-xs text-gray-600">
                         <span>${symp}</span>
-                        <span class="font-mono whitespace-nowrap ml-2">${pcs.toLocaleString()} ชิ้น <span class="text-gray-400">(${pct}% เครื่อง)</span> <span class="text-red-500">(${pctDay}% ของวัน)</span></span>
+                        <span class="font-mono whitespace-nowrap ml-2">${pcs.toLocaleString()} ชิ้น <span class="text-gray-400">(${pct}% เครื่อง)</span> <span class="text-red-500">(${pctDay}% ของ${periodWord})</span></span>
                     </div>`;
                     if (isRollChange && macCoils > 0) {
                         const avg = (pcs / macCoils).toFixed(1);
@@ -143,7 +146,7 @@ window.showTrendDayBreakdown = function(d) {
     }
 
     if ((!d.ngByMachine || d.ngByMachine.length === 0) && (!d.pendingByMachine || d.pendingByMachine.length === 0)) {
-        html = '<div class="text-center text-gray-500 py-4">ไม่มีข้อมูลในวันนี้</div>';
+        html = `<div class="text-center text-gray-500 py-4">ไม่มีข้อมูลใน${periodWord}นี้</div>`;
     }
 
     container.innerHTML = html;
