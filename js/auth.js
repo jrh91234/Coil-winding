@@ -1,12 +1,39 @@
-window.onload = () => {
+window.onload = async () => {
     const savedUser = localStorage.getItem('CWM_AUTH_USER');
     if (savedUser) {
         window.currentUser = JSON.parse(savedUser);
         initAppAfterLogin();
-    } else {
-        document.getElementById('login-modal').classList.remove('hidden');
+        return;
     }
+    // Super App SSO: ใช้ login จาก Assembly Super App ถ้ามีสิทธิ์แอปนี้
+    const ssoUser = await superAppSsoUser('coil-winding');
+    if (ssoUser) {
+        window.currentUser = { username: ssoUser.username, role: ssoUser.role, name: ssoUser.name, sso: true };
+        localStorage.setItem('CWM_AUTH_USER', JSON.stringify(window.currentUser));
+        document.getElementById('login-modal').classList.add('hidden');
+        initAppAfterLogin();
+        return;
+    }
+    document.getElementById('login-modal').classList.remove('hidden');
 };
+
+// session จาก Assembly Super App (localStorage SUPERAPP_SSO) → ถาม auth กลางว่ามีสิทธิ์/role อะไรในแอปนี้
+async function superAppSsoUser(appId) {
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem('SUPERAPP_SSO') || 'null'); } catch (e) {}
+    if (!s || !s.token || !s.authUrl || !(s.expiresAt > Date.now())) return null;
+    try {
+        const res = await fetch(s.authUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'verify', token: s.token, app: appId })
+        });
+        const data = await res.json();
+        return data.success ? data.user : null;
+    } catch (e) {
+        return null;
+    }
+}
 
 document.getElementById('loginForm').onsubmit = async (e) => {
     e.preventDefault();
