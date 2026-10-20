@@ -16,7 +16,7 @@
   - `dashboard.js` (171 lines) — loadDashboard
 - `js/form.js` (907 lines) — NG input form, Setup sub-symptom selection
 - `js/globals.js` (426 lines) — Global variables (ngSymptoms, machineMapping, getShiftDateStr with 08:00 cutoff)
-- `js/auth.js` (262 lines) — Authentication
+- `js/auth.js` (318 lines) — Authentication (+ Super App SSO auto-login via `SUPERAPP_SSO`)
 - `js/packing.js` (366 lines) — Packing module
 - `js/planning.js` — **แผนการผลิต / Job Order**: ฟอร์มสร้าง Job Order, ตารางติดตามความคืบหน้า, ตัวเลือก Job Order ในฟอร์มบันทึกผลิต, การ์ด Job Order บน Dashboard
 - `js/parts.js` (299 lines) — **Parts tracking**: Parts Master CRUD, Installation tracking, Shot Counter, Machine parts tab
