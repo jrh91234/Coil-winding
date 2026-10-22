@@ -3363,8 +3363,9 @@ function doPost(e) {
           const checkCount = parseInt(r.Check_Count) || 0;
           const effectiveLife = lifeShots > 0 ? lifeShots * (checkCount + 1) : 0;
           const pct = effectiveLife > 0 ? (actualShots / effectiveLife) * 100 : 0;
-          // เข้าคิว "รอตรวจเช็ค" เมื่อ Shot หลังตรวจล่าสุดถึงรอบที่ตั้งไว้เท่านั้น
-          // ส่วนอะไหล่ที่ใช้งานครบ/เกินอายุให้ไปอยู่ในคิวเปลี่ยนอะไหล่แทน
+          // เข้าคิว "รอตรวจเช็ค" เมื่อ Shot หลังตรวจล่าสุดถึงรอบที่ตั้งไว้ — มาก่อนเสมอ แม้เกินอายุแล้ว
+          // (ตรวจผ่าน = ต่ออายุอีก 1 รอบ จึงต้องให้ช่างได้เห็นในคิวตรวจ ไม่ใช่ซ่อนไว้ในคิวใกล้หมดอายุ)
+          // อะไหล่ที่เกินอายุแต่ยังไม่ถึงรอบตรวจ → คิวใกล้หมดอายุ (ควรเปลี่ยน)
           const dueByCheckShot = !!state.needsCheck;
           const dueByLifeOverage = lifeShots > 0 && pct >= 100;
           const item = {
@@ -3382,12 +3383,13 @@ function doPost(e) {
             checkIntervalShots: state.checkIntervalShots || 0,
             lastCheckDate: state.lastCheckDate || "",
             checkCount: checkCount,
-            checkReason: dueByCheckShot ? "due_shot" : (dueByLifeOverage ? "overdue_life" : "")
+            checkReason: dueByCheckShot ? "due_shot" : (dueByLifeOverage ? "overdue_life" : ""),
+            overLife: dueByLifeOverage
           };
-          if (dueByLifeOverage) {
-            result.partsNearEnd.push(item);
-          } else if (dueByCheckShot) {
+          if (dueByCheckShot) {
             result.partsCheck.push(item);
+          } else if (dueByLifeOverage) {
+            result.partsNearEnd.push(item);
           } else if (lifeShots > 0 && pct >= 90) {
             result.partsNearEnd.push(item);
           }

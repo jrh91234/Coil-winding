@@ -217,7 +217,11 @@ function renderPartsCheckItem(d) {
     const checkThreshold = Number(d.checkThresholdShots !== undefined ? d.checkThresholdShots : d.nextCheckShot);
     const reasonBadge = d.checkReason === 'overdue_life'
         ? `<span class="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-bold" title="ใช้งานเกินอายุที่คำนวณได้แล้ว (${d.pct}%) จึงเข้าคิวตรวจเช็คทันที แม้ยังไม่ถึง Next Check ที่ตั้งไว้">🔴 เกินอายุใช้งาน (${d.pct}%)</span>`
-        : `<span class="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold" title="ใช้งานถึงรอบ Next Check ที่ตั้งไว้แล้ว">🟡 ถึงรอบตรวจตามกำหนด</span>`;
+        : `<span class="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold" title="ใช้งานถึงรอบ Next Check ที่ตั้งไว้แล้ว">🟡 ถึงรอบตรวจตามกำหนด</span>`
+          // ถึงรอบตรวจ + เกินอายุแล้ว → แสดงทั้ง 2 ป้าย ให้ช่างตัดสินใจ ตรวจต่ออายุ หรือ เปลี่ยน
+          + (d.overLife && d.checkReason === 'due_shot'
+              ? ` <span class="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-bold" title="ใช้งานเกินอายุที่คำนวณได้แล้ว — ตรวจแล้วถ้าไม่ผ่านให้เปลี่ยน">🔴 เกินอายุใช้งาน (${d.pct}%)</span>`
+              : '');
     return `<div class="border-l-4 border-l-amber-500 bg-white rounded-r-lg shadow-sm p-4 mb-2 hover:shadow-md transition-shadow">
         <div class="flex items-start justify-between">
             <div class="flex-1 min-w-0">
@@ -229,10 +233,11 @@ function renderPartsCheckItem(d) {
                     ${reasonBadge}
                 </div>
                 <div class="text-xs text-gray-600">${hasLastCheck ? `Shot หลังตรวจ ${checkShots.toLocaleString()} / รอบถัดไป ${checkThreshold.toLocaleString()} shot (เริ่มนับหลัง ${d.lastCheckDate})` : `Actual: <b class="text-amber-700">${Number(d.actualShots).toLocaleString()}</b> / Next Check: <b>${Number(d.nextCheckShot).toLocaleString()}</b> shot`}</div>
-                <div class="text-xs text-gray-500 mt-0.5">Life: ${d.lifeShots > 0 ? Number(d.lifeShots).toLocaleString() : '∞'} · ตรวจแล้ว ${d.checkCount} ครั้ง</div>
+                <div class="text-xs text-gray-500 mt-0.5">Actual: ${Number(d.actualShots).toLocaleString()} / Life: ${d.effectiveLife > 0 ? Number(d.effectiveLife).toLocaleString() : (d.lifeShots > 0 ? Number(d.lifeShots).toLocaleString() : '∞')} · ตรวจแล้ว ${d.checkCount} ครั้ง</div>
             </div>
             <div class="flex flex-col gap-1 ml-3 shrink-0">
                 <button onclick="window.openCheckPartDialog('${d.installId}', '${d.partId}', '${escName}', '${d.machine}', ${d.actualShots}, ${d.lifeShots}, ${d.nextCheckShot}, ${d.checkIntervalShots || 0})" class="text-xs bg-amber-600 text-white px-3 py-1 rounded hover:bg-amber-700 font-bold">🔍 ตรวจเช็ค</button>
+                ${d.overLife ? `<button title="เปลี่ยนอะไหล่ที่เกินอายุ" onclick="window.promptReplacepart('${d.installId}', '${d.machine}', '${d.partId}', '${escName}', ${d.lifeShots})" class="text-xs bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 font-bold">🔄 เปลี่ยน</button>` : ''}
                 <button onclick="window.showCheckHistory('${d.installId}', '${escName}', '${d.partId}')" class="text-xs text-gray-500 hover:underline">📋 ประวัติ</button>
             </div>
         </div>
