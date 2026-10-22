@@ -359,11 +359,12 @@ window.deletePart = async function(partId, partName) {
 // === ระบบติดตั้งอะไหล่ (Installation) ===
 // installDate: "yyyy-MM-dd HH:mm" (optional, ถ้าไม่ส่ง backend จะใช้เวลาปัจจุบัน)
 // Install_Shot ถูกคำนวณฝั่ง backend ตามวันที่ติดตั้ง
-window.installPartToMachine = async function(machine, partId, partName, lifeShots, maintJobId, installDate) {
+window.installPartToMachine = async function(machine, partId, partName, lifeShots, maintJobId, installDate, requestId) {
     const recorder = (window.currentUser && window.currentUser.name) || 'System';
     const payload = {
         action: 'SAVE_PARTS_INSTALLATION',
         mode: 'new',
+        requestId: requestId || '',
         installation: {
             Machine: machine,
             Part_ID: partId,
@@ -379,11 +380,12 @@ window.installPartToMachine = async function(machine, partId, partName, lifeShot
     return await res.json();
 };
 
-window.replacePartOnMachine = async function(installId, machine, partId, partName, lifeShots, maintJobId, installDate) {
+window.replacePartOnMachine = async function(installId, machine, partId, partName, lifeShots, maintJobId, installDate, requestId) {
     const recorder = (window.currentUser && window.currentUser.name) || 'System';
     const payload = {
         action: 'SAVE_PARTS_INSTALLATION',
         mode: 'replace',
+        requestId: requestId || '',
         installation: {
             Install_ID: installId,
             Machine: machine,
@@ -573,6 +575,8 @@ window.openInstallPartDialog = function(partId, partName, lifeShots, options) {
     const prevInstallId = options.prevInstallId || '';
     const currentMachine = options.currentMachine || '';
     const isReplaceMode = !!prevInstallId;
+    // 🔒 เลขคำขอ 1 เลขต่อการเปิดหน้าต่าง 1 ครั้ง — ถ้ากดซ้ำ/ส่งซ้ำ backend จะคืนผลเดิม ไม่สร้างแถวใหม่
+    window._installRequestId = 'REQ-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
 
     document.getElementById('install-part-id').value = partId;
     document.getElementById('install-part-life-val').value = lifeShots || 0;
@@ -671,14 +675,18 @@ window.confirmInstallPart = async function() {
         return;
     }
 
+    // 🔒 กันกดซ้ำระหว่างรอผล (ปุ่ม disabled อย่างเดียวไม่พอ เช่น กด Enter / ดับเบิลคลิกเร็ว)
+    if (window._installSaving) return;
+    window._installSaving = true;
+    const requestId = window._installRequestId;
     const btn = document.getElementById('btn-confirm-install');
     const origText = btn.innerText;
     btn.disabled = true;
     btn.innerText = prevInstallId ? '⏳ กำลังบันทึก...' : '⏳ กำลังติดตั้ง...';
     try {
         const result = prevInstallId
-            ? await window.replacePartOnMachine(prevInstallId, machine, partId, partName, lifeShots, maintJobId, installDate)
-            : await window.installPartToMachine(machine, partId, partName, lifeShots, maintJobId, installDate);
+            ? await window.replacePartOnMachine(prevInstallId, machine, partId, partName, lifeShots, maintJobId, installDate, requestId)
+            : await window.installPartToMachine(machine, partId, partName, lifeShots, maintJobId, installDate, requestId);
         if (result && result.status === 'success') {
             document.getElementById('modal-install-part').classList.add('hidden');
             const shotInfo = (result.installShot !== undefined) ? ` (เริ่มนับจาก ${Number(result.installShot).toLocaleString()} shot)` : '';
@@ -701,10 +709,18 @@ window.confirmInstallPart = async function() {
             }
         } else {
             alert('ไม่สำเร็จ: ' + ((result && result.message) || ''));
+            // ข้อมูลบนจอเก่ากว่าในชีต (เช่น มีคนเปลี่ยนไปแล้ว) → ปิดหน้าต่างแล้วโหลดตารางใหม่ กันทำรายการซ้ำจากข้อมูลเก่า
+            const staleCodes = ['ALREADY_CHANGED', 'DUPLICATE_ACTIVE', 'NOT_FOUND'];
+            if (result && staleCodes.indexOf(result.code) !== -1) {
+                document.getElementById('modal-install-part').classList.add('hidden');
+                if (typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
+            }
         }
     } catch (err) {
-        alert('เกิดข้อผิดพลาด: ' + err.message);
+        // เน็ตหลุด/หมดเวลา: ชีตอาจบันทึกไปแล้ว — กดยืนยันอีกครั้งได้อย่างปลอดภัย (ใช้เลขคำขอเดิม ไม่บันทึกซ้ำ)
+        alert('เกิดข้อผิดพลาด: ' + err.message + '\nกดยืนยันอีกครั้งได้ ระบบจะไม่บันทึกซ้ำ');
     } finally {
+        window._installSaving = false;
         btn.disabled = false;
         btn.innerText = origText;
     }

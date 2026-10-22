@@ -1916,178 +1916,225 @@ function doPost(e) {
   }
 
   if (action === "SAVE_PARTS_INSTALLATION") {
-    let sheet = ss.getSheetByName("Parts_Installation");
-    if (!sheet) {
-      sheet = ss.insertSheet("Parts_Installation");
-      sheet.appendRow(["Install_ID", "Machine", "Part_ID", "Part_Name", "Install_Date", "Install_Shot", "Life_Shots", "Status", "Maint_Job_ID", "Recorder", "Replaced_Date", "Carried_Shots", "Carried_Days", "Check_Interval_Shots", "Next_Check_Shot", "Last_Check_Date", "Check_Count"]);
+    // 🔒 กันบันทึกซ้ำ: (1) ล็อกให้ทำทีละคำขอ (2) requestId เดิม = คืนผลครั้งแรก ไม่เขียนซ้ำ
+    // (เคยเกิดแถว Active ซ้ำจากการส่งคำขอเดิม 2 ครั้ง เช่น เน็ตช้าแล้วกดซ้ำ)
+    const jsonOut_ = (obj) => ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+    const instLock = LockService.getScriptLock();
+    try { instLock.waitLock(15000); } catch (lockErr) {
+      return jsonOut_({status: "error", code: "BUSY", message: "ระบบกำลังบันทึกรายการอื่นอยู่ กรุณาลองใหม่อีกครั้ง"});
     }
-    // ตรวจสอบว่ามีคอลัมน์ที่จำเป็นหรือยัง (backward compat)
-    ensureColumns(sheet, ["Carried_Shots", "Carried_Days", "Check_Interval_Shots", "Next_Check_Shot", "Last_Check_Date", "Check_Count"]);
-
-    const d = data.installation;
-    const now = new Date();
-
-    // หา Check_Interval_Shots default: frontend → Parts_Master → 0
-    let checkInterval = parseInt(d.Check_Interval_Shots);
-    if (!checkInterval || checkInterval < 0) {
-      checkInterval = lookupPartsMasterCheckInterval(ss, d.Part_ID);
-    }
-
-    // รับ Install_Date จาก frontend ได้ (format: "yyyy-MM-dd" หรือ "yyyy-MM-dd HH:mm")
-    // ถ้าไม่ส่งมาให้ใช้เวลาปัจจุบัน
-    let installDateFull = String(d.Install_Date || "").trim();
-    if (!installDateFull) {
-      installDateFull = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm");
-    }
-    const installDateOnly = installDateFull.substring(0, 10); // "yyyy-MM-dd"
-
-    if (data.mode === "replace" && d.Install_ID) {
-      // เปลี่ยน/ย้ายอะไหล่: ปิดตัวเก่า + คำนวณ carry-over + สร้างตัวใหม่
-      const rows = sheet.getDataRange().getValues();
-      const headers = rows[0].map(h => String(h).trim());
-      const colIdx = (name) => headers.indexOf(name);
-      let oldCarried = 0, oldInstallShot = 0, oldMachine = "";
-      let oldCarriedDays = 0, oldInstallDateStr = "";
-      for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][colIdx("Install_ID")]).trim() === d.Install_ID) {
-          oldCarried = parseInt(rows[i][colIdx("Carried_Shots")]) || 0;
-          oldInstallShot = parseInt(rows[i][colIdx("Install_Shot")]) || 0;
-          oldMachine = String(rows[i][colIdx("Machine")] || "").trim();
-          const cdIdx = colIdx("Carried_Days");
-          oldCarriedDays = (cdIdx !== -1) ? (parseInt(rows[i][cdIdx]) || 0) : 0;
-          const oldInstDateRaw = rows[i][colIdx("Install_Date")];
-          if (oldInstDateRaw instanceof Date && !isNaN(oldInstDateRaw.getTime())) {
-            oldInstallDateStr = Utilities.formatDate(oldInstDateRaw, "GMT+7", "yyyy-MM-dd");
-          } else {
-            oldInstallDateStr = String(oldInstDateRaw || "").trim().substring(0, 10);
-          }
-          sheet.getRange(i + 1, colIdx("Status") + 1).setValue("Replaced");
-          sheet.getRange(i + 1, colIdx("Replaced_Date") + 1).setValue(installDateOnly);
-          break;
-        }
+    try {
+      const reqId = String(data.requestId || "").trim();
+      const reqCache = CacheService.getScriptCache();
+      const reqKey = reqId ? "pinst_" + reqId : "";
+      if (reqKey) {
+        const prev = reqCache.get(reqKey);
+        if (prev) return ContentService.createTextOutput(prev).setMimeType(ContentService.MimeType.JSON);
       }
-      // คำนวณ Shot ที่ใช้ไปบนเครื่องเก่า (ถึงวันที่ถอดอะไหล่) แล้ว carry ไปยังรายการใหม่
-      const oldMachineShots = oldMachine ? calcMachineShots(ss, oldMachine, "2020-01-01", installDateOnly) : 0;
-      const shotsOnOld = Math.max(0, oldMachineShots - oldInstallShot);
-      const newCarried = oldCarried + shotsOnOld;
-      // คำนวณจำนวนวันที่ใช้บนเครื่องเก่า แล้ว carry ไปยังรายการใหม่
-      const daysOnOld = (oldInstallDateStr && installDateOnly)
-        ? Math.max(0, daysBetween(oldInstallDateStr, installDateOnly))
-        : 0;
-      const newCarriedDays = oldCarriedDays + daysOnOld;
+      const instOut = (function() {
+        let sheet = ss.getSheetByName("Parts_Installation");
+        if (!sheet) {
+          sheet = ss.insertSheet("Parts_Installation");
+          sheet.appendRow(["Install_ID", "Machine", "Part_ID", "Part_Name", "Install_Date", "Install_Shot", "Life_Shots", "Status", "Maint_Job_ID", "Recorder", "Replaced_Date", "Carried_Shots", "Carried_Days", "Check_Interval_Shots", "Next_Check_Shot", "Last_Check_Date", "Check_Count"]);
+        }
+        // ตรวจสอบว่ามีคอลัมน์ที่จำเป็นหรือยัง (backward compat)
+        ensureColumns(sheet, ["Carried_Shots", "Carried_Days", "Check_Interval_Shots", "Next_Check_Shot", "Last_Check_Date", "Check_Count"]);
 
-      const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
-      // คำนวณ Install_Shot ของเครื่องใหม่ ณ วันที่ติดตั้ง (shot สะสมถึงวันนั้น)
-      const newInstallShot = calcMachineShots(ss, d.Machine, "2020-01-01", installDateOnly);
-      // Next_Check_Shot = shot สะสมตัวอะไหล่ ณ ปัจจุบัน + interval
-      const newNextCheckShot = (checkInterval > 0) ? (newCarried + checkInterval) : 0;
-      // appendRow ตาม header order (re-read headers เผื่อเพิ่ม columns ใหม่)
-      const newHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
-      const rowData = newHeaders.map(function(h) {
-        switch(h) {
-          case "Install_ID": return newId;
-          case "Machine": return d.Machine;
-          case "Part_ID": return d.Part_ID;
-          case "Part_Name": return d.Part_Name || "";
-          case "Install_Date": return installDateFull;
-          case "Install_Shot": return newInstallShot;
-          case "Life_Shots": return parseInt(d.Life_Shots) || 0;
-          case "Status": return "Active";
-          case "Maint_Job_ID": return d.Maint_Job_ID || "";
-          case "Recorder": return d.Recorder || "";
-          case "Replaced_Date": return "";
-          case "Carried_Shots": return newCarried;
-          case "Carried_Days": return newCarriedDays;
-          case "Check_Interval_Shots": return checkInterval;
-          case "Next_Check_Shot": return newNextCheckShot;
-          case "Last_Check_Date": return "";
-          case "Check_Count": return 0;
-          default: return "";
+        const d = data.installation;
+        const now = new Date();
+
+        // หา Check_Interval_Shots default: frontend → Parts_Master → 0
+        let checkInterval = parseInt(d.Check_Interval_Shots);
+        if (!checkInterval || checkInterval < 0) {
+          checkInterval = lookupPartsMasterCheckInterval(ss, d.Part_ID);
         }
-      });
-      sheet.appendRow(rowData);
-      SpreadsheetApp.flush();
-      logUserAction(d.Recorder || "System", "User", "REPLACE_PARTS_INSTALLATION", "เปลี่ยน/ย้ายอะไหล่ " + (d.Part_Name || d.Part_ID) + " (" + d.Install_ID + ") จาก " + oldMachine + " ไป " + d.Machine);
-      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId, carriedShots: newCarried, carriedDays: newCarriedDays, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot})).setMimeType(ContentService.MimeType.JSON);
-    } else {
-      // ติดตั้งอะไหล่ใหม่ — ยกยอด Shot/Day สะสมจาก Removed record ล่าสุดของ Part_ID เดียวกัน (ถ้ามี)
-      let carryShots = 0;
-      let carryDays = 0;
-      const existRows = sheet.getDataRange().getValues();
-      const existHdr = existRows[0].map(function(h) { return String(h).trim(); });
-      const exPidIdx = existHdr.indexOf("Part_ID");
-      const exStatusIdx = existHdr.indexOf("Status");
-      const exCarriedIdx = existHdr.indexOf("Carried_Shots");
-      const exCarriedDIdx = existHdr.indexOf("Carried_Days");
-      const exRepDateIdx = existHdr.indexOf("Replaced_Date");
-      let consumedRowNum = -1; // แถว (1-based) ของ Removed record ที่ยกยอดมา → จะ mark เป็น Archived กันยกซ้ำ
-      // กันติดตั้งซ้ำ: อะไหล่ตัวเดียวกันมีรายการ Active บนเครื่องเดียวกันอยู่แล้ว → ไม่สร้างแถวใหม่
-      // (เคยเกิดจากกด "ติดตั้ง" ซ้ำ ทำให้ Actual Shot ถูกนับ 2 เท่า)
-      const exMacIdx = existHdr.indexOf("Machine");
-      const exIdIdx = existHdr.indexOf("Install_ID");
-      if (exPidIdx !== -1 && exStatusIdx !== -1 && exMacIdx !== -1) {
-        for (let i = 1; i < existRows.length; i++) {
-          if (String(existRows[i][exPidIdx] || "").trim() === String(d.Part_ID || "").trim() &&
-              String(existRows[i][exStatusIdx] || "").trim() === "Active" &&
-              String(existRows[i][exMacIdx] || "").trim() === String(d.Machine || "").trim()) {
-            const dupId = exIdIdx !== -1 ? String(existRows[i][exIdIdx] || "") : "";
-            return ContentService.createTextOutput(JSON.stringify({status: "error", code: "DUPLICATE_ACTIVE", installId: dupId,
-              message: "อะไหล่ " + d.Part_ID + " ติดตั้งอยู่ที่ " + d.Machine + " แล้ว (" + dupId + ") — ถ้าจะเปลี่ยน/ย้าย ให้กดที่ป้ายชื่อเครื่อง หรือถอดออกก่อน"})).setMimeType(ContentService.MimeType.JSON);
-          }
+
+        // รับ Install_Date จาก frontend ได้ (format: "yyyy-MM-dd" หรือ "yyyy-MM-dd HH:mm")
+        // ถ้าไม่ส่งมาให้ใช้เวลาปัจจุบัน
+        let installDateFull = String(d.Install_Date || "").trim();
+        if (!installDateFull) {
+          installDateFull = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm");
         }
-      }
-      if (exPidIdx !== -1 && exStatusIdx !== -1) {
-        let latestRemovedDate = "";
-        for (let i = 1; i < existRows.length; i++) {
-          if (String(existRows[i][exPidIdx] || "").trim() === d.Part_ID &&
-              String(existRows[i][exStatusIdx] || "").trim() === "Removed") {
-            var rdRaw = exRepDateIdx !== -1 ? existRows[i][exRepDateIdx] : "";
-            var rd = (rdRaw instanceof Date && !isNaN(rdRaw.getTime()))
-              ? Utilities.formatDate(rdRaw, "GMT+7", "yyyy-MM-dd")
-              : String(rdRaw || "").trim().substring(0, 10);
-            if (!latestRemovedDate || rd >= latestRemovedDate) {
-              latestRemovedDate = rd;
-              carryShots = exCarriedIdx !== -1 ? (parseInt(existRows[i][exCarriedIdx]) || 0) : 0;
-              carryDays = exCarriedDIdx !== -1 ? (parseInt(existRows[i][exCarriedDIdx]) || 0) : 0;
-              consumedRowNum = i + 1;
+        const installDateOnly = installDateFull.substring(0, 10); // "yyyy-MM-dd"
+
+        if (data.mode === "replace" && d.Install_ID) {
+          // เปลี่ยน/ย้ายอะไหล่: ปิดตัวเก่า + คำนวณ carry-over + สร้างตัวใหม่
+          const rows = sheet.getDataRange().getValues();
+          const headers = rows[0].map(h => String(h).trim());
+          const colIdx = (name) => headers.indexOf(name);
+          let oldCarried = 0, oldInstallShot = 0, oldMachine = "";
+          let oldCarriedDays = 0, oldInstallDateStr = "";
+          // ตรวจก่อนเขียน: (1) รายการเดิมต้องยัง Active (ถ้าถูกเปลี่ยน/ถอดไปแล้ว = คำขอซ้ำ หรือหน้าจอยังไม่รีเฟรช)
+          //               (2) อะไหล่ตัวนี้ต้องไม่ Active อยู่บนเครื่องปลายทางในแถวอื่นแล้ว
+          let oldStatus = null;
+          for (let i = 1; i < rows.length; i++) {
+            const rid = String(rows[i][colIdx("Install_ID")]).trim();
+            const rStatus = String(rows[i][colIdx("Status")] || "").trim();
+            if (rid === d.Install_ID) { oldStatus = rStatus; continue; }
+            if (rStatus === "Active" &&
+                String(rows[i][colIdx("Part_ID")] || "").trim() === String(d.Part_ID || "").trim() &&
+                String(rows[i][colIdx("Machine")] || "").trim() === String(d.Machine || "").trim()) {
+              return jsonOut_({status: "error", code: "DUPLICATE_ACTIVE", installId: rid,
+                message: "อะไหล่ " + d.Part_ID + " ติดตั้งอยู่ที่ " + d.Machine + " แล้ว (" + rid + ") — กรุณาโหลดหน้าใหม่ก่อนทำรายการ"});
             }
           }
+          if (oldStatus === null) {
+            return jsonOut_({status: "error", code: "NOT_FOUND", message: "ไม่พบรายการติดตั้ง " + d.Install_ID + " — กรุณาโหลดหน้าใหม่"});
+          }
+          if (oldStatus !== "Active") {
+            return jsonOut_({status: "error", code: "ALREADY_CHANGED", message: "รายการ " + d.Install_ID + " ถูกเปลี่ยน/ถอดไปแล้ว (สถานะ: " + oldStatus + ") — ระบบไม่บันทึกซ้ำ กรุณาโหลดหน้าใหม่"});
+          }
+          for (let i = 1; i < rows.length; i++) {
+            if (String(rows[i][colIdx("Install_ID")]).trim() === d.Install_ID) {
+              oldCarried = parseInt(rows[i][colIdx("Carried_Shots")]) || 0;
+              oldInstallShot = parseInt(rows[i][colIdx("Install_Shot")]) || 0;
+              oldMachine = String(rows[i][colIdx("Machine")] || "").trim();
+              const cdIdx = colIdx("Carried_Days");
+              oldCarriedDays = (cdIdx !== -1) ? (parseInt(rows[i][cdIdx]) || 0) : 0;
+              const oldInstDateRaw = rows[i][colIdx("Install_Date")];
+              if (oldInstDateRaw instanceof Date && !isNaN(oldInstDateRaw.getTime())) {
+                oldInstallDateStr = Utilities.formatDate(oldInstDateRaw, "GMT+7", "yyyy-MM-dd");
+              } else {
+                oldInstallDateStr = String(oldInstDateRaw || "").trim().substring(0, 10);
+              }
+              sheet.getRange(i + 1, colIdx("Status") + 1).setValue("Replaced");
+              sheet.getRange(i + 1, colIdx("Replaced_Date") + 1).setValue(installDateOnly);
+              break;
+            }
+          }
+          // คำนวณ Shot ที่ใช้ไปบนเครื่องเก่า (ถึงวันที่ถอดอะไหล่) แล้ว carry ไปยังรายการใหม่
+          const oldMachineShots = oldMachine ? calcMachineShots(ss, oldMachine, "2020-01-01", installDateOnly) : 0;
+          const shotsOnOld = Math.max(0, oldMachineShots - oldInstallShot);
+          const newCarried = oldCarried + shotsOnOld;
+          // คำนวณจำนวนวันที่ใช้บนเครื่องเก่า แล้ว carry ไปยังรายการใหม่
+          const daysOnOld = (oldInstallDateStr && installDateOnly)
+            ? Math.max(0, daysBetween(oldInstallDateStr, installDateOnly))
+            : 0;
+          const newCarriedDays = oldCarriedDays + daysOnOld;
+
+          const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
+          // คำนวณ Install_Shot ของเครื่องใหม่ ณ วันที่ติดตั้ง (shot สะสมถึงวันนั้น)
+          const newInstallShot = calcMachineShots(ss, d.Machine, "2020-01-01", installDateOnly);
+          // Next_Check_Shot = shot สะสมตัวอะไหล่ ณ ปัจจุบัน + interval
+          const newNextCheckShot = (checkInterval > 0) ? (newCarried + checkInterval) : 0;
+          // appendRow ตาม header order (re-read headers เผื่อเพิ่ม columns ใหม่)
+          const newHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+          const rowData = newHeaders.map(function(h) {
+            switch(h) {
+              case "Install_ID": return newId;
+              case "Machine": return d.Machine;
+              case "Part_ID": return d.Part_ID;
+              case "Part_Name": return d.Part_Name || "";
+              case "Install_Date": return installDateFull;
+              case "Install_Shot": return newInstallShot;
+              case "Life_Shots": return parseInt(d.Life_Shots) || 0;
+              case "Status": return "Active";
+              case "Maint_Job_ID": return d.Maint_Job_ID || "";
+              case "Recorder": return d.Recorder || "";
+              case "Replaced_Date": return "";
+              case "Carried_Shots": return newCarried;
+              case "Carried_Days": return newCarriedDays;
+              case "Check_Interval_Shots": return checkInterval;
+              case "Next_Check_Shot": return newNextCheckShot;
+              case "Last_Check_Date": return "";
+              case "Check_Count": return 0;
+              default: return "";
+            }
+          });
+          sheet.appendRow(rowData);
+          SpreadsheetApp.flush();
+          logUserAction(d.Recorder || "System", "User", "REPLACE_PARTS_INSTALLATION", "เปลี่ยน/ย้ายอะไหล่ " + (d.Part_Name || d.Part_ID) + " (" + d.Install_ID + ") จาก " + oldMachine + " ไป " + d.Machine);
+          return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Replaced", installId: newId, carriedShots: newCarried, carriedDays: newCarriedDays, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot})).setMimeType(ContentService.MimeType.JSON);
+        } else {
+          // ติดตั้งอะไหล่ใหม่ — ยกยอด Shot/Day สะสมจาก Removed record ล่าสุดของ Part_ID เดียวกัน (ถ้ามี)
+          let carryShots = 0;
+          let carryDays = 0;
+          const existRows = sheet.getDataRange().getValues();
+          const existHdr = existRows[0].map(function(h) { return String(h).trim(); });
+          const exPidIdx = existHdr.indexOf("Part_ID");
+          const exStatusIdx = existHdr.indexOf("Status");
+          const exCarriedIdx = existHdr.indexOf("Carried_Shots");
+          const exCarriedDIdx = existHdr.indexOf("Carried_Days");
+          const exRepDateIdx = existHdr.indexOf("Replaced_Date");
+          let consumedRowNum = -1; // แถว (1-based) ของ Removed record ที่ยกยอดมา → จะ mark เป็น Archived กันยกซ้ำ
+          // กันติดตั้งซ้ำ: อะไหล่ตัวเดียวกันมีรายการ Active บนเครื่องเดียวกันอยู่แล้ว → ไม่สร้างแถวใหม่
+          // (เคยเกิดจากกด "ติดตั้ง" ซ้ำ ทำให้ Actual Shot ถูกนับ 2 เท่า)
+          const exMacIdx = existHdr.indexOf("Machine");
+          const exIdIdx = existHdr.indexOf("Install_ID");
+          if (exPidIdx !== -1 && exStatusIdx !== -1 && exMacIdx !== -1) {
+            for (let i = 1; i < existRows.length; i++) {
+              if (String(existRows[i][exPidIdx] || "").trim() === String(d.Part_ID || "").trim() &&
+                  String(existRows[i][exStatusIdx] || "").trim() === "Active" &&
+                  String(existRows[i][exMacIdx] || "").trim() === String(d.Machine || "").trim()) {
+                const dupId = exIdIdx !== -1 ? String(existRows[i][exIdIdx] || "") : "";
+                return ContentService.createTextOutput(JSON.stringify({status: "error", code: "DUPLICATE_ACTIVE", installId: dupId,
+                  message: "อะไหล่ " + d.Part_ID + " ติดตั้งอยู่ที่ " + d.Machine + " แล้ว (" + dupId + ") — ถ้าจะเปลี่ยน/ย้าย ให้กดที่ป้ายชื่อเครื่อง หรือถอดออกก่อน"})).setMimeType(ContentService.MimeType.JSON);
+              }
+            }
+          }
+          if (exPidIdx !== -1 && exStatusIdx !== -1) {
+            let latestRemovedDate = "";
+            for (let i = 1; i < existRows.length; i++) {
+              if (String(existRows[i][exPidIdx] || "").trim() === d.Part_ID &&
+                  String(existRows[i][exStatusIdx] || "").trim() === "Removed") {
+                var rdRaw = exRepDateIdx !== -1 ? existRows[i][exRepDateIdx] : "";
+                var rd = (rdRaw instanceof Date && !isNaN(rdRaw.getTime()))
+                  ? Utilities.formatDate(rdRaw, "GMT+7", "yyyy-MM-dd")
+                  : String(rdRaw || "").trim().substring(0, 10);
+                if (!latestRemovedDate || rd >= latestRemovedDate) {
+                  latestRemovedDate = rd;
+                  carryShots = exCarriedIdx !== -1 ? (parseInt(existRows[i][exCarriedIdx]) || 0) : 0;
+                  carryDays = exCarriedDIdx !== -1 ? (parseInt(existRows[i][exCarriedDIdx]) || 0) : 0;
+                  consumedRowNum = i + 1;
+                }
+              }
+            }
+          }
+          const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
+          const hdr = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+          const newInstallShot = calcMachineShots(ss, d.Machine, "2020-01-01", installDateOnly);
+          const newNextCheckShot = (checkInterval > 0) ? (carryShots + checkInterval) : 0;
+          const rowData = hdr.map(function(h) {
+            switch(h) {
+              case "Install_ID": return newId;
+              case "Machine": return d.Machine;
+              case "Part_ID": return d.Part_ID;
+              case "Part_Name": return d.Part_Name || "";
+              case "Install_Date": return installDateFull;
+              case "Install_Shot": return newInstallShot;
+              case "Life_Shots": return parseInt(d.Life_Shots) || 0;
+              case "Status": return "Active";
+              case "Maint_Job_ID": return d.Maint_Job_ID || "";
+              case "Recorder": return d.Recorder || "";
+              case "Replaced_Date": return "";
+              case "Carried_Shots": return carryShots;
+              case "Carried_Days": return carryDays;
+              case "Check_Interval_Shots": return checkInterval;
+              case "Next_Check_Shot": return newNextCheckShot;
+              case "Last_Check_Date": return "";
+              case "Check_Count": return 0;
+              default: return "";
+            }
+          });
+          sheet.appendRow(rowData);
+          // mark Removed record ที่ยกยอดมาแล้วเป็น "Archived" กันการยกยอดซ้ำเมื่อติดตั้ง Part_ID เดิมอีกครั้ง
+          if (consumedRowNum > 0 && carryShots > 0 && exStatusIdx !== -1) {
+            sheet.getRange(consumedRowNum, exStatusIdx + 1).setValue("Archived");
+          }
+          SpreadsheetApp.flush();
+          logUserAction(d.Recorder || "System", "User", "INSTALL_PARTS", "ติดตั้งอะไหล่ " + (d.Part_Name || d.Part_ID) + " กับเครื่อง " + d.Machine + (carryShots > 0 ? " (ยกยอด " + carryShots + " shot)" : ""));
+          return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Installed", installId: newId, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot, carriedShots: carryShots, carriedDays: carryDays})).setMimeType(ContentService.MimeType.JSON);
         }
+      })();
+      if (reqKey && instOut) {
+        try {
+          const txt = instOut.getContent();
+          if (JSON.parse(txt).status === "success") reqCache.put(reqKey, txt, 21600); // จำไว้ 6 ชม.
+        } catch (cacheErr) { /* ignore */ }
       }
-      const newId = "INS-" + Utilities.formatDate(now, "GMT+7", "yyMMdd") + "-" + Math.random().toString(36).substr(2, 4).toUpperCase();
-      const hdr = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
-      const newInstallShot = calcMachineShots(ss, d.Machine, "2020-01-01", installDateOnly);
-      const newNextCheckShot = (checkInterval > 0) ? (carryShots + checkInterval) : 0;
-      const rowData = hdr.map(function(h) {
-        switch(h) {
-          case "Install_ID": return newId;
-          case "Machine": return d.Machine;
-          case "Part_ID": return d.Part_ID;
-          case "Part_Name": return d.Part_Name || "";
-          case "Install_Date": return installDateFull;
-          case "Install_Shot": return newInstallShot;
-          case "Life_Shots": return parseInt(d.Life_Shots) || 0;
-          case "Status": return "Active";
-          case "Maint_Job_ID": return d.Maint_Job_ID || "";
-          case "Recorder": return d.Recorder || "";
-          case "Replaced_Date": return "";
-          case "Carried_Shots": return carryShots;
-          case "Carried_Days": return carryDays;
-          case "Check_Interval_Shots": return checkInterval;
-          case "Next_Check_Shot": return newNextCheckShot;
-          case "Last_Check_Date": return "";
-          case "Check_Count": return 0;
-          default: return "";
-        }
-      });
-      sheet.appendRow(rowData);
-      // mark Removed record ที่ยกยอดมาแล้วเป็น "Archived" กันการยกยอดซ้ำเมื่อติดตั้ง Part_ID เดิมอีกครั้ง
-      if (consumedRowNum > 0 && carryShots > 0 && exStatusIdx !== -1) {
-        sheet.getRange(consumedRowNum, exStatusIdx + 1).setValue("Archived");
-      }
-      SpreadsheetApp.flush();
-      logUserAction(d.Recorder || "System", "User", "INSTALL_PARTS", "ติดตั้งอะไหล่ " + (d.Part_Name || d.Part_ID) + " กับเครื่อง " + d.Machine + (carryShots > 0 ? " (ยกยอด " + carryShots + " shot)" : ""));
-      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Installed", installId: newId, installShot: newInstallShot, checkInterval: checkInterval, nextCheckShot: newNextCheckShot, carriedShots: carryShots, carriedDays: carryDays})).setMimeType(ContentService.MimeType.JSON);
+      return instOut;
+    } finally {
+      instLock.releaseLock();
     }
   }
 

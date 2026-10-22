@@ -57,6 +57,7 @@
 - **Parts_Installation sheet**: Install_ID, Machine, Part_ID, Part_Name, Install_Date, Install_Shot, Life_Shots, Status (Active/Replaced), Maint_Job_ID, Recorder, Replaced_Date
 - **Shot Counter**: cumulative FG+NG per machine since install date → % life used → color status (green/yellow/red)
 - Backend actions: GET_PARTS_MASTER, SAVE_PARTS_MASTER, DELETE_PARTS_MASTER, GET_PARTS_INSTALLATION, SAVE_PARTS_INSTALLATION, UPDATE_PARTS_LIFE, GET_MACHINE_SHOTS
+- **กันติดตั้งซ้ำ** (`SAVE_PARTS_INSTALLATION`): LockService + `requestId` (CacheService 6 ชม. — ส่งซ้ำได้ผลเดิม) · โหมด replace ต้องให้รายการเดิมยัง `Active` · ห้าม Part_ID เดียวกัน Active ซ้ำบนเครื่องเดียวกัน (code: `DUPLICATE_ACTIVE` / `ALREADY_CHANGED` / `NOT_FOUND` / `BUSY`)
 - Frontend: `js/parts.js`, menu "⚙️ จัดการอะไหล่", Machine Detail tab "⚙️ อะไหล่"
 
 ## Production Plan / Job Order System
