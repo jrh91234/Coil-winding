@@ -205,7 +205,15 @@ function renderPartsTable() {
             }).join('') + '</div>';
         }
         // Actual Shot + Actual Days รวมทุกเครื่อง
-        const totalActualShots = installations.reduce((sum, inst) => sum + inst.actualShots, 0);
+        // รายการ Active ซ้ำบนเครื่องเดียวกัน (กดติดตั้งซ้ำ) นับแค่รายการเดียว — ไม่งั้น shot ถูกบวกเป็น 2 เท่า
+        const seenMac = {};
+        const countedInstalls = [];
+        const dupInstalls = [];
+        [...installations].sort((a, b) => b.actualShots - a.actualShots).forEach(inst => {
+            if (seenMac[inst.machine]) dupInstalls.push(inst);
+            else { seenMac[inst.machine] = true; countedInstalls.push(inst); }
+        });
+        const totalActualShots = countedInstalls.reduce((sum, inst) => sum + inst.actualShots, 0);
         const maxActualDays = installations.reduce((mx, inst) => Math.max(mx, inst.actualDays || 0), 0);
         const totalEffectiveLife = installations.length === 1 ? (installations[0].effectiveLife || life) : life;
         const pctTotal = totalEffectiveLife > 0 && installations.length === 1 ? Math.min((totalActualShots / totalEffectiveLife) * 100, 100) : 0;
@@ -217,10 +225,14 @@ function renderPartsTable() {
         else if (pctTotal >= 80) shotColor = 'text-yellow-600 font-bold';
         else shotColor = 'text-gray-700';
         let checkBadge = '';
+        if (dupInstalls.length > 0) {
+            const dupIds = dupInstalls.map(i => i.installId).join(', ');
+            checkBadge += `<div class="text-[10px] text-red-600 font-bold" title="รายการซ้ำ: ${escAttr(dupIds)} — ลบแถวนี้ในชีต Parts_Installation หรือกดถอดรายการที่ซ้ำ">⚠️ ติดตั้งซ้ำ ${dupInstalls.length} รายการ (ไม่นับซ้ำ)</div>`;
+        }
         if (anyNeedsCheck) {
-            checkBadge = '<div class="text-[10px] text-orange-600 font-bold">🔍 ต้องตรวจเช็ค</div>';
+            checkBadge += '<div class="text-[10px] text-orange-600 font-bold">🔍 ต้องตรวจเช็ค</div>';
         } else if (totalCheckCount > 0) {
-            checkBadge = `<div class="text-[10px] text-green-600 font-bold">✅ ตรวจผ่าน ${totalCheckCount} ครั้ง</div>`;
+            checkBadge += `<div class="text-[10px] text-green-600 font-bold">✅ ตรวจผ่าน ${totalCheckCount} ครั้ง</div>`;
         }
         const shotHtml = installations.length > 0
             ? `<div><span class="${shotColor} font-mono">${totalActualShots.toLocaleString()}</span><div class="text-[10px] text-gray-500 font-mono">${maxActualDays.toLocaleString()} วัน</div>${checkBadge}</div>`
@@ -644,6 +656,15 @@ window.confirmInstallPart = async function() {
 
     if (!machine) { alert('กรุณาเลือกเครื่อง'); return; }
     if (!partId) { alert('ไม่พบรหัสอะไหล่'); return; }
+    // กันติดตั้งซ้ำ: อะไหล่ตัวนี้ Active อยู่บนเครื่องที่เลือกแล้ว (ป้องกัน Actual Shot ถูกนับ 2 เท่า)
+    if (!prevInstallId) {
+        const active = partLocationsCache[partId] || [];
+        if (active.some(i => i.machine === machine)) {
+            alert(`อะไหล่ ${partId} ติดตั้งอยู่ที่ ${machine} แล้ว\nถ้าจะเปลี่ยน/ย้าย ให้กดที่ป้ายชื่อเครื่องในช่อง "ติดตั้งที่" แทน`);
+            return;
+        }
+        if (active.length > 0 && !confirm(`อะไหล่ ${partId} ติดตั้งอยู่ที่ ${active.map(i => i.machine).join(', ')} แล้ว\nต้องการติดตั้งเพิ่มที่ ${machine} อีกรายการจริงหรือไม่?\n(ถ้าจะย้ายเครื่อง ให้กดที่ป้ายชื่อเครื่องแทน)`)) return;
+    }
     if (!dateVal) { alert('กรุณาเลือกวันติดตั้ง'); return; }
     if (!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(timeVal)) {
         alert('กรุณากรอกเวลาเป็นรูปแบบ 24 ชม. เช่น 14:30');

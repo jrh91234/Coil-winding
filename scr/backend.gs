@@ -2021,6 +2021,21 @@ function doPost(e) {
       const exCarriedDIdx = existHdr.indexOf("Carried_Days");
       const exRepDateIdx = existHdr.indexOf("Replaced_Date");
       let consumedRowNum = -1; // แถว (1-based) ของ Removed record ที่ยกยอดมา → จะ mark เป็น Archived กันยกซ้ำ
+      // กันติดตั้งซ้ำ: อะไหล่ตัวเดียวกันมีรายการ Active บนเครื่องเดียวกันอยู่แล้ว → ไม่สร้างแถวใหม่
+      // (เคยเกิดจากกด "ติดตั้ง" ซ้ำ ทำให้ Actual Shot ถูกนับ 2 เท่า)
+      const exMacIdx = existHdr.indexOf("Machine");
+      const exIdIdx = existHdr.indexOf("Install_ID");
+      if (exPidIdx !== -1 && exStatusIdx !== -1 && exMacIdx !== -1) {
+        for (let i = 1; i < existRows.length; i++) {
+          if (String(existRows[i][exPidIdx] || "").trim() === String(d.Part_ID || "").trim() &&
+              String(existRows[i][exStatusIdx] || "").trim() === "Active" &&
+              String(existRows[i][exMacIdx] || "").trim() === String(d.Machine || "").trim()) {
+            const dupId = exIdIdx !== -1 ? String(existRows[i][exIdIdx] || "") : "";
+            return ContentService.createTextOutput(JSON.stringify({status: "error", code: "DUPLICATE_ACTIVE", installId: dupId,
+              message: "อะไหล่ " + d.Part_ID + " ติดตั้งอยู่ที่ " + d.Machine + " แล้ว (" + dupId + ") — ถ้าจะเปลี่ยน/ย้าย ให้กดที่ป้ายชื่อเครื่อง หรือถอดออกก่อน"})).setMimeType(ContentService.MimeType.JSON);
+          }
+        }
+      }
       if (exPidIdx !== -1 && exStatusIdx !== -1) {
         let latestRemovedDate = "";
         for (let i = 1; i < existRows.length; i++) {
