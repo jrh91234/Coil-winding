@@ -278,6 +278,25 @@ window.showMachineDetail = function(machineName) {
                 }
             }
 
+            // รายการติดตั้ง/ถอดอะไหล่ (จากเมนูจัดการอะไหล่) — ไม่มีช่วงเวลาหยุดเครื่อง
+            if (log.source === 'parts') {
+                const isRemove = String(log.issueType || '').includes('ถอด');
+                maintHtml += `
+                <div class="bg-white border ${isRemove ? 'border-red-200' : 'border-teal-200'} p-3 rounded-lg shadow-sm">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="font-bold text-sm ${isRemove ? 'text-red-600' : 'text-teal-700'}">${tmEscHtml(log.issueType)}</span>
+                        <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">${tmEscHtml(log.date)}${sTime !== '-' ? ' ' + tmEscHtml(sTime) : ''}</span>
+                    </div>
+                    <p class="text-sm text-gray-700 p-2 rounded border border-gray-100 bg-gray-50">${tmEscHtml(log.remark)}</p>
+                    <div class="text-[11px] text-gray-500 mt-1 flex justify-between">
+                        <span>⚙️ จากเมนูจัดการอะไหล่${log.jobId ? ' · Job: ' + tmEscHtml(log.jobId) : ''}</span>
+                        <span>👤 ${tmEscHtml(log.recorder) || '-'}</span>
+                    </div>
+                </div>
+                `;
+                return;
+            }
+
             maintHtml += `
                 <div class="bg-white border border-gray-200 p-3 rounded-lg shadow-sm">
                     <div class="flex justify-between items-start mb-2">

@@ -5253,6 +5253,77 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
     }
   }
 
+  // --- ประวัติติดตั้ง/ถอดอะไหล่ (Parts_Installation) → แสดงในแท็บซ่อมบำรุงของแต่ละเครื่อง ---
+  // ใส่เฉพาะ machineData[mac].maintenanceLogs (ไม่ใส่ result.maintenanceLogs เพื่อไม่ให้กระทบ auto report)
+  const partInstSheet = ss.getSheetByName("Parts_Installation");
+  if (partInstSheet) {
+    const piData = partInstSheet.getDataRange().getValues();
+    if (piData.length > 1) {
+      const piHdr = piData[0].map(h => String(h).trim());
+      const piCol = (name) => piHdr.indexOf(name);
+      const splitDateTime = (raw) => {
+        if (!raw) return { date: "", time: "" };
+        if (raw instanceof Date && !isNaN(raw.getTime())) {
+          const t = Utilities.formatDate(raw, "GMT+7", "HH:mm");
+          return { date: Utilities.formatDate(raw, "GMT+7", "yyyy-MM-dd"), time: t === "00:00" ? "" : t };
+        }
+        const s = String(raw).trim();
+        const tm = s.match(/(\d{1,2}):(\d{2})/);
+        return { date: s.substring(0, 10), time: tm ? tm[1].padStart(2, "0") + ":" + tm[2] : "" };
+      };
+      const pushPartLog = (mac, logObj) => {
+        if (!result.machineData[mac]) {
+          result.machineData[mac] = {
+              fg: 0, ngTotalPcs: 0, ngTotalKg: 0,
+              ngBreakdownPcs: {}, ngBreakdownKg: {}, remarks: [],
+              hourlyFg: Array(displayLabels.length).fill(0),
+              hourlyNgPcs: Array(displayLabels.length).fill(0),
+              hourlyNgBreakdown: Array(displayLabels.length).fill(null).map(() => ({})),
+              daily: {}, maintenanceLogs: []
+          };
+        }
+        if (!result.machineData[mac].maintenanceLogs) result.machineData[mac].maintenanceLogs = [];
+        result.machineData[mac].maintenanceLogs.push(logObj);
+      };
+
+      for (let i = 1; i < piData.length; i++) {
+        const r = piData[i];
+        const mac = String(r[piCol("Machine")] || "").trim();
+        if (!mac) continue;
+        const partId = String(r[piCol("Part_ID")] || "").trim();
+        const partName = String(r[piCol("Part_Name")] || "").trim();
+        const partLabel = (partName ? partName + " " : "") + "(" + partId + ")";
+        const status = String(r[piCol("Status")] || "").trim();
+        const recorder = piCol("Recorder") !== -1 ? r[piCol("Recorder")] : "";
+        const maintJobId = piCol("Maint_Job_ID") !== -1 ? r[piCol("Maint_Job_ID")] : "";
+
+        const inst = splitDateTime(r[piCol("Install_Date")]);
+        if (inst.date && inst.date >= startDate && inst.date <= endDate) {
+          pushPartLog(mac, {
+            jobId: maintJobId, date: inst.date, machine: mac,
+            issueType: "🔧 ติดตั้งอะไหล่",
+            startTime: inst.time, endTime: inst.time,
+            remark: "ติดตั้ง " + partLabel + " ที่เครื่อง " + mac,
+            imageUrl: "", recorder: recorder, source: "parts"
+          });
+        }
+
+        if (status === "Removed" || status === "Replaced") {
+          const rem = splitDateTime(r[piCol("Replaced_Date")]);
+          if (rem.date && rem.date >= startDate && rem.date <= endDate) {
+            pushPartLog(mac, {
+              jobId: "", date: rem.date, machine: mac,
+              issueType: status === "Replaced" ? "⏏️ ถอดอะไหล่ (เปลี่ยน/ย้าย)" : "⏏️ ถอดอะไหล่",
+              startTime: rem.time, endTime: rem.time,
+              remark: "ถอด " + partLabel + " ออกจากเครื่อง " + mac,
+              imageUrl: "", recorder: "", source: "parts"
+            });
+          }
+        }
+      }
+    }
+  }
+
   // --- อ่านข้อมูลเคลม RTV ---
   const rtvSheet = ss.getSheetByName("RTV_Data");
   if (rtvSheet) {
