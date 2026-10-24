@@ -10,7 +10,7 @@
             report: 'รายงานผลการผลิตและคุณภาพ', executive: 'สำหรับผู้บริหาร', customer: 'สำหรับลูกค้า',
             period: 'ช่วงข้อมูล', filters: 'ตัวกรอง', generated: 'สร้างรายงานเมื่อ',
             summary: 'ภาพรวมผลการดำเนินงาน', target: 'เป้าหมายผลิต', fg: 'ผลิตดี (FG)',
-            ng: 'ของเสีย (NG)', achievement: 'เทียบเป้าหมาย', weightedNg: 'อัตรา NG ตามน้ำหนัก', weightedYield: 'Yield ตามน้ำหนัก',
+            ng: 'ของเสีย (NG)', weightedNg: 'อัตรา NG ตามน้ำหนัก', weightedYield: 'Yield ตามน้ำหนัก',
             production: 'แนวโน้มการผลิต', quality: 'คุณภาพและอาการ NG หลัก',
             machines: 'เครื่องจักรที่มี NG สูง', jobs: 'สถานะแผนผลิตและ Job Order',
             appendix: 'ภาคผนวก: นิยามและขอบเขตข้อมูล', fgLegend: 'FG (ชิ้น)', ngLegend: 'NG (ชิ้น)',
@@ -35,7 +35,7 @@
             report: 'Production & Quality Review', executive: 'Executive', customer: 'Customer',
             period: 'Data period', filters: 'Filters', generated: 'Generated',
             summary: 'Performance overview', target: 'Production target', fg: 'Good output (FG)',
-            ng: 'Defects (NG)', achievement: 'Target achievement', weightedNg: 'Weight-based NG rate', weightedYield: 'Weight-based yield',
+            ng: 'Defects (NG)', weightedNg: 'Weight-based NG rate', weightedYield: 'Weight-based yield',
             production: 'Production trend', quality: 'Quality & top defects',
             machines: 'Machines with highest NG', jobs: 'Production plan & Job Orders',
             appendix: 'Appendix: definitions & data scope', fgLegend: 'FG (pcs)', ngLegend: 'NG (pcs)',
@@ -330,24 +330,20 @@
 
         const fg = number(data.totalFg);
         const ng = getNgPcs(data);
-        const target = number(data.productionTarget);
         const rates = getWeightedRates(data);
-        const achievement = target > 0 ? (fg / target) * 100 : null;
-        const x = [0.82, 4.82, 8.82], w = 3.68, h = 1.48;
-        const y = [1.72, 3.42];
-        addMetricCard(slide, deck.pptx, x[0], y[0], w, h, deck.labels.target, target > 0 ? `${formatNumber(target, deck.language)} ${deck.labels.pieces}` : 'N/A', '', COLORS.blue);
-        addMetricCard(slide, deck.pptx, x[1], y[0], w, h, deck.labels.fg, `${formatNumber(fg, deck.language)} ${deck.labels.pieces}`, `${deck.labels.fgWeight}: ${formatNumber(rates.fgKg, deck.language, 2)} ${deck.labels.kg}`, COLORS.green);
-        addMetricCard(slide, deck.pptx, x[2], y[0], w, h, deck.labels.ng, `${formatNumber(ng, deck.language)} ${deck.labels.pieces}`, `${deck.labels.ngWeight}: ${formatNumber(rates.ngKg, deck.language, 2)} ${deck.labels.kg}`, COLORS.red);
-        addMetricCard(slide, deck.pptx, x[0], y[1], w, h, deck.labels.achievement, formatPercent(achievement, deck.language), '', COLORS.blue);
-        addMetricCard(slide, deck.pptx, x[1], y[1], w, h, deck.labels.weightedYield, formatPercent(rates.yieldRate, deck.language), '', COLORS.green);
-        addMetricCard(slide, deck.pptx, x[2], y[1], w, h, deck.labels.weightedNg, formatPercent(rates.ngRate, deck.language), '', COLORS.teal);
+        const x = [1.12, 6.85], w = 5.35, h = 1.48;
+        const y = [1.78, 3.52];
+        addMetricCard(slide, deck.pptx, x[0], y[0], w, h, deck.labels.fg, `${formatNumber(fg, deck.language)} ${deck.labels.pieces}`, `${deck.labels.fgWeight}: ${formatNumber(rates.fgKg, deck.language, 2)} ${deck.labels.kg}`, COLORS.green);
+        addMetricCard(slide, deck.pptx, x[1], y[0], w, h, deck.labels.ng, `${formatNumber(ng, deck.language)} ${deck.labels.pieces}`, `${deck.labels.ngWeight}: ${formatNumber(rates.ngKg, deck.language, 2)} ${deck.labels.kg}`, COLORS.red);
+        addMetricCard(slide, deck.pptx, x[0], y[1], w, h, deck.labels.weightedYield, formatPercent(rates.yieldRate, deck.language), '', COLORS.green);
+        addMetricCard(slide, deck.pptx, x[1], y[1], w, h, deck.labels.weightedNg, formatPercent(rates.ngRate, deck.language), '', COLORS.teal);
 
         addShape(slide, deck.pptx, 'roundRect', {
-            x: 0.82, y: 5.24, w: 11.69, h: 0.68,
+            x: 0.82, y: 5.44, w: 11.69, h: 0.68,
             line: { color: 'D8E7F4', width: 0.7 }, fill: { color: 'F3F8FC' }
         });
         addText(slide, rates.ngRate === null ? deck.labels.noWeight : deck.labels.formula, {
-            x: 1.04, y: 5.46, w: 11.2, h: 0.24, fontSize: 10, color: COLORS.text, bold: true, align: 'center'
+            x: 1.04, y: 5.66, w: 11.2, h: 0.24, fontSize: 10, color: COLORS.text, bold: true, align: 'center'
         });
     }
 
