@@ -812,8 +812,7 @@
         const maxValue = Math.max(1, ...top.map(row => row.value));
         top.forEach((row, index) => {
             const y = chartTop + index * rowH;
-            const clippedLabel = row.label.length > 34 ? `${row.label.slice(0, 32)}…` : row.label;
-            addText(slide, clippedLabel, { x: labelX, y, w: labelW, h: 0.28, fontSize: 8.5, color: COLORS.text });
+            addText(slide, row.label, { x: labelX, y, w: labelW, h: 0.36, fontSize: 8, color: COLORS.text, valign: 'mid', fit: 'shrink' });
             addShape(slide, deck.pptx, 'roundRect', {
                 x: barX, y: y + 0.055, w: barW, h: 0.2,
                 line: { color: 'EDF1F6', transparency: 100 }, fill: { color: 'EDF1F6' }
