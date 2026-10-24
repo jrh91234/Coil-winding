@@ -14,7 +14,7 @@
   - `auto-report.js` (1158 lines) — renderAutoReportContent (full report generation)
   - `export.js` (131 lines) — printAutoReport, exportCSV
   - `dashboard.js` (171 lines) — loadDashboard
-  - `pptx-export.js` — Executive/Customer PowerPoint generation from the latest loaded Dashboard data; monthly/quarterly production trend with weight-based NG rate axis; Customer preset omits machine and Job Order details; loads local PptxGenJS from `js/vendor/`
+  - `pptx-export.js` — Executive/Customer PowerPoint generation from the latest loaded Dashboard data; includes overall and per-model production KPIs, monthly/quarterly production and Sorting trends, quality, machine, and Job Order slides; Customer preset omits machine and Job Order details; loads local PptxGenJS from `js/vendor/`
 - `js/form.js` (907 lines) — NG input form, Setup sub-symptom selection
 - `js/globals.js` (426 lines) — Global variables (ngSymptoms, machineMapping, getShiftDateStr with 08:00 cutoff)
 - `js/auth.js` (318 lines) — Authentication (+ Super App SSO auto-login via `SUPERAPP_SSO`)
@@ -35,6 +35,8 @@
 
 ## Data Flow
 - Backend `sortResultByMachine[mac|date]` = { fgPcs, ngPcs, pendingPcs, pendingBySymptom }
+- `data.sortingTrend[]` = daily Sorting results with total FG/NG/Pending and `byModel[model] = {fgPcs, ngPcs, pendingPcs}` for presentation exports
+- `data.machineData[machine].byModel[model]` = {fg, ngPcs, ngKg} for model-specific machine NG slides
 - Frontend `data.machineData[mac].sortData[date]` = above object
 - Frontend `data.machineData[mac].daily[date]` = { fg, ngPcs, ngBreakdown: {symptom: count} }
 - `data.dynamicSymptomWeights` = { symptom: fgRate } from sort history

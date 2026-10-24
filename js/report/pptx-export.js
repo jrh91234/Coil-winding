@@ -11,12 +11,14 @@
             period: 'ช่วงข้อมูล', filters: 'ตัวกรอง', generated: 'สร้างรายงานเมื่อ',
             summary: 'ภาพรวมผลการดำเนินงาน', target: 'เป้าหมายผลิต', fg: 'ผลิตดี (FG)',
             ng: 'ของเสีย (NG)', weightedNg: 'อัตรา NG ตามน้ำหนัก', weightedYield: 'Yield ตามน้ำหนัก',
+            modelSummary: 'ภาพรวมผลการดำเนินงานแยกรุ่น', modelLabel: 'รุ่นสินค้า',
             production: 'แนวโน้มการผลิต', monthlyProduction: 'แนวโน้มการผลิตรายเดือน',
             quarterlyProduction: 'แนวโน้มการผลิตรายไตรมาส', productionAxis: 'ยอดผลิต (ชิ้น)',
             ngRateLegend: '% NG ตามน้ำหนัก', quality: 'คุณภาพและอาการ NG หลัก',
             monthlySorting: 'ผลคัดแยกรายเดือน (Sorting)', quarterlySorting: 'ผลคัดแยกรายไตรมาส (Sorting)',
             sortingAxis: 'จำนวนชิ้น', sortingFgLegend: 'Sort FG', sortingNgLegend: 'Sort NG',
             sortingPendingLegend: 'รอคัด (Pending/Rejected)',
+            modelSortingScope: 'แยกตามรุ่นสินค้า · จัดกลุ่มตามวันที่บันทึก Sorting',
             sortingScope: 'จัดกลุ่มตามวันที่บันทึก Sorting ไม่ใช้ตัวกรองกะ',
             sortingNote: 'ผลคัดรวมสถานะ Completed และ Wait QC; Pending รวม Rejected ด้วย และผลคัดที่อนุมัติแล้วอาจอยู่ในยอดผลิตด้วย',
             machines: 'เครื่องจักรที่มี NG สูง', jobs: 'สถานะแผนผลิตและ Job Order',
@@ -43,12 +45,14 @@
             period: 'Data period', filters: 'Filters', generated: 'Generated',
             summary: 'Performance overview', target: 'Production target', fg: 'Good output (FG)',
             ng: 'Defects (NG)', weightedNg: 'Weight-based NG rate', weightedYield: 'Weight-based yield',
+            modelSummary: 'Performance by product model', modelLabel: 'Product model',
             production: 'Production trend', monthlyProduction: 'Monthly production trend',
             quarterlyProduction: 'Quarterly production trend', productionAxis: 'Production (pcs)',
             ngRateLegend: 'Weight-based NG rate', quality: 'Quality & top defects',
             monthlySorting: 'Monthly sorting results', quarterlySorting: 'Quarterly sorting results',
             sortingAxis: 'Pieces', sortingFgLegend: 'Sorted FG', sortingNgLegend: 'Sorted NG',
             sortingPendingLegend: 'Pending/Rejected',
+            modelSortingScope: 'By product model · grouped by Sorting record date',
             sortingScope: 'Grouped by Sorting record date; shift filters do not apply',
             sortingNote: 'Output includes Completed and Wait QC; pending includes Rejected. Approved output may also appear in production totals.',
             machines: 'Machines with highest NG', jobs: 'Production plan & Job Orders',
@@ -152,10 +156,44 @@
         return !!(input && input.checked && !input.disabled);
     }
 
+    function getModelNames(data, section) {
+        const names = new Set();
+        const add = value => {
+            const model = String(value || '').trim();
+            if (model) names.add(model);
+        };
+        if (!section || section === 'production' || section === 'summary' || section === 'quality' || section === 'machines') {
+            Object.keys(data.productData || {}).forEach(add);
+            (data.dailyTrend || []).forEach(row => Object.keys(row && row.byModel || {}).forEach(add));
+        }
+        if (!section || section === 'sorting') {
+            (data.sortingTrend || []).forEach(row => Object.keys(row && row.byModel || {}).forEach(add));
+            (data.dailyTrend || []).forEach(row => {
+                Object.keys(row && row.sortByModel || {}).forEach(add);
+                Object.keys(row && row.pendingSortByModel || {}).forEach(add);
+            });
+        }
+        if (!section || section === 'jobOrders') {
+            (data.jobOrders || []).forEach(job => {
+                if (job && job.status !== 'Cancelled') add(job.product);
+            });
+        }
+        return [...names].sort((a, b) => a.localeCompare(b));
+    }
+
     function getSelectedSlideCount() {
-        return 2 + (isSectionSelected('production') ? 2 : 0)
-            + (isSectionSelected('sorting') ? 2 : 0)
-            + ['quality', 'machines', 'jobOrders', 'appendix'].filter(isSectionSelected).length;
+        const data = getData() || {};
+        const audience = document.getElementById('pptx-audience');
+        const customer = audience && audience.value === 'customer';
+        const modelCount = getModelNames(data, 'summary').length;
+        let count = 2 + modelCount;
+        if (isSectionSelected('production')) count += 2 + getModelNames(data, 'production').length * 2;
+        if (isSectionSelected('sorting')) count += 2 + getModelNames(data, 'sorting').length * 2;
+        if (isSectionSelected('quality')) count += getModelNames(data, 'quality').length + 1;
+        if (!customer && isSectionSelected('machines')) count += getModelNames(data, 'machines').length + 1;
+        if (!customer && isSectionSelected('jobOrders')) count += getModelNames(data, 'jobOrders').length + 1;
+        if (isSectionSelected('appendix')) count += 1;
+        return count;
     }
 
     function updateSlideCount() {
@@ -346,10 +384,31 @@
         if (detail) addText(slide, detail, { x: x + 0.25, y: y + h - 0.36, w: w - 0.45, h: 0.2, fontSize: 8.5, color: COLORS.muted });
     }
 
-    function addSummarySlide(deck, data) {
+    function getModelProductionData(data, model) {
+        const product = data.productData && data.productData[model] || {};
+        const totalFg = number(product.fg);
+        const totalNgPcs = number(product.ngTotalPcs);
+        const hasStrictWeight = typeof window.getWppStrict === 'function'
+            && typeof window.getKgFromPcs === 'function'
+            && window.getWppStrict(model) !== null;
+        const totalFgKg = hasStrictWeight ? window.getKgFromPcs(model, totalFg) : null;
+        const backendNgKg = Number(product.ngTotalKg);
+        const totalNgKg = hasStrictWeight
+            ? (Number.isFinite(backendNgKg) ? backendNgKg : window.getKgFromPcs(model, totalNgPcs))
+            : null;
+        return {
+            totalFg: totalFg,
+            totalNgPcs: totalNgPcs,
+            totalFgKg: totalFgKg,
+            totalNgKg: totalNgKg
+        };
+    }
+
+    function addSummarySlide(deck, data, model) {
         const slide = deck.pptx.addSlide();
         deck.page += 1;
-        addBase(slide, deck.pptx, deck.labels.summary, `${deck.labels.period}: ${deck.period} · ${deck.filters}`, deck);
+        const title = model ? `${deck.labels.modelSummary} · ${model}` : deck.labels.summary;
+        addBase(slide, deck.pptx, title, `${deck.labels.period}: ${deck.period} · ${deck.filters}`, deck);
 
         const fg = number(data.totalFg);
         const ng = getNgPcs(data);
@@ -381,7 +440,7 @@
         return fallback;
     }
 
-    function getTrendBuckets(data, period, language) {
+    function getTrendBuckets(data, period, language, model) {
         const getWppStrict = window.getWppStrict;
         const getKgFromPcs = window.getKgFromPcs;
         const rows = (data.dailyTrend || []).filter(row => row && row.date).map(row => {
@@ -391,22 +450,26 @@
             const models = row.byModel && typeof row.byModel === 'object' ? Object.entries(row.byModel) : [];
             if ((number(row.fg) > 0 || number(row.ng) > 0) && !models.length) weightComplete = false;
 
-            models.forEach(([model, values]) => {
+            models.forEach(([modelName, values]) => {
+                if (model && modelName !== model) return;
                 const fgPcs = number(values && values.fg);
                 const ngPcs = values && values.ng !== undefined ? number(values.ng) : number(values && values.ngPcs);
                 if (fgPcs <= 0 && ngPcs <= 0) return;
-                if (typeof getWppStrict !== 'function' || getWppStrict(model) === null) {
+                if (typeof getWppStrict !== 'function' || getWppStrict(modelName) === null) {
                     weightComplete = false;
                     return;
                 }
-                fgKg += getKgFromPcs(model, fgPcs);
-                ngKg += getKgFromPcs(model, ngPcs);
+                fgKg += getKgFromPcs(modelName, fgPcs);
+                ngKg += getKgFromPcs(modelName, ngPcs);
             });
 
+            const modelValues = model && row.byModel && row.byModel[model];
+            const fg = model ? number(modelValues && modelValues.fg) : number(row.fg);
+            const ng = model ? number(modelValues && (modelValues.ng !== undefined ? modelValues.ng : modelValues.ngPcs)) : number(row.ng);
             return {
                 date: row.date,
-                fg: number(row.fg),
-                ng: number(row.ng),
+                fg: fg,
+                ng: ng,
                 fgKg: fgKg,
                 ngKg: ngKg,
                 weightComplete: weightComplete
@@ -432,23 +495,47 @@
         });
     }
 
-    function getSortingBuckets(data, period, language) {
+    function getSortingBuckets(data, period, language, model) {
         const currentRows = Array.isArray(data.sortingTrend) && data.sortingTrend.length
             ? data.sortingTrend
             : (data.dailyTrend || []).map(row => ({
                 date: row.date,
                 fgPcs: row.sortYield && row.sortYield.fg,
                 ngPcs: row.sortYield && row.sortYield.ng,
-                pendingPcs: row.pendingSortQty
+                pendingPcs: row.pendingSortQty,
+                byModel: Object.fromEntries([...new Set([
+                    ...Object.keys(row.sortByModel || {}),
+                    ...Object.keys(row.pendingSortByModel || {})
+                ])].map(name => [name, {
+                    fgPcs: number(row.sortByModel && row.sortByModel[name] && row.sortByModel[name].fg),
+                    ngPcs: number(row.sortByModel && row.sortByModel[name] && row.sortByModel[name].ng),
+                    pendingPcs: number(row.pendingSortByModel && row.pendingSortByModel[name] && row.pendingSortByModel[name].qty)
+                }]))
             }));
-        const rows = currentRows.filter(row => row && row.date);
+        const dailyByDate = new Map((data.dailyTrend || []).map(row => [row && row.date, row]));
+        const rows = currentRows.filter(row => row && row.date).map(row => {
+            if (row.byModel) return row;
+            const daily = dailyByDate.get(row.date) || {};
+            const modelNames = new Set([
+                ...Object.keys(daily.sortByModel || {}),
+                ...Object.keys(daily.pendingSortByModel || {})
+            ]);
+            const byModel = {};
+            modelNames.forEach(name => {
+                const sorted = daily.sortByModel && daily.sortByModel[name] || {};
+                const pending = daily.pendingSortByModel && daily.pendingSortByModel[name] || {};
+                byModel[name] = { fgPcs: sorted.fg || 0, ngPcs: sorted.ng || 0, pendingPcs: pending.qty || 0 };
+            });
+            return Object.assign({}, row, { byModel: byModel });
+        });
         if (typeof window.groupRowsByPeriod !== 'function') return [];
         return window.groupRowsByPeriod(rows, period, row => row.date,
             () => ({ fgPcs: 0, ngPcs: 0, pendingPcs: 0 }),
             (bucket, row) => {
-                bucket.fgPcs += number(row.fgPcs !== undefined ? row.fgPcs : row.fg);
-                bucket.ngPcs += number(row.ngPcs !== undefined ? row.ngPcs : row.ng);
-                bucket.pendingPcs += number(row.pendingPcs !== undefined ? row.pendingPcs : row.pending);
+                const values = model && row.byModel && row.byModel[model];
+                bucket.fgPcs += model ? number(values && (values.fgPcs !== undefined ? values.fgPcs : values.fg)) : number(row.fgPcs !== undefined ? row.fgPcs : row.fg);
+                bucket.ngPcs += model ? number(values && (values.ngPcs !== undefined ? values.ngPcs : values.ng)) : number(row.ngPcs !== undefined ? row.ngPcs : row.ng);
+                bucket.pendingPcs += model ? number(values && (values.pendingPcs !== undefined ? values.pendingPcs : values.pending)) : number(row.pendingPcs !== undefined ? row.pendingPcs : row.pending);
             }
         ).map(bucket => Object.assign(bucket, {
             label: formatGroupedPeriodLabel(bucket.key, period, language, bucket.label)
@@ -463,12 +550,12 @@
         addText(slide, label, { x: x + 0.22, y, w: width || 1.25, h: 0.22, fontSize: 8.5, color: COLORS.muted });
     }
 
-    function addProductionSlide(deck, data, period) {
+    function addProductionSlide(deck, data, period, model) {
         const slide = deck.pptx.addSlide();
         deck.page += 1;
         const title = period === 'month' ? deck.labels.monthlyProduction : deck.labels.quarterlyProduction;
-        addBase(slide, deck.pptx, title, `${deck.labels.period}: ${deck.period} · ${deck.filters}`, deck);
-        const buckets = getTrendBuckets(data, period, deck.language);
+        addBase(slide, deck.pptx, model ? `${title} · ${model}` : title, `${deck.labels.period}: ${deck.period} · ${deck.filters}`, deck);
+        const buckets = getTrendBuckets(data, period, deck.language, model);
         if (!buckets.length) {
             addText(slide, deck.labels.noData, { x: 1.1, y: 3.0, w: 11.0, h: 0.6, fontSize: 18, align: 'center', color: COLORS.muted });
             return;
@@ -588,12 +675,13 @@
         });
     }
 
-    function addSortingSlide(deck, data, period) {
+    function addSortingSlide(deck, data, period, model) {
         const slide = deck.pptx.addSlide();
         deck.page += 1;
         const title = period === 'month' ? deck.labels.monthlySorting : deck.labels.quarterlySorting;
-        addBase(slide, deck.pptx, title, `${deck.labels.period}: ${deck.period} · ${deck.labels.sortingScope}`, deck);
-        const buckets = getSortingBuckets(data, period, deck.language);
+        const scope = model ? deck.labels.modelSortingScope : deck.labels.sortingScope;
+        addBase(slide, deck.pptx, model ? `${title} · ${model}` : title, `${deck.labels.period}: ${deck.period} · ${scope}`, deck);
+        const buckets = getSortingBuckets(data, period, deck.language, model);
         if (!buckets.length || !buckets.some(row => row.fgPcs + row.ngPcs + row.pendingPcs > 0)) {
             addText(slide, deck.labels.noData, { x: 1.1, y: 3.0, w: 11.0, h: 0.6, fontSize: 18, align: 'center', color: COLORS.muted });
             return;
@@ -696,18 +784,19 @@
         });
     }
 
-    function addQualitySlide(deck, data) {
+    function addQualitySlide(deck, data, model) {
         const slide = deck.pptx.addSlide();
         deck.page += 1;
-        addBase(slide, deck.pptx, deck.labels.quality, deck.labels.defectCount, deck);
+        addBase(slide, deck.pptx, model ? `${deck.labels.quality} · ${model}` : deck.labels.quality, deck.labels.defectCount, deck);
 
-        const rates = getWeightedRates(data);
+        const rates = getWeightedRates(model ? getModelProductionData(data, model) : data);
         addText(slide, deck.labels.weightedNg, { x: 0.9, y: 1.48, w: 3.3, h: 0.27, fontSize: 10, bold: true, color: COLORS.muted });
         addText(slide, formatPercent(rates.ngRate, deck.language), { x: 0.9, y: 1.82, w: 3.3, h: 0.66, fontFace: 'Tahoma', fontSize: 34, bold: true, color: COLORS.red });
         addText(slide, `${deck.labels.ngWeight}: ${formatNumber(rates.ngKg, deck.language, 2)} ${deck.labels.kg} · ${deck.labels.fgWeight}: ${formatNumber(rates.fgKg, deck.language, 2)} ${deck.labels.kg}`, { x: 0.92, y: 2.5, w: 11.3, h: 0.22, fontSize: 8.5, color: COLORS.muted });
 
-        const labels = data.ngLabels || [];
-        const values = data.ngValuesPcs || data.ngValues || [];
+        const modelDefects = model && data.productData && data.productData[model] && data.productData[model].ngBreakdownPcs;
+        const labels = model ? Object.keys(modelDefects || {}) : (data.ngLabels || []);
+        const values = model ? labels.map(label => modelDefects[label]) : (data.ngValuesPcs || data.ngValues || []);
         const rows = labels.map((label, index) => ({ label: String(label), value: number(values[index]) }))
             .filter(row => row.value > 0)
             .sort((a, b) => b.value - a.value);
@@ -738,14 +827,15 @@
         });
     }
 
-    function addMachineSlide(deck, data) {
+    function addMachineSlide(deck, data, model) {
         const slide = deck.pptx.addSlide();
         deck.page += 1;
-        addBase(slide, deck.pptx, deck.labels.machines, deck.labels.machineNg, deck);
+        addBase(slide, deck.pptx, model ? `${deck.labels.machines} · ${model}` : deck.labels.machines, deck.labels.machineNg, deck);
         const rows = Object.entries(data.machineData || {}).map(([name, item]) => ({
             name: name,
-            ng: item.ngTotalPcs !== undefined ? number(item.ngTotalPcs) : number(item.ngTotal),
-            ngKg: number(item.ngTotalKg)
+            ng: model ? number(item.byModel && item.byModel[model] && item.byModel[model].ngPcs)
+                : (item.ngTotalPcs !== undefined ? number(item.ngTotalPcs) : number(item.ngTotal)),
+            ngKg: model ? number(item.byModel && item.byModel[model] && item.byModel[model].ngKg) : number(item.ngTotalKg)
         })).filter(row => row.ng > 0).sort((a, b) => b.ng - a.ng).slice(0, 8);
         if (!rows.length) {
             addText(slide, deck.labels.noData, { x: 1.1, y: 3.0, w: 11.0, h: 0.6, fontSize: 18, align: 'center', color: COLORS.muted });
@@ -769,11 +859,11 @@
         });
     }
 
-    function addJobOrderSlide(deck, data) {
+    function addJobOrderSlide(deck, data, model) {
         const slide = deck.pptx.addSlide();
         deck.page += 1;
-        addBase(slide, deck.pptx, deck.labels.jobs, deck.labels.cumulativeNote, deck);
-        const jobs = (data.jobOrders || []).filter(job => job && job.status !== 'Cancelled').slice();
+        addBase(slide, deck.pptx, model ? `${deck.labels.jobs} · ${model}` : deck.labels.jobs, deck.labels.cumulativeNote, deck);
+        const jobs = (data.jobOrders || []).filter(job => job && job.status !== 'Cancelled' && (!model || String(job.product || '').trim() === model)).slice();
         if (!jobs.length) {
             addText(slide, deck.labels.noData, { x: 1.1, y: 3.0, w: 11.0, h: 0.6, fontSize: 18, align: 'center', color: COLORS.muted });
             return;
@@ -884,17 +974,37 @@
 
             addCover(deck);
             addSummarySlide(deck, data);
+            getModelNames(data, 'summary').forEach(model => {
+                addSummarySlide(deck, getModelProductionData(data, model), model);
+            });
             if (isSectionSelected('production')) {
                 addProductionSlide(deck, data, 'month');
                 addProductionSlide(deck, data, 'quarter');
+                getModelNames(data, 'production').forEach(model => {
+                    addProductionSlide(deck, data, 'month', model);
+                    addProductionSlide(deck, data, 'quarter', model);
+                });
             }
             if (isSectionSelected('sorting')) {
                 addSortingSlide(deck, data, 'month');
                 addSortingSlide(deck, data, 'quarter');
+                getModelNames(data, 'sorting').forEach(model => {
+                    addSortingSlide(deck, data, 'month', model);
+                    addSortingSlide(deck, data, 'quarter', model);
+                });
             }
-            if (isSectionSelected('quality')) addQualitySlide(deck, data);
-            if (audience === 'executive' && isSectionSelected('machines')) addMachineSlide(deck, data);
-            if (audience === 'executive' && isSectionSelected('jobOrders')) addJobOrderSlide(deck, data);
+            if (isSectionSelected('quality')) {
+                addQualitySlide(deck, data);
+                getModelNames(data, 'quality').forEach(model => addQualitySlide(deck, data, model));
+            }
+            if (audience === 'executive' && isSectionSelected('machines')) {
+                addMachineSlide(deck, data);
+                getModelNames(data, 'machines').forEach(model => addMachineSlide(deck, data, model));
+            }
+            if (audience === 'executive' && isSectionSelected('jobOrders')) {
+                addJobOrderSlide(deck, data);
+                getModelNames(data, 'jobOrders').forEach(model => addJobOrderSlide(deck, data, model));
+            }
             if (isSectionSelected('appendix')) addAppendixSlide(deck, data);
 
             const filePeriod = `${meta.dataStart || meta.start || 'report'}_${meta.dataEnd || meta.end || ''}`.replace(/[^0-9A-Za-z_-]+/g, '_').replace(/^_+|_+$/g, '');

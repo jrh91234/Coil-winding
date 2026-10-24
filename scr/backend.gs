@@ -5485,6 +5485,13 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
         result.machineData[machine].fg += fg;
         result.machineData[machine].ngTotalKg += ngKg;
         result.machineData[machine].ngTotalPcs += ngPcs;
+        if (!result.machineData[machine].byModel) result.machineData[machine].byModel = {};
+        if (!result.machineData[machine].byModel[product]) {
+          result.machineData[machine].byModel[product] = { fg: 0, ngPcs: 0, ngKg: 0 };
+        }
+        result.machineData[machine].byModel[product].fg += fg;
+        result.machineData[machine].byModel[product].ngPcs += ngPcs;
+        result.machineData[machine].byModel[product].ngKg += ngKg;
         
         if (hIdx !== -1) {
             result.machineData[machine].hourlyFg[hIdx] += fg;
@@ -5497,9 +5504,10 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
         result.machineData[machine].daily[rowDateStr].fg += fg;
         result.machineData[machine].daily[rowDateStr].ngPcs += ngPcs;
 
-        if (!result.productData[product]) result.productData[product] = { fg: 0, ngTotalPcs: 0, ngBreakdownPcs: {} };
+        if (!result.productData[product]) result.productData[product] = { fg: 0, ngTotalPcs: 0, ngTotalKg: 0, ngBreakdownPcs: {} };
         result.productData[product].fg += fg;
         result.productData[product].ngTotalPcs += ngPcs;
+        result.productData[product].ngTotalKg += ngKg;
 
         details.forEach(item => {
           if (item.type) {
@@ -5845,11 +5853,26 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
   result.sortingTrend = sortingDates.map(date => {
     const sorted = sortResultByDate[date] || {};
     const pending = pendingSortByDate[date] || {};
+    const modelNames = [...new Set([
+      ...Object.keys(sortByModelDate[date] || {}),
+      ...Object.keys(pendingByDateModel[date] || {})
+    ])];
+    const byModel = {};
+    modelNames.forEach(model => {
+      const modelSorted = (sortByModelDate[date] || {})[model] || {};
+      const modelPending = (pendingByDateModel[date] || {})[model] || {};
+      byModel[model] = {
+        fgPcs: modelSorted.fg || 0,
+        ngPcs: modelSorted.ng || 0,
+        pendingPcs: modelPending.qty || 0
+      };
+    });
     return {
       date: date,
       fgPcs: sorted.fgPcs || 0,
       ngPcs: sorted.ngPcs || 0,
-      pendingPcs: pending.qty || 0
+      pendingPcs: pending.qty || 0,
+      byModel: byModel
     };
   });
 
