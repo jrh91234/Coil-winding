@@ -233,7 +233,7 @@
     };
 
     function loadPptxGenJs() {
-        if (typeof window.pptxgen === 'function') return Promise.resolve(window.pptxgen);
+        if (typeof window.PptxGenJS === 'function') return Promise.resolve(window.PptxGenJS);
         if (pptxLoadPromise) return pptxLoadPromise;
 
         pptxLoadPromise = new Promise((resolve, reject) => {
@@ -241,7 +241,7 @@
             // Keep export independent of third-party CDN access on the user's network.
             script.src = 'js/vendor/pptxgen.bundle.js?v=3.12.0';
             script.onload = function () {
-                if (typeof window.pptxgen === 'function') resolve(window.pptxgen);
+                if (typeof window.PptxGenJS === 'function') resolve(window.PptxGenJS);
                 else {
                     pptxLoadPromise = null;
                     reject(new Error('PowerPoint library loaded without its browser API'));
