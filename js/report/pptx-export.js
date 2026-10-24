@@ -238,7 +238,8 @@
 
         pptxLoadPromise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
+            // Keep export independent of third-party CDN access on the user's network.
+            script.src = 'js/vendor/pptxgen.bundle.js?v=3.12.0';
             script.onload = function () {
                 if (typeof window.pptxgen === 'function') resolve(window.pptxgen);
                 else {
@@ -627,7 +628,8 @@
             alert(language === 'th' ? `สร้างไฟล์ ${fileName} เรียบร้อยแล้ว` : `Created ${fileName}`);
         } catch (error) {
             console.error('PowerPoint export failed:', error);
-            alert('สร้าง PowerPoint ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง');
+            const detail = error && error.message ? error.message : String(error || 'Unknown error');
+            alert(`สร้าง PowerPoint ไม่สำเร็จ: ${detail.slice(0, 180)}`);
         } finally {
             button.disabled = false;
             button.textContent = originalText;
