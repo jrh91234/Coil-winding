@@ -16,11 +16,12 @@
             quarterlyProduction: 'แนวโน้มการผลิตรายไตรมาส', productionAxis: 'ยอดผลิต (ชิ้น)',
             ngRateLegend: '% NG ตามน้ำหนัก', quality: 'คุณภาพและอาการ NG หลัก',
             monthlySorting: 'ผลคัดแยกรายเดือน (Sorting)', quarterlySorting: 'ผลคัดแยกรายไตรมาส (Sorting)',
-            sortingAxis: 'จำนวนชิ้น', sortingFgLegend: 'Sort FG', sortingNgLegend: 'Sort NG',
+            sortingAxis: 'งาน Sorting รวม (ชิ้น)', sortingCapacity: 'Capacity เฉลี่ย',
+            sortingCapacityUnit: 'ชิ้น/วันที่มีผลคัด', sortingFgLegend: 'Sort FG', sortingNgLegend: 'Sort NG',
             sortingPendingLegend: 'รอคัด (Pending/Rejected)',
             modelSortingScope: 'แยกตามรุ่นสินค้า · จัดกลุ่มตามวันที่บันทึก Sorting',
             sortingScope: 'จัดกลุ่มตามวันที่บันทึก Sorting ไม่ใช้ตัวกรองกะ',
-            sortingNote: 'ผลคัดรวมสถานะ Completed และ Wait QC; Pending รวม Rejected ด้วย และผลคัดที่อนุมัติแล้วอาจอยู่ในยอดผลิตด้วย',
+            sortingNote: 'แท่งรวม Sort FG + Sort NG + งานรอคัด; Capacity เฉลี่ย = FG+NG ต่อวันที่มีผลคัด · รวม Completed/Wait QC และ Pending/Rejected; ผลที่อนุมัติแล้วอาจอยู่ในยอดผลิตด้วย',
             machines: 'เครื่องจักรที่มี NG สูง', jobs: 'สถานะแผนผลิตและ Job Order',
             appendix: 'ภาคผนวก: นิยามและขอบเขตข้อมูล', fgLegend: 'FG (ชิ้น)', ngLegend: 'NG (ชิ้น)',
             pieces: 'ชิ้น', kg: 'กก.', noData: 'ไม่มีข้อมูลในหัวข้อนี้สำหรับช่วงที่เลือก',
@@ -50,11 +51,12 @@
             quarterlyProduction: 'Quarterly production trend', productionAxis: 'Production (pcs)',
             ngRateLegend: 'Weight-based NG rate', quality: 'Quality & top defects',
             monthlySorting: 'Monthly sorting results', quarterlySorting: 'Quarterly sorting results',
-            sortingAxis: 'Pieces', sortingFgLegend: 'Sorted FG', sortingNgLegend: 'Sorted NG',
+            sortingAxis: 'Total Sorting workload (pcs)', sortingCapacity: 'Avg. capacity',
+            sortingCapacityUnit: 'pcs/active sorting day', sortingFgLegend: 'Sorted FG', sortingNgLegend: 'Sorted NG',
             sortingPendingLegend: 'Pending/Rejected',
             modelSortingScope: 'By product model · grouped by Sorting record date',
             sortingScope: 'Grouped by Sorting record date; shift filters do not apply',
-            sortingNote: 'Output includes Completed and Wait QC; pending includes Rejected. Approved output may also appear in production totals.',
+            sortingNote: 'Bars combine Sorted FG + Sorted NG + pending work; average capacity is FG+NG per active sorting day · Includes Completed/Wait QC and Pending/Rejected; approved output may also appear in production totals.',
             machines: 'Machines with highest NG', jobs: 'Production plan & Job Orders',
             appendix: 'Appendix: definitions & data scope', fgLegend: 'FG (pcs)', ngLegend: 'NG (pcs)',
             pieces: 'pcs', kg: 'kg', noData: 'No data for this section in the selected period',
@@ -530,12 +532,15 @@
         });
         if (typeof window.groupRowsByPeriod !== 'function') return [];
         return window.groupRowsByPeriod(rows, period, row => row.date,
-            () => ({ fgPcs: 0, ngPcs: 0, pendingPcs: 0 }),
+            () => ({ fgPcs: 0, ngPcs: 0, pendingPcs: 0, activeDays: 0 }),
             (bucket, row) => {
                 const values = model && row.byModel && row.byModel[model];
-                bucket.fgPcs += model ? number(values && (values.fgPcs !== undefined ? values.fgPcs : values.fg)) : number(row.fgPcs !== undefined ? row.fgPcs : row.fg);
-                bucket.ngPcs += model ? number(values && (values.ngPcs !== undefined ? values.ngPcs : values.ng)) : number(row.ngPcs !== undefined ? row.ngPcs : row.ng);
+                const fgPcs = model ? number(values && (values.fgPcs !== undefined ? values.fgPcs : values.fg)) : number(row.fgPcs !== undefined ? row.fgPcs : row.fg);
+                const ngPcs = model ? number(values && (values.ngPcs !== undefined ? values.ngPcs : values.ng)) : number(row.ngPcs !== undefined ? row.ngPcs : row.ng);
                 bucket.pendingPcs += model ? number(values && (values.pendingPcs !== undefined ? values.pendingPcs : values.pending)) : number(row.pendingPcs !== undefined ? row.pendingPcs : row.pending);
+                bucket.fgPcs += fgPcs;
+                bucket.ngPcs += ngPcs;
+                if (fgPcs + ngPcs > 0) bucket.activeDays += 1;
             }
         ).map(bucket => Object.assign(bucket, {
             label: formatGroupedPeriodLabel(bucket.key, period, language, bucket.label)
@@ -687,21 +692,18 @@
             return;
         }
 
-        addText(slide, deck.labels.sortingAxis, { x: 0.78, y: 1.52, w: 2.5, h: 0.22, fontSize: 8.5, color: COLORS.muted });
+        const totalSorted = buckets.reduce((sum, row) => sum + row.fgPcs + row.ngPcs, 0);
+        const activeDays = buckets.reduce((sum, row) => sum + row.activeDays, 0);
+        const avgCapacity = activeDays > 0 ? formatNumber(totalSorted / activeDays, deck.language, 0) : 'N/A';
+        addText(slide, `${deck.labels.sortingAxis} · ${deck.labels.sortingCapacity}: ${avgCapacity} ${deck.labels.sortingCapacityUnit}`, {
+            x: 0.78, y: 1.52, w: 6.1, h: 0.22, fontSize: 8.5, color: COLORS.muted
+        });
         addLegend(slide, deck.pptx, 7.12, 1.52, COLORS.green, deck.labels.sortingFgLegend, 0.8);
         addLegend(slide, deck.pptx, 8.45, 1.52, COLORS.red, deck.labels.sortingNgLegend, 0.8);
-        addShape(slide, deck.pptx, 'line', {
-            x: 9.82, y: 1.62, w: 0.28, h: 0,
-            line: { color: COLORS.amber, width: 2.2 }
-        });
-        addShape(slide, deck.pptx, 'ellipse', {
-            x: 9.92, y: 1.57, w: 0.1, h: 0.1,
-            line: { color: COLORS.amber, width: 1 }, fill: { color: COLORS.white }
-        });
-        addText(slide, deck.labels.sortingPendingLegend, { x: 10.18, y: 1.52, w: 2.2, h: 0.22, fontSize: 8.5, color: COLORS.muted });
+        addLegend(slide, deck.pptx, 9.82, 1.52, COLORS.amber, deck.labels.sortingPendingLegend, 2.2);
 
         const chartX = 1.22, chartW = 10.78, topY = 1.96, baseY = 5.82, chartH = baseY - topY;
-        const maxValue = Math.max(1, ...buckets.map(row => Math.max(row.fgPcs + row.ngPcs, row.pendingPcs)));
+        const maxValue = Math.max(1, ...buckets.map(row => row.fgPcs + row.ngPcs + row.pendingPcs));
         const rawStep = maxValue / 5;
         const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
         const valueStep = Math.ceil(rawStep / magnitude) * magnitude;
@@ -709,8 +711,6 @@
         const slotW = chartW / buckets.length;
         const barW = Math.min(1.0, slotW * 0.48);
         const axisFontSize = buckets.length > 15 ? 6.2 : (buckets.length > 10 ? 7 : 8);
-        const points = [];
-
         for (let tick = 0; tick <= 5; tick++) {
             const y = baseY - (tick / 5) * chartH;
             addShape(slide, deck.pptx, 'line', {
@@ -727,6 +727,7 @@
             const x = slotX + ((slotW - barW) / 2);
             const fgH = (row.fgPcs / axisMaxValue) * chartH;
             const ngH = (row.ngPcs / axisMaxValue) * chartH;
+            const pendingH = (row.pendingPcs / axisMaxValue) * chartH;
             if (fgH > 0) {
                 addShape(slide, deck.pptx, 'rect', {
                     x: x, y: baseY - fgH, w: barW, h: fgH,
@@ -739,10 +740,16 @@
                     line: { color: COLORS.red, transparency: 100 }, fill: { color: COLORS.red }
                 });
             }
-            const sortedTotal = row.fgPcs + row.ngPcs;
-            if (sortedTotal > 0) {
-                addText(slide, formatNumber(sortedTotal, deck.language), {
-                    x: slotX, y: Math.max(topY + 0.04, baseY - fgH - ngH - 0.22),
+            if (pendingH > 0) {
+                addShape(slide, deck.pptx, 'rect', {
+                    x: x, y: baseY - fgH - ngH - pendingH, w: barW, h: pendingH,
+                    line: { color: COLORS.amber, transparency: 100 }, fill: { color: COLORS.amber }
+                });
+            }
+            const totalWorkload = row.fgPcs + row.ngPcs + row.pendingPcs;
+            if (totalWorkload > 0) {
+                addText(slide, formatNumber(totalWorkload, deck.language), {
+                    x: slotX, y: Math.max(topY + 0.04, baseY - fgH - ngH - pendingH - 0.22),
                     w: slotW, h: 0.17, fontSize: axisFontSize, bold: true, align: 'center', color: COLORS.text
                 });
             }
@@ -750,37 +757,10 @@
                 x: slotX, y: baseY + 0.12, w: slotW, h: 0.32,
                 fontSize: axisFontSize, align: 'center', color: COLORS.muted
             });
-            points.push({
-                x: slotX + (slotW / 2),
-                y: baseY - (Math.min(row.pendingPcs, axisMaxValue) / axisMaxValue) * chartH,
-                value: row.pendingPcs
-            });
-        });
-
-        for (let index = 0; index < points.length - 1; index++) {
-            const a = points[index], b = points[index + 1];
-            const top = Math.min(a.y, b.y);
-            addShape(slide, deck.pptx, b.y < a.y ? 'lineInv' : 'line', {
-                x: a.x, y: top, w: b.x - a.x, h: Math.max(0.002, Math.abs(b.y - a.y)),
-                line: { color: COLORS.amber, width: 2.2 }
-            });
-        }
-        points.forEach(point => {
-            addShape(slide, deck.pptx, 'ellipse', {
-                x: point.x - 0.055, y: point.y - 0.055, w: 0.11, h: 0.11,
-                line: { color: COLORS.amber, width: 1.3 }, fill: { color: COLORS.white }
-            });
-            if (point.value > 0) {
-                addText(slide, formatNumber(point.value, deck.language), {
-                    x: point.x - 0.33, y: point.y <= topY + 0.25 ? point.y + 0.09 : point.y - 0.23,
-                    w: 0.66, h: 0.16, fontSize: 7, bold: true, align: 'center', color: 'B45309',
-                    fill: { color: COLORS.white, transparency: 10 }
-                });
-            }
         });
 
         addText(slide, deck.labels.sortingNote, {
-            x: 0.95, y: 6.42, w: 11.3, h: 0.27, fontSize: 7.7, color: COLORS.muted, italic: true
+            x: 0.95, y: 6.4, w: 11.3, h: 0.3, fontSize: 7.7, color: COLORS.muted, italic: true
         });
     }
 
