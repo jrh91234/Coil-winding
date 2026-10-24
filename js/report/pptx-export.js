@@ -11,7 +11,9 @@
             period: 'ช่วงข้อมูล', filters: 'ตัวกรอง', generated: 'สร้างรายงานเมื่อ',
             summary: 'ภาพรวมผลการดำเนินงาน', target: 'เป้าหมายผลิต', fg: 'ผลิตดี (FG)',
             ng: 'ของเสีย (NG)', weightedNg: 'อัตรา NG ตามน้ำหนัก', weightedYield: 'Yield ตามน้ำหนัก',
-            production: 'แนวโน้มการผลิต', quality: 'คุณภาพและอาการ NG หลัก',
+            production: 'แนวโน้มการผลิต', monthlyProduction: 'แนวโน้มการผลิตรายเดือน',
+            quarterlyProduction: 'แนวโน้มการผลิตรายไตรมาส', productionAxis: 'ยอดผลิต (ชิ้น)',
+            ngRateLegend: '% NG ตามน้ำหนัก', quality: 'คุณภาพและอาการ NG หลัก',
             machines: 'เครื่องจักรที่มี NG สูง', jobs: 'สถานะแผนผลิตและ Job Order',
             appendix: 'ภาคผนวก: นิยามและขอบเขตข้อมูล', fgLegend: 'FG (ชิ้น)', ngLegend: 'NG (ชิ้น)',
             pieces: 'ชิ้น', kg: 'กก.', noData: 'ไม่มีข้อมูลในหัวข้อนี้สำหรับช่วงที่เลือก',
@@ -26,7 +28,7 @@
             missingWeight: 'หากไม่มีข้อมูลน้ำหนัก ระบบจะแสดง N/A และไม่แทนด้วยอัตราตามจำนวนชิ้น',
             customerNote: 'ชุดลูกค้าไม่ใส่ชื่อเครื่อง, Job Order, ต้นทุน หรือบันทึกภายใน',
             executiveNote: 'ข้อมูลอิงผลการค้นหาล่าสุดใน Dashboard',
-            periodGrouped: 'ช่วงวันที่ยาวจะแบ่งเป็นช่วงย่อยโดยรวมยอด FG และ NG',
+            periodGrouped: 'ยอดรวมแยกตามเดือนและไตรมาส · NG Rate คำนวณจากน้ำหนักรวมของแต่ละช่วง',
             slide: 'สไลด์', pageSource: 'CWM Production System',
             totalProduced: 'ผลิตรวม FG + NG', ngWeight: 'NG ตามน้ำหนัก', fgWeight: 'FG ตามน้ำหนัก',
             filterShift: 'กะ', filterType: 'ประเภทกะ', all: 'ทั้งหมด', stale: 'ช่องกรองเปลี่ยนแล้ว รายงานนี้ยังใช้ผลการค้นหาครั้งล่าสุด'
@@ -36,7 +38,9 @@
             period: 'Data period', filters: 'Filters', generated: 'Generated',
             summary: 'Performance overview', target: 'Production target', fg: 'Good output (FG)',
             ng: 'Defects (NG)', weightedNg: 'Weight-based NG rate', weightedYield: 'Weight-based yield',
-            production: 'Production trend', quality: 'Quality & top defects',
+            production: 'Production trend', monthlyProduction: 'Monthly production trend',
+            quarterlyProduction: 'Quarterly production trend', productionAxis: 'Production (pcs)',
+            ngRateLegend: 'Weight-based NG rate', quality: 'Quality & top defects',
             machines: 'Machines with highest NG', jobs: 'Production plan & Job Orders',
             appendix: 'Appendix: definitions & data scope', fgLegend: 'FG (pcs)', ngLegend: 'NG (pcs)',
             pieces: 'pcs', kg: 'kg', noData: 'No data for this section in the selected period',
@@ -51,7 +55,7 @@
             missingWeight: 'When weight data is unavailable, the rate is N/A and is not replaced with a piece-based rate',
             customerNote: 'Customer decks omit machine names, Job Orders, cost data, and internal notes',
             executiveNote: 'Data reflects the most recent Dashboard search',
-            periodGrouped: 'Long periods are grouped into intervals by summing FG and NG totals',
+            periodGrouped: 'Monthly and quarterly totals · NG rate is recalculated from each period’s total weight',
             slide: 'Slide', pageSource: 'CWM Production System',
             totalProduced: 'Total FG + NG', ngWeight: 'NG by weight', fgWeight: 'FG by weight',
             filterShift: 'Shift', filterType: 'Shift type', all: 'All', stale: 'Filters have changed; this deck still uses the most recent search result'
@@ -70,6 +74,13 @@
             minimumFractionDigits: digits || 0,
             maximumFractionDigits: digits || 0
         });
+    }
+
+    function formatAxisQuantity(value, language) {
+        const amount = number(value);
+        if (amount >= 1000000) return `${formatNumber(amount / 1000000, language, amount >= 10000000 ? 0 : 1)}M`;
+        if (amount >= 1000) return `${formatNumber(amount / 1000, language, amount >= 100000 ? 0 : 1)}k`;
+        return formatNumber(amount, language);
     }
 
     function formatPercent(value, language) {
@@ -132,7 +143,8 @@
     }
 
     function getSelectedSlideCount() {
-        return 2 + ['production', 'quality', 'machines', 'jobOrders', 'appendix'].filter(isSectionSelected).length;
+        return 2 + (isSectionSelected('production') ? 2 : 0)
+            + ['quality', 'machines', 'jobOrders', 'appendix'].filter(isSectionSelected).length;
     }
 
     function updateSlideCount() {
@@ -347,62 +359,138 @@
         });
     }
 
-    function getTrendBuckets(data) {
-        const rows = (data.dailyTrend || []).filter(row => row && row.date).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
-        if (!rows.length) return [];
-        const step = Math.max(1, Math.ceil(rows.length / 10));
-        const buckets = [];
-        for (let i = 0; i < rows.length; i += step) {
-            const batch = rows.slice(i, i + step);
-            const first = String(batch[0].date);
-            const last = String(batch[batch.length - 1].date);
-            const short = value => {
-                const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-                return match ? `${match[3]}/${match[2]}` : value.slice(0, 10);
-            };
-            buckets.push({
-                label: first === last ? short(first) : `${short(first)}–${short(last)}`,
-                fg: batch.reduce((sum, row) => sum + number(row.fg), 0),
-                ng: batch.reduce((sum, row) => sum + number(row.ng), 0)
+    function getTrendBuckets(data, period, language) {
+        const getWppStrict = window.getWppStrict;
+        const getKgFromPcs = window.getKgFromPcs;
+        const rows = (data.dailyTrend || []).filter(row => row && row.date).map(row => {
+            let fgKg = 0;
+            let ngKg = 0;
+            let weightComplete = typeof getWppStrict === 'function' && typeof getKgFromPcs === 'function';
+            const models = row.byModel && typeof row.byModel === 'object' ? Object.entries(row.byModel) : [];
+            if ((number(row.fg) > 0 || number(row.ng) > 0) && !models.length) weightComplete = false;
+
+            models.forEach(([model, values]) => {
+                const fgPcs = number(values && values.fg);
+                const ngPcs = values && values.ng !== undefined ? number(values.ng) : number(values && values.ngPcs);
+                if (fgPcs <= 0 && ngPcs <= 0) return;
+                if (typeof getWppStrict !== 'function' || getWppStrict(model) === null) {
+                    weightComplete = false;
+                    return;
+                }
+                fgKg += getKgFromPcs(model, fgPcs);
+                ngKg += getKgFromPcs(model, ngPcs);
             });
-        }
-        return buckets;
+
+            return {
+                date: row.date,
+                fg: number(row.fg),
+                ng: number(row.ng),
+                fgKg: fgKg,
+                ngKg: ngKg,
+                weightComplete: weightComplete
+            };
+        });
+
+        if (typeof window.groupRowsByPeriod !== 'function') return [];
+        return window.groupRowsByPeriod(rows, period, row => row.date,
+            () => ({ fg: 0, ng: 0, fgKg: 0, ngKg: 0, weightComplete: true }),
+            (bucket, row) => {
+                bucket.fg += row.fg;
+                bucket.ng += row.ng;
+                bucket.fgKg += row.fgKg;
+                bucket.ngKg += row.ngKg;
+                bucket.weightComplete = bucket.weightComplete && row.weightComplete;
+            }
+        ).map(bucket => {
+            let label = bucket.label;
+            if (period === 'month' && language === 'en') {
+                const match = String(bucket.key).match(/^(\d{4})-(\d{2})$/);
+                if (match) label = new Date(Number(match[1]), Number(match[2]) - 1, 1).toLocaleString('en-US', { month: 'short', year: '2-digit' });
+            } else if (period === 'quarter' && language === 'en') {
+                const match = String(bucket.key).match(/^(\d{4})-Q([1-4])$/);
+                if (match) label = `Q${match[2]} ${match[1]}`;
+            }
+            const totalKg = bucket.fgKg + bucket.ngKg;
+            return Object.assign(bucket, {
+                label: label,
+                ngRate: bucket.weightComplete && totalKg > 0 ? (bucket.ngKg / totalKg) * 100 : null
+            });
+        });
     }
 
-    function addLegend(slide, pptx, x, y, color, label) {
+    function addLegend(slide, pptx, x, y, color, label, width) {
         addShape(slide, pptx, 'rect', {
             x: x, y: y + 0.035, w: 0.14, h: 0.14,
             line: { color: color, transparency: 100 }, fill: { color: color }
         });
-        addText(slide, label, { x: x + 0.22, y, w: 1.0, h: 0.22, fontSize: 9, color: COLORS.muted });
+        addText(slide, label, { x: x + 0.22, y, w: width || 1.25, h: 0.22, fontSize: 8.5, color: COLORS.muted });
     }
 
-    function addProductionSlide(deck, data) {
+    function addProductionSlide(deck, data, period) {
         const slide = deck.pptx.addSlide();
         deck.page += 1;
-        addBase(slide, deck.pptx, deck.labels.production, deck.labels.totalProduced, deck);
-        const buckets = getTrendBuckets(data);
+        const title = period === 'month' ? deck.labels.monthlyProduction : deck.labels.quarterlyProduction;
+        addBase(slide, deck.pptx, title, `${deck.labels.period}: ${deck.period} · ${deck.filters}`, deck);
+        const buckets = getTrendBuckets(data, period, deck.language);
         if (!buckets.length) {
             addText(slide, deck.labels.noData, { x: 1.1, y: 3.0, w: 11.0, h: 0.6, fontSize: 18, align: 'center', color: COLORS.muted });
             return;
         }
 
-        addLegend(slide, deck.pptx, 9.35, 1.55, COLORS.blue, deck.labels.fgLegend);
-        addLegend(slide, deck.pptx, 10.85, 1.55, COLORS.red, deck.labels.ngLegend);
+        addText(slide, deck.labels.productionAxis, { x: 0.78, y: 1.52, w: 2.5, h: 0.22, fontSize: 8.5, color: COLORS.muted });
+        addLegend(slide, deck.pptx, 7.12, 1.52, COLORS.blue, deck.labels.fgLegend, 0.8);
+        addLegend(slide, deck.pptx, 8.45, 1.52, COLORS.red, deck.labels.ngLegend, 0.8);
+        addShape(slide, deck.pptx, 'line', {
+            x: 9.82, y: 1.62, w: 0.28, h: 0,
+            line: { color: '7C3AED', width: 2.2 }
+        });
+        addShape(slide, deck.pptx, 'ellipse', {
+            x: 9.92, y: 1.57, w: 0.1, h: 0.1,
+            line: { color: '7C3AED', width: 1 }, fill: { color: 'FFFFFF' }
+        });
+        addText(slide, deck.labels.ngRateLegend, { x: 10.18, y: 1.52, w: 2.2, h: 0.22, fontSize: 8.5, color: COLORS.muted });
 
-        const chartX = 0.95, chartW = 11.43, baseY = 5.92, maxH = 3.48;
+        const chartX = 1.22, chartW = 10.78, topY = 1.96, baseY = 5.82, chartH = baseY - topY;
         const maxValue = Math.max(1, ...buckets.map(row => row.fg + row.ng));
+        const rawStep = maxValue / 5;
+        const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+        const valueStep = Math.ceil(rawStep / magnitude) * magnitude;
+        const axisMaxValue = valueStep * 5;
+        const validRates = buckets.map(row => row.ngRate).filter(value => value !== null);
+        const maxRate = validRates.length ? Math.max(...validRates) : 0;
+        const rateMax = Math.min(100, Math.max(5, Math.ceil(maxRate / 5) * 5));
         const slotW = chartW / buckets.length;
-        const barW = Math.min(0.68, slotW * 0.56);
-        addShape(slide, deck.pptx, 'rect', {
-            x: chartX, y: baseY, w: chartW, h: 0.012,
-            line: { color: COLORS.border, transparency: 100 }, fill: { color: COLORS.border }
+        const barW = Math.min(1.0, slotW * 0.48);
+        const axisFontSize = buckets.length > 15 ? 6.2 : (buckets.length > 10 ? 7 : 8);
+        const points = [];
+
+        for (let tick = 0; tick <= 5; tick++) {
+            const ratio = tick / 5;
+            const y = baseY - ratio * chartH;
+            addShape(slide, deck.pptx, 'line', {
+                x: chartX, y: y, w: chartW, h: 0,
+                line: { color: tick === 0 ? COLORS.border : 'EDF1F6', width: tick === 0 ? 1 : 0.6 }
+            });
+            addText(slide, formatAxisQuantity(valueStep * tick, deck.language), {
+                x: 0.54, y: y - 0.1, w: 0.58, h: 0.18, fontSize: 7.5, align: 'right', color: COLORS.muted
+            });
+            addText(slide, `${formatNumber(rateMax * ratio, deck.language, 0)}%`, {
+                x: 12.1, y: y - 0.1, w: 0.62, h: 0.18, fontSize: 7.5, align: 'left', color: COLORS.muted
+            });
+        }
+        addShape(slide, deck.pptx, 'line', {
+            x: chartX, y: topY, w: 0, h: chartH,
+            line: { color: 'B8C2D0', width: 0.8 }
+        });
+        addShape(slide, deck.pptx, 'line', {
+            x: chartX + chartW, y: topY, w: 0, h: chartH,
+            line: { color: 'B8C2D0', width: 0.8 }
         });
 
         buckets.forEach((row, index) => {
             const x = chartX + (index * slotW) + ((slotW - barW) / 2);
-            const fgH = (row.fg / maxValue) * maxH;
-            const ngH = (row.ng / maxValue) * maxH;
+            const fgH = (row.fg / axisMaxValue) * chartH;
+            const ngH = (row.ng / axisMaxValue) * chartH;
             if (fgH > 0) {
                 addShape(slide, deck.pptx, 'rect', {
                     x: x, y: baseY - fgH, w: barW, h: fgH,
@@ -416,11 +504,51 @@
                 });
             }
             const total = row.fg + row.ng;
-            addText(slide, formatNumber(total, deck.language), { x: x - 0.22, y: Math.max(2.06, baseY - fgH - ngH - 0.26), w: barW + 0.44, h: 0.18, fontSize: 8, bold: true, align: 'center', color: COLORS.text });
-            addText(slide, row.label, { x: chartX + (index * slotW), y: baseY + 0.12, w: slotW, h: 0.4, fontSize: 7.5, align: 'center', color: COLORS.muted });
+            addText(slide, formatNumber(total, deck.language), {
+                x: chartX + (index * slotW), y: Math.max(topY + 0.04, baseY - fgH - ngH - 0.22),
+                w: slotW, h: 0.17, fontSize: axisFontSize, bold: true, align: 'center', color: COLORS.text
+            });
+            addText(slide, row.label, {
+                x: chartX + (index * slotW), y: baseY + 0.12, w: slotW, h: 0.32,
+                fontSize: axisFontSize, align: 'center', color: COLORS.muted
+            });
+            if (row.ngRate !== null) {
+                points.push({
+                    x: chartX + (index * slotW) + (slotW / 2),
+                    y: baseY - (Math.min(row.ngRate, rateMax) / rateMax) * chartH,
+                    rate: row.ngRate
+                });
+            } else {
+                points.push(null);
+            }
         });
 
-        addText(slide, deck.labels.periodGrouped, { x: 0.95, y: 6.55, w: 11.3, h: 0.2, fontSize: 8.5, color: COLORS.muted, italic: true });
+        for (let index = 0; index < points.length - 1; index++) {
+            const a = points[index], b = points[index + 1];
+            if (!a || !b) continue;
+            const top = Math.min(a.y, b.y);
+            const risingToRight = b.y < a.y;
+            addShape(slide, deck.pptx, risingToRight ? 'lineInv' : 'line', {
+                x: a.x, y: top, w: b.x - a.x, h: Math.max(0.002, Math.abs(b.y - a.y)),
+                line: { color: '7C3AED', width: 2.2 }
+            });
+        }
+        points.forEach(point => {
+            if (!point) return;
+            addShape(slide, deck.pptx, 'ellipse', {
+                x: point.x - 0.055, y: point.y - 0.055, w: 0.11, h: 0.11,
+                line: { color: '7C3AED', width: 1.3 }, fill: { color: COLORS.white }
+            });
+            addText(slide, formatPercent(point.rate, deck.language), {
+                x: point.x - 0.33, y: point.y <= topY + 0.25 ? point.y + 0.09 : point.y - 0.23,
+                w: 0.66, h: 0.16, fontSize: 7, bold: true, align: 'center', color: '6D28D9',
+                fill: { color: COLORS.white, transparency: 10 }
+            });
+        });
+
+        addText(slide, validRates.length ? deck.labels.periodGrouped : deck.labels.noWeight, {
+            x: 0.95, y: 6.45, w: 11.3, h: 0.22, fontSize: 8.5, color: COLORS.muted, italic: true
+        });
     }
 
     function addQualitySlide(deck, data) {
@@ -611,7 +739,10 @@
 
             addCover(deck);
             addSummarySlide(deck, data);
-            if (isSectionSelected('production')) addProductionSlide(deck, data);
+            if (isSectionSelected('production')) {
+                addProductionSlide(deck, data, 'month');
+                addProductionSlide(deck, data, 'quarter');
+            }
             if (isSectionSelected('quality')) addQualitySlide(deck, data);
             if (audience === 'executive' && isSectionSelected('machines')) addMachineSlide(deck, data);
             if (audience === 'executive' && isSectionSelected('jobOrders')) addJobOrderSlide(deck, data);
