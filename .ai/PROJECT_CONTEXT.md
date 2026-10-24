@@ -14,6 +14,7 @@
   - `auto-report.js` (1158 lines) — renderAutoReportContent (full report generation)
   - `export.js` (131 lines) — printAutoReport, exportCSV
   - `dashboard.js` (171 lines) — loadDashboard
+  - `pptx-export.js` — Executive/Customer PowerPoint generation from the latest loaded Dashboard data; Customer preset omits machine and Job Order details
 - `js/form.js` (907 lines) — NG input form, Setup sub-symptom selection
 - `js/globals.js` (426 lines) — Global variables (ngSymptoms, machineMapping, getShiftDateStr with 08:00 cutoff)
 - `js/auth.js` (318 lines) — Authentication (+ Super App SSO auto-login via `SUPERAPP_SSO`)
@@ -112,6 +113,7 @@
 - **Modify NG Rate Trend**: Edit `js/charts/main.js` (search `qcTrend`)
 - **Modify NG Symptom Trend**: Edit `js/charts/ng-trend.js`
 - **Modify audit export**: Edit `js/charts/audit.js`
+- **Modify PowerPoint export**: Edit `js/report/pptx-export.js` and its modal in `index.html`
 - **Modify popup/breakdown**: Edit `js/charts/popups.js`
 - **Modify data collection**: Edit `scr/backend.gs`
 - **Modify NG form**: Edit `js/form.js`

@@ -372,6 +372,9 @@
                     <button onclick="window.exportCSV()" class="flex-1 lg:flex-none bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-green-700 transition-colors shadow-sm flex items-center justify-center gap-1">
                         📗 ดาวน์โหลด Excel
                     </button>
+                    <button onclick="window.openPptxExportModal()" class="flex-1 lg:flex-none bg-rose-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-rose-700 transition-colors shadow-sm flex items-center justify-center gap-1">
+                        📊 สร้าง PowerPoint
+                    </button>
                     <button onclick="window.openSortingTimestampQuery()" class="flex-1 lg:flex-none bg-pink-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-pink-700 transition-colors shadow-sm flex items-center justify-center gap-1">
                         📦 ดึงตาม Timestamp
                     </button>
@@ -892,6 +895,76 @@
             </div>
         </div>
         <div class="p-6 md:p-10 max-w-[210mm] mx-auto w-full bg-white my-6 shadow-2xl rounded-sm" id="auto-report-content" style="min-height: 297mm;"></div>
+    </div>
+
+    <div id="modal-pptx-export" class="fixed inset-0 bg-black bg-opacity-60 z-[80] hidden items-center justify-center p-4 print-hide" role="dialog" aria-modal="true" aria-labelledby="pptx-export-title">
+        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div class="bg-slate-900 text-white px-5 py-4 flex justify-between items-center">
+                <div>
+                    <h2 id="pptx-export-title" class="text-lg font-black">📊 สร้าง PowerPoint สำหรับนำเสนอ</h2>
+                    <p class="text-xs text-slate-300 mt-1">เลือกผู้ชม ภาษา และหัวข้อจากข้อมูลที่ค้นหาบน Dashboard ล่าสุด</p>
+                </div>
+                <button type="button" onclick="window.closePptxExportModal()" class="text-slate-300 hover:text-white text-3xl leading-none" aria-label="ปิด">&times;</button>
+            </div>
+            <div class="p-5 overflow-y-auto space-y-5">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="pptx-audience" class="block text-sm font-bold text-gray-700 mb-1">รูปแบบนำเสนอ</label>
+                        <select id="pptx-audience" onchange="window.applyPptxPreset()" class="w-full p-2.5 border border-gray-300 rounded-lg bg-white">
+                            <option value="executive">ผู้บริหาร (Executive)</option>
+                            <option value="customer">ลูกค้า (Customer)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="pptx-language" class="block text-sm font-bold text-gray-700 mb-1">ภาษาในสไลด์</label>
+                        <select id="pptx-language" class="w-full p-2.5 border border-gray-300 rounded-lg bg-white">
+                            <option value="th">ไทย</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="pptx-data-range" class="rounded-lg bg-indigo-50 border border-indigo-100 p-3 text-sm text-indigo-900"></div>
+                <div id="pptx-stale-notice" class="hidden rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900"></div>
+
+                <div>
+                    <h3 class="text-sm font-black text-gray-800 mb-2">หัวข้อในสไลด์</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label class="flex items-start gap-2 rounded-lg border p-3 bg-gray-50">
+                            <input type="checkbox" checked disabled class="mt-1 accent-indigo-600">
+                            <span><b class="block text-sm">ภาพรวม KPI</b><small class="text-gray-500">ยอดผลิต, NG, ผลเทียบเป้า และอัตราคุณภาพ</small></span>
+                        </label>
+                        <label class="flex items-start gap-2 rounded-lg border p-3 hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" data-pptx-section="production" checked class="mt-1 accent-indigo-600">
+                            <span><b class="block text-sm">แนวโน้มการผลิต</b><small class="text-gray-500">FG และ NG ตามช่วงข้อมูล</small></span>
+                        </label>
+                        <label class="flex items-start gap-2 rounded-lg border p-3 hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" data-pptx-section="quality" checked class="mt-1 accent-indigo-600">
+                            <span><b class="block text-sm">คุณภาพและ Pareto</b><small class="text-gray-500">อาการ NG หลักในช่วงที่เลือก</small></span>
+                        </label>
+                        <label class="flex items-start gap-2 rounded-lg border p-3 hover:bg-gray-50 cursor-pointer" data-pptx-internal-option>
+                            <input type="checkbox" data-pptx-section="machines" checked class="mt-1 accent-indigo-600">
+                            <span><b class="block text-sm">เครื่องที่มี NG สูง</b><small class="text-gray-500">รายละเอียดภายในองค์กร</small></span>
+                        </label>
+                        <label class="flex items-start gap-2 rounded-lg border p-3 hover:bg-gray-50 cursor-pointer" data-pptx-internal-option>
+                            <input type="checkbox" data-pptx-section="jobOrders" checked class="mt-1 accent-indigo-600">
+                            <span><b class="block text-sm">แผนผลิตและ Job Order</b><small class="text-gray-500">สถานะสะสมของใบงาน</small></span>
+                        </label>
+                        <label class="flex items-start gap-2 rounded-lg border p-3 hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" data-pptx-section="appendix" checked class="mt-1 accent-indigo-600">
+                            <span><b class="block text-sm">ภาคผนวกและนิยาม KPI</b><small class="text-gray-500">สูตรและเงื่อนไขที่ใช้กับข้อมูล</small></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="pptx-audience-note" class="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-900"></div>
+                <p id="pptx-slide-count" class="text-xs text-gray-500"></p>
+            </div>
+            <div class="p-4 border-t bg-gray-50 flex justify-end gap-2">
+                <button type="button" onclick="window.closePptxExportModal()" class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-bold hover:bg-gray-100">ยกเลิก</button>
+                <button type="button" id="btn-generate-pptx" onclick="window.generatePptxPresentation()" class="px-5 py-2 rounded-lg bg-rose-600 text-white font-bold shadow hover:bg-rose-700 disabled:opacity-60 disabled:cursor-wait">ดาวน์โหลด .pptx</button>
+            </div>
+        </div>
     </div>
 
     <!-- Modals -->
@@ -1766,6 +1839,7 @@
     <script src="js/report/auto-report.js?v=4.6"></script>
     <script src="js/report/export.js?v=4.1"></script>
     <script src="js/report/dashboard.js?v=4.2"></script>
+    <script src="js/report/pptx-export.js?v=1.0"></script>
     <script src="js/charts/helpers.js?v=4.1"></script>
     <script src="js/charts/draw-tool.js?v=4.0"></script>
     <script src="js/charts/models.js?v=4.2"></script>
