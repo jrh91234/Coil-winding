@@ -16,12 +16,11 @@
             quarterlyProduction: 'แนวโน้มการผลิตรายไตรมาส', productionAxis: 'ยอดผลิต (ชิ้น)',
             ngRateLegend: '% NG ตามน้ำหนัก', quality: 'คุณภาพและอาการ NG หลัก',
             monthlySorting: 'ผลคัดแยกรายเดือน (Sorting)', quarterlySorting: 'ผลคัดแยกรายไตรมาส (Sorting)',
-            sortingAxis: 'งาน Sorting รวม (ชิ้น)', sortingCapacity: 'Capacity เฉลี่ย',
-            sortingCapacityUnit: 'ชิ้น/วันที่มีผลคัด', sortingFgLegend: 'Sort FG', sortingNgLegend: 'Sort NG',
-            sortingPendingLegend: 'รอคัด (Pending/Rejected)',
+            sortingAxis: 'งาน Sorting รวม (ชิ้น)', sortingCapacity: 'Capacity เฉลี่ยรวมผู้คัด',
+            sortingCapacityUnit: 'ชิ้น/วันที่มีผลคัด', sortingTotalLegend: 'รวม FG + NG + รอ Sort',
             modelSortingScope: 'แยกตามรุ่นสินค้า · จัดกลุ่มตามวันที่บันทึก Sorting',
             sortingScope: 'จัดกลุ่มตามวันที่บันทึก Sorting ไม่ใช้ตัวกรองกะ',
-            sortingNote: 'แท่งรวม Sort FG + Sort NG + งานรอคัด; Capacity เฉลี่ย = FG+NG ต่อวันที่มีผลคัด · รวม Completed/Wait QC และ Pending/Rejected; ผลที่อนุมัติแล้วอาจอยู่ในยอดผลิตด้วย',
+            sortingNote: 'แท่งเดียวรวม Sort FG + Sort NG + งานรอคัด; Capacity เฉลี่ยรวมผู้คัด = FG+NG ต่อวันที่มีผลคัด · รวม Completed/Wait QC และ Pending/Rejected; ผลที่อนุมัติแล้วอาจอยู่ในยอดผลิตด้วย',
             machines: 'เครื่องจักรที่มี NG สูง', jobs: 'สถานะแผนผลิตและ Job Order',
             appendix: 'ภาคผนวก: นิยามและขอบเขตข้อมูล', fgLegend: 'FG (ชิ้น)', ngLegend: 'NG (ชิ้น)',
             pieces: 'ชิ้น', kg: 'กก.', noData: 'ไม่มีข้อมูลในหัวข้อนี้สำหรับช่วงที่เลือก',
@@ -51,12 +50,11 @@
             quarterlyProduction: 'Quarterly production trend', productionAxis: 'Production (pcs)',
             ngRateLegend: 'Weight-based NG rate', quality: 'Quality & top defects',
             monthlySorting: 'Monthly sorting results', quarterlySorting: 'Quarterly sorting results',
-            sortingAxis: 'Total Sorting workload (pcs)', sortingCapacity: 'Avg. capacity',
-            sortingCapacityUnit: 'pcs/active sorting day', sortingFgLegend: 'Sorted FG', sortingNgLegend: 'Sorted NG',
-            sortingPendingLegend: 'Pending/Rejected',
+            sortingAxis: 'Total Sorting workload (pcs)', sortingCapacity: 'Avg. capacity (all sorters)',
+            sortingCapacityUnit: 'pcs/active sorting day', sortingTotalLegend: 'FG + NG + pending',
             modelSortingScope: 'By product model · grouped by Sorting record date',
             sortingScope: 'Grouped by Sorting record date; shift filters do not apply',
-            sortingNote: 'Bars combine Sorted FG + Sorted NG + pending work; average capacity is FG+NG per active sorting day · Includes Completed/Wait QC and Pending/Rejected; approved output may also appear in production totals.',
+            sortingNote: 'Each bar combines Sorted FG + Sorted NG + pending work; average capacity includes all sorters and equals FG+NG per active sorting day · Includes Completed/Wait QC and Pending/Rejected; approved output may also appear in production totals.',
             machines: 'Machines with highest NG', jobs: 'Production plan & Job Orders',
             appendix: 'Appendix: definitions & data scope', fgLegend: 'FG (pcs)', ngLegend: 'NG (pcs)',
             pieces: 'pcs', kg: 'kg', noData: 'No data for this section in the selected period',
@@ -698,9 +696,7 @@
         addText(slide, `${deck.labels.sortingAxis} · ${deck.labels.sortingCapacity}: ${avgCapacity} ${deck.labels.sortingCapacityUnit}`, {
             x: 0.78, y: 1.52, w: 6.1, h: 0.22, fontSize: 8.5, color: COLORS.muted
         });
-        addLegend(slide, deck.pptx, 7.12, 1.52, COLORS.green, deck.labels.sortingFgLegend, 0.8);
-        addLegend(slide, deck.pptx, 8.45, 1.52, COLORS.red, deck.labels.sortingNgLegend, 0.8);
-        addLegend(slide, deck.pptx, 9.82, 1.52, COLORS.amber, deck.labels.sortingPendingLegend, 2.2);
+        addLegend(slide, deck.pptx, 10.05, 1.52, COLORS.blue, deck.labels.sortingTotalLegend, 2.25);
 
         const chartX = 1.22, chartW = 10.78, topY = 1.96, baseY = 5.82, chartH = baseY - topY;
         const maxValue = Math.max(1, ...buckets.map(row => row.fgPcs + row.ngPcs + row.pendingPcs));
@@ -725,31 +721,17 @@
         buckets.forEach((row, index) => {
             const slotX = chartX + (index * slotW);
             const x = slotX + ((slotW - barW) / 2);
-            const fgH = (row.fgPcs / axisMaxValue) * chartH;
-            const ngH = (row.ngPcs / axisMaxValue) * chartH;
-            const pendingH = (row.pendingPcs / axisMaxValue) * chartH;
-            if (fgH > 0) {
-                addShape(slide, deck.pptx, 'rect', {
-                    x: x, y: baseY - fgH, w: barW, h: fgH,
-                    line: { color: COLORS.green, transparency: 100 }, fill: { color: COLORS.green }
-                });
-            }
-            if (ngH > 0) {
-                addShape(slide, deck.pptx, 'rect', {
-                    x: x, y: baseY - fgH - ngH, w: barW, h: ngH,
-                    line: { color: COLORS.red, transparency: 100 }, fill: { color: COLORS.red }
-                });
-            }
-            if (pendingH > 0) {
-                addShape(slide, deck.pptx, 'rect', {
-                    x: x, y: baseY - fgH - ngH - pendingH, w: barW, h: pendingH,
-                    line: { color: COLORS.amber, transparency: 100 }, fill: { color: COLORS.amber }
-                });
-            }
             const totalWorkload = row.fgPcs + row.ngPcs + row.pendingPcs;
+            const barH = (totalWorkload / axisMaxValue) * chartH;
+            if (barH > 0) {
+                addShape(slide, deck.pptx, 'rect', {
+                    x: x, y: baseY - barH, w: barW, h: barH,
+                    line: { color: COLORS.blue, transparency: 100 }, fill: { color: COLORS.blue }
+                });
+            }
             if (totalWorkload > 0) {
                 addText(slide, formatNumber(totalWorkload, deck.language), {
-                    x: slotX, y: Math.max(topY + 0.04, baseY - fgH - ngH - pendingH - 0.22),
+                    x: slotX, y: Math.max(topY + 0.04, baseY - barH - 0.22),
                     w: slotW, h: 0.17, fontSize: axisFontSize, bold: true, align: 'center', color: COLORS.text
                 });
             }
