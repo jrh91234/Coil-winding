@@ -5195,7 +5195,7 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
     hourlyNgPcsData: Array(displayLabels.length).fill(0),
     hourlyByModel: {}, 
     ngLabels: [], ngValuesPcs: [], ngValuesKg: [],
-    machineData: {}, productData: {}, dailyTrend: [],
+    machineData: {}, productData: {}, dailyTrend: [], sortingTrend: [],
     maintenanceLogs: [], 
     rtvLogs: [],
     jobOrderData: {},     // ยอดผลิตจริงแยกตามเลข Job Order ในช่วงที่เลือก
@@ -5833,6 +5833,23 @@ function getAdvancedDashboardData(reqStart, reqEnd, reqShift, reqType) {
       workHoursByModel: workHoursByDateModel[date] || {},
       coilChanges: coilChangesByDate[date] || 0,
       coilChangesByMachine: coilChangesByDateMachine[date] || {}
+    };
+  });
+
+  // แยกข้อมูล Sorting โดยตรงตามวันที่บันทึก เพื่อให้รายงานรวมวันที่มีผลคัด
+  // แม้วันนั้นไม่มีแถวใน Production_Data หรือมีเพียงสถานะ Wait QC
+  const sortingDates = [...new Set([
+    ...Object.keys(sortResultByDate),
+    ...Object.keys(pendingSortByDate)
+  ])].sort();
+  result.sortingTrend = sortingDates.map(date => {
+    const sorted = sortResultByDate[date] || {};
+    const pending = pendingSortByDate[date] || {};
+    return {
+      date: date,
+      fgPcs: sorted.fgPcs || 0,
+      ngPcs: sorted.ngPcs || 0,
+      pendingPcs: pending.qty || 0
     };
   });
 

@@ -91,6 +91,7 @@
   - `accountedPcs = producedFg + ngNetPcs + sortingOpenPcs` → ใช้ตัดสิน "ยอดครบหรือไม่" เทียบกับ `targetQty`
   - ตรวจแล้วทุกสถานะ (ผลิตล้วน / รอคัด / คัดเสร็จ / พบที่ FG / รอ QC) ผลรวมคงที่เท่ายอดที่ออกจากเครื่อง
 - Payload: `jobOrders[]` เพิ่ม `ngPcsFromMachine/ngPcsFromSort/pendingSortPcs/waitQcPcs/sortingOpenPcs/accountedPcs/qtyComplete`, dashboard เพิ่ม `jobOrderSortData`, GET_JOB_ORDERS เพิ่ม `unlinkedSorting`
+- PowerPoint Sorting trend uses Dashboard `sortingTrend[]` (`date`, `fgPcs`, `ngPcs`, `pendingPcs`) grouped by Sorting record date; Completed/Wait QC outputs and Pending/Rejected quantities stay separate from production totals.
 - Frontend: `window.getJobOrderQty(j)` ใน `js/planning.js` เป็นตัวกลางอ่านค่าเหล่านี้ (มี fallback สำหรับข้อมูลเก่า) — ใช้ทั้งตาราง Plan, การ์ด Dashboard, Auto Report, CSV
 
 ## Daily Check (OK 1st Part Workstation Check list)

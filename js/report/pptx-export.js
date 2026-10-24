@@ -14,6 +14,11 @@
             production: 'แนวโน้มการผลิต', monthlyProduction: 'แนวโน้มการผลิตรายเดือน',
             quarterlyProduction: 'แนวโน้มการผลิตรายไตรมาส', productionAxis: 'ยอดผลิต (ชิ้น)',
             ngRateLegend: '% NG ตามน้ำหนัก', quality: 'คุณภาพและอาการ NG หลัก',
+            monthlySorting: 'ผลคัดแยกรายเดือน (Sorting)', quarterlySorting: 'ผลคัดแยกรายไตรมาส (Sorting)',
+            sortingAxis: 'จำนวนชิ้น', sortingFgLegend: 'Sort FG', sortingNgLegend: 'Sort NG',
+            sortingPendingLegend: 'รอคัด (Pending/Rejected)',
+            sortingScope: 'จัดกลุ่มตามวันที่บันทึก Sorting ไม่ใช้ตัวกรองกะ',
+            sortingNote: 'ผลคัดรวมสถานะ Completed และ Wait QC; Pending รวม Rejected ด้วย และผลคัดที่อนุมัติแล้วอาจอยู่ในยอดผลิตด้วย',
             machines: 'เครื่องจักรที่มี NG สูง', jobs: 'สถานะแผนผลิตและ Job Order',
             appendix: 'ภาคผนวก: นิยามและขอบเขตข้อมูล', fgLegend: 'FG (ชิ้น)', ngLegend: 'NG (ชิ้น)',
             pieces: 'ชิ้น', kg: 'กก.', noData: 'ไม่มีข้อมูลในหัวข้อนี้สำหรับช่วงที่เลือก',
@@ -41,6 +46,11 @@
             production: 'Production trend', monthlyProduction: 'Monthly production trend',
             quarterlyProduction: 'Quarterly production trend', productionAxis: 'Production (pcs)',
             ngRateLegend: 'Weight-based NG rate', quality: 'Quality & top defects',
+            monthlySorting: 'Monthly sorting results', quarterlySorting: 'Quarterly sorting results',
+            sortingAxis: 'Pieces', sortingFgLegend: 'Sorted FG', sortingNgLegend: 'Sorted NG',
+            sortingPendingLegend: 'Pending/Rejected',
+            sortingScope: 'Grouped by Sorting record date; shift filters do not apply',
+            sortingNote: 'Output includes Completed and Wait QC; pending includes Rejected. Approved output may also appear in production totals.',
             machines: 'Machines with highest NG', jobs: 'Production plan & Job Orders',
             appendix: 'Appendix: definitions & data scope', fgLegend: 'FG (pcs)', ngLegend: 'NG (pcs)',
             pieces: 'pcs', kg: 'kg', noData: 'No data for this section in the selected period',
@@ -144,6 +154,7 @@
 
     function getSelectedSlideCount() {
         return 2 + (isSectionSelected('production') ? 2 : 0)
+            + (isSectionSelected('sorting') ? 2 : 0)
             + ['quality', 'machines', 'jobOrders', 'appendix'].filter(isSectionSelected).length;
     }
 
@@ -359,6 +370,17 @@
         });
     }
 
+    function formatGroupedPeriodLabel(key, period, language, fallback) {
+        if (period === 'month' && language === 'en') {
+            const match = String(key).match(/^(\d{4})-(\d{2})$/);
+            if (match) return new Date(Number(match[1]), Number(match[2]) - 1, 1).toLocaleString('en-US', { month: 'short', year: '2-digit' });
+        } else if (period === 'quarter' && language === 'en') {
+            const match = String(key).match(/^(\d{4})-Q([1-4])$/);
+            if (match) return `Q${match[2]} ${match[1]}`;
+        }
+        return fallback;
+    }
+
     function getTrendBuckets(data, period, language) {
         const getWppStrict = window.getWppStrict;
         const getKgFromPcs = window.getKgFromPcs;
@@ -402,20 +424,35 @@
                 bucket.weightComplete = bucket.weightComplete && row.weightComplete;
             }
         ).map(bucket => {
-            let label = bucket.label;
-            if (period === 'month' && language === 'en') {
-                const match = String(bucket.key).match(/^(\d{4})-(\d{2})$/);
-                if (match) label = new Date(Number(match[1]), Number(match[2]) - 1, 1).toLocaleString('en-US', { month: 'short', year: '2-digit' });
-            } else if (period === 'quarter' && language === 'en') {
-                const match = String(bucket.key).match(/^(\d{4})-Q([1-4])$/);
-                if (match) label = `Q${match[2]} ${match[1]}`;
-            }
             const totalKg = bucket.fgKg + bucket.ngKg;
             return Object.assign(bucket, {
-                label: label,
+                label: formatGroupedPeriodLabel(bucket.key, period, language, bucket.label),
                 ngRate: bucket.weightComplete && totalKg > 0 ? (bucket.ngKg / totalKg) * 100 : null
             });
         });
+    }
+
+    function getSortingBuckets(data, period, language) {
+        const currentRows = Array.isArray(data.sortingTrend) && data.sortingTrend.length
+            ? data.sortingTrend
+            : (data.dailyTrend || []).map(row => ({
+                date: row.date,
+                fgPcs: row.sortYield && row.sortYield.fg,
+                ngPcs: row.sortYield && row.sortYield.ng,
+                pendingPcs: row.pendingSortQty
+            }));
+        const rows = currentRows.filter(row => row && row.date);
+        if (typeof window.groupRowsByPeriod !== 'function') return [];
+        return window.groupRowsByPeriod(rows, period, row => row.date,
+            () => ({ fgPcs: 0, ngPcs: 0, pendingPcs: 0 }),
+            (bucket, row) => {
+                bucket.fgPcs += number(row.fgPcs !== undefined ? row.fgPcs : row.fg);
+                bucket.ngPcs += number(row.ngPcs !== undefined ? row.ngPcs : row.ng);
+                bucket.pendingPcs += number(row.pendingPcs !== undefined ? row.pendingPcs : row.pending);
+            }
+        ).map(bucket => Object.assign(bucket, {
+            label: formatGroupedPeriodLabel(bucket.key, period, language, bucket.label)
+        }));
     }
 
     function addLegend(slide, pptx, x, y, color, label, width) {
@@ -548,6 +585,114 @@
 
         addText(slide, validRates.length ? deck.labels.periodGrouped : deck.labels.noWeight, {
             x: 0.95, y: 6.45, w: 11.3, h: 0.22, fontSize: 8.5, color: COLORS.muted, italic: true
+        });
+    }
+
+    function addSortingSlide(deck, data, period) {
+        const slide = deck.pptx.addSlide();
+        deck.page += 1;
+        const title = period === 'month' ? deck.labels.monthlySorting : deck.labels.quarterlySorting;
+        addBase(slide, deck.pptx, title, `${deck.labels.period}: ${deck.period} · ${deck.labels.sortingScope}`, deck);
+        const buckets = getSortingBuckets(data, period, deck.language);
+        if (!buckets.length || !buckets.some(row => row.fgPcs + row.ngPcs + row.pendingPcs > 0)) {
+            addText(slide, deck.labels.noData, { x: 1.1, y: 3.0, w: 11.0, h: 0.6, fontSize: 18, align: 'center', color: COLORS.muted });
+            return;
+        }
+
+        addText(slide, deck.labels.sortingAxis, { x: 0.78, y: 1.52, w: 2.5, h: 0.22, fontSize: 8.5, color: COLORS.muted });
+        addLegend(slide, deck.pptx, 7.12, 1.52, COLORS.green, deck.labels.sortingFgLegend, 0.8);
+        addLegend(slide, deck.pptx, 8.45, 1.52, COLORS.red, deck.labels.sortingNgLegend, 0.8);
+        addShape(slide, deck.pptx, 'line', {
+            x: 9.82, y: 1.62, w: 0.28, h: 0,
+            line: { color: COLORS.amber, width: 2.2 }
+        });
+        addShape(slide, deck.pptx, 'ellipse', {
+            x: 9.92, y: 1.57, w: 0.1, h: 0.1,
+            line: { color: COLORS.amber, width: 1 }, fill: { color: COLORS.white }
+        });
+        addText(slide, deck.labels.sortingPendingLegend, { x: 10.18, y: 1.52, w: 2.2, h: 0.22, fontSize: 8.5, color: COLORS.muted });
+
+        const chartX = 1.22, chartW = 10.78, topY = 1.96, baseY = 5.82, chartH = baseY - topY;
+        const maxValue = Math.max(1, ...buckets.map(row => Math.max(row.fgPcs + row.ngPcs, row.pendingPcs)));
+        const rawStep = maxValue / 5;
+        const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+        const valueStep = Math.ceil(rawStep / magnitude) * magnitude;
+        const axisMaxValue = valueStep * 5;
+        const slotW = chartW / buckets.length;
+        const barW = Math.min(1.0, slotW * 0.48);
+        const axisFontSize = buckets.length > 15 ? 6.2 : (buckets.length > 10 ? 7 : 8);
+        const points = [];
+
+        for (let tick = 0; tick <= 5; tick++) {
+            const y = baseY - (tick / 5) * chartH;
+            addShape(slide, deck.pptx, 'line', {
+                x: chartX, y: y, w: chartW, h: 0,
+                line: { color: tick === 0 ? COLORS.border : 'EDF1F6', width: tick === 0 ? 1 : 0.6 }
+            });
+            addText(slide, formatAxisQuantity(valueStep * tick, deck.language), {
+                x: 0.54, y: y - 0.1, w: 0.58, h: 0.18, fontSize: 7.5, align: 'right', color: COLORS.muted
+            });
+        }
+
+        buckets.forEach((row, index) => {
+            const slotX = chartX + (index * slotW);
+            const x = slotX + ((slotW - barW) / 2);
+            const fgH = (row.fgPcs / axisMaxValue) * chartH;
+            const ngH = (row.ngPcs / axisMaxValue) * chartH;
+            if (fgH > 0) {
+                addShape(slide, deck.pptx, 'rect', {
+                    x: x, y: baseY - fgH, w: barW, h: fgH,
+                    line: { color: COLORS.green, transparency: 100 }, fill: { color: COLORS.green }
+                });
+            }
+            if (ngH > 0) {
+                addShape(slide, deck.pptx, 'rect', {
+                    x: x, y: baseY - fgH - ngH, w: barW, h: ngH,
+                    line: { color: COLORS.red, transparency: 100 }, fill: { color: COLORS.red }
+                });
+            }
+            const sortedTotal = row.fgPcs + row.ngPcs;
+            if (sortedTotal > 0) {
+                addText(slide, formatNumber(sortedTotal, deck.language), {
+                    x: slotX, y: Math.max(topY + 0.04, baseY - fgH - ngH - 0.22),
+                    w: slotW, h: 0.17, fontSize: axisFontSize, bold: true, align: 'center', color: COLORS.text
+                });
+            }
+            addText(slide, row.label, {
+                x: slotX, y: baseY + 0.12, w: slotW, h: 0.32,
+                fontSize: axisFontSize, align: 'center', color: COLORS.muted
+            });
+            points.push({
+                x: slotX + (slotW / 2),
+                y: baseY - (Math.min(row.pendingPcs, axisMaxValue) / axisMaxValue) * chartH,
+                value: row.pendingPcs
+            });
+        });
+
+        for (let index = 0; index < points.length - 1; index++) {
+            const a = points[index], b = points[index + 1];
+            const top = Math.min(a.y, b.y);
+            addShape(slide, deck.pptx, b.y < a.y ? 'lineInv' : 'line', {
+                x: a.x, y: top, w: b.x - a.x, h: Math.max(0.002, Math.abs(b.y - a.y)),
+                line: { color: COLORS.amber, width: 2.2 }
+            });
+        }
+        points.forEach(point => {
+            addShape(slide, deck.pptx, 'ellipse', {
+                x: point.x - 0.055, y: point.y - 0.055, w: 0.11, h: 0.11,
+                line: { color: COLORS.amber, width: 1.3 }, fill: { color: COLORS.white }
+            });
+            if (point.value > 0) {
+                addText(slide, formatNumber(point.value, deck.language), {
+                    x: point.x - 0.33, y: point.y <= topY + 0.25 ? point.y + 0.09 : point.y - 0.23,
+                    w: 0.66, h: 0.16, fontSize: 7, bold: true, align: 'center', color: 'B45309',
+                    fill: { color: COLORS.white, transparency: 10 }
+                });
+            }
+        });
+
+        addText(slide, deck.labels.sortingNote, {
+            x: 0.95, y: 6.42, w: 11.3, h: 0.27, fontSize: 7.7, color: COLORS.muted, italic: true
         });
     }
 
@@ -742,6 +887,10 @@
             if (isSectionSelected('production')) {
                 addProductionSlide(deck, data, 'month');
                 addProductionSlide(deck, data, 'quarter');
+            }
+            if (isSectionSelected('sorting')) {
+                addSortingSlide(deck, data, 'month');
+                addSortingSlide(deck, data, 'quarter');
             }
             if (isSectionSelected('quality')) addQualitySlide(deck, data);
             if (audience === 'executive' && isSectionSelected('machines')) addMachineSlide(deck, data);
