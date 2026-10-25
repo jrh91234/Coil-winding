@@ -121,3 +121,83 @@ td { @apply px-6 py-4 border-b text-sm text-gray-700 whitespace-nowrap; }
     body.printing-scrap .scrap-doc-input { border-bottom: 1px solid #000 !important; }
 }
 #print-header { display: none; }
+
+/* ==========================================
+   แถบแท็บแบบ browser (js/tabs.js) — อยู่ใน nav ที่ sticky จึงติดบนสุดไปด้วย
+   ========================================== */
+.cwm-tabs {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    padding: 4px 8px 0;
+    background: #e2e8f0;
+    border-top: 1px solid #cbd5e1;
+}
+.cwm-tabs-list {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.cwm-tabs-list::-webkit-scrollbar { display: none; }
+.cwm-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    max-width: 210px;
+    height: 32px;
+    padding: 0 6px 0 12px;
+    border-radius: 8px 8px 0 0;
+    color: #475569;
+    font-size: 13px;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+.cwm-tab span { overflow: hidden; text-overflow: ellipsis; }
+.cwm-tab:hover { background: rgba(255, 255, 255, 0.6); }
+.cwm-tab.active { background: #f3f4f6; color: #1e3a8a; font-weight: 700; box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.08); }
+.cwm-tab-close {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    color: inherit;
+    font-size: 15px;
+    line-height: 1;
+}
+.cwm-tab-close:hover { background: #cbd5e1; }
+.cwm-tab-add {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    color: #475569;
+    font-size: 20px;
+    line-height: 1;
+}
+.cwm-tab-add:hover { background: rgba(255, 255, 255, 0.75); }
+/* หน้าแท็บใหม่: ปุ่มทุกเมนูที่ผู้ใช้มีสิทธิ์ */
+.cwm-newtab-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 12px;
+}
+.cwm-newtab-item {
+    padding: 18px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+    color: #1f2937;
+    font-size: 15px;
+    font-weight: 700;
+    text-align: center;
+    transition: background 0.15s, border-color 0.15s;
+}
+.cwm-newtab-item:hover { background: #eff6ff; border-color: #2563eb; }
+/* ไม่พึ่ง reset ของ Tailwind — ปุ่มในแถบแท็บหน้าตาเหมือนกันทุกเครื่อง */
+.cwm-tab-close, .cwm-tab-add, .cwm-newtab-item { font-family: inherit; cursor: pointer; }
+.cwm-tab-close, .cwm-tab-add { border: 0; background: transparent; padding: 0; }
