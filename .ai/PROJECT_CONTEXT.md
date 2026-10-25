@@ -16,6 +16,7 @@
   - `dashboard.js` (171 lines) — loadDashboard
   - `pptx-export.js` — Executive/Customer PowerPoint generation from the latest loaded Dashboard data; includes overall and per-model production KPIs, monthly/quarterly production and Sorting trends (single total bar for Sorted FG + Sorted NG + pending, plus average actual capacity across all sorters per active sorting day), quality, machine, and Job Order slides; Customer preset omits machine and Job Order details; loads local PptxGenJS from `js/vendor/`
 - `js/form.js` (907 lines) — NG input form, Setup sub-symptom selection
+- `js/tabs.js` — **แถบแท็บแบบ browser** ใต้ Navbar: ห่อ `window.switchTab` (โหลดเป็นไฟล์สุดท้าย), จำแท็บใน localStorage `cwm_browser_tabs`, ปุ่ม + เปิด `section-newtab` (หน้าเปล่าให้เลือกเมนู สร้างด้วย JS), Ctrl/⌘+คลิก หรือคลิกกลางที่เมนู = แท็บใหม่ · CSS `.cwm-tab*` ใน `css/style.css`
 - `js/globals.js` (426 lines) — Global variables (ngSymptoms, machineMapping, getShiftDateStr with 08:00 cutoff)
 - `js/auth.js` (318 lines) — Authentication (+ Super App SSO auto-login via `SUPERAPP_SSO`)
 - `js/packing.js` (366 lines) — Packing module
