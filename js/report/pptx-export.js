@@ -1,9 +1,9 @@
 (function () {
     const PAGE = { width: 13.333, height: 7.5 };
+    // ชุดสีเดียวกับ PowerPoint ของระบบ H1 Lug&Screw
     const COLORS = {
-        navy: '10243A', blue: '2563EB', teal: '0F766E', red: 'DC4C4C',
-        green: '15803D', amber: 'D97706', text: '172B4D', muted: '64748B',
-        border: 'DCE3EC', pale: 'F4F7FB', white: 'FFFFFF', lightBlue: 'EAF1FF'
+        ink: '0F172A', muted: '64748B', faint: '94A3B8', line: 'E2E8F0', soft: 'F8FAFC', head: '1E293B',
+        primary: '1A73E8', good: '1E8E3E', bad: 'D93025', warn: 'E37400', white: 'FFFFFF'
     };
     const TEXT = {
         th: {
@@ -38,7 +38,10 @@
             periodGrouped: 'ยอดรวมแยกตามเดือนและไตรมาส · NG Rate คำนวณจากน้ำหนักรวมของแต่ละช่วง',
             slide: 'สไลด์', pageSource: 'CWM Production System',
             totalProduced: 'ผลิตรวม FG + NG', ngWeight: 'NG ตามน้ำหนัก', fgWeight: 'FG ตามน้ำหนัก',
-            filterShift: 'กะ', filterType: 'ประเภทกะ', all: 'ทั้งหมด', stale: 'ช่องกรองเปลี่ยนแล้ว รายงานนี้ยังใช้ผลการค้นหาครั้งล่าสุด'
+            filterShift: 'กะ', filterType: 'ประเภทกะ', all: 'ทั้งหมด', stale: 'ช่องกรองเปลี่ยนแล้ว รายงานนี้ยังใช้ผลการค้นหาครั้งล่าสุด',
+            thanks: 'ขอบคุณ', thanksSub: 'ตัวเลขทุกหน้ามาจากระบบ CWM Production System ชุดเดียวกับหน้า Dashboard',
+            axisNote: 'แกนซ้าย = จำนวนชิ้น · แกนขวา = % NG ตามน้ำหนัก', periodCol: 'ช่วง', ngRateShort: '% NG (น้ำหนัก)',
+            defect: 'อาการ', share: '% ของ NG', machine: 'เครื่องจักร', definition: 'นิยาม'
         },
         en: {
             report: 'Production & Quality Review', executive: 'Executive', customer: 'Customer',
@@ -72,7 +75,10 @@
             periodGrouped: 'Monthly and quarterly totals · NG rate is recalculated from each period’s total weight',
             slide: 'Slide', pageSource: 'CWM Production System',
             totalProduced: 'Total FG + NG', ngWeight: 'NG by weight', fgWeight: 'FG by weight',
-            filterShift: 'Shift', filterType: 'Shift type', all: 'All', stale: 'Filters have changed; this deck still uses the most recent search result'
+            filterShift: 'Shift', filterType: 'Shift type', all: 'All', stale: 'Filters have changed; this deck still uses the most recent search result',
+            thanks: 'Thank you', thanksSub: 'All figures come from the CWM Production System — the same data as the Dashboard',
+            axisNote: 'Left axis = pieces · Right axis = weight-based NG %', periodCol: 'Period', ngRateShort: 'NG % (weight)',
+            defect: 'Defect', share: '% of NG', machine: 'Machine', definition: 'Definition'
         }
     };
 
@@ -193,7 +199,7 @@
         if (!customer && isSectionSelected('machines')) count += getModelNames(data, 'machines').length + 1;
         if (!customer && isSectionSelected('jobOrders')) count += getModelNames(data, 'jobOrders').length + 1;
         if (isSectionSelected('appendix')) count += 1;
-        return count;
+        return count + 1; // สไลด์ปิด
     }
 
     function updateSlideCount() {
@@ -317,72 +323,314 @@
         return pptxLoadPromise;
     }
 
+
+    // ==========================================
+    // เทมเพลตสไลด์ (แบบเดียวกับระบบ H1 Lug&Screw)
+    // แถบน้ำเงินบนสุด · หัวข้อ/คำอธิบาย · ท้ายหน้า + เลขหน้า · ปก/ปิดพื้นเข้ม
+    // กราฟเป็นกราฟจริงของ PowerPoint (แก้ข้อมูล/สีต่อได้) · ตารางหัวเข้ม แถวสลับสี
+    // ==========================================
+    const FONT = 'Tahoma';
+    const MASTER = 'CWM_BODY';
+
     function addText(slide, text, options) {
         slide.addText(String(text === undefined || text === null ? '' : text), Object.assign({
-            fontFace: 'Tahoma', color: COLORS.text, margin: 0, breakLine: false,
-            valign: 'mid', fit: 'shrink'
+            fontFace: FONT, color: COLORS.ink, margin: 0, valign: 'mid'
         }, options || {}));
     }
 
-    function addShape(slide, pptx, type, options) {
-        slide.addShape((pptx.ShapeType && pptx.ShapeType[type]) || type, options);
+    function defineMaster(pptx, footer) {
+        pptx.defineSlideMaster({
+            title: MASTER,
+            background: { color: COLORS.white },
+            objects: [
+                { rect: { x: 0, y: 0, w: PAGE.width, h: 0.12, fill: { color: COLORS.primary } } },
+                { text: { text: footer, options: { x: 0.5, y: 7.05, w: 10, h: 0.3, fontFace: FONT, fontSize: 9, color: COLORS.faint } } }
+            ],
+            slideNumber: { x: 12.2, y: 7.05, w: 0.7, h: 0.3, fontFace: FONT, fontSize: 9, color: COLORS.faint, align: 'right' }
+        });
     }
 
-    function addBase(slide, pptx, title, subtitle, deck) {
-        slide.background = { color: COLORS.white };
-        addShape(slide, pptx, 'rect', {
-            x: 0, y: 0, w: PAGE.width, h: 0.12,
-            line: { color: COLORS.blue, transparency: 100 }, fill: { color: COLORS.blue }
+    function bodySlide(deck, title, subtitle) {
+        const slide = deck.pptx.addSlide({ masterName: MASTER });
+        deck.page += 1;
+        addText(slide, title, { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 24, bold: true, fit: 'shrink' });
+        if (subtitle) addText(slide, subtitle, { x: 0.5, y: 0.88, w: 12.3, h: 0.4, fontSize: 13, color: COLORS.muted, fit: 'shrink' });
+        return slide;
+    }
+
+    function emptyNote(slide, text, y) {
+        addText(slide, text, { x: 0.5, y: y || 3.2, w: 12.3, h: 0.6, fontSize: 16, color: COLORS.muted, align: 'center' });
+    }
+
+    function footNote(slide, text) {
+        addText(slide, text, { x: 0.5, y: 6.62, w: 12.3, h: 0.32, fontSize: 9, italic: true, color: COLORS.muted, fit: 'shrink' });
+    }
+
+    // การ์ด KPI: เลขใหญ่ (สีตามความหมาย) + ป้าย + คำอธิบายบรรทัดเล็ก
+    function addCards(slide, pptx, cards, y, perRow) {
+        perRow = perRow || 4;
+        const gap = 0.2, w = (12.3 - gap * (perRow - 1)) / perRow, h = 1.35;
+        cards.forEach((card, i) => {
+            const x = 0.5 + (i % perRow) * (w + gap);
+            const yy = y + Math.floor(i / perRow) * (h + gap);
+            slide.addShape(pptx.ShapeType.roundRect, { x: x, y: yy, w: w, h: h, fill: { color: COLORS.soft }, line: { color: COLORS.line }, rectRadius: 0.08 });
+            addText(slide, card.value, { x: x + 0.15, y: yy + 0.12, w: w - 0.3, h: 0.65, fontSize: String(card.value).length > 12 ? 20 : 28, bold: true, color: card.color || COLORS.ink, fit: 'shrink' });
+            addText(slide, card.label, { x: x + 0.15, y: yy + 0.78, w: w - 0.3, h: 0.3, fontSize: 12, color: COLORS.muted, fit: 'shrink' });
+            if (card.sub) addText(slide, card.sub, { x: x + 0.15, y: yy + 1.04, w: w - 0.3, h: 0.25, fontSize: 10, color: COLORS.muted, fit: 'shrink' });
         });
-        addText(slide, title, { x: 0.72, y: 0.45, w: 11.9, h: 0.45, fontFace: 'Tahoma', fontSize: 24, bold: true });
-        if (subtitle) addText(slide, subtitle, { x: 0.74, y: 0.98, w: 11.8, h: 0.28, fontSize: 10, color: COLORS.muted });
-        addShape(slide, pptx, 'rect', {
-            x: 0.72, y: 7.04, w: 11.9, h: 0.012,
-            line: { color: COLORS.border, transparency: 100 }, fill: { color: COLORS.border }
+        return y + Math.ceil(cards.length / perRow) * (h + gap);
+    }
+
+    // ตาราง: หัวเข้ม ตัวขาว · แถวสลับสี · คอลัมน์ตัวเลขชิดขวา
+    function addTable(slide, table, x, y, w, opt) {
+        opt = opt || {};
+        if (table.caption) {
+            addText(slide, table.caption, { x: x, y: y, w: w, h: 0.35, fontSize: 13, bold: true });
+            y += 0.4;
+        }
+        if (!table.rows.length) {
+            addText(slide, table.empty || '-', { x: x, y: y, w: w, h: 0.4, fontSize: 12, color: COLORS.muted });
+            return;
+        }
+        const rows = [table.headers.map((h, i) => ({
+            text: h, options: { bold: true, color: COLORS.white, fill: { color: COLORS.head }, align: table.numeric[i] ? 'right' : 'left' }
+        }))];
+        table.rows.forEach((row, ri) => {
+            rows.push(row.map((v, i) => ({
+                text: String(v), options: Object.assign({ align: table.numeric[i] ? 'right' : 'left', fill: { color: ri % 2 ? COLORS.soft : COLORS.white } }, (table.cellOpts && table.cellOpts(ri, i)) || {})
+            })));
         });
-        const audienceLabel = deck.audience === 'customer' ? deck.labels.customer.toUpperCase() : deck.labels.executive.toUpperCase();
-        addText(slide, `${deck.labels.pageSource} · ${deck.period} · ${audienceLabel}`, { x: 0.74, y: 7.09, w: 10.5, h: 0.2, fontSize: 8, color: COLORS.muted });
-        addText(slide, String(deck.page), { x: 11.9, y: 7.08, w: 0.6, h: 0.2, align: 'right', fontSize: 8, color: COLORS.muted });
+        slide.addTable(rows, {
+            x: x, y: y, w: w, colW: opt.colW, fontFace: FONT, fontSize: opt.fontSize || 11, color: COLORS.ink,
+            border: { type: 'solid', pt: 0.5, color: COLORS.line }, rowH: opt.rowH || 0.32, valign: 'middle', autoPage: false
+        });
+    }
+
+    function barChart(slide, pptx, chart, box, opt) {
+        opt = opt || {};
+        slide.addChart(pptx.charts.BAR, chart.series.map(s => ({ name: s.name, labels: chart.labels, values: s.values })), Object.assign({
+            x: box.x, y: box.y, w: box.w, h: box.h,
+            barDir: opt.horizontal ? 'bar' : 'col',
+            chartColors: opt.colors || [COLORS.primary],
+            catAxisLabelFontFace: FONT, catAxisLabelFontSize: chart.labels.length > 20 ? 8 : 10,
+            valAxisLabelFontFace: FONT, valAxisLabelFontSize: 10, valAxisLabelFormatCode: '#,##0',
+            valGridLine: { color: 'EEEEEE', size: 0.5 },
+            showLegend: chart.series.length > 1, legendPos: 't', legendFontFace: FONT, legendFontSize: 10,
+            showValue: !!opt.showValue, dataLabelFormatCode: '#,##0', dataLabelFontFace: FONT, dataLabelFontSize: 9, dataLabelPosition: 'outEnd'
+        }, opt.extra || {}));
     }
 
     function addCover(deck) {
         const slide = deck.pptx.addSlide();
         deck.page += 1;
-        slide.background = { color: COLORS.navy };
-        addShape(slide, deck.pptx, 'rect', {
-            x: 0, y: 0, w: 0.22, h: PAGE.height,
-            line: { color: COLORS.teal, transparency: 100 }, fill: { color: COLORS.teal }
+        slide.background = { color: COLORS.ink };
+        slide.addShape(deck.pptx.ShapeType.rect, { x: 0, y: 0, w: 0.25, h: PAGE.height, fill: { color: COLORS.primary }, line: { color: COLORS.primary } });
+        addText(slide, `${deck.labels.report} · ${deck.audience === 'customer' ? deck.labels.customer : deck.labels.executive}`, {
+            x: 0.9, y: 2.2, w: 11.5, h: 1.2, fontSize: 36, bold: true, color: COLORS.white, fit: 'shrink'
         });
-        addShape(slide, deck.pptx, 'rect', {
-            x: 9.8, y: 0, w: 3.533, h: PAGE.height,
-            line: { color: '152F4D', transparency: 100 }, fill: { color: '152F4D' }
-        });
-        addText(slide, 'CWM · PRODUCTION SYSTEM', { x: 0.92, y: 0.86, w: 6.5, h: 0.32, fontSize: 12, bold: true, charSpacing: 1.2, color: 'AFC8E8' });
-        addText(slide, deck.labels.report, { x: 0.9, y: 2.08, w: 8.2, h: 1.05, fontFace: 'Tahoma', fontSize: 31, bold: true, color: COLORS.white, valign: 'bottom' });
-        addText(slide, deck.audience === 'customer' ? deck.labels.customer : deck.labels.executive, { x: 0.94, y: 3.24, w: 6.4, h: 0.38, fontSize: 17, color: '74D4C8', bold: true });
-        addText(slide, `${deck.labels.period}: ${deck.period}`, { x: 0.94, y: 4.18, w: 7.9, h: 0.45, fontSize: 16, color: COLORS.white, bold: true });
-        addText(slide, deck.filters, { x: 0.94, y: 4.76, w: 7.9, h: 0.42, fontSize: 11, color: 'D8E4F2' });
-        addText(slide, `${deck.labels.generated}: ${deck.generatedAt}`, { x: 0.94, y: 6.72, w: 7.8, h: 0.24, fontSize: 9, color: 'AFC8E8' });
-        addShape(slide, deck.pptx, 'rect', {
-            x: 10.38, y: 1.63, w: 1.9, h: 1.9,
-            line: { color: '31577B', width: 1.5 }, fill: { color: '183550' }
-        });
-        addText(slide, 'CWM', { x: 10.47, y: 2.17, w: 1.72, h: 0.58, fontFace: 'Tahoma', fontSize: 30, bold: true, align: 'center', color: COLORS.white });
+        addText(slide, [
+            `${deck.labels.period}: ${deck.period}`,
+            `${deck.labels.filters}: ${deck.filters}`,
+            `${deck.labels.generated}: ${deck.generatedAt}`
+        ].join('\n'), { x: 0.9, y: 3.6, w: 11.5, h: 1.6, fontSize: 16, color: 'CBD5E1', valign: 'top', paraSpaceAfter: 6 });
+        addText(slide, 'CWM Production System', { x: 0.9, y: 6.6, w: 11.5, h: 0.4, fontSize: 12, color: '94A3B8' });
     }
 
-    function addMetricCard(slide, pptx, x, y, w, h, label, value, detail, accent) {
-        addShape(slide, pptx, 'roundRect', {
-            x: x, y: y, w: w, h: h,
-            line: { color: COLORS.border, width: 1 }, fill: { color: COLORS.white }
-        });
-        addShape(slide, pptx, 'rect', {
-            x: x, y: y, w: 0.09, h: h,
-            line: { color: accent, transparency: 100 }, fill: { color: accent }
-        });
-        addText(slide, label, { x: x + 0.25, y: y + 0.19, w: w - 0.45, h: 0.25, fontSize: 10, bold: true, color: COLORS.muted });
-        addText(slide, value, { x: x + 0.25, y: y + 0.54, w: w - 0.45, h: 0.48, fontFace: 'Tahoma', fontSize: 25, bold: true, color: accent });
-        if (detail) addText(slide, detail, { x: x + 0.25, y: y + h - 0.36, w: w - 0.45, h: 0.2, fontSize: 8.5, color: COLORS.muted });
+    function addClosing(deck) {
+        const slide = deck.pptx.addSlide();
+        deck.page += 1;
+        slide.background = { color: COLORS.ink };
+        addText(slide, deck.labels.thanks, { x: 0.5, y: 2.6, w: 12.3, h: 1, fontSize: 40, bold: true, color: COLORS.white, align: 'center' });
+        addText(slide, deck.labels.thanksSub, { x: 0.5, y: 3.7, w: 12.3, h: 0.6, fontSize: 14, color: 'CBD5E1', align: 'center' });
     }
+
+    function addSummarySlide(deck, data, model) {
+        const title = model ? `${deck.labels.modelSummary} · ${model}` : deck.labels.summary;
+        const slide = bodySlide(deck, title, `${deck.labels.period}: ${deck.period} · ${deck.filters}`);
+        const fg = number(data.totalFg);
+        const ng = getNgPcs(data);
+        const rates = getWeightedRates(data);
+        addCards(slide, deck.pptx, [
+            { label: deck.labels.fg, value: `${formatNumber(fg, deck.language)} ${deck.labels.pieces}`, color: COLORS.good, sub: `${deck.labels.fgWeight}: ${formatNumber(rates.fgKg, deck.language, 2)} ${deck.labels.kg}` },
+            { label: deck.labels.ng, value: `${formatNumber(ng, deck.language)} ${deck.labels.pieces}`, color: COLORS.bad, sub: `${deck.labels.ngWeight}: ${formatNumber(rates.ngKg, deck.language, 2)} ${deck.labels.kg}` },
+            { label: deck.labels.weightedYield, value: formatPercent(rates.yieldRate, deck.language), color: COLORS.good },
+            { label: deck.labels.weightedNg, value: formatPercent(rates.ngRate, deck.language), color: COLORS.bad },
+            { label: deck.labels.totalProduced, value: `${formatNumber(fg + ng, deck.language)} ${deck.labels.pieces}`, color: COLORS.primary }
+        ], 1.6, 4);
+        footNote(slide, rates.ngRate === null ? deck.labels.noWeight : `${deck.labels.formula} · ${deck.labels.yieldFormula}`);
+    }
+
+    // FG + NG ซ้อนเป็นแท่งเดียว (แกนซ้าย = ชิ้น) + เส้น % NG ตามน้ำหนัก (แกนขวา) + ตารางสรุปใต้กราฟ
+    function addProductionSlide(deck, data, period, model) {
+        const title = period === 'month' ? deck.labels.monthlyProduction : deck.labels.quarterlyProduction;
+        const slide = bodySlide(deck, model ? `${title} · ${model}` : title,
+            `${deck.labels.period}: ${deck.period} · ${deck.labels.axisNote}`);
+        const buckets = getTrendBuckets(data, period, deck.language, model);
+        if (!buckets.length || !buckets.some(row => row.fg + row.ng > 0)) { emptyNote(slide, deck.labels.noData); return; }
+
+        const labels = buckets.map(row => row.label);
+        const hasRate = buckets.some(row => row.ngRate !== null);
+        const withTable = buckets.length <= 12;
+        const chartH = withTable ? 3.95 : 5.2;
+        const charts = [{
+            type: deck.pptx.charts.BAR,
+            data: [
+                { name: deck.labels.fgLegend, labels: labels, values: buckets.map(row => row.fg) },
+                { name: deck.labels.ngLegend, labels: labels, values: buckets.map(row => row.ng) }
+            ],
+            options: { chartColors: [COLORS.good, COLORS.bad], barGrouping: 'stacked', barGapWidthPct: 50 }
+        }];
+        if (hasRate) {
+            charts.push({
+                type: deck.pptx.charts.LINE,
+                // ช่วงที่น้ำหนักไม่ครบ = ไม่มีค่า (ไม่แทนด้วย % ตามชิ้น)
+                data: [{ name: deck.labels.ngRateLegend, labels: labels, values: buckets.map(row => row.ngRate === null ? null : Math.round(row.ngRate * 100) / 100) }],
+                options: {
+                    chartColors: [COLORS.warn], lineSize: 2.5, lineDataSymbol: 'circle', lineDataSymbolSize: 7,
+                    secondaryValAxis: true, secondaryCatAxis: true,
+                    showValue: buckets.length <= 12, dataLabelFormatCode: '0.00"%"', dataLabelPosition: 't',
+                    dataLabelFontFace: FONT, dataLabelFontSize: 9, dataLabelColor: COLORS.warn
+                }
+            });
+        }
+        const axisBase = { valAxisTitleFontFace: FONT, valAxisTitleFontSize: 10, valAxisLabelFontFace: FONT, valAxisLabelFontSize: 10 };
+        slide.addChart(charts, {
+            x: 0.5, y: 1.4, w: 12.3, h: chartH,
+            catAxisLabelFontFace: FONT, catAxisLabelFontSize: labels.length > 20 ? 8 : 10,
+            valAxes: hasRate ? [
+                Object.assign({ showValAxisTitle: true, valAxisTitle: deck.labels.pieces, valAxisLabelFormatCode: '#,##0', valGridLine: { color: 'EEEEEE', size: 0.5 } }, axisBase),
+                Object.assign({ showValAxisTitle: true, valAxisTitle: deck.labels.ngRateLegend, valAxisLabelFormatCode: '0.0"%"', valAxisMinVal: 0, valGridLine: { style: 'none' } }, axisBase)
+            ] : [Object.assign({ showValAxisTitle: true, valAxisTitle: deck.labels.pieces, valAxisLabelFormatCode: '#,##0', valGridLine: { color: 'EEEEEE', size: 0.5 } }, axisBase)],
+            catAxes: hasRate ? [{ catAxisTitle: '' }, { catAxisHidden: true }] : undefined,
+            showLegend: true, legendPos: 't', legendFontFace: FONT, legendFontSize: 11
+        });
+        if (withTable) {
+            addTable(slide, {
+                headers: [deck.labels.periodCol].concat(labels),
+                rows: [
+                    ['FG'].concat(buckets.map(row => formatNumber(row.fg, deck.language))),
+                    ['NG'].concat(buckets.map(row => formatNumber(row.ng, deck.language))),
+                    [deck.labels.ngRateShort].concat(buckets.map(row => formatPercent(row.ngRate, deck.language)))
+                ],
+                numeric: [false].concat(labels.map(() => true))
+            }, 0.5, 1.5 + chartH, 12.3, { fontSize: 10, rowH: 0.28 });
+        }
+        if (!hasRate) footNote(slide, deck.labels.noWeight);
+    }
+
+    // งาน Sorting: แท่งเดียวรวม FG + NG + รอคัด พร้อมตัวเลขบนหัวแท่ง
+    function addSortingSlide(deck, data, period, model) {
+        const title = period === 'month' ? deck.labels.monthlySorting : deck.labels.quarterlySorting;
+        const scope = model ? deck.labels.modelSortingScope : deck.labels.sortingScope;
+        const buckets = getSortingBuckets(data, period, deck.language, model);
+        const totalSorted = buckets.reduce((sum, row) => sum + row.fgPcs + row.ngPcs, 0);
+        const activeDays = buckets.reduce((sum, row) => sum + row.activeDays, 0);
+        const avgCapacity = activeDays > 0 ? formatNumber(totalSorted / activeDays, deck.language, 0) : 'N/A';
+        const slide = bodySlide(deck, model ? `${title} · ${model}` : title,
+            `${deck.labels.period}: ${deck.period} · ${scope} · ${deck.labels.sortingCapacity}: ${avgCapacity} ${deck.labels.sortingCapacityUnit}`);
+        if (!buckets.length || !buckets.some(row => row.fgPcs + row.ngPcs + row.pendingPcs > 0)) { emptyNote(slide, deck.labels.noData); return; }
+        barChart(slide, deck.pptx, {
+            labels: buckets.map(row => row.label),
+            series: [{ name: deck.labels.sortingTotalLegend, values: buckets.map(row => row.fgPcs + row.ngPcs + row.pendingPcs) }]
+        }, { x: 0.5, y: 1.4, w: 12.3, h: 5.15 }, { colors: [COLORS.primary], showValue: buckets.length <= 31 });
+        footNote(slide, deck.labels.sortingNote);
+    }
+
+    // คุณภาพ: การ์ด % NG ตามน้ำหนัก + กราฟแท่งแนวนอนอาการ NG + ตารางสัดส่วน
+    function addQualitySlide(deck, data, model) {
+        const slide = bodySlide(deck, model ? `${deck.labels.quality} · ${model}` : deck.labels.quality,
+            `${deck.labels.period}: ${deck.period} · ${deck.labels.defectCount}`);
+        const rates = getWeightedRates(model ? getModelProductionData(data, model) : data);
+        const modelDefects = model && data.productData && data.productData[model] && data.productData[model].ngBreakdownPcs;
+        const names = model ? Object.keys(modelDefects || {}) : (data.ngLabels || []);
+        const values = model ? names.map(name => modelDefects[name]) : (data.ngValuesPcs || data.ngValues || []);
+        const rows = names.map((name, i) => ({ label: String(name), value: number(values[i]) }))
+            .filter(row => row.value > 0)
+            .sort((a, b) => b.value - a.value);
+        const top = rows.slice(0, 9);
+        if (rows.length > 9) top.push({ label: deck.language === 'th' ? 'อาการอื่น ๆ' : 'Other defects', value: rows.slice(9).reduce((sum, row) => sum + row.value, 0) });
+        const sum = top.reduce((a, row) => a + row.value, 0);
+
+        addCards(slide, deck.pptx, [
+            { label: deck.labels.weightedNg, value: formatPercent(rates.ngRate, deck.language), color: COLORS.bad, sub: `${deck.labels.ngWeight}: ${formatNumber(rates.ngKg, deck.language, 2)} ${deck.labels.kg}` },
+            { label: deck.labels.ng, value: `${formatNumber(sum, deck.language)} ${deck.labels.pieces}`, color: COLORS.bad }
+        ], 1.45, 4);
+        if (!top.length) { emptyNote(slide, deck.labels.noData, 3.9); return; }
+        barChart(slide, deck.pptx, {
+            labels: top.map(row => row.label),
+            series: [{ name: deck.labels.defectCount, values: top.map(row => row.value) }]
+        }, { x: 0.5, y: 3.05, w: 6.6, h: 3.85 }, { horizontal: true, showValue: true, colors: [COLORS.bad], extra: { catAxisOrientation: 'maxMin', catAxisLabelFontSize: 9 } });
+        addTable(slide, {
+            headers: [deck.labels.defect, deck.labels.pieces, deck.labels.share],
+            rows: top.map(row => [row.label, formatNumber(row.value, deck.language), formatPercent(sum > 0 ? row.value / sum * 100 : 0, deck.language)]),
+            numeric: [false, true, true]
+        }, 7.3, 3.1, 5.5, { fontSize: 9.5, rowH: 0.3, colW: [3.1, 1.2, 1.2] });
+    }
+
+    // เครื่องจักร NG สูง: กราฟแท่ง + ตาราง (ชิ้น / กก.)
+    function addMachineSlide(deck, data, model) {
+        const slide = bodySlide(deck, model ? `${deck.labels.machines} · ${model}` : deck.labels.machines,
+            `${deck.labels.period}: ${deck.period} · ${deck.labels.machineNg}`);
+        const rows = Object.entries(data.machineData || {}).map(([name, item]) => ({
+            name: name,
+            ng: model ? number(item.byModel && item.byModel[model] && item.byModel[model].ngPcs)
+                : (item.ngTotalPcs !== undefined ? number(item.ngTotalPcs) : number(item.ngTotal)),
+            ngKg: model ? number(item.byModel && item.byModel[model] && item.byModel[model].ngKg) : number(item.ngTotalKg)
+        })).filter(row => row.ng > 0).sort((a, b) => b.ng - a.ng).slice(0, 10);
+        if (!rows.length) { emptyNote(slide, deck.labels.noData); return; }
+        barChart(slide, deck.pptx, {
+            labels: rows.map(row => row.name),
+            series: [{ name: deck.labels.machineNg, values: rows.map(row => row.ng) }]
+        }, { x: 0.5, y: 1.4, w: 6.6, h: 5.45 }, { horizontal: true, showValue: true, colors: [COLORS.warn], extra: { catAxisOrientation: 'maxMin' } });
+        addTable(slide, {
+            headers: [deck.labels.machine, `NG (${deck.labels.pieces})`, `NG (${deck.labels.kg})`],
+            rows: rows.map(row => [row.name, formatNumber(row.ng, deck.language), formatNumber(row.ngKg, deck.language, 2)]),
+            numeric: [false, true, true]
+        }, 7.3, 1.5, 5.5, { fontSize: 10.5, rowH: 0.32 });
+    }
+
+    function addJobOrderSlide(deck, data, model) {
+        const slide = bodySlide(deck, model ? `${deck.labels.jobs} · ${model}` : deck.labels.jobs, deck.labels.cumulativeNote);
+        const jobs = (data.jobOrders || []).filter(job => job && job.status !== 'Cancelled' && (!model || String(job.product || '').trim() === model)).slice();
+        if (!jobs.length) { emptyNote(slide, deck.labels.noData); return; }
+        const rows = jobs.map(job => {
+            const qty = typeof window.getJobOrderQty === 'function'
+                ? window.getJobOrderQty(job)
+                : { accounted: number(job.accountedPcs), complete: !!job.qtyComplete };
+            const target = number(job.targetQty);
+            const accounted = number(qty.accounted);
+            return {
+                job: String(job.jobOrder || '—'),
+                product: String(job.product || '—'),
+                target: target,
+                accounted: accounted,
+                progress: target > 0 ? Math.min(100, (accounted / target) * 100) : 0,
+                status: String(job.status || '—')
+            };
+        }).sort((a, b) => a.progress - b.progress).slice(0, 14);
+        addTable(slide, {
+            headers: [deck.labels.job, deck.labels.product, deck.labels.jobTarget, deck.labels.accounted, deck.labels.progress, deck.labels.status],
+            rows: rows.map(row => [row.job, row.product, formatNumber(row.target, deck.language), formatNumber(row.accounted, deck.language), formatPercent(row.progress, deck.language), row.status]),
+            numeric: [false, false, true, true, true, false],
+            cellOpts: (ri, ci) => ci === 4 ? { bold: true, color: rows[ri].progress >= 100 ? COLORS.good : COLORS.primary } : null
+        }, 0.5, 1.5, 12.3, { fontSize: 11, rowH: 0.34, colW: [2.2, 3.6, 1.6, 1.7, 1.5, 1.7] });
+    }
+
+    function addAppendixSlide(deck, data) {
+        const slide = bodySlide(deck, deck.labels.appendix, `${deck.labels.period}: ${deck.period} · ${deck.filters}`);
+        const rates = getWeightedRates(data);
+        addTable(slide, {
+            headers: ['#', deck.labels.definition],
+            rows: [deck.labels.formula, deck.labels.yieldFormula, deck.labels.periodMethod, deck.labels.dayBoundary, deck.labels.missingWeight]
+                .map((item, i) => [i + 1, item]),
+            numeric: [true, false]
+        }, 0.5, 1.5, 12.3, { fontSize: 12, rowH: 0.5, colW: [0.6, 11.7] });
+        addCards(slide, deck.pptx, [
+            { label: deck.labels.weightedNg, value: formatPercent(rates.ngRate, deck.language), color: rates.ngRate === null ? COLORS.muted : COLORS.bad },
+            { label: deck.labels.weightedYield, value: formatPercent(rates.yieldRate, deck.language), color: COLORS.good }
+        ], 4.75, 4);
+    }
+
 
     function getModelProductionData(data, model) {
         const product = data.productData && data.productData[model] || {};
@@ -402,31 +650,6 @@
             totalFgKg: totalFgKg,
             totalNgKg: totalNgKg
         };
-    }
-
-    function addSummarySlide(deck, data, model) {
-        const slide = deck.pptx.addSlide();
-        deck.page += 1;
-        const title = model ? `${deck.labels.modelSummary} · ${model}` : deck.labels.summary;
-        addBase(slide, deck.pptx, title, `${deck.labels.period}: ${deck.period} · ${deck.filters}`, deck);
-
-        const fg = number(data.totalFg);
-        const ng = getNgPcs(data);
-        const rates = getWeightedRates(data);
-        const x = [1.12, 6.85], w = 5.35, h = 1.48;
-        const y = [1.78, 3.52];
-        addMetricCard(slide, deck.pptx, x[0], y[0], w, h, deck.labels.fg, `${formatNumber(fg, deck.language)} ${deck.labels.pieces}`, `${deck.labels.fgWeight}: ${formatNumber(rates.fgKg, deck.language, 2)} ${deck.labels.kg}`, COLORS.green);
-        addMetricCard(slide, deck.pptx, x[1], y[0], w, h, deck.labels.ng, `${formatNumber(ng, deck.language)} ${deck.labels.pieces}`, `${deck.labels.ngWeight}: ${formatNumber(rates.ngKg, deck.language, 2)} ${deck.labels.kg}`, COLORS.red);
-        addMetricCard(slide, deck.pptx, x[0], y[1], w, h, deck.labels.weightedYield, formatPercent(rates.yieldRate, deck.language), '', COLORS.green);
-        addMetricCard(slide, deck.pptx, x[1], y[1], w, h, deck.labels.weightedNg, formatPercent(rates.ngRate, deck.language), '', COLORS.teal);
-
-        addShape(slide, deck.pptx, 'roundRect', {
-            x: 0.82, y: 5.44, w: 11.69, h: 0.68,
-            line: { color: 'D8E7F4', width: 0.7 }, fill: { color: 'F3F8FC' }
-        });
-        addText(slide, rates.ngRate === null ? deck.labels.noWeight : deck.labels.formula, {
-            x: 1.04, y: 5.66, w: 11.2, h: 0.24, fontSize: 10, color: COLORS.text, bold: true, align: 'center'
-        });
     }
 
     function formatGroupedPeriodLabel(key, period, language, fallback) {
@@ -545,354 +768,6 @@
         }));
     }
 
-    function addLegend(slide, pptx, x, y, color, label, width) {
-        addShape(slide, pptx, 'rect', {
-            x: x, y: y + 0.035, w: 0.14, h: 0.14,
-            line: { color: color, transparency: 100 }, fill: { color: color }
-        });
-        addText(slide, label, { x: x + 0.22, y, w: width || 1.25, h: 0.22, fontSize: 8.5, color: COLORS.muted });
-    }
-
-    function addProductionSlide(deck, data, period, model) {
-        const slide = deck.pptx.addSlide();
-        deck.page += 1;
-        const title = period === 'month' ? deck.labels.monthlyProduction : deck.labels.quarterlyProduction;
-        addBase(slide, deck.pptx, model ? `${title} · ${model}` : title, `${deck.labels.period}: ${deck.period} · ${deck.filters}`, deck);
-        const buckets = getTrendBuckets(data, period, deck.language, model);
-        if (!buckets.length) {
-            addText(slide, deck.labels.noData, { x: 1.1, y: 3.0, w: 11.0, h: 0.6, fontSize: 18, align: 'center', color: COLORS.muted });
-            return;
-        }
-
-        addText(slide, deck.labels.productionAxis, { x: 0.78, y: 1.52, w: 2.5, h: 0.22, fontSize: 8.5, color: COLORS.muted });
-        addLegend(slide, deck.pptx, 7.12, 1.52, COLORS.blue, deck.labels.fgLegend, 0.8);
-        addLegend(slide, deck.pptx, 8.45, 1.52, COLORS.red, deck.labels.ngLegend, 0.8);
-        addShape(slide, deck.pptx, 'line', {
-            x: 9.82, y: 1.62, w: 0.28, h: 0,
-            line: { color: '7C3AED', width: 2.2 }
-        });
-        addShape(slide, deck.pptx, 'ellipse', {
-            x: 9.92, y: 1.57, w: 0.1, h: 0.1,
-            line: { color: '7C3AED', width: 1 }, fill: { color: 'FFFFFF' }
-        });
-        addText(slide, deck.labels.ngRateLegend, { x: 10.18, y: 1.52, w: 2.2, h: 0.22, fontSize: 8.5, color: COLORS.muted });
-
-        const chartX = 1.22, chartW = 10.78, topY = 1.96, baseY = 5.82, chartH = baseY - topY;
-        const maxValue = Math.max(1, ...buckets.map(row => row.fg + row.ng));
-        const rawStep = maxValue / 5;
-        const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
-        const valueStep = Math.ceil(rawStep / magnitude) * magnitude;
-        const axisMaxValue = valueStep * 5;
-        const validRates = buckets.map(row => row.ngRate).filter(value => value !== null);
-        const maxRate = validRates.length ? Math.max(...validRates) : 0;
-        const rateMax = Math.min(100, Math.max(5, Math.ceil(maxRate / 5) * 5));
-        const slotW = chartW / buckets.length;
-        const barW = Math.min(1.0, slotW * 0.48);
-        const axisFontSize = buckets.length > 15 ? 6.2 : (buckets.length > 10 ? 7 : 8);
-        const points = [];
-
-        for (let tick = 0; tick <= 5; tick++) {
-            const ratio = tick / 5;
-            const y = baseY - ratio * chartH;
-            addShape(slide, deck.pptx, 'line', {
-                x: chartX, y: y, w: chartW, h: 0,
-                line: { color: tick === 0 ? COLORS.border : 'EDF1F6', width: tick === 0 ? 1 : 0.6 }
-            });
-            addText(slide, formatAxisQuantity(valueStep * tick, deck.language), {
-                x: 0.54, y: y - 0.1, w: 0.58, h: 0.18, fontSize: 7.5, align: 'right', color: COLORS.muted
-            });
-            addText(slide, `${formatNumber(rateMax * ratio, deck.language, 0)}%`, {
-                x: 12.1, y: y - 0.1, w: 0.62, h: 0.18, fontSize: 7.5, align: 'left', color: COLORS.muted
-            });
-        }
-        addShape(slide, deck.pptx, 'line', {
-            x: chartX, y: topY, w: 0, h: chartH,
-            line: { color: 'B8C2D0', width: 0.8 }
-        });
-        addShape(slide, deck.pptx, 'line', {
-            x: chartX + chartW, y: topY, w: 0, h: chartH,
-            line: { color: 'B8C2D0', width: 0.8 }
-        });
-
-        buckets.forEach((row, index) => {
-            const x = chartX + (index * slotW) + ((slotW - barW) / 2);
-            const fgH = (row.fg / axisMaxValue) * chartH;
-            const ngH = (row.ng / axisMaxValue) * chartH;
-            if (fgH > 0) {
-                addShape(slide, deck.pptx, 'rect', {
-                    x: x, y: baseY - fgH, w: barW, h: fgH,
-                    line: { color: COLORS.blue, transparency: 100 }, fill: { color: COLORS.blue }
-                });
-            }
-            if (ngH > 0) {
-                addShape(slide, deck.pptx, 'rect', {
-                    x: x, y: baseY - fgH - ngH, w: barW, h: ngH,
-                    line: { color: COLORS.red, transparency: 100 }, fill: { color: COLORS.red }
-                });
-            }
-            const total = row.fg + row.ng;
-            addText(slide, formatNumber(total, deck.language), {
-                x: chartX + (index * slotW), y: Math.max(topY + 0.04, baseY - fgH - ngH - 0.22),
-                w: slotW, h: 0.17, fontSize: axisFontSize, bold: true, align: 'center', color: COLORS.text
-            });
-            addText(slide, row.label, {
-                x: chartX + (index * slotW), y: baseY + 0.12, w: slotW, h: 0.32,
-                fontSize: axisFontSize, align: 'center', color: COLORS.muted
-            });
-            if (row.ngRate !== null) {
-                points.push({
-                    x: chartX + (index * slotW) + (slotW / 2),
-                    y: baseY - (Math.min(row.ngRate, rateMax) / rateMax) * chartH,
-                    rate: row.ngRate
-                });
-            } else {
-                points.push(null);
-            }
-        });
-
-        for (let index = 0; index < points.length - 1; index++) {
-            const a = points[index], b = points[index + 1];
-            if (!a || !b) continue;
-            const top = Math.min(a.y, b.y);
-            const risingToRight = b.y < a.y;
-            addShape(slide, deck.pptx, risingToRight ? 'lineInv' : 'line', {
-                x: a.x, y: top, w: b.x - a.x, h: Math.max(0.002, Math.abs(b.y - a.y)),
-                line: { color: '7C3AED', width: 2.2 }
-            });
-        }
-        points.forEach(point => {
-            if (!point) return;
-            addShape(slide, deck.pptx, 'ellipse', {
-                x: point.x - 0.055, y: point.y - 0.055, w: 0.11, h: 0.11,
-                line: { color: '7C3AED', width: 1.3 }, fill: { color: COLORS.white }
-            });
-            addText(slide, formatPercent(point.rate, deck.language), {
-                x: point.x - 0.33, y: point.y <= topY + 0.25 ? point.y + 0.09 : point.y - 0.23,
-                w: 0.66, h: 0.16, fontSize: 7, bold: true, align: 'center', color: '6D28D9',
-                fill: { color: COLORS.white, transparency: 10 }
-            });
-        });
-
-        addText(slide, validRates.length ? deck.labels.periodGrouped : deck.labels.noWeight, {
-            x: 0.95, y: 6.45, w: 11.3, h: 0.22, fontSize: 8.5, color: COLORS.muted, italic: true
-        });
-    }
-
-    function addSortingSlide(deck, data, period, model) {
-        const slide = deck.pptx.addSlide();
-        deck.page += 1;
-        const title = period === 'month' ? deck.labels.monthlySorting : deck.labels.quarterlySorting;
-        const scope = model ? deck.labels.modelSortingScope : deck.labels.sortingScope;
-        addBase(slide, deck.pptx, model ? `${title} · ${model}` : title, `${deck.labels.period}: ${deck.period} · ${scope}`, deck);
-        const buckets = getSortingBuckets(data, period, deck.language, model);
-        if (!buckets.length || !buckets.some(row => row.fgPcs + row.ngPcs + row.pendingPcs > 0)) {
-            addText(slide, deck.labels.noData, { x: 1.1, y: 3.0, w: 11.0, h: 0.6, fontSize: 18, align: 'center', color: COLORS.muted });
-            return;
-        }
-
-        const totalSorted = buckets.reduce((sum, row) => sum + row.fgPcs + row.ngPcs, 0);
-        const activeDays = buckets.reduce((sum, row) => sum + row.activeDays, 0);
-        const avgCapacity = activeDays > 0 ? formatNumber(totalSorted / activeDays, deck.language, 0) : 'N/A';
-        addText(slide, `${deck.labels.sortingAxis} · ${deck.labels.sortingCapacity}: ${avgCapacity} ${deck.labels.sortingCapacityUnit}`, {
-            x: 0.78, y: 1.52, w: 6.1, h: 0.22, fontSize: 8.5, color: COLORS.muted
-        });
-        addLegend(slide, deck.pptx, 10.05, 1.52, COLORS.blue, deck.labels.sortingTotalLegend, 2.25);
-
-        const chartX = 1.22, chartW = 10.78, topY = 1.96, baseY = 5.82, chartH = baseY - topY;
-        const maxValue = Math.max(1, ...buckets.map(row => row.fgPcs + row.ngPcs + row.pendingPcs));
-        const rawStep = maxValue / 5;
-        const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
-        const valueStep = Math.ceil(rawStep / magnitude) * magnitude;
-        const axisMaxValue = valueStep * 5;
-        const slotW = chartW / buckets.length;
-        const barW = Math.min(1.0, slotW * 0.48);
-        const axisFontSize = buckets.length > 15 ? 6.2 : (buckets.length > 10 ? 7 : 8);
-        for (let tick = 0; tick <= 5; tick++) {
-            const y = baseY - (tick / 5) * chartH;
-            addShape(slide, deck.pptx, 'line', {
-                x: chartX, y: y, w: chartW, h: 0,
-                line: { color: tick === 0 ? COLORS.border : 'EDF1F6', width: tick === 0 ? 1 : 0.6 }
-            });
-            addText(slide, formatAxisQuantity(valueStep * tick, deck.language), {
-                x: 0.54, y: y - 0.1, w: 0.58, h: 0.18, fontSize: 7.5, align: 'right', color: COLORS.muted
-            });
-        }
-
-        buckets.forEach((row, index) => {
-            const slotX = chartX + (index * slotW);
-            const x = slotX + ((slotW - barW) / 2);
-            const totalWorkload = row.fgPcs + row.ngPcs + row.pendingPcs;
-            const barH = (totalWorkload / axisMaxValue) * chartH;
-            if (barH > 0) {
-                addShape(slide, deck.pptx, 'rect', {
-                    x: x, y: baseY - barH, w: barW, h: barH,
-                    line: { color: COLORS.blue, transparency: 100 }, fill: { color: COLORS.blue }
-                });
-            }
-            if (totalWorkload > 0) {
-                addText(slide, formatNumber(totalWorkload, deck.language), {
-                    x: slotX, y: Math.max(topY + 0.04, baseY - barH - 0.22),
-                    w: slotW, h: 0.17, fontSize: axisFontSize, bold: true, align: 'center', color: COLORS.text
-                });
-            }
-            addText(slide, row.label, {
-                x: slotX, y: baseY + 0.12, w: slotW, h: 0.32,
-                fontSize: axisFontSize, align: 'center', color: COLORS.muted
-            });
-        });
-
-        addText(slide, deck.labels.sortingNote, {
-            x: 0.95, y: 6.4, w: 11.3, h: 0.3, fontSize: 7.7, color: COLORS.muted, italic: true
-        });
-    }
-
-    function addQualitySlide(deck, data, model) {
-        const slide = deck.pptx.addSlide();
-        deck.page += 1;
-        addBase(slide, deck.pptx, model ? `${deck.labels.quality} · ${model}` : deck.labels.quality, deck.labels.defectCount, deck);
-
-        const rates = getWeightedRates(model ? getModelProductionData(data, model) : data);
-        addText(slide, deck.labels.weightedNg, { x: 0.9, y: 1.48, w: 3.3, h: 0.27, fontSize: 10, bold: true, color: COLORS.muted });
-        addText(slide, formatPercent(rates.ngRate, deck.language), { x: 0.9, y: 1.82, w: 3.3, h: 0.66, fontFace: 'Tahoma', fontSize: 34, bold: true, color: COLORS.red });
-        addText(slide, `${deck.labels.ngWeight}: ${formatNumber(rates.ngKg, deck.language, 2)} ${deck.labels.kg} · ${deck.labels.fgWeight}: ${formatNumber(rates.fgKg, deck.language, 2)} ${deck.labels.kg}`, { x: 0.92, y: 2.5, w: 11.3, h: 0.22, fontSize: 8.5, color: COLORS.muted });
-
-        const modelDefects = model && data.productData && data.productData[model] && data.productData[model].ngBreakdownPcs;
-        const labels = model ? Object.keys(modelDefects || {}) : (data.ngLabels || []);
-        const values = model ? labels.map(label => modelDefects[label]) : (data.ngValuesPcs || data.ngValues || []);
-        const rows = labels.map((label, index) => ({ label: String(label), value: number(values[index]) }))
-            .filter(row => row.value > 0)
-            .sort((a, b) => b.value - a.value);
-        const top = rows.slice(0, 7);
-        if (rows.length > 7) top.push({ label: deck.language === 'th' ? 'อาการอื่น ๆ' : 'Other defects', value: rows.slice(7).reduce((sum, row) => sum + row.value, 0) });
-        if (!top.length) {
-            addText(slide, deck.labels.noData, { x: 1.1, y: 4.05, w: 11.0, h: 0.5, fontSize: 16, align: 'center', color: COLORS.muted });
-            if (rates.ngRate === null) addText(slide, deck.labels.noWeight, { x: 1.0, y: 5.0, w: 11.2, h: 0.3, fontSize: 10, align: 'center', color: COLORS.muted });
-            return;
-        }
-
-        const chartTop = 3.05, rowH = 0.45, labelX = 0.95, labelW = 3.15, barX = 4.28, barW = 6.95;
-        const maxValue = Math.max(1, ...top.map(row => row.value));
-        top.forEach((row, index) => {
-            const y = chartTop + index * rowH;
-            addText(slide, row.label, { x: labelX, y, w: labelW, h: 0.36, fontSize: 8, color: COLORS.text, valign: 'mid', fit: 'shrink' });
-            addShape(slide, deck.pptx, 'roundRect', {
-                x: barX, y: y + 0.055, w: barW, h: 0.2,
-                line: { color: 'EDF1F6', transparency: 100 }, fill: { color: 'EDF1F6' }
-            });
-            const valueW = Math.max(0.035, (row.value / maxValue) * barW);
-            addShape(slide, deck.pptx, 'roundRect', {
-                x: barX, y: y + 0.055, w: valueW, h: 0.2,
-                line: { color: COLORS.red, transparency: 100 }, fill: { color: COLORS.red }
-            });
-            addText(slide, formatNumber(row.value, deck.language), { x: 11.38, y: y + 0.02, w: 1.05, h: 0.26, fontSize: 8.5, bold: true, align: 'right', color: COLORS.text });
-        });
-    }
-
-    function addMachineSlide(deck, data, model) {
-        const slide = deck.pptx.addSlide();
-        deck.page += 1;
-        addBase(slide, deck.pptx, model ? `${deck.labels.machines} · ${model}` : deck.labels.machines, deck.labels.machineNg, deck);
-        const rows = Object.entries(data.machineData || {}).map(([name, item]) => ({
-            name: name,
-            ng: model ? number(item.byModel && item.byModel[model] && item.byModel[model].ngPcs)
-                : (item.ngTotalPcs !== undefined ? number(item.ngTotalPcs) : number(item.ngTotal)),
-            ngKg: model ? number(item.byModel && item.byModel[model] && item.byModel[model].ngKg) : number(item.ngTotalKg)
-        })).filter(row => row.ng > 0).sort((a, b) => b.ng - a.ng).slice(0, 8);
-        if (!rows.length) {
-            addText(slide, deck.labels.noData, { x: 1.1, y: 3.0, w: 11.0, h: 0.6, fontSize: 18, align: 'center', color: COLORS.muted });
-            return;
-        }
-
-        const maxValue = Math.max(1, ...rows.map(row => row.ng));
-        rows.forEach((row, index) => {
-            const y = 1.62 + index * 0.57;
-            addText(slide, row.name, { x: 0.95, y, w: 1.45, h: 0.28, fontSize: 10, bold: true });
-            addShape(slide, deck.pptx, 'roundRect', {
-                x: 2.55, y: y + 0.04, w: 7.7, h: 0.22,
-                line: { color: 'EDF1F6', transparency: 100 }, fill: { color: 'EDF1F6' }
-            });
-            addShape(slide, deck.pptx, 'roundRect', {
-                x: 2.55, y: y + 0.04, w: Math.max(0.04, (row.ng / maxValue) * 7.7), h: 0.22,
-                line: { color: COLORS.amber, transparency: 100 }, fill: { color: COLORS.amber }
-            });
-            addText(slide, `${formatNumber(row.ng, deck.language)} ${deck.labels.pieces}`, { x: 10.43, y, w: 1.25, h: 0.25, fontSize: 9, bold: true, align: 'right' });
-            addText(slide, `${formatNumber(row.ngKg, deck.language, 2)} ${deck.labels.kg}`, { x: 11.78, y, w: 0.62, h: 0.25, fontSize: 8, align: 'right', color: COLORS.muted });
-        });
-    }
-
-    function addJobOrderSlide(deck, data, model) {
-        const slide = deck.pptx.addSlide();
-        deck.page += 1;
-        addBase(slide, deck.pptx, model ? `${deck.labels.jobs} · ${model}` : deck.labels.jobs, deck.labels.cumulativeNote, deck);
-        const jobs = (data.jobOrders || []).filter(job => job && job.status !== 'Cancelled' && (!model || String(job.product || '').trim() === model)).slice();
-        if (!jobs.length) {
-            addText(slide, deck.labels.noData, { x: 1.1, y: 3.0, w: 11.0, h: 0.6, fontSize: 18, align: 'center', color: COLORS.muted });
-            return;
-        }
-
-        const rows = jobs.map(job => {
-            const qty = typeof window.getJobOrderQty === 'function'
-                ? window.getJobOrderQty(job)
-                : { accounted: number(job.accountedPcs), complete: !!job.qtyComplete };
-            const target = number(job.targetQty);
-            const accounted = number(qty.accounted);
-            return {
-                job: String(job.jobOrder || '—'),
-                product: String(job.product || '—'),
-                target: target,
-                accounted: accounted,
-                progress: target > 0 ? Math.min(100, (accounted / target) * 100) : 0,
-                status: String(job.status || '—')
-            };
-        }).sort((a, b) => a.progress - b.progress).slice(0, 7);
-
-        const headers = [
-            { label: deck.labels.job, x: 0.95, w: 2.0, align: 'left' },
-            { label: deck.labels.product, x: 3.05, w: 3.1, align: 'left' },
-            { label: deck.labels.jobTarget, x: 6.25, w: 1.35, align: 'right' },
-            { label: deck.labels.accounted, x: 7.72, w: 1.45, align: 'right' },
-            { label: deck.labels.progress, x: 9.3, w: 1.35, align: 'right' },
-            { label: deck.labels.status, x: 10.83, w: 1.48, align: 'right' }
-        ];
-        addShape(slide, deck.pptx, 'rect', { x: 0.87, y: 1.55, w: 11.62, h: 0.45, line: { color: COLORS.navy, transparency: 100 }, fill: { color: COLORS.navy } });
-        headers.forEach(header => addText(slide, header.label, { x: header.x, y: 1.67, w: header.w, h: 0.18, fontSize: 8, bold: true, color: COLORS.white, align: header.align }));
-
-        rows.forEach((row, index) => {
-            const y = 2.05 + index * 0.54;
-            if (index % 2 === 0) addShape(slide, deck.pptx, 'rect', { x: 0.87, y: y - 0.04, w: 11.62, h: 0.48, line: { color: 'F7F9FC', transparency: 100 }, fill: { color: 'F7F9FC' } });
-            addText(slide, row.job, { x: headers[0].x, y, w: headers[0].w, h: 0.22, fontSize: 8.5, bold: true });
-            addText(slide, row.product, { x: headers[1].x, y, w: headers[1].w, h: 0.22, fontSize: 8 });
-            addText(slide, formatNumber(row.target, deck.language), { x: headers[2].x, y, w: headers[2].w, h: 0.22, fontSize: 8.5, align: 'right' });
-            addText(slide, formatNumber(row.accounted, deck.language), { x: headers[3].x, y, w: headers[3].w, h: 0.22, fontSize: 8.5, align: 'right' });
-            addText(slide, formatPercent(row.progress, deck.language), { x: headers[4].x, y, w: headers[4].w, h: 0.22, fontSize: 8.5, bold: true, align: 'right', color: row.progress >= 100 ? COLORS.green : COLORS.blue });
-            addText(slide, row.status, { x: headers[5].x, y, w: headers[5].w, h: 0.22, fontSize: 8, align: 'right', color: COLORS.muted });
-        });
-    }
-
-    function addAppendixSlide(deck, data) {
-        const slide = deck.pptx.addSlide();
-        deck.page += 1;
-        addBase(slide, deck.pptx, deck.labels.appendix, `${deck.labels.period}: ${deck.period} · ${deck.filters}`, deck);
-        const rates = getWeightedRates(data);
-        const items = [
-            deck.labels.formula,
-            deck.labels.yieldFormula,
-            deck.labels.periodMethod,
-            deck.labels.dayBoundary,
-            deck.labels.missingWeight
-        ];
-        items.forEach((item, index) => {
-            const y = 1.62 + index * 0.76;
-            addShape(slide, deck.pptx, 'roundRect', {
-                x: 0.92, y, w: 11.5, h: 0.56,
-                line: { color: COLORS.border, width: 0.7 }, fill: { color: index % 2 === 0 ? 'F7F9FC' : COLORS.white }
-            });
-            addShape(slide, deck.pptx, 'rect', { x: 0.92, y, w: 0.07, h: 0.56, line: { color: COLORS.teal, transparency: 100 }, fill: { color: COLORS.teal } });
-            addText(slide, item, { x: 1.18, y: y + 0.1, w: 10.9, h: 0.32, fontSize: 10, color: COLORS.text });
-        });
-        addText(slide, `${deck.labels.weightedNg}: ${formatPercent(rates.ngRate, deck.language)}`, { x: 0.95, y: 5.72, w: 11.2, h: 0.26, fontSize: 10, bold: true, color: rates.ngRate === null ? COLORS.muted : COLORS.red });
-    }
-
     window.generatePptxPresentation = async function () {
         const data = getData();
         if (!data) {
@@ -932,6 +807,7 @@
                 generatedAt: now.toLocaleString(language === 'th' ? 'th-TH' : 'en-GB'),
                 page: 0
             };
+            defineMaster(pptx, `${labels.pageSource} · ${deck.period} · ${(audience === 'customer' ? labels.customer : labels.executive).toUpperCase()}`);
 
             addCover(deck);
             addSummarySlide(deck, data);
@@ -967,6 +843,7 @@
                 getModelNames(data, 'jobOrders').forEach(model => addJobOrderSlide(deck, data, model));
             }
             if (isSectionSelected('appendix')) addAppendixSlide(deck, data);
+            addClosing(deck);
 
             const filePeriod = `${meta.dataStart || meta.start || 'report'}_${meta.dataEnd || meta.end || ''}`.replace(/[^0-9A-Za-z_-]+/g, '_').replace(/^_+|_+$/g, '');
             const fileName = `CWM_${audience === 'customer' ? 'Customer' : 'Executive'}_${filePeriod || now.toISOString().slice(0, 10)}.pptx`;
