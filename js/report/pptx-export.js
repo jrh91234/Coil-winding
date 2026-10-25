@@ -41,7 +41,8 @@
             filterShift: 'กะ', filterType: 'ประเภทกะ', all: 'ทั้งหมด', stale: 'ช่องกรองเปลี่ยนแล้ว รายงานนี้ยังใช้ผลการค้นหาครั้งล่าสุด',
             thanks: 'ขอบคุณ', thanksSub: 'ตัวเลขทุกหน้ามาจากระบบ CWM Production System ชุดเดียวกับหน้า Dashboard',
             axisNote: 'แกนซ้าย = จำนวนชิ้น · แกนขวา = % NG ตามน้ำหนัก', periodCol: 'ช่วง', ngRateShort: '% NG (น้ำหนัก)',
-            defect: 'อาการ', share: '% ของ NG', machine: 'เครื่องจักร', definition: 'นิยาม'
+            defect: 'อาการ', share: '% ของ NG', machine: 'เครื่องจักร', definition: 'นิยาม',
+            allModels: 'รวมทุกรุ่น', byModel: 'แยกตามรุ่น', byModelNote: 'FG / NG (ชิ้น) และ NG % ตามน้ำหนักของแต่ละรุ่น'
         },
         en: {
             report: 'Production & Quality Review', executive: 'Executive', customer: 'Customer',
@@ -78,7 +79,8 @@
             filterShift: 'Shift', filterType: 'Shift type', all: 'All', stale: 'Filters have changed; this deck still uses the most recent search result',
             thanks: 'Thank you', thanksSub: 'All figures come from the CWM Production System — the same data as the Dashboard',
             axisNote: 'Left axis = pieces · Right axis = weight-based NG %', periodCol: 'Period', ngRateShort: 'NG % (weight)',
-            defect: 'Defect', share: '% of NG', machine: 'Machine', definition: 'Definition'
+            defect: 'Defect', share: '% of NG', machine: 'Machine', definition: 'Definition',
+            allModels: 'All models', byModel: 'by model', byModelNote: 'FG / NG (pcs) and weight-based NG % for each model'
         }
     };
 
@@ -193,7 +195,10 @@
         const customer = audience && audience.value === 'customer';
         const modelCount = getModelNames(data, 'summary').length;
         let count = 2 + modelCount;
-        if (isSectionSelected('production')) count += 2 + getModelNames(data, 'production').length * 2;
+        if (isSectionSelected('production')) {
+            const models = getModelNames(data, 'production').length;
+            count += 2 + models * 2 + (models > 2 ? 2 : 0); // รุ่นเกิน 2 = ตารางแยกรุ่นอีกหน้า (รายเดือน/ไตรมาส)
+        }
         if (isSectionSelected('sorting')) count += 2 + getModelNames(data, 'sorting').length * 2;
         if (isSectionSelected('quality')) count += getModelNames(data, 'quality').length + 1;
         if (!customer && isSectionSelected('machines')) count += getModelNames(data, 'machines').length + 1;
@@ -471,7 +476,13 @@
         const labels = buckets.map(row => row.label);
         const hasRate = buckets.some(row => row.ngRate !== null);
         const withTable = buckets.length <= 12;
-        const chartH = withTable ? 3.95 : 5.2;
+        // สไลด์รวม: ตารางแยกตามรุ่นใต้ยอดรวม (FG / NG / NG % ตามน้ำหนัก ของแต่ละรุ่น)
+        // รุ่นไม่เกิน 2 = อยู่หน้าเดียวกับกราฟ, มากกว่านั้น = ตารางเต็มหน้าในสไลด์ถัดไป
+        const modelRows = !model && withTable ? getModelBreakdownRows(deck, data, period, buckets) : [];
+        const modelsInline = modelRows.length > 0 && modelRows.length <= 6;
+        const tableRowH = modelsInline ? 0.24 : 0.28;
+        const tableH = (4 + (modelsInline ? modelRows.length : 0)) * tableRowH;
+        const chartH = withTable ? Math.max(2.8, 6.9 - 1.4 - 0.1 - tableH) : 5.2;
         const charts = [{
             type: deck.pptx.charts.BAR,
             data: [
@@ -504,18 +515,59 @@
             catAxes: hasRate ? [{ catAxisTitle: '' }, { catAxisHidden: true }] : undefined,
             showLegend: true, legendPos: 't', legendFontFace: FONT, legendFontSize: 11
         });
+        const totalRows = [
+            [`${deck.labels.allModels} · FG`].concat(buckets.map(row => formatNumber(row.fg, deck.language))),
+            [`${deck.labels.allModels} · NG`].concat(buckets.map(row => formatNumber(row.ng, deck.language))),
+            [`${deck.labels.allModels} · ${deck.labels.ngRateShort}`].concat(buckets.map(row => formatPercent(row.ngRate, deck.language)))
+        ];
+        const header = [deck.labels.periodCol].concat(labels);
+        const numeric = [false].concat(labels.map(() => true));
         if (withTable) {
-            addTable(slide, {
-                headers: [deck.labels.periodCol].concat(labels),
-                rows: [
-                    ['FG'].concat(buckets.map(row => formatNumber(row.fg, deck.language))),
-                    ['NG'].concat(buckets.map(row => formatNumber(row.ng, deck.language))),
-                    [deck.labels.ngRateShort].concat(buckets.map(row => formatPercent(row.ngRate, deck.language)))
-                ],
-                numeric: [false].concat(labels.map(() => true))
-            }, 0.5, 1.5 + chartH, 12.3, { fontSize: 10, rowH: 0.28 });
+            const rows = modelsInline ? totalRows.concat(modelRows) : totalRows;
+            addTable(slide, { headers: header, rows: rows, numeric: numeric, cellOpts: breakdownCellOpts(rows) },
+                0.5, 1.45 + chartH, 12.3, { fontSize: modelsInline ? 9 : 10, rowH: tableRowH, colW: breakdownColW(labels.length) });
         }
         if (!hasRate) footNote(slide, deck.labels.noWeight);
+
+        if (modelRows.length && !modelsInline) {
+            const next = bodySlide(deck, `${title} · ${deck.labels.byModel}`,
+                `${deck.labels.period}: ${deck.period} · ${deck.labels.byModelNote}`);
+            const rows = totalRows.concat(modelRows);
+            const rowH = Math.min(0.32, 5.35 / (rows.length + 1));
+            addTable(next, { headers: header, rows: rows, numeric: numeric, cellOpts: breakdownCellOpts(rows) },
+                0.5, 1.5, 12.3, { fontSize: rowH < 0.27 ? 9 : 10, rowH: rowH, colW: breakdownColW(labels.length) });
+        }
+    }
+
+    // แถว FG / NG / NG % (ตามน้ำหนัก) ของแต่ละรุ่น เรียงคอลัมน์ตามช่วงเดียวกับยอดรวม
+    function getModelBreakdownRows(deck, data, period, buckets) {
+        const rows = [];
+        getModelNames(data, 'production').forEach(name => {
+            const byKey = new Map(getTrendBuckets(data, period, deck.language, name).map(b => [b.key, b]));
+            const cells = buckets.map(b => byKey.get(b.key) || { fg: 0, ng: 0, ngRate: null });
+            if (!cells.some(c => c.fg + c.ng > 0)) return;
+            rows.push([`${name} · FG`].concat(cells.map(c => formatNumber(c.fg, deck.language))));
+            rows.push([`${name} · NG`].concat(cells.map(c => formatNumber(c.ng, deck.language))));
+            rows.push([`${name} · ${deck.labels.ngRateShort}`].concat(cells.map(c => formatPercent(c.ngRate, deck.language))));
+        });
+        return rows;
+    }
+
+    // แถว NG % เป็นตัวหนา (สีตามกลุ่ม) แบ่งกลุ่มรุ่นด้วยสีพื้น ให้อ่านทีละรุ่นได้ง่าย
+    function breakdownCellOpts(rows) {
+        return (ri, ci) => {
+            const group = Math.floor(ri / 3);
+            const opts = { fill: { color: group % 2 ? COLORS.soft : COLORS.white } };
+            if (ri % 3 === 2) { opts.bold = true; if (ci > 0) opts.color = COLORS.warn; }
+            if (ci === 0 && ri % 3 === 0) opts.bold = true;
+            return opts;
+        };
+    }
+
+    function breakdownColW(periods) {
+        const first = 2.5;
+        const rest = (12.3 - first) / Math.max(1, periods);
+        return [first].concat(Array(periods).fill(rest));
     }
 
     // งาน Sorting: แท่งเดียวรวม FG + NG + รอคัด พร้อมตัวเลขบนหัวแท่ง
