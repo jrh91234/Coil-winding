@@ -480,8 +480,10 @@
         // รุ่นไม่เกิน 2 = อยู่หน้าเดียวกับกราฟ, มากกว่านั้น = ตารางเต็มหน้าในสไลด์ถัดไป
         const modelRows = !model && withTable ? getModelBreakdownRows(deck, data, period, buckets) : [];
         const modelsInline = modelRows.length > 0 && modelRows.length <= 6;
-        const tableRowH = modelsInline ? 0.24 : 0.28;
-        const tableH = (4 + (modelsInline ? modelRows.length : 0)) * tableRowH;
+        // หน้ากราฟแสดงเฉพาะ NG % ของแต่ละรุ่น (แถวละรุ่น) ใต้ยอดรวม — FG/NG รายรุ่นดูได้ที่ตารางแยกรุ่น
+        const rateRows = modelRows.filter((row, i) => i % 3 === 2);
+        const tableRowH = rateRows.length ? (rateRows.length > 4 ? 0.22 : 0.24) : 0.28;
+        const tableH = (4 + rateRows.length) * tableRowH;
         const chartH = withTable ? Math.max(2.8, 6.9 - 1.4 - 0.1 - tableH) : 5.2;
         const charts = [{
             type: deck.pptx.charts.BAR,
@@ -523,9 +525,12 @@
         const header = [deck.labels.periodCol].concat(labels);
         const numeric = [false].concat(labels.map(() => true));
         if (withTable) {
-            const rows = modelsInline ? totalRows.concat(modelRows) : totalRows;
-            addTable(slide, { headers: header, rows: rows, numeric: numeric, cellOpts: breakdownCellOpts(rows) },
-                0.5, 1.45 + chartH, 12.3, { fontSize: modelsInline ? 9 : 10, rowH: tableRowH, colW: breakdownColW(labels.length) });
+            const rows = totalRows.concat(rateRows);
+            addTable(slide, {
+                headers: header, rows: rows, numeric: numeric,
+                cellOpts: (ri, ci) => ri < 3 ? breakdownCellOpts(totalRows)(ri, ci)
+                    : Object.assign({ fill: { color: COLORS.soft } }, ci > 0 ? { color: COLORS.warn } : {})
+            }, 0.5, 1.45 + chartH, 12.3, { fontSize: rateRows.length ? 9 : 10, rowH: tableRowH, colW: breakdownColW(labels.length) });
         }
         if (!hasRate) footNote(slide, deck.labels.noWeight);
 
