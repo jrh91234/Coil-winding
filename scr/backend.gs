@@ -438,6 +438,94 @@ function saveCheckImageToDrive(base64Data, filename) {
   }
 }
 
+// ==================================================
+// 🧹 5ส. หลังเลิกงาน — ชีต FiveSEndLog + โฟลเดอร์รูป 5S_Photos (action อยู่ใน doPost: GET_FIVES_WEEK / SAVE_FIVES_END / CONFIRM_FIVES / REJECT_FIVES)
+// ==================================================
+var FIVES_END_SHEET = "FiveSEndLog";
+var FIVES_END_HEADERS = ["EntryID", "Timestamp", "Date", "Day", "Shift",
+  "DoneBy", "DoneByName", "Photos", "Remark", "Status",
+  "ConfirmedBy", "ConfirmedName", "ConfirmedAt", "RejectReason", "ClientRequestID"];
+var FIVES_END_PHOTOS = 3;   // งานหลังเลิกงานต้องมีรูปครบเท่านี้พอดี
+
+/** วันทำงาน yyyy-MM-dd (ตัดรอบ 08:00 เวลาไทย) */
+function fiveSWorkDate_(d) {
+  const t = new Date(d.getTime());
+  if ((parseInt(Utilities.formatDate(t, "GMT+7", "H"), 10) || 0) < 8) t.setTime(t.getTime() - 24 * 3600 * 1000);
+  return Utilities.formatDate(t, "GMT+7", "yyyy-MM-dd");
+}
+
+/** 1 = จันทร์ .. 7 = อาทิตย์ */
+function fiveSDayOfWeek_(dateStr) {
+  const d = new Date(dateStr + "T12:00:00Z").getUTCDay();
+  return d === 0 ? 7 : d;
+}
+
+function fiveSAddDays_(dateStr, n) {
+  const d = new Date(dateStr + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return Utilities.formatDate(d, "UTC", "yyyy-MM-dd");
+}
+
+function mapFiveSEndRow_(r) {
+  const photos = String(r.Photos || "").split(/\s*,\s*/).filter(u => u);
+  return {
+    kind: "end",
+    entryId: String(r.EntryID),
+    timestamp: String(r.Timestamp || ""),
+    date: String(r.Date || "").substring(0, 10),
+    day: Number(r.Day) || 0,
+    shift: String(r.Shift || ""),
+    doneBy: String(r.DoneBy || ""),
+    doneByName: String(r.DoneByName || ""),
+    photos: photos,
+    photo: photos[0] || "",
+    remark: String(r.Remark || ""),
+    status: String(r.Status || "done"),
+    confirmedBy: String(r.ConfirmedBy || ""),
+    confirmedName: String(r.ConfirmedName || ""),
+    confirmedAt: String(r.ConfirmedAt || ""),
+    rejectReason: String(r.RejectReason || "")
+  };
+}
+
+function getOrCreateFiveSPhotosFolder() {
+  const props = PropertiesService.getScriptProperties();
+  const folderId = props.getProperty("FIVES_PHOTOS_FOLDER_ID");
+  if (folderId) {
+    try { return DriveApp.getFolderById(folderId); } catch (e) { /* fall through */ }
+  }
+  // สร้างเป็น sibling ของโฟลเดอร์ NG เดิม
+  const ngFolder = DriveApp.getFolderById("1GcY_XvQTaBTE75dkrWdh8SnABXfUc6G4");
+  try {
+    const parents = ngFolder.getParents();
+    const parent = parents.hasNext() ? parents.next() : DriveApp.getRootFolder();
+    const newFolder = parent.createFolder("5S_Photos");
+    newFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    props.setProperty("FIVES_PHOTOS_FOLDER_ID", newFolder.getId());
+    return newFolder;
+  } catch (e) {
+    console.error("Create 5S folder error: " + e);
+    return ngFolder;
+  }
+}
+
+function saveFiveSImageToDrive(base64Data, filename) {
+  if (!base64Data) return "";
+  try {
+    const splitBase = String(base64Data).split(',');
+    const hasPrefix = splitBase.length > 1 && splitBase[0].indexOf('base64') > -1;
+    const type = hasPrefix ? splitBase[0].split(';')[0].replace('data:', '') : 'image/jpeg';
+    const byteCharacters = Utilities.base64Decode(hasPrefix ? splitBase[1] : splitBase[0]);
+    const blob = Utilities.newBlob(byteCharacters, type, filename);
+    const file = getOrCreateFiveSPhotosFolder().createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return file.getUrl();
+  } catch (e) {
+    console.error("Save 5S image error: " + e);
+    return "";
+  }
+}
+
 // เพิ่ม column ที่ขาดหายไปใน sheet (backward compat helper)
 function ensureColumns(sheet, requiredCols) {
   let headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
@@ -1707,6 +1795,185 @@ function doPost(e) {
         return jsonOut_({status: "success"});
       }
       return jsonOut_({status: "error", message: "ไม่พบรายการ"});
+    } catch (err) {
+      return jsonOut_({status: "error", message: err.toString()});
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  // --- 5ส. หลังเลิกงาน (Production) — js/fives.js ---
+  // ทุกกะ (A/B) ปิดวันทำงาน (จ.–ส.) ด้วยรูปพื้นที่ทำงาน 3 รูป (บังคับครบ) แล้วให้ Leader ยืนยัน หรือตีกลับให้ทำใหม่
+  // วันทำงานตัดรอบ 08:00 เหมือนส่วนอื่นของระบบ · EntryID = "5SE-yyyyMMdd-XXXXXX"
+  if (action === "GET_FIVES_WEEK" || action === "SAVE_FIVES_END" || action === "CONFIRM_FIVES" || action === "REJECT_FIVES") {
+    const canConfirmFiveS_ = function(role) { return role === "Admin" || role === "Production"; };
+    let sheet = ss.getSheetByName(FIVES_END_SHEET);
+    if (!sheet) {
+      sheet = ss.insertSheet(FIVES_END_SHEET);
+      sheet.appendRow(FIVES_END_HEADERS);
+      sheet.setFrozenRows(1);
+    }
+    ensureColumns(sheet, FIVES_END_HEADERS);
+    const readAll_ = function() {
+      const rows = sheet.getDataRange().getValues();
+      const headers = rows[0].map(h => String(h).trim());
+      const out = [];
+      for (let i = 1; i < rows.length; i++) {
+        const obj = { _row: i + 1 };
+        headers.forEach(function(h, idx) {
+          let v = rows[i][idx];
+          if (v instanceof Date) v = Utilities.formatDate(v, "GMT+7", h === "Date" ? "yyyy-MM-dd" : "yyyy-MM-dd HH:mm:ss");
+          obj[h] = v !== undefined && v !== null ? v : "";
+        });
+        if (obj.EntryID && String(obj.Status) !== "cancelled") out.push(obj);
+      }
+      return { headers: headers, rows: out };
+    };
+    const setCells_ = function(headers, rowNum, values) {
+      Object.keys(values).forEach(function(k) {
+        const col = headers.indexOf(k);
+        if (col !== -1) sheet.getRange(rowNum, col + 1).setValue(values[k]);
+      });
+    };
+    const today = fiveSWorkDate_(new Date());
+
+    if (action === "GET_FIVES_WEEK") {
+      const ref = /^\d{4}-\d{2}-\d{2}$/.test(String(data.date || "")) ? String(data.date) : today;
+      const weekStart = fiveSAddDays_(ref, 1 - fiveSDayOfWeek_(ref));
+      const weekEnd = fiveSAddDays_(weekStart, 5);
+      const pendingFrom = fiveSAddDays_(today, -31);
+      const all = readAll_().rows.map(mapFiveSEndRow_);
+      return jsonOut_({
+        status: "success",
+        today: today,
+        todayDay: fiveSDayOfWeek_(today),
+        weekStart: weekStart,
+        weekEnd: weekEnd,
+        endPhotos: FIVES_END_PHOTOS,
+        endEntries: all.filter(e => e.date >= weekStart && e.date <= weekEnd),
+        endToday: all.filter(e => e.date === today),
+        pending: all.filter(e => e.status === "done" && e.date >= pendingFrom),
+        canConfirm: canConfirmFiveS_(data.role)
+      });
+    }
+
+    if (action === "SAVE_FIVES_END") {
+      const shift = String(data.shift || "").trim().toUpperCase();
+      if (shift !== "A" && shift !== "B") return jsonOut_({status: "error", message: "กรุณาเลือกกะ (A/B)"});
+      const photos = Array.isArray(data.photos) ? data.photos : [];
+      const valid = photos.filter(p => typeof p === "string" && p.indexOf("data:image/") === 0);
+      if (photos.length !== FIVES_END_PHOTOS || valid.length !== FIVES_END_PHOTOS) {
+        return jsonOut_({status: "error", message: "กรุณาถ่ายรูปให้ครบ " + FIVES_END_PHOTOS + " รูป"});
+      }
+      if (fiveSDayOfWeek_(today) > 6) return jsonOut_({status: "error", message: "วันอาทิตย์ไม่มีเวร 5ส."});
+      const clientRequestId = String(data.clientRequestId || "").trim();
+      const remark = String(data.remark || "").trim().substring(0, 300);
+      const doneName = String(data.name || data.username || "").trim();
+
+      // เช็คซ้ำก่อนอัปโหลดรูป (ไม่ล็อค เพราะอัปโหลดรูปใช้เวลา) แล้วเช็คอีกรอบตอนเขียนชีต
+      const findState_ = function() {
+        const all = readAll_();
+        const replay = clientRequestId ? all.rows.filter(r => String(r.ClientRequestID) === clientRequestId)[0] : null;
+        const existing = all.rows.filter(r => r.Date === today && String(r.Shift) === shift)[0] || null;
+        return { headers: all.headers, replay: replay, existing: existing };
+      };
+      const blocked_ = function(st) {
+        if (st.replay) return jsonOut_({status: "success", duplicate: true, entry: mapFiveSEndRow_(st.replay), message: "บันทึกเรียบร้อย"});
+        if (st.existing && String(st.existing.Status) !== "rejected") {
+          return jsonOut_({status: "error", message: "5ส. หลังเลิกงาน กะ " + shift + " วันนี้บันทึกไปแล้วโดย " + (st.existing.DoneByName || st.existing.DoneBy)});
+        }
+        return null;
+      };
+      let st = findState_();
+      let stop = blocked_(st);
+      if (stop) return stop;
+
+      const now = new Date();
+      const entryId = st.existing ? String(st.existing.EntryID)
+        : "5SE-" + Utilities.formatDate(now, "GMT+7", "yyyyMMdd") + "-" + Utilities.getUuid().substring(0, 6).toUpperCase();
+      const hhmmss = Utilities.formatDate(now, "GMT+7", "HHmmss");
+      const urls = [];
+      for (let i = 0; i < photos.length; i++) {
+        const url = saveFiveSImageToDrive(photos[i], entryId + "_" + hhmmss + "_" + (i + 1) + ".jpg");
+        if (!url) return jsonOut_({status: "error", message: "บันทึกรูปที่ " + (i + 1) + " ไม่สำเร็จ กรุณาลองใหม่"});
+        urls.push(url);
+      }
+
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000);
+        st = findState_();
+        stop = blocked_(st);
+        if (stop) return stop;
+        const values = {
+          Timestamp: Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss"),
+          DoneBy: data.username || "",
+          DoneByName: doneName,
+          Photos: urls.join(", "),
+          Remark: remark,
+          Status: "done",
+          ConfirmedBy: "",
+          ConfirmedName: "",
+          ConfirmedAt: "",
+          ClientRequestID: clientRequestId
+        };
+        if (st.existing) {
+          if (String(st.existing.EntryID) !== entryId) return jsonOut_({status: "error", message: "ข้อมูลเปลี่ยนระหว่างบันทึก กรุณาลองใหม่"});
+          setCells_(st.headers, st.existing._row, values);
+        } else {
+          values.EntryID = entryId;
+          values.Date = "'" + today;   // เก็บเป็นข้อความ กันชีตแปลงเป็น Date
+          values.Day = fiveSDayOfWeek_(today);
+          values.Shift = shift;
+          sheet.appendRow(st.headers.map(h => values.hasOwnProperty(h) ? values[h] : ""));
+        }
+        SpreadsheetApp.flush();
+        logUserAction(data.username || "System", data.role || "User", "SAVE_FIVES_END", "5ส. หลังเลิกงาน: " + entryId + " | กะ " + shift + " | " + today);
+        return jsonOut_({status: "success", entryId: entryId, message: "บันทึกเรียบร้อย รอ Leader ตรวจยืนยัน"});
+      } catch (err) {
+        return jsonOut_({status: "error", message: err.toString()});
+      } finally {
+        lock.releaseLock();
+      }
+    }
+
+    // Leader ยืนยัน (หลายรายการได้) / ตีกลับให้ทำใหม่ — คนที่ถ่ายรูปยืนยันงานตัวเองไม่ได้ (ยกเว้น Admin)
+    if (!canConfirmFiveS_(data.role)) return jsonOut_({status: "error", message: "ไม่มีสิทธิ์ยืนยันงาน 5ส."});
+    const isSelf_ = function(r) { return data.role !== "Admin" && data.username && String(r.DoneBy) === String(data.username); };
+    const leaderName = String(data.name || data.username || "").trim();
+    const stamp = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss");
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      const all = readAll_();
+      if (action === "CONFIRM_FIVES") {
+        const wanted = {};
+        (Array.isArray(data.entryIds) ? data.entryIds : []).forEach(id => { wanted[String(id)] = true; });
+        const ids = [];
+        let skippedSelf = 0;
+        all.rows.forEach(function(r) {
+          if (!wanted[String(r.EntryID)] || String(r.Status) !== "done") return;
+          if (isSelf_(r)) { skippedSelf++; return; }
+          setCells_(all.headers, r._row, { Status: "confirmed", ConfirmedBy: data.username || "", ConfirmedName: leaderName, ConfirmedAt: stamp, RejectReason: "" });
+          ids.push(String(r.EntryID));
+        });
+        SpreadsheetApp.flush();
+        if (ids.length) logUserAction(data.username || "System", data.role || "User", "CONFIRM_FIVES", "ยืนยัน 5ส.: " + ids.join(", "));
+        return jsonOut_({status: "success", confirmed: ids.length, confirmedIds: ids,
+          message: (ids.length ? "ยืนยันเรียบร้อย " + ids.length + " รายการ" : "ไม่มีรายการที่รอยืนยัน") +
+            (skippedSelf ? " (ข้าม " + skippedSelf + " รายการที่คุณถ่ายเอง)" : "")});
+      }
+      // REJECT_FIVES
+      const reason = String(data.reason || "").trim().substring(0, 300);
+      if (!reason) return jsonOut_({status: "error", message: "กรุณาระบุเหตุผลที่ให้ทำใหม่"});
+      const row = all.rows.filter(r => String(r.EntryID) === String(data.entryId || ""))[0];
+      if (!row) return jsonOut_({status: "error", message: "ไม่พบรายการ"});
+      if (String(row.Status) !== "done") return jsonOut_({status: "error", message: "รายการนี้ไม่ได้รอยืนยันแล้ว"});
+      if (isSelf_(row)) return jsonOut_({status: "error", message: "ตีกลับงานที่ตัวเองถ่ายไม่ได้ ให้ Leader คนอื่นตรวจ"});
+      setCells_(all.headers, row._row, { Status: "rejected", ConfirmedBy: data.username || "", ConfirmedName: leaderName, ConfirmedAt: stamp, RejectReason: reason });
+      SpreadsheetApp.flush();
+      logUserAction(data.username || "System", data.role || "User", "REJECT_FIVES", "ตีกลับ 5ส.: " + row.EntryID + " | " + reason);
+      return jsonOut_({status: "success", message: "ส่งกลับให้ทำใหม่แล้ว"});
     } catch (err) {
       return jsonOut_({status: "error", message: err.toString()});
     } finally {
