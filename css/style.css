@@ -201,3 +201,55 @@ td { @apply px-6 py-4 border-b text-sm text-gray-700 whitespace-nowrap; }
 /* ไม่พึ่ง reset ของ Tailwind — ปุ่มในแถบแท็บหน้าตาเหมือนกันทุกเครื่อง */
 .cwm-tab-close, .cwm-tab-add, .cwm-newtab-item { font-family: inherit; cursor: pointer; }
 .cwm-tab-close, .cwm-tab-add { border: 0; background: transparent; padding: 0; }
+
+/* ===== 5ส. หลังเลิกงาน (js/fives.js) ===== */
+.fs-badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.fs-badge.confirmed { background: #e6f4ea; color: #137333; }
+.fs-badge.done { background: #fef7e0; color: #b06000; }
+.fs-badge.rejected { background: #fce8e6; color: #c5221f; }
+.fs-badge.missed { background: #fce8e6; color: #a50e0e; }
+.fs-badge.todo { background: #f1f3f4; color: #5f6368; }
+.fs-shift-pill { display: inline-block; font-size: 12px; font-weight: 800; padding: 1px 8px; border-radius: 6px; color: #fff; }
+.fs-shift-pill.shift-a { background: #1a73e8; }
+.fs-shift-pill.shift-b { background: #9334e6; }
+.fs-job-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); padding: 14px; margin-bottom: 12px; border: 2px solid transparent; }
+.fs-job-card.mine { border-color: #2563eb; }
+.fs-reject-note { background: #fce8e6; color: #a50e0e; border-radius: 8px; padding: 6px 10px; font-size: 13px; margin-bottom: 8px; }
+.fs-end-thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
+.fs-end-thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; cursor: zoom-in; background: #f1f3f4; display: block; }
+.fs-shots-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.fs-shots-head b { font-size: 15px; }
+.fs-shots-head .req, .fs-shots-head .cnt { color: #d93025; font-weight: 700; }
+.fs-shots-head .cnt { white-space: nowrap; }
+.fs-shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.fs-shots > div { display: flex; flex-direction: column; }
+.fs-shot-lbl { flex: 1; font-size: 13px; font-weight: 700; margin-bottom: 4px; line-height: 1.3; }
+.fs-shot-box { position: relative; aspect-ratio: 1; border: 2px dashed #f28b82; border-radius: 10px; background: #fef7f6; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; padding: 0; width: 100%; font-family: inherit; }
+.fs-shot-box .ex { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.35; }
+.fs-shot-box .ex-tag { position: absolute; left: 6px; top: 6px; background: rgba(60,64,67,0.85); color: #fff; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 1px 6px; }
+.fs-shot-box .cam { position: relative; font-size: 24px; background: rgba(255,255,255,0.85); border-radius: 8px; padding: 0 6px; line-height: 1.3; }
+.fs-shot-box .tap { position: relative; color: #d93025; font-weight: 700; font-size: 13px; background: rgba(255,255,255,0.85); border-radius: 6px; padding: 0 6px; }
+.fs-pend-item { display: flex; gap: 10px; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; }
+.fs-pend-thumbs { display: flex; gap: 4px; flex-shrink: 0; }
+.fs-pend-thumbs img { width: 62px; height: 96px; object-fit: cover; border-radius: 6px; cursor: zoom-in; background: #f1f3f4; }
+.fs-btn-ok, .fs-btn-reject { padding: 4px 12px; border-radius: 8px; font-size: 13px; font-weight: 700; border: 1px solid; }
+.fs-btn-ok { background: #16a34a; color: #fff; border-color: #16a34a; }
+.fs-btn-reject { background: #fff; color: #dc2626; border-color: #fca5a5; }
+.fs-week { width: 100%; border-collapse: collapse; font-size: 13px; text-align: center; }
+.fs-week th, .fs-week td { border: 1px solid #e5e7eb; padding: 6px 4px; }
+.fs-week th { background: #f9fafb; }
+.fs-week th.day-1 { background: #fef9c3; } .fs-week th.day-2 { background: #fce7f3; } .fs-week th.day-3 { background: #dcfce7; }
+.fs-week th.day-4 { background: #ffedd5; } .fs-week th.day-5 { background: #dbeafe; } .fs-week th.day-6 { background: #ede9fe; }
+.fs-cam-shutter { width: 68px; height: 68px; border-radius: 50%; background: #fff; border: 5px solid #9ca3af; }
+.fs-cam-shutter:active { background: #e5e7eb; }
+.fs-cam-slot { width: 60px; height: 60px; border-radius: 8px; border: 2px dashed #666; color: #bbb; font-weight: 800; font-size: 20px;
+  display: flex; align-items: center; justify-content: center; overflow: hidden; background: #222; padding: 0; }
+.fs-cam-slot.active { border: 3px solid #fbbc04; color: #fbbc04; }
+.fs-cam-slot img { width: 100%; height: 100%; object-fit: cover; }
+.fs-cam-grid { display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%; max-height: 100%; overflow-y: auto; padding: 8px; }
+.fs-cam-tile { position: relative; border-radius: 10px; overflow: hidden; background: #222; border: 2px dashed #666; min-height: 90px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; color: #bbb; font-weight: 700; }
+.fs-cam-tile img { width: 100%; max-height: 30vh; object-fit: contain; display: block; }
+.fs-cam-tile .cap { position: absolute; left: 0; top: 0; background: rgba(0,0,0,0.6); color: #fff; font-size: 13px; padding: 3px 8px; border-bottom-right-radius: 8px; }
+@media (min-width: 700px) { .fs-cam-grid { grid-template-columns: repeat(3, 1fr); } }

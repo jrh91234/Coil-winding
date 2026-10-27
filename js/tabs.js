@@ -10,7 +10,7 @@
     const STORE_KEY = 'cwm_browser_tabs';
     const MAX_TABS = 12;
     const NEW_TAB = 'newtab';
-    const SECTIONS = ['inbox', 'form', 'planning', 'dashboard', 'admin', 'rtv', 'scrap', 'dailycheck', 'packing', 'parts', 'cost'];
+    const SECTIONS = ['inbox', 'form', 'planning', 'dashboard', 'admin', 'rtv', 'scrap', 'dailycheck', 'fives', 'packing', 'parts', 'cost'];
 
     const origSwitch = window.switchTab;
     if (typeof origSwitch !== 'function') return;

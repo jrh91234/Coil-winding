@@ -104,6 +104,15 @@
 - Sheet `Daily_Check`: Check_ID, Timestamp, Shift_Date, Shift, Check_Time, Machine, Product, Check_Type, C1..C11, Result, Inspector, Recorded_By, Remark, Supervisor, Confirmed_At (สร้างอัตโนมัติ)
 - Backend actions (POST): `SAVE_DAILY_CHECK`, `GET_DAILY_CHECKS` (dateFrom/dateTo/machine), `CONFIRM_DAILY_CHECK` (หัวหน้างานยืนยัน), `DELETE_DAILY_CHECK` (Admin)
 
+## 5ส. หลังเลิกงาน (Production)
+- Frontend: `js/fives.js` + `section-fives` (+ กล้องเต็มจอ `fs-cam`, หน้าต่างดูรูป `fs-photo-modal`) ใน index.html, เมนู `tab-fives` (Admin / Production) · CSS `.fs-*` ใน `css/style.css`
+- ทุกกะ (A/B) ทำวันละ 1 ครั้ง จ.–ส. (วันอาทิตย์ไม่มี) วันทำงานตัดรอบ 08:00 · ผู้ใช้เลือก "กะของฉัน" เอง (จำใน localStorage `cwm_fives_crew`)
+- ถ่ายรูปครบ 3 รูป (บังคับ): 1) พื้นที่ทำงาน/พื้นรอบเครื่อง 2) โต๊ะงาน/เครื่องมือเก็บเข้าที่ 3) ถังขยะ/ถังเศษ/จุดวางงาน NG — กล้องในหน้าเว็บเท่านั้น (fallback `<input capture>` ไม่รับไฟล์เก่ากว่า 5 นาที) ย่อ 1280px JPEG 0.75 ประทับแถบ กะ/(n/3)/เวลา/ชื่อ
+- รูปตัวอย่างจางในช่องว่าง: `img/fives/end-1..3.jpg` (ดู `img/fives/README.md`)
+- Leader (role Admin / Production) ยืนยัน หรือ "ให้ทำใหม่" พร้อมเหตุผล — คนถ่ายยืนยัน/ตีกลับงานตัวเองไม่ได้ (ยกเว้น Admin) · งานที่ถูกตีกลับถ่ายใหม่ครบ 3 รูปแล้วบันทึกทับแถวเดิม
+- Sheet `FiveSEndLog`: EntryID (`5SE-yyyyMMdd-XXXXXX`), Timestamp, Date, Day, Shift, DoneBy, DoneByName, Photos (URL คั่น ", "), Remark, Status (done/confirmed/rejected), ConfirmedBy, ConfirmedName, ConfirmedAt, RejectReason, ClientRequestID (สร้างอัตโนมัติ) · รูปเก็บ Drive โฟลเดอร์ `5S_Photos` (Script Property `FIVES_PHOTOS_FOLDER_ID`)
+- Backend actions (POST): `GET_FIVES_WEEK` (date → endEntries/endToday/pending ย้อน 31 วัน/canConfirm), `SAVE_FIVES_END` (shift, photos[3], remark, clientRequestId กันส่งซ้ำ), `CONFIRM_FIVES` (entryIds[]), `REJECT_FIVES` (entryId, reason)
+
 ## Architecture Notes
 - All chart functions use `window.functionName` — no ES modules, no imports
 - Shared state: `currentDashboardData`, `charts` object, `machineMapping`
