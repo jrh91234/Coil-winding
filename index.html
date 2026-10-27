@@ -1078,8 +1078,10 @@
             <div class="flex justify-between items-center mb-4 flex-none">
                 <h3 class="text-lg font-bold">บันทึกของเสีย (NG)</h3><button type="button" onclick="window.manageSymptomsFromModal()" class="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded text-xs font-bold hover:bg-blue-100 shadow-sm">⚙️ จัดการรายการ</button>
             </div>
+            <div id="modal-ng-model-info" class="flex-none -mt-2 mb-2 text-xs"></div>
             <div id="modal-ng-list" class="space-y-2 mb-4 overflow-y-auto flex-1 p-1"></div>
             <div class="flex-none pt-2 border-t">
+                 <div id="modal-ng-total" class="mb-2 text-xs text-right text-gray-600"></div>
                  <button type="button" onclick="window.addCustomNgField()" class="w-full mb-2 text-blue-600 text-xs font-bold border border-blue-200 rounded py-1 hover:bg-blue-50">+ ระบุอาการอื่น (Add Other)</button>
                  <div class="flex gap-2">
                     <button onclick="window.closeNgModal(true)" class="flex-1 bg-green-600 text-white py-2 rounded-lg font-bold">ยืนยัน</button>
@@ -1837,14 +1839,14 @@
     <!-- Scripts (แก้เป็นเวอร์ชันเพื่อกัน Cache) -->
     <script src="js/globals.js?v=3.58"></script>
     <script src="js/auth.js?v=3.59"></script>
-    <script src="js/form.js?v=3.58"></script>
+    <script src="js/form.js?v=3.59"></script>
     <script src="js/planning.js?v=1.1"></script>
     <script src="js/report/widgets.js?v=4.0"></script>
     <script src="js/report/auto-report.js?v=4.6"></script>
     <script src="js/report/export.js?v=4.1"></script>
     <script src="js/report/dashboard.js?v=4.2"></script>
     <script src="js/report/pptx-export.js?v=2.2"></script>
-    <script src="js/charts/helpers.js?v=4.1"></script>
+    <script src="js/charts/helpers.js?v=4.2"></script>
     <script src="js/charts/draw-tool.js?v=4.0"></script>
     <script src="js/charts/models.js?v=4.2"></script>
     <script src="js/charts/ng-trend.js?v=4.5"></script>

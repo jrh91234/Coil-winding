@@ -62,6 +62,14 @@ window.getKgFromPcs = function(prod, pcs) {
     return pcs * w;
 };
 
+// Kg → PCS (ปัดเป็นจำนวนเต็ม) — คืน null ถ้ารุ่นไม่มีค่า WPP
+window.getPcsFromKg = function(prod, kg) {
+    const w = window.getWppStrict(prod);
+    if (w === null) return null;
+    if (!kg || kg <= 0) return 0;
+    return Math.round(kg / w);
+};
+
 
 // ==========================================
 // Helper: จัดกลุ่มข้อมูลตามช่วงเวลา (รายวัน / สัปดาห์ / เดือน / ไตรมาส / ปี) — แบบกราฟหุ้น

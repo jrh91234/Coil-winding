@@ -219,8 +219,48 @@ window.openNgModal = async function(rowId) {
         window.renderNgItem(list, item.type, item.qty, item.remark, true);
     });
 
+    window.updateNgPcsPreview();
     modal.classList.remove('hidden');
 };
+
+// แสดงค่า NG เทียบเป็น PCS ตามรุ่นของแถวที่เปิด (แสดงอย่างเดียว ไม่ได้บันทึก)
+function getCurrentNgProduct() {
+    const rowEl = currentRowIdForNg ? document.getElementById(currentRowIdForNg) : null;
+    const pSelect = rowEl ? rowEl.querySelector('.product-select-target') : null;
+    return pSelect ? pSelect.value : '';
+}
+
+window.updateNgPcsPreview = function() {
+    const prod = getCurrentNgProduct();
+    const wpp = window.getWppStrict ? window.getWppStrict(prod) : null;
+    const info = document.getElementById('modal-ng-model-info');
+    const totalEl = document.getElementById('modal-ng-total');
+
+    if (info) {
+        info.innerHTML = wpp !== null
+            ? `<div class="bg-indigo-50 border border-indigo-200 text-indigo-700 rounded px-2 py-1">รุ่น: <b>${prod}</b> · 1 pcs = ${wpp} Kg</div>`
+            : `<div class="bg-yellow-50 border border-yellow-200 text-yellow-700 rounded px-2 py-1">รุ่น: <b>${prod || '-'}</b> · ไม่มีค่าน้ำหนักต่อชิ้น (WPP) จึงเทียบ PCS ไม่ได้</div>`;
+    }
+
+    let totalKg = 0, totalPcs = 0;
+    document.querySelectorAll('#modal-ng-list .ng-item-row').forEach(row => {
+        const kg = parseFloat(row.querySelector('.ng-input-qty').value) || 0;
+        const pcs = window.getPcsFromKg ? window.getPcsFromKg(prod, kg) : null;
+        const preview = row.querySelector('.ng-pcs-preview');
+        if (preview) preview.textContent = (pcs !== null && kg > 0) ? `≈ ${pcs.toLocaleString()} pcs` : '';
+        if (kg > 0) { totalKg += kg; totalPcs += pcs || 0; }
+    });
+
+    if (totalEl) {
+        totalEl.innerHTML = totalKg > 0
+            ? `รวม NG: <b class="text-red-600">${totalKg.toFixed(2)} Kg</b>${wpp !== null ? ` ≈ <b class="text-indigo-700">${totalPcs.toLocaleString()} pcs</b>` : ''}`
+            : '';
+    }
+};
+
+document.addEventListener('input', e => {
+    if (e.target.classList && e.target.classList.contains('ng-input-qty')) window.updateNgPcsPreview();
+});
 
 const setupDropdownExcludedExact = new Set(['setup', 'อื่นๆ (others)']);
 const setupDropdownExcludedKeywords = ['เปลี่ยนม้วน', 'เปลี่ยนรุ่น'];
@@ -264,7 +304,8 @@ window.renderNgItem = function(container, label, qty, remark, isCustom=false, se
                 <input type="number" class="ng-input-qty w-20 p-1 border rounded text-right" value="${qty}" placeholder="0.00" min="0" step="any">
                 <span class="text-xs text-gray-500 ml-1">Kg</span>
             </div>
-        </div>${setupDropdownHtml}
+        </div>
+        <div class="ng-pcs-preview text-[11px] text-right text-indigo-600 font-medium -mt-1 mb-1 pr-6 min-h-0"></div>${setupDropdownHtml}
         <input type="text" class="ng-input-remark w-full p-1 border rounded text-xs bg-gray-50" value="${remark}" placeholder="หมายเหตุ...">
     `;
     container.appendChild(div);
