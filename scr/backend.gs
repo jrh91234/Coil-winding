@@ -188,6 +188,37 @@ function ensurePmPlanShifts(pmSheet) {
   return rows;
 }
 
+// ตรวจหาแผน PM ที่ช่างทำไปแล้วแต่วันครบกำหนดถูกดึงกลับมา (ยังค้างใน Inbox) — อ่านอย่างเดียว ไม่แก้ชีท
+// วิธีใช้: เปิด Apps Script → เลือกฟังก์ชัน auditPmResetPlans → Run → ดูผลใน Execution log
+function auditPmResetPlans() {
+  const pmSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Maintenance_Plan");
+  if (!pmSheet) { Logger.log("ไม่พบชีท Maintenance_Plan"); return []; }
+  const rows = pmSheet.getDataRange().getValues();
+  const h = rows[0].map(x => String(x).trim());
+  const ix = (n) => h.indexOf(n);
+  const todayStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+  const found = [];
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][ix("Status")] || "").trim() !== "Active") continue;
+    const due = pmDateStr(rows[i][ix("Next_Due_Date")]);
+    const lastDone = ix("Last_Done_Date") > -1 ? pmDateStr(rows[i][ix("Last_Done_Date")]) : "";
+    if (!due || due > todayStr || !lastDone || lastDone < due) continue;
+    found.push({
+      row: i + 1,
+      planId: String(rows[i][ix("Plan_ID")] || ""),
+      machine: String(rows[i][ix("Machine")] || ""),
+      taskName: String(rows[i][ix("Task_Name")] || ""),
+      shift: ix("Assigned_Shift") > -1 ? normalizePmShift(rows[i][ix("Assigned_Shift")]) : "",
+      dueDate: due,
+      lastDone: lastDone
+    });
+  }
+  found.sort((a, b) => a.taskName.localeCompare(b.taskName) || a.machine.localeCompare(b.machine));
+  Logger.log("พบ " + found.length + " แผนที่ทำแล้วแต่ยังค้างใน Inbox");
+  found.forEach(f => Logger.log([f.machine, f.taskName, "กะ " + (f.shift || "-"), "กำหนด " + f.dueDate, "ทำล่าสุด " + f.lastDone, f.planId, "แถว " + f.row].join(" | ")));
+  return found;
+}
+
 // ==================================================
 // 🗂️ ประวัติงาน PM — ใช้ร่วมกันระหว่าง GET_PM_HISTORY และ EXPORT_PM_HISTORY_PDF
 // ==================================================
