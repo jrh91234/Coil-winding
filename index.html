@@ -1379,6 +1379,11 @@
                 <div id="fs-week-summary" class="mb-2"></div>
                 <div class="overflow-x-auto"><table class="fs-week" id="fs-week-table"></table></div>
             </div>
+            <div class="bg-white rounded-xl shadow p-4 mt-4 border-2 border-amber-300 hidden" id="fs-unscored-card">
+                <div class="font-bold text-amber-700 mb-1">⭐ ยืนยันแล้วแต่ยังไม่มีคะแนน (<span id="fs-unscored-count">0</span>)</div>
+                <div class="text-xs text-gray-500 mb-2">งานย้อนหลัง 60 วันที่ยืนยันไปก่อนมีระบบคะแนน — กด "ให้คะแนน" เพื่อลงคะแนนย้อนหลัง (แก้คะแนนงานอื่นได้จากหน้าต่างดูรูป)</div>
+                <div id="fs-unscored-list" class="space-y-2"></div>
+            </div>
             <div class="bg-white rounded-xl shadow p-4 mt-4">
                 <div class="font-bold text-gray-800 mb-2">⭐ คะแนนประเมินพนักงานประจำกะ · เดือน <span id="fs-score-title"></span></div>
                 <div id="fs-score-body"></div>
@@ -1416,7 +1421,7 @@
     <!-- 5ส.: Leader ยืนยัน + ให้คะแนน -->
     <div id="fs-score-modal" class="fixed inset-0 bg-black bg-opacity-60 z-[66] hidden flex items-center justify-center p-3 print-hide">
         <div class="bg-white w-full max-w-md rounded-xl shadow-2xl p-4">
-            <div class="font-bold text-lg text-emerald-700">✔ ยืนยันงาน 5ส. + ให้คะแนน</div>
+            <div class="font-bold text-lg text-emerald-700" id="fs-score-head">✔ ยืนยันงาน 5ส. + ให้คะแนน</div>
             <div id="fs-score-target" class="text-sm text-gray-600 mb-3"></div>
             <div class="text-sm font-bold mb-1">คะแนน (เต็ม <span id="fs-score-max">10</span>) <span class="text-red-600">*</span></div>
             <div id="fs-score-picker" class="grid grid-cols-6 gap-2 mb-3"></div>
@@ -1437,6 +1442,7 @@
             </div>
             <div id="fs-photo-body" class="overflow-y-auto flex-1"></div>
             <div id="fs-photo-meta" class="text-sm text-gray-500 mt-2 flex-none"></div>
+            <button type="button" id="fs-photo-score" class="hidden fs-btn-ok mt-2 self-start flex-none">⭐ ให้คะแนน</button>
         </div>
     </div>
 
@@ -2068,7 +2074,7 @@
 
     <script src="js/scrap.js?v=2.1"></script>
     <script src="js/dailycheck.js?v=1.0"></script>
-    <script src="js/fives.js?v=1.2"></script>
+    <script src="js/fives.js?v=1.3"></script>
     <script src="js/parts.js?v=5.5"></script>
     <script src="js/inbox.js?v=2.7"></script>
     <script src="js/tabs.js?v=1.1"></script>

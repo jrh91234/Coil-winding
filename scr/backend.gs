@@ -445,7 +445,7 @@ var FIVES_END_SHEET = "FiveSEndLog";
 var FIVES_END_HEADERS = ["EntryID", "Timestamp", "Date", "Day", "Shift",
   "DoneBy", "DoneByName", "Photos", "Remark", "Status",
   "ConfirmedBy", "ConfirmedName", "ConfirmedAt", "RejectReason", "ClientRequestID",
-  "Score", "ScoreNote"];
+  "Score", "ScoreNote", "ScoredBy", "ScoredAt"];
 var FIVES_END_PHOTOS = 3;   // งานหลังเลิกงานต้องมีรูปครบเท่านี้พอดี
 var FIVES_SCORE_MAX = 10;   // คะแนนที่ Leader ให้ตอนยืนยัน (0..10) ใช้ประเมินพนักงานประจำกะ
 
@@ -488,7 +488,9 @@ function mapFiveSEndRow_(r) {
     confirmedAt: String(r.ConfirmedAt || ""),
     rejectReason: String(r.RejectReason || ""),
     score: r.Score === "" || r.Score === null || r.Score === undefined ? null : Number(r.Score),
-    scoreNote: String(r.ScoreNote || "")
+    scoreNote: String(r.ScoreNote || ""),
+    scoredBy: String(r.ScoredBy || ""),
+    scoredAt: String(r.ScoredAt || "")
   };
 }
 
@@ -1809,7 +1811,7 @@ function doPost(e) {
   // --- 5ส. หลังเลิกงาน (Production) — js/fives.js ---
   // ทุกกะ (A/B) ปิดวันทำงาน (จ.–ส.) ด้วยรูปพื้นที่ทำงาน 3 รูป (บังคับครบ) แล้วให้ Leader ยืนยัน หรือตีกลับให้ทำใหม่
   // วันทำงานตัดรอบ 08:00 เหมือนส่วนอื่นของระบบ · EntryID = "5SE-yyyyMMdd-XXXXXX"
-  if (action === "GET_FIVES_WEEK" || action === "SAVE_FIVES_END" || action === "CONFIRM_FIVES" || action === "REJECT_FIVES") {
+  if (action === "GET_FIVES_WEEK" || action === "SAVE_FIVES_END" || action === "CONFIRM_FIVES" || action === "REJECT_FIVES" || action === "SCORE_FIVES") {
     const canConfirmFiveS_ = function(role) { return role === "Admin" || role === "Production"; };
     let sheet = ss.getSheetByName(FIVES_END_SHEET);
     if (!sheet) {
@@ -1860,6 +1862,8 @@ function doPost(e) {
         // คะแนนทั้งเดือนของสัปดาห์ที่ดู — ไว้ประเมินพนักงานประจำกะ
         month: ref.substring(0, 7),
         monthScored: all.filter(e => e.status === "confirmed" && e.score !== null && e.date.substring(0, 7) === ref.substring(0, 7)),
+        // ยืนยันไปแล้วแต่ยังไม่มีคะแนน (เช่น ยืนยันก่อนมีระบบคะแนน) ย้อน 60 วัน — ให้ Leader ให้คะแนนย้อนหลัง
+        unscored: all.filter(e => e.status === "confirmed" && e.score === null && e.date >= fiveSAddDays_(today, -60)),
         scoreMax: FIVES_SCORE_MAX,
         canConfirm: canConfirmFiveS_(data.role)
       });
@@ -1935,6 +1939,8 @@ function doPost(e) {
           ConfirmedAt: "",
           Score: "",
           ScoreNote: "",
+          ScoredBy: "",
+          ScoredAt: "",
           ClientRequestID: clientRequestId
         };
         if (st.existing) {
@@ -1966,13 +1972,26 @@ function doPost(e) {
     try {
       lock.waitLock(10000);
       const all = readAll_();
+      // คะแนนบังคับ: จำนวนเต็ม 0..FIVES_SCORE_MAX (ยืนยันหลายรายการ = คะแนนเดียวกันทุกรายการ)
+      const score = Number(data.score);
+      const badScore = data.score === "" || data.score === null || data.score === undefined || !Number.isInteger(score) || score < 0 || score > FIVES_SCORE_MAX;
+      const scoreNote = String(data.scoreNote || "").trim().substring(0, 300);
+      if ((action === "CONFIRM_FIVES" || action === "SCORE_FIVES") && badScore) {
+        return jsonOut_({status: "error", message: "กรุณาให้คะแนน 0–" + FIVES_SCORE_MAX});
+      }
+      if (action === "SCORE_FIVES") {
+        // ให้คะแนน / แก้คะแนนย้อนหลัง ของงานที่ยืนยันไปแล้ว
+        const row = all.rows.filter(r => String(r.EntryID) === String(data.entryId || ""))[0];
+        if (!row) return jsonOut_({status: "error", message: "ไม่พบรายการ"});
+        if (String(row.Status) !== "confirmed") return jsonOut_({status: "error", message: "ให้คะแนนย้อนหลังได้เฉพาะงานที่ยืนยันแล้ว"});
+        if (isSelf_(row)) return jsonOut_({status: "error", message: "ให้คะแนนงานที่ตัวเองถ่ายไม่ได้ ให้ Leader คนอื่นให้คะแนน"});
+        const before = row.Score === "" ? "-" : row.Score;
+        setCells_(all.headers, row._row, { Score: score, ScoreNote: scoreNote, ScoredBy: leaderName, ScoredAt: stamp });
+        SpreadsheetApp.flush();
+        logUserAction(data.username || "System", data.role || "User", "SCORE_FIVES", "ให้คะแนน 5ส. ย้อนหลัง: " + row.EntryID + " | " + before + " → " + score + "/" + FIVES_SCORE_MAX);
+        return jsonOut_({status: "success", message: "บันทึกคะแนน " + score + "/" + FIVES_SCORE_MAX + " แล้ว"});
+      }
       if (action === "CONFIRM_FIVES") {
-        // คะแนนบังคับ: จำนวนเต็ม 0..FIVES_SCORE_MAX ใช้คะแนนเดียวกันทุกรายการที่ส่งมา
-        const score = Number(data.score);
-        if (data.score === "" || data.score === null || data.score === undefined || !Number.isInteger(score) || score < 0 || score > FIVES_SCORE_MAX) {
-          return jsonOut_({status: "error", message: "กรุณาให้คะแนน 0–" + FIVES_SCORE_MAX});
-        }
-        const scoreNote = String(data.scoreNote || "").trim().substring(0, 300);
         const wanted = {};
         (Array.isArray(data.entryIds) ? data.entryIds : []).forEach(id => { wanted[String(id)] = true; });
         const ids = [];
@@ -1980,7 +1999,7 @@ function doPost(e) {
         all.rows.forEach(function(r) {
           if (!wanted[String(r.EntryID)] || String(r.Status) !== "done") return;
           if (isSelf_(r)) { skippedSelf++; return; }
-          setCells_(all.headers, r._row, { Status: "confirmed", ConfirmedBy: data.username || "", ConfirmedName: leaderName, ConfirmedAt: stamp, RejectReason: "", Score: score, ScoreNote: scoreNote });
+          setCells_(all.headers, r._row, { Status: "confirmed", ConfirmedBy: data.username || "", ConfirmedName: leaderName, ConfirmedAt: stamp, RejectReason: "", Score: score, ScoreNote: scoreNote, ScoredBy: leaderName, ScoredAt: stamp });
           ids.push(String(r.EntryID));
         });
         SpreadsheetApp.flush();
