@@ -87,6 +87,14 @@ function pmAddFrequency(dateStr, frequency, interval) {
   return Utilities.formatDate(d, "GMT+7", "yyyy-MM-dd");
 }
 
+// รอบถัดไปบนตารางรอบเดิม (base + ความถี่ ซ้ำ ๆ) ที่เลยวัน afterStr ไปแล้ว
+// กันกรณีรอบเกินกำหนดนานกว่า 1 ความถี่ → ถ้าบวกแค่รอบเดียว ทำเสร็จแล้วก็ยังถึงกำหนดอยู่
+function pmNextDueAfter(base, frequency, interval, afterStr) {
+  let d = pmAddFrequency(base, frequency, interval);
+  for (let n = 0; d <= afterStr && n < 1000; n++) d = pmAddFrequency(d, frequency, interval);
+  return d;
+}
+
 function pmMajorityShift(list) {
   let a = 0, b = 0;
   list.forEach(s => { if (s === "A") a++; else if (s === "B") b++; });
@@ -147,10 +155,12 @@ function ensurePmPlanShifts(pmSheet) {
   }
 
   // ซิงค์วันครบกำหนดทั้งกลุ่มให้ตรงกัน (แผนเก่าที่เครื่องแต่ละเครื่องวันไม่เท่ากัน)
-  //  - ถ้ารอบนี้ถึงกำหนดแล้ว: เครื่องที่ยังค้างทุกเครื่อง = วันครบกำหนดของรอบนี้ (วันที่เก่าสุด),
-  //    เครื่องที่ทำไปแล้ว = รอบนี้ + ความถี่
   //  - ถ้ายังไม่ถึงกำหนดเลย: ทุกเครื่อง = วันที่เร็วสุดของกลุ่ม
+  //  - ถ้ารอบนี้ถึงกำหนดแล้ว: เครื่องที่ทำรอบนี้ไปแล้ว (วันเลยรอบนี้) คงวันเดิมไว้ ห้ามดึงกลับ,
+  //    เครื่องที่วันถูกดึงกลับมาแล้วแต่ Last_Done_Date อยู่ในรอบนี้ = ทำแล้ว → เลื่อนไปรอบถัดไป,
+  //    เครื่องที่ยังค้าง = วันครบกำหนดของรอบนี้ (วันที่เก่าสุด)
   const dueCol = ix("Next_Due_Date");
+  const lastDoneIx = ix("Last_Done_Date");
   if (dueCol > -1) {
     const todayStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
     Object.keys(groups).forEach(key => {
@@ -160,8 +170,12 @@ function ensurePmPlanShifts(pmSheet) {
       if (!cycleDue) return;
       idxs.forEach(i => {
         const cur = pmDateStr(rows[i][dueCol]);
+        const lastDone = lastDoneIx > -1 ? pmDateStr(rows[i][lastDoneIx]) : "";
         let want = cycleDue;
-        if (cycleDue <= todayStr && cur > todayStr) want = pmAddFrequency(cycleDue, rows[i][ix("Frequency")], rows[i][ix("Interval_Value")]);
+        if (cycleDue <= todayStr) {
+          if (cur > cycleDue) want = cur;
+          else if (lastDone && lastDone >= cycleDue) want = pmNextDueAfter(cycleDue, rows[i][ix("Frequency")], rows[i][ix("Interval_Value")], lastDone);
+        }
         if (cur !== want) {
           pmSheet.getRange(i + 1, dueCol + 1).setValue(want);
           rows[i][dueCol] = want;
@@ -3851,7 +3865,7 @@ function doPost(e) {
     }
     let cycleDue = pmDateStr(pmRows[planRow - 1][ci("Next_Due_Date")]);
     groupRows.forEach(r => { const d = pmDateStr(pmRows[r - 1][ci("Next_Due_Date")]); if (d && (!cycleDue || d < cycleDue)) cycleDue = d; });
-    nextDueStr = pmAddFrequency(cycleDue || doneDate, planFreq, planInterval);
+    nextDueStr = pmNextDueAfter(cycleDue || doneDate, planFreq, planInterval, doneDate);
 
     const lastDoneCol = ci("Last_Done_Date") + 1;
     const nextDueCol = ci("Next_Due_Date") + 1;
