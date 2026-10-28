@@ -28,6 +28,7 @@
   let confirming = false;
   let backDate = '';        // Admin: วันที่ลงย้อนหลัง / ทดสอบ ('' = วันทำงานปัจจุบัน)
   let scoreIds = [];        // รายการที่กำลังให้คะแนนในหน้าต่างยืนยัน
+  let scoreMode = 'confirm'; // 'confirm' = ยืนยัน+ให้คะแนน · 'score' = ให้/แก้คะแนนย้อนหลังของงานที่ยืนยันแล้ว
   let scoreVal = null;
 
   function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
@@ -244,7 +245,28 @@
     $('fs-week-summary').innerHTML =
       '<span class="fs-badge done">ทำแล้ว ' + done + '/' + due + '</span> ' +
       '<span class="fs-badge confirmed">Leader ยืนยัน ' + confirmed + '/' + due + '</span>';
+    renderUnscored();
     renderScores();
+  }
+
+  // ===== ยืนยันแล้วแต่ยังไม่มีคะแนน → ให้คะแนนย้อนหลัง =====
+  function renderUnscored(){
+    const list = (data.unscored || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    const card = $('fs-unscored-card');
+    card.classList.toggle('hidden', !canConfirm() || !list.length);
+    if (!canConfirm()) return;
+    $('fs-unscored-count').textContent = list.length;
+    $('fs-unscored-list').innerHTML = list.map(e =>
+      '<div class="fs-pend-item">' +
+        '<div class="fs-pend-thumbs">' + (e.photos || []).map((u, i) =>
+          `<img src="${esc(photoSrc(u, 200))}" alt="" loading="lazy" data-photo="${esc(e.entryId)}" data-focus="${i}">`).join('') + '</div>' +
+        '<div class="flex-1 min-w-0 text-sm"><span class="fs-shift-pill shift-' + esc(e.shift.toLowerCase()) + '">กะ ' + esc(e.shift) + '</span> ' +
+          'วัน' + esc(DAY_FULL[e.day] || '') + ' ' + esc(shortDate(e.date)) + '<br>ผู้ทำ: ' + esc(e.doneByName) +
+          '<br><span class="text-xs text-gray-500">ยืนยันโดย ' + esc(e.confirmedName) + '</span>' +
+          (canConfirmEntry(e)
+            ? `<div class="mt-2"><button type="button" class="fs-btn-ok" data-score-entry="${esc(e.entryId)}">⭐ ให้คะแนน</button></div>`
+            : '<div class="text-xs text-gray-400 mt-2">งานที่คุณถ่ายเอง — ให้ Leader คนอื่นให้คะแนน</div>') +
+        '</div></div>').join('');
   }
 
   // ===== คะแนนประเมินพนักงานประจำกะ (ทั้งเดือนของสัปดาห์ที่ดู) =====
@@ -286,8 +308,33 @@
 
   // ===== Leader ยืนยัน / ตีกลับ =====
   // ยืนยัน = ต้องให้คะแนน 0..10 (ยืนยันทั้งหมด ใช้คะแนนเดียวกันทุกรายการ)
+  function findEntry(id){
+    const pool = (data && (data.pending || []).concat(data.endEntries || [], data.endToday || [], data.unscored || [], data.monthScored || [])) || [];
+    return pool.find(e => e.entryId === id) || null;
+  }
+
+  // ให้คะแนน / แก้คะแนนย้อนหลัง (งานที่ยืนยันแล้ว)
+  function scoreEntry(id){
+    const e = findEntry(id);
+    if (confirming || !e) return;
+    scoreMode = 'score';
+    scoreIds = [id];
+    scoreVal = e.score !== null && e.score !== undefined ? e.score : null;
+    $('fs-score-head').textContent = scoreVal === null ? '⭐ ให้คะแนนย้อนหลัง' : '✏️ แก้คะแนน';
+    $('fs-score-target').textContent = 'กะ ' + e.shift + ' · วัน' + (DAY_FULL[e.day] || '') + ' ' + shortDate(e.date) + ' · ผู้ทำ: ' + e.doneByName +
+      ' (ยืนยันแล้วโดย ' + e.confirmedName + ')';
+    $('fs-score-note').value = e.scoreNote || '';
+    $('fs-score-ok').textContent = '💾 บันทึกคะแนน';
+    renderScorePicker();
+    $('fs-photo-modal').classList.add('hidden');
+    $('fs-score-modal').classList.remove('hidden');
+  }
+
   function confirmEntries(ids){
     if (confirming || !ids.length) return;
+    scoreMode = 'confirm';
+    $('fs-score-head').textContent = '✔ ยืนยันงาน 5ส. + ให้คะแนน';
+    $('fs-score-ok').textContent = '✔ ยืนยัน';
     scoreIds = ids.slice();
     scoreVal = null;
     const pool = (data && data.pending) || [];
@@ -318,7 +365,10 @@
     const btn = $('fs-score-ok');
     btn.disabled = true;
     try {
-      const res = await postFs({ action: 'CONFIRM_FIVES', entryIds: scoreIds, score: scoreVal, scoreNote: $('fs-score-note').value.trim() });
+      const note = $('fs-score-note').value.trim();
+      const res = scoreMode === 'score'
+        ? await postFs({ action: 'SCORE_FIVES', entryId: scoreIds[0], score: scoreVal, scoreNote: note })
+        : await postFs({ action: 'CONFIRM_FIVES', entryIds: scoreIds, score: scoreVal, scoreNote: note });
       if (!res || res.status !== 'success') { toast((res && res.message) || 'ยืนยันไม่สำเร็จ', 'error'); return; }
       toast(res.message);
       $('fs-score-modal').classList.add('hidden');
@@ -523,8 +573,7 @@
   // ===== หน้าต่างดูรูป =====
   function openPhoto(id, focus){
     if (!data) return;
-    const pool = (data.endEntries || []).concat(data.endToday || [], data.pending || []);
-    const e = pool.find(x => x.entryId === id);
+    const e = findEntry(id);
     if (!e || !e.photos || !e.photos.length) return;
     $('fs-photo-title').textContent = '5ส. หลังเลิกงาน · กะ ' + e.shift + ' · ' + (DAY_FULL[e.day] || '') + ' ' + shortDate(e.date);
     $('fs-photo-body').innerHTML = e.photos.map((u, i) =>
@@ -536,6 +585,12 @@
       (e.score !== null && e.score !== undefined ? ' · คะแนน ' + e.score + '/' + scoreMax() : '') + (e.scoreNote ? ' (' + e.scoreNote + ')' : '');
     if (e.status === 'rejected') meta += ' · ตีกลับโดย ' + e.confirmedName + ': ' + e.rejectReason;
     $('fs-photo-meta').textContent = meta;
+    // งานที่ยืนยันแล้ว: Leader ให้คะแนน / แก้คะแนนย้อนหลังได้
+    const sb = $('fs-photo-score');
+    const canScore = e.status === 'confirmed' && canConfirmEntry(e);
+    sb.classList.toggle('hidden', !canScore);
+    sb.dataset.scoreEntry = canScore ? e.entryId : '';
+    sb.textContent = e.score !== null && e.score !== undefined ? '✏️ แก้คะแนน (' + e.score + '/' + scoreMax() + ')' : '⭐ ให้คะแนน';
     $('fs-photo-modal').classList.remove('hidden');
     const target = focus ? $('fs-photo-lbl' + focus) : null;
     if (target) target.scrollIntoView({ block: 'start' });
@@ -548,9 +603,10 @@
     const sec = $('section-fives');
     // ปุ่มที่สร้างใหม่ทุกครั้งที่ render — ดักที่ section เดียว
     sec.addEventListener('click', ev => {
-      const t = ev.target.closest('[data-shoot],[data-photo],[data-confirm],[data-reject]');
+      const t = ev.target.closest('[data-shoot],[data-photo],[data-confirm],[data-reject],[data-score-entry]');
       if (!t) return;
-      if (t.dataset.shoot) openEndCamera(t.dataset.shoot, Number(t.dataset.slot) || 0);
+      if (t.dataset.scoreEntry) scoreEntry(t.dataset.scoreEntry);
+      else if (t.dataset.shoot) openEndCamera(t.dataset.shoot, Number(t.dataset.slot) || 0);
       else if (t.dataset.photo) openPhoto(t.dataset.photo, Number(t.dataset.focus) || 0);
       else if (t.dataset.confirm) confirmEntries([t.dataset.confirm]);
       else if (t.dataset.reject) rejectEntry(t.dataset.reject);
@@ -606,6 +662,7 @@
       if (b) { scoreVal = Number(b.dataset.score); renderScorePicker(); }
     });
     $('fs-score-ok').addEventListener('click', submitScore);
+    $('fs-photo-score').addEventListener('click', () => { const id = $('fs-photo-score').dataset.scoreEntry; if (id) scoreEntry(id); });
     $('fs-score-cancel').addEventListener('click', () => { if (!confirming) $('fs-score-modal').classList.add('hidden'); });
     $('fs-photo-close').addEventListener('click', () => $('fs-photo-modal').classList.add('hidden'));
     $('fs-photo-modal').addEventListener('click', ev => { if (ev.target === $('fs-photo-modal')) $('fs-photo-modal').classList.add('hidden'); });
