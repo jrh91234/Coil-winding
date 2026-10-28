@@ -444,8 +444,10 @@ function saveCheckImageToDrive(base64Data, filename) {
 var FIVES_END_SHEET = "FiveSEndLog";
 var FIVES_END_HEADERS = ["EntryID", "Timestamp", "Date", "Day", "Shift",
   "DoneBy", "DoneByName", "Photos", "Remark", "Status",
-  "ConfirmedBy", "ConfirmedName", "ConfirmedAt", "RejectReason", "ClientRequestID"];
+  "ConfirmedBy", "ConfirmedName", "ConfirmedAt", "RejectReason", "ClientRequestID",
+  "Score", "ScoreNote"];
 var FIVES_END_PHOTOS = 3;   // งานหลังเลิกงานต้องมีรูปครบเท่านี้พอดี
+var FIVES_SCORE_MAX = 10;   // คะแนนที่ Leader ให้ตอนยืนยัน (0..10) ใช้ประเมินพนักงานประจำกะ
 
 /** วันทำงาน yyyy-MM-dd (ตัดรอบ 08:00 เวลาไทย) */
 function fiveSWorkDate_(d) {
@@ -484,7 +486,9 @@ function mapFiveSEndRow_(r) {
     confirmedBy: String(r.ConfirmedBy || ""),
     confirmedName: String(r.ConfirmedName || ""),
     confirmedAt: String(r.ConfirmedAt || ""),
-    rejectReason: String(r.RejectReason || "")
+    rejectReason: String(r.RejectReason || ""),
+    score: r.Score === "" || r.Score === null || r.Score === undefined ? null : Number(r.Score),
+    scoreNote: String(r.ScoreNote || "")
   };
 }
 
@@ -1853,6 +1857,10 @@ function doPost(e) {
         endEntries: all.filter(e => e.date >= weekStart && e.date <= weekEnd),
         endToday: all.filter(e => e.date === today),
         pending: all.filter(e => e.status === "done" && e.date >= pendingFrom),
+        // คะแนนทั้งเดือนของสัปดาห์ที่ดู — ไว้ประเมินพนักงานประจำกะ
+        month: ref.substring(0, 7),
+        monthScored: all.filter(e => e.status === "confirmed" && e.score !== null && e.date.substring(0, 7) === ref.substring(0, 7)),
+        scoreMax: FIVES_SCORE_MAX,
         canConfirm: canConfirmFiveS_(data.role)
       });
     }
@@ -1915,6 +1923,8 @@ function doPost(e) {
           ConfirmedBy: "",
           ConfirmedName: "",
           ConfirmedAt: "",
+          Score: "",
+          ScoreNote: "",
           ClientRequestID: clientRequestId
         };
         if (st.existing) {
@@ -1947,6 +1957,12 @@ function doPost(e) {
       lock.waitLock(10000);
       const all = readAll_();
       if (action === "CONFIRM_FIVES") {
+        // คะแนนบังคับ: จำนวนเต็ม 0..FIVES_SCORE_MAX ใช้คะแนนเดียวกันทุกรายการที่ส่งมา
+        const score = Number(data.score);
+        if (data.score === "" || data.score === null || data.score === undefined || !Number.isInteger(score) || score < 0 || score > FIVES_SCORE_MAX) {
+          return jsonOut_({status: "error", message: "กรุณาให้คะแนน 0–" + FIVES_SCORE_MAX});
+        }
+        const scoreNote = String(data.scoreNote || "").trim().substring(0, 300);
         const wanted = {};
         (Array.isArray(data.entryIds) ? data.entryIds : []).forEach(id => { wanted[String(id)] = true; });
         const ids = [];
@@ -1954,11 +1970,11 @@ function doPost(e) {
         all.rows.forEach(function(r) {
           if (!wanted[String(r.EntryID)] || String(r.Status) !== "done") return;
           if (isSelf_(r)) { skippedSelf++; return; }
-          setCells_(all.headers, r._row, { Status: "confirmed", ConfirmedBy: data.username || "", ConfirmedName: leaderName, ConfirmedAt: stamp, RejectReason: "" });
+          setCells_(all.headers, r._row, { Status: "confirmed", ConfirmedBy: data.username || "", ConfirmedName: leaderName, ConfirmedAt: stamp, RejectReason: "", Score: score, ScoreNote: scoreNote });
           ids.push(String(r.EntryID));
         });
         SpreadsheetApp.flush();
-        if (ids.length) logUserAction(data.username || "System", data.role || "User", "CONFIRM_FIVES", "ยืนยัน 5ส.: " + ids.join(", "));
+        if (ids.length) logUserAction(data.username || "System", data.role || "User", "CONFIRM_FIVES", "ยืนยัน 5ส.: " + ids.join(", ") + " | คะแนน " + score + "/" + FIVES_SCORE_MAX);
         return jsonOut_({status: "success", confirmed: ids.length, confirmedIds: ids,
           message: (ids.length ? "ยืนยันเรียบร้อย " + ids.length + " รายการ" : "ไม่มีรายการที่รอยืนยัน") +
             (skippedSelf ? " (ข้าม " + skippedSelf + " รายการที่คุณถ่ายเอง)" : "")});

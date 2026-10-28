@@ -109,9 +109,10 @@
 - ทุกกะ (A/B) ทำวันละ 1 ครั้ง จ.–ส. (วันอาทิตย์ไม่มี) วันทำงานตัดรอบ 08:00 · ผู้ใช้เลือก "กะของฉัน" เอง (จำใน localStorage `cwm_fives_crew`)
 - ถ่ายรูปครบ 3 รูป (บังคับ): 1) พื้นที่ทำงาน/พื้นรอบเครื่อง 2) โต๊ะงาน/เครื่องมือเก็บเข้าที่ 3) ถังขยะ/ถังเศษ/จุดวางงาน NG — กล้องในหน้าเว็บเท่านั้น (fallback `<input capture>` ไม่รับไฟล์เก่ากว่า 5 นาที) ย่อ 1280px JPEG 0.75 ประทับแถบ กะ/(n/3)/เวลา/ชื่อ
 - รูปตัวอย่างจางในช่องว่าง: `img/fives/end-1..3.jpg` (ดู `img/fives/README.md`)
+- **คะแนน 5ส.**: Leader ต้องให้คะแนน 0–10 (บังคับ) + ความเห็น (ไม่บังคับ) ตอนยืนยัน (ยืนยันทั้งหมด = คะแนนเดียวกัน) → คอลัมน์ `Score`, `ScoreNote` · แท็บสรุปรายสัปดาห์มีการ์ด "คะแนนประเมินพนักงานประจำกะ" เฉลี่ยทั้งเดือนต่อกะ A/B และต่อผู้ถ่าย (`monthScored` จาก GET_FIVES_WEEK) · ถูกตีกลับแล้วส่งใหม่ คะแนนเดิมถูกล้าง
 - Leader (role Admin / Production) ยืนยัน หรือ "ให้ทำใหม่" พร้อมเหตุผล — คนถ่ายยืนยัน/ตีกลับงานตัวเองไม่ได้ (ยกเว้น Admin) · งานที่ถูกตีกลับถ่ายใหม่ครบ 3 รูปแล้วบันทึกทับแถวเดิม
-- Sheet `FiveSEndLog`: EntryID (`5SE-yyyyMMdd-XXXXXX`), Timestamp, Date, Day, Shift, DoneBy, DoneByName, Photos (URL คั่น ", "), Remark, Status (done/confirmed/rejected), ConfirmedBy, ConfirmedName, ConfirmedAt, RejectReason, ClientRequestID (สร้างอัตโนมัติ) · รูปเก็บ Drive โฟลเดอร์ `5S_Photos` (Script Property `FIVES_PHOTOS_FOLDER_ID`)
-- Backend actions (POST): `GET_FIVES_WEEK` (date → endEntries/endToday/pending ย้อน 31 วัน/canConfirm), `SAVE_FIVES_END` (shift, photos[3], remark, clientRequestId กันส่งซ้ำ), `CONFIRM_FIVES` (entryIds[]), `REJECT_FIVES` (entryId, reason)
+- Sheet `FiveSEndLog`: EntryID (`5SE-yyyyMMdd-XXXXXX`), Timestamp, Date, Day, Shift, DoneBy, DoneByName, Photos (URL คั่น ", "), Remark, Status (done/confirmed/rejected), ConfirmedBy, ConfirmedName, ConfirmedAt, RejectReason, ClientRequestID, Score, ScoreNote (สร้าง/เติมคอลัมน์อัตโนมัติ) · รูปเก็บ Drive โฟลเดอร์ `5S_Photos` (Script Property `FIVES_PHOTOS_FOLDER_ID`)
+- Backend actions (POST): `GET_FIVES_WEEK` (date → endEntries/endToday/pending ย้อน 31 วัน/canConfirm), `SAVE_FIVES_END` (shift, photos[3], remark, clientRequestId กันส่งซ้ำ), `CONFIRM_FIVES` (entryIds[], score 0–10, scoreNote), `REJECT_FIVES` (entryId, reason)
 
 ## Architecture Notes
 - All chart functions use `window.functionName` — no ES modules, no imports
