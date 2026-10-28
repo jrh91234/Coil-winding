@@ -1343,6 +1343,12 @@
                     <button type="button" id="fs-refresh" class="px-2 py-1 rounded-lg border border-gray-300 text-sm" title="รีเฟรช">🔄</button>
                 </div>
             </div>
+            <div id="fs-admin-tools" class="hidden mt-3 flex flex-wrap items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm">
+                <span class="font-bold text-amber-800">🛠 Admin: ลงย้อนหลัง / ทดสอบ</span>
+                <input type="date" id="fs-backdate" class="p-1 border rounded text-sm">
+                <button type="button" id="fs-backdate-clear" class="px-2 py-1 border rounded bg-white text-xs">กลับวันนี้</button>
+                <span class="text-xs text-amber-700">เลือกวันที่ผ่านมาแล้ว แล้วแตะช่องเพื่อเลือกรูปจากไฟล์</span>
+            </div>
             <div class="flex gap-2 mt-3">
                 <button type="button" id="fs-view-today">📷 งานวันนี้</button>
                 <button type="button" id="fs-view-week">📅 สรุปรายสัปดาห์</button>
@@ -1404,6 +1410,7 @@
             </div>
         </div>
         <input type="file" id="fs-cam-fallback" accept="image/*" capture="environment" class="hidden">
+        <input type="file" id="fs-cam-file" accept="image/*" class="hidden">
     </div>
 
     <!-- 5ส.: Leader ยืนยัน + ให้คะแนน -->
@@ -2061,7 +2068,7 @@
 
     <script src="js/scrap.js?v=2.1"></script>
     <script src="js/dailycheck.js?v=1.0"></script>
-    <script src="js/fives.js?v=1.1"></script>
+    <script src="js/fives.js?v=1.2"></script>
     <script src="js/parts.js?v=5.5"></script>
     <script src="js/inbox.js?v=2.7"></script>
     <script src="js/tabs.js?v=1.1"></script>

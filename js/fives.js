@@ -26,6 +26,7 @@
   let camIdx = 0;           // ช่องที่กล้องกำลังถ่าย
   let sending = false;
   let confirming = false;
+  let backDate = '';        // Admin: วันที่ลงย้อนหลัง / ทดสอบ ('' = วันทำงานปัจจุบัน)
   let scoreIds = [];        // รายการที่กำลังให้คะแนนในหน้าต่างยืนยัน
   let scoreVal = null;
 
@@ -67,6 +68,9 @@
 
   function scoreMax(){ return (data && data.scoreMax) || 10; }
   function fmtAvg(sum, n){ return n ? (Math.round(sum / n * 10) / 10).toFixed(1) : '-'; }
+
+  function isAdmin(){ return user().role === 'Admin'; }
+  function dayOfWeek(dateStr){ const d = new Date(dateStr + 'T12:00:00').getDay(); return d === 0 ? 7 : d; }
 
   function canConfirm(){ return !!(data && data.canConfirm); }
   // คนที่ถ่ายรูปยืนยันงานตัวเองไม่ได้ (ยกเว้น Admin) — backend เช็คซ้ำ
@@ -145,14 +149,20 @@
   function renderToday(){
     const box = $('fs-today');
     const d = data;
-    if (d.todayDay > 6) {
-      box.innerHTML = '<div class="bg-white rounded-xl shadow p-6 text-center text-gray-500">วันอาทิตย์ไม่มีเวร 5ส.</div>';
+    const date = backDate || d.today;
+    const day = dayOfWeek(date);
+    const banner = backDate
+      ? '<div class="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-3 mb-3 text-sm">🛠 <b>โหมดลงย้อนหลัง / ทดสอบ (Admin)</b> วันที่ ' + esc(shortDate(date)) +
+        ' — แตะช่องเพื่อเลือกรูปจากไฟล์ได้ (ไม่ต้องใช้กล้อง) · รายการจะมีหมายเหตุ "[ลงย้อนหลังโดย Admin]"</div>'
+      : '';
+    if (day > 6) {
+      box.innerHTML = banner + '<div class="bg-white rounded-xl shadow p-6 text-center text-gray-500">วันอาทิตย์ไม่มีเวร 5ส.</div>';
       return;
     }
     const shifts = crew === 'B' ? ['B', 'A'] : ['A', 'B'];
-    box.innerHTML = '<div class="text-sm text-gray-500 mb-2">วัน' + esc(DAY_FULL[d.todayDay]) + ' ' + esc(shortDate(d.today)) + ' (ตัดรอบวัน 08:00)</div>' +
+    box.innerHTML = banner + '<div class="text-sm text-gray-500 mb-2">วัน' + esc(DAY_FULL[day]) + ' ' + esc(shortDate(date)) + (backDate ? '' : ' (ตัดรอบวัน 08:00)') + '</div>' +
       shifts.map(shift => {
-        const e = endEntry(d.endToday, d.today, shift);
+        const e = endEntry(backDate ? d.endEntries : d.endToday, date, shift);
         const mine = crew === shift;
         let body = '';
         if (e && e.photos && e.photos.length) {
@@ -172,7 +182,7 @@
         return '<div class="fs-job-card' + (mine ? ' mine' : '') + '">' +
           '<div class="flex justify-between items-center gap-2 mb-1"><span><span class="fs-shift-pill shift-' + shift.toLowerCase() + '">กะ ' + shift + '</span>' +
           (mine ? ' <span class="text-sm text-blue-600 font-bold">งานของคุณ</span>' : '') + '</span>' +
-          statusBadge(e, d.today) + '</div>' +
+          statusBadge(e, date) + '</div>' +
           '<div class="text-xs text-gray-500 mb-2">👥 ผู้รับผิดชอบ: พนักงานกะ ' + shift + ' · ถ่ายรูปพื้นที่ทำงานก่อนเลิกงาน</div>' +
           body + '</div>';
       }).join('');
@@ -347,10 +357,11 @@
   function hasLiveCamera(){ return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
 
   function openEndCamera(shift, first){
-    if (data && data.todayDay > 6) return;
-    camJob = { shift };
+    const date = backDate || (data && data.today);
+    if (!date || dayOfWeek(date) > 6) return;
+    camJob = { shift, backDate: backDate };
     camShots = END_SHOTS.map(() => '');
-    $('fs-cam-title').textContent = '5ส. หลังเลิกงาน · กะ ' + shift;
+    $('fs-cam-title').textContent = '5ส. หลังเลิกงาน · กะ ' + shift + (backDate ? ' · ลงย้อนหลัง ' + shortDate(backDate) : '');
     $('fs-cam-remark').value = '';
     takeShot(first || 0);
   }
@@ -358,6 +369,12 @@
   async function takeShot(i){
     if (sending || !camJob) return;
     camIdx = i;
+    // Admin ลงย้อนหลัง: เลือกรูปจากไฟล์ (ไม่บังคับกล้อง ไม่เช็คอายุไฟล์)
+    if (camJob.backDate) {
+      $('fs-cam-file').value = '';
+      $('fs-cam-file').click();
+      return;
+    }
     if (!hasLiveCamera()) {
       $('fs-cam-fallback').value = '';
       $('fs-cam-fallback').click();
@@ -430,7 +447,8 @@
     ctx.drawImage(source, 0, 0, cw, ch);
     const bkk = new Date(Date.now() + 7 * 3600 * 1000).toISOString();
     const text = '5ส. หลังเลิกงาน กะ ' + camJob.shift + ' (' + (camIdx + 1) + '/' + camShots.length + ')' +
-      ' | ' + bkk.substring(0, 10) + ' ' + bkk.substring(11, 16) + ' | ' + (userName() || '');
+      ' | ' + bkk.substring(0, 10) + ' ' + bkk.substring(11, 16) + ' | ' + (userName() || '') +
+      (camJob.backDate ? ' | ลงย้อนหลัง ' + camJob.backDate : '');
     const fs = Math.max(14, Math.round(cw / 32));
     ctx.font = '700 ' + fs + 'px Sarabun, sans-serif';
     const pad = Math.round(fs * 0.5);
@@ -456,7 +474,7 @@
   function onFallbackPhoto(input){
     const file = input.files && input.files[0];
     if (!file || !camJob) return;
-    if (!file.lastModified || Date.now() - file.lastModified > FALLBACK_MAX_AGE_MS) {
+    if (!camJob.backDate && (!file.lastModified || Date.now() - file.lastModified > FALLBACK_MAX_AGE_MS)) {
       toast('ต้องถ่ายรูปใหม่จากกล้องเท่านั้น (ห้ามใช้รูปเก่าจากคลังภาพ)', 'error');
       if (!$('fs-cam').classList.contains('hidden')) showReview();
       return;
@@ -483,6 +501,7 @@
       const res = await postFs({
         action: 'SAVE_FIVES_END',
         shift: camJob.shift,
+        date: camJob.backDate || '',
         photos: camShots.slice(),
         remark: $('fs-cam-remark').value.trim(),
         clientRequestId: 'fives-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
@@ -556,6 +575,24 @@
     $('fs-cam-shutter').addEventListener('click', snap);
     $('fs-cam-send').addEventListener('click', sendPhotos);
     $('fs-cam-fallback').addEventListener('change', ev => onFallbackPhoto(ev.target));
+    $('fs-cam-file').addEventListener('change', ev => onFallbackPhoto(ev.target));
+    if (isAdmin()) {
+      $('fs-admin-tools').classList.remove('hidden');
+      $('fs-backdate').max = getShiftDateStr();
+      $('fs-backdate').addEventListener('change', () => {
+        const v = $('fs-backdate').value;
+        backDate = v && v < getShiftDateStr() ? v : '';
+        if (!backDate) $('fs-backdate').value = '';
+        weekRef = backDate;
+        view = 'today';
+        load();
+      });
+      $('fs-backdate-clear').addEventListener('click', () => {
+        $('fs-backdate').value = '';
+        backDate = ''; weekRef = '';
+        load();
+      });
+    }
     $('fs-cam-strip').addEventListener('click', ev => {
       const b = ev.target.closest('[data-pick]');
       if (b) { camIdx = Number(b.dataset.pick); showLive(); }
