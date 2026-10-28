@@ -1877,32 +1877,22 @@ function doPost(e) {
       if (photos.length !== FIVES_END_PHOTOS || valid.length !== FIVES_END_PHOTOS) {
         return jsonOut_({status: "error", message: "กรุณาถ่ายรูปให้ครบ " + FIVES_END_PHOTOS + " รูป"});
       }
-      // Admin ลงย้อนหลัง / ทดสอบได้ (ไม่เกิน 60 วัน ห้ามวันอนาคต) — คนอื่นบันทึกได้เฉพาะวันทำงานปัจจุบัน
-      let workDate = today;
-      const backDate = String(data.date || "").trim();
-      if (backDate && backDate !== today) {
-        if (data.role !== "Admin") return jsonOut_({status: "error", message: "ลงย้อนหลังได้เฉพาะ Admin"});
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(backDate) || backDate > today || backDate < fiveSAddDays_(today, -60)) {
-          return jsonOut_({status: "error", message: "วันที่ลงย้อนหลังไม่ถูกต้อง (ย้อนได้ไม่เกิน 60 วัน)"});
-        }
-        workDate = backDate;
-      }
-      if (fiveSDayOfWeek_(workDate) > 6) return jsonOut_({status: "error", message: "วันอาทิตย์ไม่มีเวร 5ส."});
+      if (fiveSDayOfWeek_(today) > 6) return jsonOut_({status: "error", message: "วันอาทิตย์ไม่มีเวร 5ส."});
       const clientRequestId = String(data.clientRequestId || "").trim();
-      const remark = ((workDate !== today ? "[ลงย้อนหลังโดย Admin] " : "") + String(data.remark || "").trim()).substring(0, 300);
+      const remark = String(data.remark || "").trim().substring(0, 300);
       const doneName = String(data.name || data.username || "").trim();
 
       // เช็คซ้ำก่อนอัปโหลดรูป (ไม่ล็อค เพราะอัปโหลดรูปใช้เวลา) แล้วเช็คอีกรอบตอนเขียนชีต
       const findState_ = function() {
         const all = readAll_();
         const replay = clientRequestId ? all.rows.filter(r => String(r.ClientRequestID) === clientRequestId)[0] : null;
-        const existing = all.rows.filter(r => r.Date === workDate && String(r.Shift) === shift)[0] || null;
+        const existing = all.rows.filter(r => r.Date === today && String(r.Shift) === shift)[0] || null;
         return { headers: all.headers, replay: replay, existing: existing };
       };
       const blocked_ = function(st) {
         if (st.replay) return jsonOut_({status: "success", duplicate: true, entry: mapFiveSEndRow_(st.replay), message: "บันทึกเรียบร้อย"});
         if (st.existing && String(st.existing.Status) !== "rejected") {
-          return jsonOut_({status: "error", message: "5ส. หลังเลิกงาน กะ " + shift + (workDate === today ? " วันนี้" : " วันที่ " + workDate) + " บันทึกไปแล้วโดย " + (st.existing.DoneByName || st.existing.DoneBy)});
+          return jsonOut_({status: "error", message: "5ส. หลังเลิกงาน กะ " + shift + " วันนี้บันทึกไปแล้วโดย " + (st.existing.DoneByName || st.existing.DoneBy)});
         }
         return null;
       };
@@ -1948,13 +1938,13 @@ function doPost(e) {
           setCells_(st.headers, st.existing._row, values);
         } else {
           values.EntryID = entryId;
-          values.Date = "'" + workDate;   // เก็บเป็นข้อความ กันชีตแปลงเป็น Date
-          values.Day = fiveSDayOfWeek_(workDate);
+          values.Date = "'" + today;   // เก็บเป็นข้อความ กันชีตแปลงเป็น Date
+          values.Day = fiveSDayOfWeek_(today);
           values.Shift = shift;
           sheet.appendRow(st.headers.map(h => values.hasOwnProperty(h) ? values[h] : ""));
         }
         SpreadsheetApp.flush();
-        logUserAction(data.username || "System", data.role || "User", "SAVE_FIVES_END", "5ส. หลังเลิกงาน: " + entryId + " | กะ " + shift + " | " + workDate);
+        logUserAction(data.username || "System", data.role || "User", "SAVE_FIVES_END", "5ส. หลังเลิกงาน: " + entryId + " | กะ " + shift + " | " + today);
         return jsonOut_({status: "success", entryId: entryId, message: "บันทึกเรียบร้อย รอ Leader ตรวจยืนยัน"});
       } catch (err) {
         return jsonOut_({status: "error", message: err.toString()});
