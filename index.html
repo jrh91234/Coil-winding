@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="css/style.css?v=3.59">
+    <link rel="stylesheet" href="css/style.css?v=3.60">
 </head>
 <body class="bg-gray-100 min-h-screen font-sans pb-10">
 
@@ -1373,6 +1373,11 @@
                 <div id="fs-week-summary" class="mb-2"></div>
                 <div class="overflow-x-auto"><table class="fs-week" id="fs-week-table"></table></div>
             </div>
+            <div class="bg-white rounded-xl shadow p-4 mt-4">
+                <div class="font-bold text-gray-800 mb-2">⭐ คะแนนประเมินพนักงานประจำกะ · เดือน <span id="fs-score-title"></span></div>
+                <div id="fs-score-body"></div>
+                <div class="text-[11px] text-gray-400 mt-2">คะแนนเฉลี่ยจากที่ Leader ให้ตอนยืนยัน (เต็ม 10) · แยกตามผู้ถ่ายรูปในกะนั้น</div>
+            </div>
         </div>
     </main>
 
@@ -1399,6 +1404,21 @@
             </div>
         </div>
         <input type="file" id="fs-cam-fallback" accept="image/*" capture="environment" class="hidden">
+    </div>
+
+    <!-- 5ส.: Leader ยืนยัน + ให้คะแนน -->
+    <div id="fs-score-modal" class="fixed inset-0 bg-black bg-opacity-60 z-[66] hidden flex items-center justify-center p-3 print-hide">
+        <div class="bg-white w-full max-w-md rounded-xl shadow-2xl p-4">
+            <div class="font-bold text-lg text-emerald-700">✔ ยืนยันงาน 5ส. + ให้คะแนน</div>
+            <div id="fs-score-target" class="text-sm text-gray-600 mb-3"></div>
+            <div class="text-sm font-bold mb-1">คะแนน (เต็ม <span id="fs-score-max">10</span>) <span class="text-red-600">*</span></div>
+            <div id="fs-score-picker" class="grid grid-cols-6 gap-2 mb-3"></div>
+            <input type="text" id="fs-score-note" class="w-full p-2 border rounded-lg text-sm mb-3" placeholder="ความเห็น (ไม่บังคับ) เช่น จุดที่ควรปรับปรุง" maxlength="300">
+            <div class="flex gap-2">
+                <button type="button" id="fs-score-ok" class="flex-1 h-11 rounded-lg bg-green-600 text-white font-bold disabled:opacity-40">✔ ยืนยัน</button>
+                <button type="button" id="fs-score-cancel" class="flex-1 h-11 rounded-lg bg-gray-200 font-bold">ยกเลิก</button>
+            </div>
+        </div>
     </div>
 
     <!-- 5ส.: ดูรูป -->
@@ -2041,7 +2061,7 @@
 
     <script src="js/scrap.js?v=2.1"></script>
     <script src="js/dailycheck.js?v=1.0"></script>
-    <script src="js/fives.js?v=1.0"></script>
+    <script src="js/fives.js?v=1.1"></script>
     <script src="js/parts.js?v=5.5"></script>
     <script src="js/inbox.js?v=2.7"></script>
     <script src="js/tabs.js?v=1.1"></script>
