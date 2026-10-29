@@ -430,6 +430,77 @@ window.renderRecorderOptions = function() {
     if (recorderList.includes(currentVal)) {
         select.value = currentVal;
     }
+    if (window.currentUser && typeof window.applyUserRecorderLock === 'function') window.applyUserRecorderLock();
+};
+
+// 🔒 ผู้บันทึก + กะ ตาม User ที่ Login (คอลัมน์ E ของ Sheet Users = กะประจำ A/B)
+// ผู้ใช้ทั่วไป: เลือกให้อัตโนมัติและล็อคไว้ / Admin: เลือกให้อัตโนมัติแต่ยังแก้ไขได้
+// ล็อคด้วย CSS แทน disabled เพราะ FormData ไม่ส่งค่า field ที่ disabled
+function setFieldLocked(el, locked) {
+    if (!el) return;
+    el.classList.toggle('pointer-events-none', locked);
+    el.classList.toggle('bg-gray-100', locked);
+    el.classList.toggle('bg-white', !locked && el.id === 'recorder');
+    el.tabIndex = locked ? -1 : 0;
+    el.title = locked ? 'ล็อคตามผู้ใช้ที่ Login' : '';
+    el.dataset.locked = locked ? '1' : '';
+}
+
+window.applyUserRecorderLock = function() {
+    const u = window.currentUser;
+    if (!u) return;
+    const isAdmin = u.role === 'Admin';
+    const recSel = document.getElementById('recorder');
+    const shiftSel = document.getElementById('shift');
+    const name = String(u.name || u.username || '').trim();
+    const shift = String(u.shift || '').trim().toUpperCase();
+
+    if (recSel && name) {
+        if (![...recSel.options].some(o => o.value === name)) {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.text = name;
+            recSel.appendChild(opt);
+        }
+        if (!isAdmin || !recSel.value) recSel.value = name;
+        setFieldLocked(recSel, !isAdmin);
+        recSel.dataset.lockedValue = isAdmin ? '' : name;
+        const manageBtn = recSel.parentElement && recSel.parentElement.querySelector('button');
+        if (manageBtn) manageBtn.classList.toggle('hidden', !isAdmin);
+    }
+
+    if (shiftSel) {
+        const validShift = shift === 'A' || shift === 'B';
+        if (validShift) shiftSel.value = shift;
+        const lockShift = validShift && !isAdmin;
+        setFieldLocked(shiftSel, lockShift);
+        shiftSel.dataset.lockedValue = lockShift ? shift : '';
+    }
+};
+
+// กันการเปลี่ยนค่าผ่านคีย์บอร์ด/สคริปต์ ขณะที่ field ถูกล็อค
+['recorder', 'shift'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', () => {
+        if (el.dataset.lockedValue) el.value = el.dataset.lockedValue;
+    });
+});
+
+// ดึงกะ/ชื่อล่าสุดของผู้ใช้จาก Sheet Users (รองรับ session เก่าที่ยังไม่มี shift และ SSO)
+window.refreshCurrentUserProfile = async function() {
+    const u = window.currentUser;
+    if (!u || !u.username) return;
+    try {
+        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_USERS' }) });
+        const data = await res.json();
+        if (!data.success || !Array.isArray(data.users)) return;
+        const me = data.users.find(x => String(x.username) === String(u.username));
+        if (!me) return;
+        u.shift = String(me.shift || '');
+        if (me.name) u.name = me.name;
+        localStorage.setItem('CWM_AUTH_USER', JSON.stringify(u));
+        window.applyUserRecorderLock();
+    } catch (e) { /* ใช้ค่าจาก session เดิม */ }
 };
 
 window.renderProductOptions = function() { 

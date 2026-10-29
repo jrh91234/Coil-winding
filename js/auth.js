@@ -113,6 +113,8 @@ function initAppAfterLogin() {
     window.initSortable();
     window.renderRecorderOptions();
     window.renderProductOptions();
+    window.applyUserRecorderLock();
+    window.refreshCurrentUserProfile();
 
     // โหลดรายการ Job Order (แผนการผลิต) ให้ฟอร์มบันทึกผลิตและหน้าวางแผนใช้งาน
     if (typeof window.loadJobOrders === 'function') {
@@ -171,7 +173,7 @@ window.openAdminPanel = function() {
 
 async function loadAdminUsers() {
     const tbody = document.getElementById('admin-user-table');
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-500">กำลังโหลดข้อมูลผู้ใช้งาน...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-gray-500">กำลังโหลดข้อมูลผู้ใช้งาน...</td></tr>';
     
     try {
         const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_USERS' }) });
@@ -196,8 +198,9 @@ async function loadAdminUsers() {
                             ${u.role}
                         </span>
                     </td>
+                    <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-700">${u.shift || '<span class="text-gray-400 font-normal">-</span>'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                        <button onclick="window.showUserModal('EDIT', '${u.username}', '${u.name}', '${u.role}')" class="text-indigo-600 hover:text-indigo-900 mr-3">✏️ แก้ไข</button>
+                        <button onclick="window.showUserModal('EDIT', '${u.username}', '${u.name}', '${u.role}', '${u.shift || ''}')" class="text-indigo-600 hover:text-indigo-900 mr-3">✏️ แก้ไข</button>
                         ${u.username !== window.currentUser.username ? 
                             `<button onclick="window.deleteUser('${u.username}')" class="text-red-600 hover:text-red-900">🗑️ ลบ</button>` 
                             : '<span class="text-gray-400 text-xs">(คุณ)</span>'
@@ -207,14 +210,14 @@ async function loadAdminUsers() {
             });
             tbody.innerHTML = html;
         } else {
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-500">ไม่พบข้อมูล หรือเกิดข้อผิดพลาด</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">ไม่พบข้อมูล หรือเกิดข้อผิดพลาด</td></tr>';
         }
     } catch(e) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-500">เกิดข้อผิดพลาดในการโหลดข้อมูล</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">เกิดข้อผิดพลาดในการโหลดข้อมูล</td></tr>';
     }
 }
 
-window.showUserModal = function(mode, username='', name='', role='Production') {
+window.showUserModal = function(mode, username='', name='', role='Production', shift='') {
     document.getElementById('user-manage-mode').value = mode;
     document.getElementById('user-manage-target').value = username;
     document.getElementById('user-modal-title').innerText = mode === 'ADD' ? 'เพิ่มผู้ใช้งานใหม่' : 'แก้ไขผู้ใช้งาน: ' + username;
@@ -228,6 +231,7 @@ window.showUserModal = function(mode, username='', name='', role='Production') {
     
     document.getElementById('user-manage-name').value = name;
     document.getElementById('user-manage-role').value = role;
+    document.getElementById('user-manage-shift').value = shift;
     
     document.getElementById('modal-user-manage').classList.remove('hidden');
 };
@@ -240,6 +244,7 @@ document.getElementById('userManageForm').onsubmit = async (e) => {
     const password = document.getElementById('user-manage-password').value.trim();
     const name = document.getElementById('user-manage-name').value.trim();
     const role = document.getElementById('user-manage-role').value;
+    const shift = document.getElementById('user-manage-shift').value;
     
     const btn = document.getElementById('btn-save-user');
     btn.disabled = true;
@@ -252,7 +257,8 @@ document.getElementById('userManageForm').onsubmit = async (e) => {
         newUsername: username,
         newPassword: password,
         newName: name,
-        newRole: role
+        newRole: role,
+        newShift: shift
     };
     
     try {
