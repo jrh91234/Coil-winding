@@ -1156,7 +1156,7 @@ function doPost(e) {
         logUserAction(sheetData[i][0], sheetData[i][2], "LOGIN", "เข้าสู่ระบบสำเร็จ");
         return ContentService.createTextOutput(JSON.stringify({
           success: true,
-          user: { username: String(sheetData[i][0]), role: sheetData[i][2], name: sheetData[i][3] }
+          user: { username: String(sheetData[i][0]), role: sheetData[i][2], name: sheetData[i][3], shift: String(sheetData[i][4] || '') }
         })).setMimeType(ContentService.MimeType.JSON);
       }
     }
@@ -1197,7 +1197,7 @@ function doPost(e) {
     const sheetData = sheet.getDataRange().getValues();
     const users = [];
     for(let i = 1; i < sheetData.length; i++) {
-        users.push({ username: sheetData[i][0], role: sheetData[i][2], name: sheetData[i][3] });
+        users.push({ username: sheetData[i][0], role: sheetData[i][2], name: sheetData[i][3], shift: String(sheetData[i][4] || '') });
     }
     return ContentService.createTextOutput(JSON.stringify({success: true, users: users})).setMimeType(ContentService.MimeType.JSON);
   }
@@ -1213,7 +1213,7 @@ function doPost(e) {
       }
     }
     
-    sheet.appendRow([data.newUsername, data.newPassword, data.newRole, data.newName]);
+    sheet.appendRow([data.newUsername, data.newPassword, data.newRole, data.newName, data.newShift || '']);
     logUserAction(data.adminUsername || "Admin", "Admin", "ADD_USER", "เพิ่มผู้ใช้ใหม่: " + data.newUsername);
     return ContentService.createTextOutput(JSON.stringify({success: true, message: "เพิ่มผู้ใช้สำเร็จ"})).setMimeType(ContentService.MimeType.JSON);
   }
@@ -1236,6 +1236,8 @@ function doPost(e) {
       if (data.newPassword) sheet.getRange(foundRow, 2).setValue(data.newPassword);
       if (data.newRole) sheet.getRange(foundRow, 3).setValue(data.newRole);
       if (data.newName) sheet.getRange(foundRow, 4).setValue(data.newName);
+      // คอลัมน์ E = กะประจำตัว (A/B) — ค่าว่าง = ไม่ระบุกะ (ส่งมาเสมอจากฟอร์มจัดการผู้ใช้)
+      if (data.newShift !== undefined) sheet.getRange(foundRow, 5).setValue(data.newShift || '');
       
       logUserAction(data.adminUsername || "Admin", "Admin", "EDIT_USER", "แก้ไขผู้ใช้: " + data.targetUsername);
       return ContentService.createTextOutput(JSON.stringify({success: true, message: "แก้ไขข้อมูลผู้ใช้สำเร็จ"})).setMimeType(ContentService.MimeType.JSON);
