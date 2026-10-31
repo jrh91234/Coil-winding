@@ -163,6 +163,7 @@ window.viewMaintImage = function(url, caption) {
     const cap = document.getElementById('viewer-caption');
 
     if (modal && img) {
+        img.onerror = null; // ล้าง fallback ที่ผู้เรียกครั้งก่อนตั้งไว้
         img.src = url;
         if (cap) cap.innerText = caption || 'ภาพแนบการแจ้งซ่อม';
         modal.classList.remove('hidden');

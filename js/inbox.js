@@ -1032,8 +1032,19 @@ function renderPmHistoryItem(l) {
 }
 
 window.openPmPhoto = function(url, caption) {
-    if (typeof window.viewMaintImage === 'function') window.viewMaintImage(url, caption);
-    else window.open(url, '_blank');
+    // ลิงก์ Drive แบบ /file/d/.../view ใส่ใน <img> ตรง ๆ ไม่ได้ — แปลงเป็นลิงก์รูปโดยตรงก่อน
+    const m = String(url || '').match(/\/d\/([^/?#]+)/) || String(url || '').match(/id=([^&]+)/);
+    if (!m || typeof window.viewMaintImage !== 'function') { window.open(url, '_blank'); return; }
+    const fileId = m[1];
+    window.viewMaintImage(`https://lh3.googleusercontent.com/d/${fileId}`, caption);
+    const img = document.getElementById('viewer-img');
+    if (img) {
+        // สำรอง: lh3 โหลดไม่ได้ → ใช้ thumbnail ขนาดใหญ่ → ยังไม่ได้อีกเปิดลิงก์ Drive ในแท็บใหม่
+        img.onerror = function() {
+            this.onerror = function() { this.onerror = null; window.open(url, '_blank'); };
+            this.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1600`;
+        };
+    }
 };
 
 // เปิดรายละเอียดงาน PM ที่ทำไปแล้ว (เรียกได้จากทั้งหน้าประวัติและ Gantt)
