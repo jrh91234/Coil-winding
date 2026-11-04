@@ -1857,7 +1857,7 @@ function doPost(e) {
 
   // --- Daily Check Machine (AM) — js/machinecheck.js (หัวข้อตาม Google Form เดิม B-CWMxx) ---
   const MACHINE_CHECK_HEADERS = ["Check_ID", "Timestamp", "Shift_Date", "Shift", "Check_Time", "Line", "Machine",
-    "AM1", "AM2", "AM3", "AM4", "Abnormal", "Result", "SESA", "Inspector", "Recorded_By"];
+    "AM1", "AM2", "AM3", "AM4", "Abnormal", "Result", "SESA", "Inspector", "Recorded_By", "Entry_Type", "Backfill_Ref"];
 
   if (action === "SAVE_MACHINE_CHECK") {
     const machine = String(data.machine || "").trim();
@@ -1870,6 +1870,13 @@ function doPost(e) {
     if (!/^\d+$/.test(sesa)) return jsonOut_({status: "error", message: "SESA ผู้ตรวจ ต้องเป็นตัวเลข"});
     if (!data.AM1 || data.AM2 === undefined || data.AM2 === "" || !data.AM3 || !data.AM4) {
       return jsonOut_({status: "error", message: "กรุณาตอบข้อ 1-4 ให้ครบ"});
+    }
+    // บันทึกย้อนหลัง: ต้องมีเวลาตรวจจริง + หลักฐาน · Timestamp ยังเป็นเวลาที่กรอกจริงเสมอ (ไม่ย้อนเวลา)
+    const isBackfill = data.backfill === true || data.backfill === "true";
+    const backfillRef = String(data.backfillRef || "").trim();
+    if (isBackfill) {
+      if (!/^\d{2}:\d{2}$/.test(String(data.checkTime || ""))) return jsonOut_({status: "error", message: "บันทึกย้อนหลัง: กรุณาระบุเวลาที่ตรวจจริง"});
+      if (!backfillRef) return jsonOut_({status: "error", message: "บันทึกย้อนหลัง: กรุณาระบุแหล่งที่มา/หลักฐาน"});
     }
     const lock = LockService.getScriptLock();
     try {
@@ -1905,11 +1912,13 @@ function doPost(e) {
         Result: data.result === "PASS" ? "PASS" : "FAIL",
         SESA: "'" + sesa,                                  // เก็บเป็นข้อความ กันเลข 0 นำหน้าหาย
         Inspector: data.inspector || "",
-        Recorded_By: data.username || ""
+        Recorded_By: data.username || "",
+        Entry_Type: isBackfill ? "Backfill" : "Realtime",
+        Backfill_Ref: isBackfill ? backfillRef : ""
       };
       sheet.appendRow(headers.map(h => rowMap.hasOwnProperty(h) ? rowMap[h] : ""));
       SpreadsheetApp.flush();
-      logUserAction(data.username || data.inspector || "System", data.role || "User", "SAVE_MACHINE_CHECK", "Machine Check: " + checkId + " | " + machine + " | " + shiftDate + " " + shift + " | " + rowMap.Result);
+      logUserAction(data.username || data.inspector || "System", data.role || "User", "SAVE_MACHINE_CHECK", "Machine Check: " + checkId + " | " + machine + " | " + shiftDate + " " + shift + " | " + rowMap.Result + (isBackfill ? " | ย้อนหลัง: " + backfillRef : ""));
       return jsonOut_({status: "success", checkId: checkId});
     } catch (err) {
       return jsonOut_({status: "error", message: err.toString()});
@@ -2032,12 +2041,12 @@ function doPost(e) {
     }
 
     // 2) Daily Check Machine ที่มีอยู่
-    const checks = {};
+    const checks = {}, backfilled = {}, realtime = {};
     const mSheet = ss.getSheetByName("Machine_Check");
     if (mSheet && mSheet.getLastRow() > 1) {
       const rows = mSheet.getDataRange().getValues();
       const hd = rows[0].map(h => String(h || "").trim());
-      const cDate = hd.indexOf("Shift_Date"), cMc = hd.indexOf("Machine"), cSh = hd.indexOf("Shift"), cRes = hd.indexOf("Result");
+      const cDate = hd.indexOf("Shift_Date"), cMc = hd.indexOf("Machine"), cSh = hd.indexOf("Shift"), cRes = hd.indexOf("Result"), cType = hd.indexOf("Entry_Type");
       for (let i = 1; i < rows.length; i++) {
         const d = toYmd(rows[i][cDate]);
         const mc = normMc(rows[i][cMc]);
@@ -2045,13 +2054,15 @@ function doPost(e) {
         const k = d + "|" + mc + "|" + normShift(rows[i][cSh]);
         const res = String(rows[i][cRes] || "").toUpperCase();
         checks[k] = checks[k] === "FAIL" ? "FAIL" : (res === "PASS" ? "PASS" : "FAIL");
+        if (cType !== -1 && String(rows[i][cType] || "") === "Backfill") backfilled[k] = true;
+        else realtime[k] = true;
       }
     }
 
     const out = Object.keys(prod).map(function(k) {
       const p = prod[k];
       return { date: p.date, machine: p.machine, shift: p.shift, crew: Object.keys(p.crew).sort().join("/"),
-        fg: p.fg, entries: p.entries, check: checks[k] || "" };
+        fg: p.fg, entries: p.entries, check: checks[k] || "", backfill: !!(backfilled[k] && !realtime[k]) };
     });
     out.sort(function(a, b) {
       return a.date.localeCompare(b.date) || (a.shift === b.shift ? 0 : a.shift === "Day" ? -1 : 1) || a.machine.localeCompare(b.machine);
