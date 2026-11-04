@@ -478,6 +478,97 @@
     wrap.innerHTML = `<table class="text-[11px] border-collapse"><thead class="bg-green-50"><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
   }
 
+  // ===== รายงาน: การผลิต vs Daily Check Machine =====
+  let gapRows = [];
+  async function loadGaps(){
+    const from = $('mk-gap-from').value, to = $('mk-gap-to').value;
+    if (!from || !to || from > to) return alert('กรุณาเลือกช่วงวันที่ให้ถูกต้อง');
+    const body = $('mk-gap-body');
+    body.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">กำลังโหลด... (ข้อมูลเยอะอาจใช้เวลาสักครู่)</td></tr>';
+    $('mk-gap-summary').innerHTML = ''; $('mk-gap-machines').innerHTML = '';
+    try {
+      const res = await post({ action: 'GET_MACHINE_CHECK_GAPS', dateFrom: from, dateTo: to });
+      if (!res || res.status !== 'success') throw new Error(res?.message || 'error');
+      gapRows = res.data || [];
+    } catch (e) {
+      gapRows = [];
+      body.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-red-500">โหลดข้อมูลไม่สำเร็จ: ${esc(e.message)}</td></tr>`;
+      return;
+    }
+    renderGaps();
+  }
+
+  function renderGaps(){
+    const total = gapRows.length;
+    const done = gapRows.filter(r => r.check).length;
+    const missing = total - done;
+    const fails = gapRows.filter(r => r.check === 'FAIL').length;
+    const pct = total ? Math.round(done * 1000 / total) / 10 : 0;
+    const days = new Set(gapRows.map(r => r.date)).size;
+    $('mk-gap-summary').innerHTML = total
+      ? `<div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+          <div class="rounded-lg bg-gray-50 border p-2"><div class="text-[11px] text-gray-500">วันที่มีการผลิต</div><div class="text-lg font-bold">${days}</div></div>
+          <div class="rounded-lg bg-gray-50 border p-2"><div class="text-[11px] text-gray-500">เครื่อง×กะ ที่ผลิต</div><div class="text-lg font-bold">${total}</div></div>
+          <div class="rounded-lg bg-green-50 border border-green-200 p-2"><div class="text-[11px] text-gray-500">มี Daily Check</div><div class="text-lg font-bold text-green-700">${done}${fails ? ` <span class="text-xs text-red-600">(FAIL ${fails})</span>` : ''}</div></div>
+          <div class="rounded-lg bg-red-50 border border-red-200 p-2"><div class="text-[11px] text-gray-500">ยังไม่มี Daily Check</div><div class="text-lg font-bold text-red-600">${missing}</div></div>
+          <div class="rounded-lg bg-amber-50 border border-amber-200 p-2"><div class="text-[11px] text-gray-500">ความครบถ้วน</div><div class="text-lg font-bold text-amber-700">${pct}%</div></div>
+        </div>`
+      : '<div class="text-gray-500">ไม่พบการลงยอดผลิตในช่วงวันที่นี้</div>';
+
+    // สรุปรายเครื่อง
+    const byMc = {};
+    gapRows.forEach(r => {
+      const m = byMc[r.machine] = byMc[r.machine] || { total: 0, done: 0, first: '' };
+      m.total++; if (r.check) m.done++;
+      if (!r.check && !m.first) m.first = r.date;
+    });
+    const mcs = MACHINES.filter(mc => byMc[mc]);
+    $('mk-gap-machines').innerHTML = mcs.length ? `<table class="text-xs border-collapse"><thead class="bg-amber-50"><tr>
+        <th class="p-1.5 text-left border">MC</th><th class="p-1.5 border">กะที่ผลิต</th><th class="p-1.5 border">มี Check</th><th class="p-1.5 border">ขาด</th><th class="p-1.5 border">%</th><th class="p-1.5 border text-left">ขาดตั้งแต่</th>
+      </tr></thead><tbody>${mcs.map(mc => {
+        const m = byMc[mc], miss = m.total - m.done, pc = Math.round(m.done * 100 / m.total);
+        return `<tr><td class="p-1.5 border font-bold">${mc}</td><td class="p-1.5 border text-center">${m.total}</td>
+          <td class="p-1.5 border text-center text-green-700">${m.done}</td>
+          <td class="p-1.5 border text-center ${miss ? 'text-red-600 font-bold' : ''}">${miss}</td>
+          <td class="p-1.5 border text-center">${pc}%</td><td class="p-1.5 border">${esc(m.first || '-')}</td></tr>`;
+      }).join('')}</tbody></table>` : '';
+
+    const list = $('mk-gap-filter').value === 'missing' ? gapRows.filter(r => !r.check) : gapRows;
+    const body = $('mk-gap-body');
+    if (!list.length) {
+      body.innerHTML = `<tr><td colspan="6" class="p-4 text-center ${total ? 'text-green-700 font-bold' : 'text-gray-400'}">${total ? 'มี Daily Check ครบทุกกะที่ผลิต ✔' : 'ไม่พบข้อมูล'}</td></tr>`;
+      return;
+    }
+    const MAX = 2000;
+    body.innerHTML = list.slice(0, MAX).map(r => {
+      const st = r.check === 'PASS' ? '<span class="text-green-700 font-bold">PASS</span>'
+        : r.check === 'FAIL' ? '<span class="text-red-600 font-bold">FAIL</span>'
+        : '<span class="text-red-600">✗ ไม่มีบันทึก</span>';
+      return `<tr class="border-t ${r.check ? '' : 'bg-red-50/40'}">
+        <td class="p-1.5 whitespace-nowrap">${esc(r.date)}</td>
+        <td class="p-1.5 text-center">${esc(SHIFT_LABEL[r.shift] || r.shift)}</td>
+        <td class="p-1.5 text-center">${esc(r.crew || '-')}</td>
+        <td class="p-1.5 text-center font-bold">${esc(r.machine)}</td>
+        <td class="p-1.5 text-right">${Number(r.fg || 0).toLocaleString()}</td>
+        <td class="p-1.5 text-center">${st}</td>
+      </tr>`;
+    }).join('') + (list.length > MAX ? `<tr><td colspan="6" class="p-2 text-center text-gray-500">แสดง ${MAX} จาก ${list.length} แถว — ดูทั้งหมดใน CSV</td></tr>` : '');
+  }
+
+  function exportGapCsv(){
+    if (!gapRows.length) return alert('กดค้นหาก่อน');
+    const list = $('mk-gap-filter').value === 'missing' ? gapRows.filter(r => !r.check) : gapRows;
+    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const lines = [['วันที่', 'กะ', 'กะทีม', 'เครื่อง', 'FG (ชิ้น)', 'Daily Check Machine'].map(q).join(',')]
+      .concat(list.map(r => [r.date, SHIFT_LABEL[r.shift] || r.shift, r.crew, r.machine, r.fg, r.check || 'ไม่มีบันทึก'].map(q).join(',')));
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Production_vs_DailyCheckMachine_${$('mk-gap-from').value}_${$('mk-gap-to').value}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   // ===== สลับ tab ย่อยใน Daily Check =====
   function switchSub(which){
     const isMk = which === 'machine';
@@ -530,6 +621,16 @@
       if (!card.classList.contains('hidden')) loadMonth();
     });
     $('mk-month').addEventListener('change', loadMonth);
+    $('mk-gap-from').value = addDays(today, -90);
+    $('mk-gap-to').value = today;
+    $('btn-mk-gap').addEventListener('click', () => {
+      const card = $('mk-gap-card');
+      card.classList.toggle('hidden');
+      if (!card.classList.contains('hidden')) { loadGaps(); card.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    });
+    $('btn-mk-gap-load').addEventListener('click', loadGaps);
+    $('mk-gap-filter').addEventListener('change', renderGaps);
+    $('btn-mk-gap-csv').addEventListener('click', exportGapCsv);
   }
 
   // เปิดเมนู Daily Check → กลับไป tab ย่อยที่ใช้ล่าสุด

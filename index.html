@@ -1570,6 +1570,7 @@
                         </div>
                         <button type="button" id="btn-mk-refresh" class="bg-green-100 hover:bg-green-200 border border-green-300 px-3 py-2 rounded-lg text-sm font-bold">🔄 โหลด</button>
                         <button type="button" id="btn-mk-month" class="bg-white hover:bg-green-50 border border-green-300 px-3 py-2 rounded-lg text-sm font-bold text-green-700">📅 ตารางรายเดือน</button>
+                        <button type="button" id="btn-mk-gap" class="bg-white hover:bg-amber-50 border border-amber-300 px-3 py-2 rounded-lg text-sm font-bold text-amber-700">📊 เทียบกับการผลิต</button>
                     </div>
                 </div>
                 <div id="mk-summary" class="mt-3 text-sm"></div>
@@ -1587,6 +1588,43 @@
                 </div>
                 <div id="mk-month-table" class="overflow-x-auto"></div>
                 <div class="mt-2 text-[11px] text-gray-500">✓ = PASS · <span class="text-red-600 font-bold">✗</span> = FAIL · <span class="inline-block w-3 h-3 bg-gray-100 border align-middle"></span> = ไม่ได้ตรวจ (วันที่ผ่านมาแล้ว ไม่นับวันอาทิตย์) · ชี้ที่ช่องเพื่อดูรายละเอียด</div>
+            </div>
+
+            <div id="mk-gap-card" class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-amber-500 hidden">
+                <div class="flex flex-wrap gap-2 items-end mb-3">
+                    <div class="mr-auto">
+                        <h3 class="font-bold text-gray-800">📊 การผลิต vs Daily Check Machine</h3>
+                        <div class="text-xs text-gray-500">ทุกเครื่อง/วัน/กะ ที่มีการลงยอดผลิต (Production_Data) เทียบกับผลตรวจ Daily Check Machine (AM) ที่บันทึกไว้</div>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block">จาก</label>
+                        <input id="mk-gap-from" type="date" class="border rounded-lg p-1.5 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block">ถึง</label>
+                        <input id="mk-gap-to" type="date" class="border rounded-lg p-1.5 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block">แสดง</label>
+                        <select id="mk-gap-filter" class="border rounded-lg p-1.5 text-sm bg-white">
+                            <option value="missing">เฉพาะที่ยังไม่มี Daily Check</option>
+                            <option value="all">ทั้งหมด</option>
+                        </select>
+                    </div>
+                    <button type="button" id="btn-mk-gap-load" class="bg-amber-100 hover:bg-amber-200 border border-amber-300 px-3 py-1.5 rounded-lg text-sm font-bold">ค้นหา</button>
+                    <button type="button" id="btn-mk-gap-csv" class="bg-gray-100 hover:bg-gray-200 border border-gray-300 px-3 py-1.5 rounded-lg text-sm font-bold">⬇️ CSV</button>
+                </div>
+                <div id="mk-gap-summary" class="text-sm"></div>
+                <div id="mk-gap-machines" class="mt-3 overflow-x-auto"></div>
+                <div class="mt-3 overflow-x-auto max-h-[480px] overflow-y-auto">
+                    <table class="w-full text-xs">
+                        <thead class="bg-amber-50 sticky top-0"><tr>
+                            <th class="p-1.5 text-left">วันที่</th><th class="p-1.5">กะ</th><th class="p-1.5">กะทีม</th><th class="p-1.5">MC</th>
+                            <th class="p-1.5 text-right">FG (ชิ้น)</th><th class="p-1.5">Daily Check</th>
+                        </tr></thead>
+                        <tbody id="mk-gap-body"><tr><td colspan="6" class="p-4 text-center text-gray-400">กดค้นหา</td></tr></tbody>
+                    </table>
+                </div>
             </div>
 
             <div id="mk-form-card" class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-green-600 hidden">
@@ -2199,7 +2237,7 @@
 
     <script src="js/scrap.js?v=2.1"></script>
     <script src="js/dailycheck.js?v=1.0"></script>
-    <script src="js/machinecheck.js?v=1.1"></script>
+    <script src="js/machinecheck.js?v=1.2"></script>
     <script src="js/fives.js?v=1.4"></script>
     <script src="js/parts.js?v=5.5"></script>
     <script src="js/inbox.js?v=2.7"></script>
