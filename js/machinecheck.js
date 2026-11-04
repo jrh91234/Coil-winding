@@ -22,7 +22,6 @@
   const T_RESULT = '6. ผลการตรวจ';
   const T_SESA = '7. SESA ผู้ตรวจ กรอกแต่ตัวเลข';
   const SHIFT_LABEL = { Day: 'กะเช้า', Night: 'กะดึก' };
-  const SESA_KEY = 'cwm_mk_sesa';
 
   let dayRecords = [];
   let histRecords = [];
@@ -38,6 +37,22 @@
   function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function $(id){ return document.getElementById(id); }
   function userName(){ return window.currentUser?.name || window.currentUser?.username || '-'; }
+  // SESA ของผู้ที่ login: username เป็นตัวเลข หรือเลขนำหน้าชื่อ (เช่น "65003 พีรพล") — '' = หาไม่ได้ ให้กรอกเอง
+  function loginSesa(){
+    const u = window.currentUser || {};
+    const un = String(u.username || '').trim();
+    if (/^\d+$/.test(un)) return un;
+    const m = String(u.name || '').trim().match(/^(\d{3,})\b/);
+    return m ? m[1] : '';
+  }
+  function applyLoginSesa(){
+    const inp = $('mk-sesa'), note = $('mk-sesa-note');
+    const sesa = loginSesa();
+    inp.value = sesa;
+    inp.readOnly = !!sesa;
+    inp.classList.toggle('bg-gray-100', !!sesa);
+    note.textContent = sesa ? `อ้างอิงจากผู้ใช้ที่ login: ${userName()}` : 'ไม่พบ SESA ในบัญชีผู้ใช้ — กรุณากรอกเอง';
+  }
   function post(payload){
     return fetch(`${SCRIPT_URL}?_t=${Date.now()}`, { method: 'POST', cache: 'no-store', body: JSON.stringify(payload) }).then(r => r.json());
   }
@@ -309,7 +324,7 @@
     $('mk-shift').value = bf ? bf.shift : currentShift();
     if (bf) $('mk-form-title').textContent += ' · ' + (SHIFT_LABEL[bf.shift] || bf.shift) + ' (ย้อนหลัง)';
     $('mk-abn').value = '';
-    $('mk-sesa').value = bf ? '' : lsGet(SESA_KEY);
+    applyLoginSesa();
     state = {}; resultOverride = '';
     const done = dayRecords.filter(r => r.Machine === machine);
     $('mk-already').classList.toggle('hidden', !done.length);
@@ -336,8 +351,6 @@
       if (!$('mk-time').value) return alert('บันทึกย้อนหลัง — กรุณากรอก "เวลา" ที่ตรวจจริงตามใบตรวจ');
       if (!bfRef) return alert('บันทึกย้อนหลัง — กรุณาระบุแหล่งที่มา/หลักฐาน (เช่น ใบตรวจกระดาษ)');
       if (!confirm('ยืนยันว่าข้อมูลนี้ตรงกับผลตรวจจริงตามหลักฐาน และ SESA ' + sesa + ' คือผู้ที่ตรวจจริง?')) return;
-    } else {
-      lsSet(SESA_KEY, sesa);
     }
 
     const btn = $('btn-mk-save');
