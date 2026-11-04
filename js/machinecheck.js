@@ -32,6 +32,7 @@
   let images = [];         // รูปแนบประกอบหัวข้อ (Admin แนบ) — { Image_ID, Item, Machine, Url, Caption }
   let imagesLoaded = false;
   let initialized = false;
+  let backfill = null;     // โหมดบันทึกย้อนหลัง: { date, machine, shift } — ผู้ตรวจจริงกรอกตามใบตรวจ/หลักฐาน
   const IMG_MAX = 1600, IMG_QUALITY = 0.85;
 
   function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -68,6 +69,8 @@
   }
   function finalResult(){ return resultOverride || autoResult(state); }
   function recordFailed(r){ return String(r.Result || '').toUpperCase() !== 'PASS'; }
+  function isBackfill(r){ return String(r.Entry_Type || '') === 'Backfill'; }
+  const BF_BADGE = '<span class="ml-1 px-1 rounded bg-purple-100 text-purple-700 text-[10px] font-bold" title="บันทึกย้อนหลัง">ย้อนหลัง</span>';
 
   // ===== สถานะเครื่องประจำวัน =====
   async function loadDay(){
@@ -298,10 +301,15 @@
     $('mk-form-card').classList.remove('hidden');
     $('mk-machine').value = machine;
     $('mk-form-title').textContent = `${machine} · ${$('mk-date').value}`;
-    $('mk-time').value = nowTime();
-    $('mk-shift').value = currentShift();
+    const bf = backfill && backfill.machine === machine && backfill.date === $('mk-date').value ? backfill : null;
+    if (!bf) backfill = null;
+    $('mk-backfill-box').classList.toggle('hidden', !bf);
+    $('mk-backfill-ref').value = '';
+    $('mk-time').value = bf ? '' : nowTime();           // ย้อนหลัง: ต้องกรอกเวลาตรวจจริงจากใบตรวจ
+    $('mk-shift').value = bf ? bf.shift : currentShift();
+    if (bf) $('mk-form-title').textContent += ' · ' + (SHIFT_LABEL[bf.shift] || bf.shift) + ' (ย้อนหลัง)';
     $('mk-abn').value = '';
-    $('mk-sesa').value = lsGet(SESA_KEY);
+    $('mk-sesa').value = bf ? '' : lsGet(SESA_KEY);
     state = {}; resultOverride = '';
     const done = dayRecords.filter(r => r.Machine === machine);
     $('mk-already').classList.toggle('hidden', !done.length);
@@ -323,7 +331,14 @@
     if (result === 'FAIL' && !abn) return alert('ผลการตรวจ FAIL — กรุณากรอก "5.สิ่งผิดปกติที่ตรวจพบเพิ่มเติม"');
     const sesa = $('mk-sesa').value.trim();
     if (!/^\d+$/.test(sesa)) return alert('กรุณากรอก "7. SESA ผู้ตรวจ" เป็นตัวเลขเท่านั้น');
-    lsSet(SESA_KEY, sesa);
+    const bfRef = backfill ? $('mk-backfill-ref').value.trim() : '';
+    if (backfill) {
+      if (!$('mk-time').value) return alert('บันทึกย้อนหลัง — กรุณากรอก "เวลา" ที่ตรวจจริงตามใบตรวจ');
+      if (!bfRef) return alert('บันทึกย้อนหลัง — กรุณาระบุแหล่งที่มา/หลักฐาน (เช่น ใบตรวจกระดาษ)');
+      if (!confirm('ยืนยันว่าข้อมูลนี้ตรงกับผลตรวจจริงตามหลักฐาน และ SESA ' + sesa + ' คือผู้ที่ตรวจจริง?')) return;
+    } else {
+      lsSet(SESA_KEY, sesa);
+    }
 
     const btn = $('btn-mk-save');
     btn.disabled = true; btn.textContent = 'กำลังส่ง...';
@@ -339,12 +354,17 @@
         abnormal: abn,
         result: result,
         sesa: sesa,
+        backfill: !!backfill,
+        backfillRef: bfRef,
         inspector: userName(),
         username: window.currentUser?.username || '',
         role: window.currentUser?.role || ''
       });
       if (res && res.status === 'success') {
         $('mk-form-card').classList.add('hidden');
+        const wasBackfill = !!backfill;
+        backfill = null;
+        if (wasBackfill && !$('mk-gap-card').classList.contains('hidden')) loadGaps();
         if (result === 'FAIL') alert('บันทึกแล้ว (ผล FAIL) — แจ้งหัวหน้างาน/ช่างซ่อมบำรุงเพื่อแก้ไขก่อนเดินเครื่อง');
         await loadDay();
         loadHistory();
@@ -385,9 +405,9 @@
       const fail = recordFailed(r);
       const del = isAdmin ? `<button type="button" data-id="${esc(r.Check_ID)}" class="mk-del text-red-500 hover:text-red-700" title="ลบ">🗑️</button>` : '';
       return `<tr class="border-t ${fail ? 'bg-red-50/50' : ''}">
-        <td class="p-1.5 whitespace-nowrap">${esc(r.Shift_Date)}</td>
+        <td class="p-1.5 whitespace-nowrap">${esc(r.Shift_Date)}${isBackfill(r) ? BF_BADGE : ''}</td>
         <td class="p-1.5 text-center">${esc(SHIFT_LABEL[r.Shift] || r.Shift)}</td>
-        <td class="p-1.5 text-center">${esc(r.Check_Time)}</td>
+        <td class="p-1.5 text-center" title="${isBackfill(r) ? esc('บันทึกเมื่อ ' + r.Timestamp + ' · หลักฐาน: ' + (r.Backfill_Ref || '-')) : ''}">${esc(r.Check_Time)}</td>
         <td class="p-1.5 text-center font-bold">${esc(r.Machine)}</td>
         ${ITEMS.map(it => `<td class="p-1.5 text-center">${shortAns(it, r[it.key])}</td>`).join('')}
         <td class="p-1.5">${esc(r.Abnormal)}</td>
@@ -414,11 +434,12 @@
     if (!histRecords.length) return alert('ไม่มีข้อมูลสำหรับ export');
     // หัวคอลัมน์เรียงแบบ Google Form response sheet เดิม
     const header = ['ประทับเวลา', 'Select Line', 'Select Machine'].concat(ITEMS.map(it => it.title))
-      .concat([T_ABN, T_RESULT, T_SESA, 'วันที่ (กะ)', 'กะ', 'ผู้บันทึก']);
+      .concat([T_ABN, T_RESULT, T_SESA, 'วันที่ (กะ)', 'กะ', 'ผู้บันทึก', 'ประเภทการบันทึก', 'หลักฐาน (ย้อนหลัง)']);
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     const lines = [header.map(q).join(',')].concat(histRecords.map(r => [r.Timestamp, r.Line || LINE, r.Machine]
       .concat(ITEMS.map(it => r[it.key]))
-      .concat([r.Abnormal, r.Result, r.SESA, r.Shift_Date, SHIFT_LABEL[r.Shift] || r.Shift, r.Inspector]).map(q).join(',')));
+      .concat([r.Abnormal, r.Result, r.SESA, r.Shift_Date, SHIFT_LABEL[r.Shift] || r.Shift, r.Inspector,
+        isBackfill(r) ? 'ย้อนหลัง' : 'ปกติ', r.Backfill_Ref || '']).map(q).join(',')));
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -470,7 +491,7 @@
         } else if (ds < today && new Date(y, m - 1, d).getDay() !== 0) {
           cls = 'bg-gray-100';
         }
-        const tip = recs.map(r => `${r.Check_Time} ${r.Result} ${r.AM2}bar SESA ${r.SESA}`).join('\n');
+        const tip = recs.map(r => `${r.Check_Time} ${r.Result} ${r.AM2}bar SESA ${r.SESA}${isBackfill(r) ? ' (ย้อนหลัง)' : ''}`).join('\n');
         cells += `<td class="p-1 text-center border ${cls}" title="${esc(tip)}">${cell}</td>`;
       }
       return `<tr><td class="p-1 font-bold sticky left-0 bg-white border whitespace-nowrap">${mc}</td>${cells}<td class="p-1 text-center border font-bold">${cnt}</td><td class="p-1 text-center border ${fails ? 'text-red-600 font-bold' : ''}">${fails}</td></tr>`;
@@ -484,7 +505,7 @@
     const from = $('mk-gap-from').value, to = $('mk-gap-to').value;
     if (!from || !to || from > to) return alert('กรุณาเลือกช่วงวันที่ให้ถูกต้อง');
     const body = $('mk-gap-body');
-    body.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">กำลังโหลด... (ข้อมูลเยอะอาจใช้เวลาสักครู่)</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-400">กำลังโหลด... (ข้อมูลเยอะอาจใช้เวลาสักครู่)</td></tr>';
     $('mk-gap-summary').innerHTML = ''; $('mk-gap-machines').innerHTML = '';
     try {
       const res = await post({ action: 'GET_MACHINE_CHECK_GAPS', dateFrom: from, dateTo: to });
@@ -492,7 +513,7 @@
       gapRows = res.data || [];
     } catch (e) {
       gapRows = [];
-      body.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-red-500">โหลดข้อมูลไม่สำเร็จ: ${esc(e.message)}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-red-500">โหลดข้อมูลไม่สำเร็จ: ${esc(e.message)}</td></tr>`;
       return;
     }
     renderGaps();
@@ -536,14 +557,15 @@
     const list = $('mk-gap-filter').value === 'missing' ? gapRows.filter(r => !r.check) : gapRows;
     const body = $('mk-gap-body');
     if (!list.length) {
-      body.innerHTML = `<tr><td colspan="6" class="p-4 text-center ${total ? 'text-green-700 font-bold' : 'text-gray-400'}">${total ? 'มี Daily Check ครบทุกกะที่ผลิต ✔' : 'ไม่พบข้อมูล'}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="7" class="p-4 text-center ${total ? 'text-green-700 font-bold' : 'text-gray-400'}">${total ? 'มี Daily Check ครบทุกกะที่ผลิต ✔' : 'ไม่พบข้อมูล'}</td></tr>`;
       return;
     }
     const MAX = 2000;
     body.innerHTML = list.slice(0, MAX).map(r => {
-      const st = r.check === 'PASS' ? '<span class="text-green-700 font-bold">PASS</span>'
+      const st = (r.check === 'PASS' ? '<span class="text-green-700 font-bold">PASS</span>'
         : r.check === 'FAIL' ? '<span class="text-red-600 font-bold">FAIL</span>'
-        : '<span class="text-red-600">✗ ไม่มีบันทึก</span>';
+        : '<span class="text-red-600">✗ ไม่มีบันทึก</span>') + (r.check && r.backfill ? BF_BADGE : '');
+      const act = r.check ? '' : `<button type="button" class="mk-gap-bf text-purple-700 hover:underline whitespace-nowrap" data-date="${esc(r.date)}" data-mc="${esc(r.machine)}" data-shift="${esc(r.shift)}">✍️ ลงย้อนหลัง</button>`;
       return `<tr class="border-t ${r.check ? '' : 'bg-red-50/40'}">
         <td class="p-1.5 whitespace-nowrap">${esc(r.date)}</td>
         <td class="p-1.5 text-center">${esc(SHIFT_LABEL[r.shift] || r.shift)}</td>
@@ -551,16 +573,27 @@
         <td class="p-1.5 text-center font-bold">${esc(r.machine)}</td>
         <td class="p-1.5 text-right">${Number(r.fg || 0).toLocaleString()}</td>
         <td class="p-1.5 text-center">${st}</td>
+        <td class="p-1.5 text-center">${act}</td>
       </tr>`;
-    }).join('') + (list.length > MAX ? `<tr><td colspan="6" class="p-2 text-center text-gray-500">แสดง ${MAX} จาก ${list.length} แถว — ดูทั้งหมดใน CSV</td></tr>` : '');
+    }).join('') + (list.length > MAX ? `<tr><td colspan="7" class="p-2 text-center text-gray-500">แสดง ${MAX} จาก ${list.length} แถว — ดูทั้งหมดใน CSV</td></tr>` : '');
+    body.querySelectorAll('.mk-gap-bf').forEach(b => b.addEventListener('click', () => startBackfill(b.dataset.date, b.dataset.mc, b.dataset.shift)));
+  }
+
+  // เปิดฟอร์มโหมดย้อนหลังจากแถวที่ขาดในรายงาน — ผู้ตรวจจริงกรอกเวลา/ผล/SESA ตามใบตรวจ (ระบบไม่สุ่มหรือเติมค่าให้)
+  async function startBackfill(date, machine, shift){
+    backfill = { date, machine, shift };
+    $('mk-date').value = date;
+    await loadDay();
+    openForm(machine);
   }
 
   function exportGapCsv(){
     if (!gapRows.length) return alert('กดค้นหาก่อน');
     const list = $('mk-gap-filter').value === 'missing' ? gapRows.filter(r => !r.check) : gapRows;
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const lines = [['วันที่', 'กะ', 'กะทีม', 'เครื่อง', 'FG (ชิ้น)', 'Daily Check Machine'].map(q).join(',')]
-      .concat(list.map(r => [r.date, SHIFT_LABEL[r.shift] || r.shift, r.crew, r.machine, r.fg, r.check || 'ไม่มีบันทึก'].map(q).join(',')));
+    const lines = [['วันที่', 'กะ', 'กะทีม', 'เครื่อง', 'FG (ชิ้น)', 'Daily Check Machine', 'ประเภทการบันทึก'].map(q).join(',')]
+      .concat(list.map(r => [r.date, SHIFT_LABEL[r.shift] || r.shift, r.crew, r.machine, r.fg, r.check || 'ไม่มีบันทึก',
+        r.check ? (r.backfill ? 'ย้อนหลัง' : 'ปกติ') : ''].map(q).join(',')));
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -603,9 +636,10 @@
     $('mk-t-sesa').textContent = T_SESA;
 
     $('btn-mk-refresh').addEventListener('click', loadDay);
-    $('mk-date').addEventListener('change', () => { loadDay(); $('mk-form-card').classList.add('hidden'); });
+    $('mk-date').addEventListener('change', () => { backfill = null; loadDay(); $('mk-form-card').classList.add('hidden'); });
+    $('btn-mk-backfill-cancel').addEventListener('click', () => { backfill = null; openForm($('mk-machine').value); });
     $('mk-machine').addEventListener('change', () => openForm($('mk-machine').value));
-    $('btn-mk-close').addEventListener('click', () => $('mk-form-card').classList.add('hidden'));
+    $('btn-mk-close').addEventListener('click', () => { backfill = null; $('mk-form-card').classList.add('hidden'); });
     $('btn-mk-all-ok').addEventListener('click', () => {
       ITEMS.forEach(it => { state[it.key] = it.type === 'number' ? (state.AM2 || '6') : it.ok; });
       resultOverride = '';

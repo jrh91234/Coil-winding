@@ -1620,9 +1620,9 @@
                     <table class="w-full text-xs">
                         <thead class="bg-amber-50 sticky top-0"><tr>
                             <th class="p-1.5 text-left">วันที่</th><th class="p-1.5">กะ</th><th class="p-1.5">กะทีม</th><th class="p-1.5">MC</th>
-                            <th class="p-1.5 text-right">FG (ชิ้น)</th><th class="p-1.5">Daily Check</th>
+                            <th class="p-1.5 text-right">FG (ชิ้น)</th><th class="p-1.5">Daily Check</th><th class="p-1.5"></th>
                         </tr></thead>
-                        <tbody id="mk-gap-body"><tr><td colspan="6" class="p-4 text-center text-gray-400">กดค้นหา</td></tr></tbody>
+                        <tbody id="mk-gap-body"><tr><td colspan="7" class="p-4 text-center text-gray-400">กดค้นหา</td></tr></tbody>
                     </table>
                 </div>
             </div>
@@ -1633,6 +1633,15 @@
                     <button type="button" id="btn-mk-close" class="text-gray-400 hover:text-gray-700 text-xl px-2">✕</button>
                 </div>
                 <div id="mk-already" class="hidden mb-3 text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg p-2"></div>
+                <div id="mk-backfill-box" class="hidden mb-3 text-xs bg-purple-50 border border-purple-300 text-purple-900 rounded-lg p-3 space-y-2">
+                    <div class="font-bold">🕘 บันทึกย้อนหลัง — กรอกตามผลตรวจจริงจากใบตรวจ/หลักฐานเท่านั้น</div>
+                    <div>ระบบจะเก็บเวลาที่กรอกจริงไว้ใน Timestamp และติดสถานะ "ย้อนหลัง" ให้หัวหน้า/ผู้ตรวจสอบเห็น · "เวลา" ด้านล่าง = เวลาที่ตรวจจริงตามใบตรวจ · SESA = ผู้ที่ตรวจจริง</div>
+                    <div>
+                        <label class="font-bold block">แหล่งที่มา / หลักฐาน <span class="text-red-600">*</span></label>
+                        <input id="mk-backfill-ref" type="text" class="w-full border rounded-lg p-2 text-sm bg-white" placeholder="เช่น ใบตรวจกระดาษ B-CWM05 แผ่นที่ 12, Google Form เดิม">
+                    </div>
+                    <button type="button" id="btn-mk-backfill-cancel" class="underline">ยกเลิกโหมดย้อนหลัง</button>
+                </div>
                 <div id="mk-form-images" class="hidden mb-3 border border-gray-200 rounded-lg p-3 bg-gray-50"></div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div>
