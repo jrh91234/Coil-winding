@@ -1977,6 +1977,88 @@ function doPost(e) {
     }
   }
 
+  // --- รายงานช่องว่าง: เครื่อง/วัน/กะ ที่มีการผลิต (Production_Data) แต่ไม่มี Daily Check Machine (Machine_Check) ---
+  if (action === "GET_MACHINE_CHECK_GAPS") {
+    const dateFrom = String(data.dateFrom || "").trim();
+    const dateTo = String(data.dateTo || "").trim();
+    const toYmd = function(v) {
+      if (v instanceof Date && !isNaN(v.getTime())) {
+        const f = Utilities.formatDate(v, "GMT+7", "yyyy-MM-dd");
+        const y = parseInt(f.substring(0, 4), 10);
+        return y > 2500 ? (y - 543) + f.substring(4) : f;
+      }
+      const t = String(v || "").trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(t)) {
+        const y = parseInt(t.substring(0, 4), 10);
+        return y > 2500 ? (y - 543) + t.substring(4, 10) : t.substring(0, 10);
+      }
+      const dp = (t.split(/[\s,]+/)[0] || "").split("/");
+      if (dp.length === 3) {
+        let y = parseInt(dp[2], 10) || 0;
+        if (y > 2500) y -= 543;
+        return y + "-" + String(parseInt(dp[1], 10) || 1).padStart(2, "0") + "-" + String(parseInt(dp[0], 10) || 1).padStart(2, "0");
+      }
+      return "";
+    };
+    const normMc = function(v) {
+      const m = String(v || "").toUpperCase().match(/CWM[\s\-_]*0*(\d{1,2})\b/);
+      return m ? "CWM-" + String(parseInt(m[1], 10)).padStart(2, "0") : "";
+    };
+    const normShift = function(v) { return /night|ดึก/i.test(String(v || "")) ? "Night" : "Day"; };
+
+    // 1) กะที่มีการผลิต (ไม่นับแถว NG ที่ระบบ Sort เขียนเพิ่ม Batch_ID "SORT-...")
+    const prod = {};
+    const pSheet = ss.getSheetByName("Production_Data");
+    if (pSheet && pSheet.getLastRow() > 1) {
+      const rows = pSheet.getDataRange().getValues();
+      const hd = rows[0].map(h => String(h || "").trim().toLowerCase());
+      const c = function(n) { return hd.indexOf(n.toLowerCase()); };
+      const cDate = c("Date"), cMc = c("Machine"), cCrew = c("Shift"), cType = c("Shift_Type"), cFg = c("FG"), cBatch = c("Batch_ID");
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (cBatch !== -1 && /^SORT-/i.test(String(r[cBatch] || ""))) continue;
+        const d = toYmd(r[cDate]);
+        if (!d || (dateFrom && d < dateFrom) || (dateTo && d > dateTo)) continue;
+        const mc = normMc(r[cMc]);
+        if (!mc) continue;
+        const sh = cType !== -1 ? normShift(r[cType]) : "Day";
+        const k = d + "|" + mc + "|" + sh;
+        if (!prod[k]) prod[k] = { date: d, machine: mc, shift: sh, crew: {}, fg: 0, entries: 0 };
+        const crew = cCrew !== -1 ? String(r[cCrew] || "").trim() : "";
+        if (crew) prod[k].crew[crew] = true;
+        prod[k].fg += cFg !== -1 ? (parseFloat(r[cFg]) || 0) : 0;
+        prod[k].entries++;
+      }
+    }
+
+    // 2) Daily Check Machine ที่มีอยู่
+    const checks = {};
+    const mSheet = ss.getSheetByName("Machine_Check");
+    if (mSheet && mSheet.getLastRow() > 1) {
+      const rows = mSheet.getDataRange().getValues();
+      const hd = rows[0].map(h => String(h || "").trim());
+      const cDate = hd.indexOf("Shift_Date"), cMc = hd.indexOf("Machine"), cSh = hd.indexOf("Shift"), cRes = hd.indexOf("Result");
+      for (let i = 1; i < rows.length; i++) {
+        const d = toYmd(rows[i][cDate]);
+        const mc = normMc(rows[i][cMc]);
+        if (!d || !mc) continue;
+        const k = d + "|" + mc + "|" + normShift(rows[i][cSh]);
+        const res = String(rows[i][cRes] || "").toUpperCase();
+        checks[k] = checks[k] === "FAIL" ? "FAIL" : (res === "PASS" ? "PASS" : "FAIL");
+      }
+    }
+
+    const out = Object.keys(prod).map(function(k) {
+      const p = prod[k];
+      return { date: p.date, machine: p.machine, shift: p.shift, crew: Object.keys(p.crew).sort().join("/"),
+        fg: p.fg, entries: p.entries, check: checks[k] || "" };
+    });
+    out.sort(function(a, b) {
+      return a.date.localeCompare(b.date) || (a.shift === b.shift ? 0 : a.shift === "Day" ? -1 : 1) || a.machine.localeCompare(b.machine);
+    });
+    return jsonOut_({status: "success", data: out});
+  }
+
   // --- รูปแนบประกอบหัวข้อ Daily Check Machine (Admin แนบ / ทุกคนเห็น) — sheet Machine_Check_Images ---
   const MK_IMG_HEADERS = ["Image_ID", "Item", "Machine", "Url", "Caption", "Uploaded_By", "Uploaded_At"];
   const MK_IMG_ITEMS = ["FORM", "AM1", "AM2", "AM3", "AM4"];
