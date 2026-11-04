@@ -514,19 +514,20 @@
 
   // ===== รายงาน: การผลิต vs Daily Check Machine =====
   let gapRows = [];
-  async function loadGaps(){
-    const from = $('mk-gap-from').value, to = $('mk-gap-to').value;
-    if (!from || !to || from > to) return alert('กรุณาเลือกช่วงวันที่ให้ถูกต้อง');
+  async function loadGaps(fromStart){
+    const from = fromStart === true ? '' : $('mk-gap-from').value, to = $('mk-gap-to').value;
+    if ((!from && fromStart !== true) || !to || (from && from > to)) return alert('กรุณาเลือกช่วงวันที่ให้ถูกต้อง');
     const body = $('mk-gap-body');
-    body.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-400">กำลังโหลด... (ข้อมูลเยอะอาจใช้เวลาสักครู่)</td></tr>';
+    body.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-gray-400">กำลังโหลด... (ข้อมูลเยอะอาจใช้เวลาสักครู่)</td></tr>';
     $('mk-gap-summary').innerHTML = ''; $('mk-gap-machines').innerHTML = '';
     try {
       const res = await post({ action: 'GET_MACHINE_CHECK_GAPS', dateFrom: from, dateTo: to });
       if (!res || res.status !== 'success') throw new Error(res?.message || 'error');
       gapRows = res.data || [];
+      if (fromStart === true && gapRows.length) $('mk-gap-from').value = gapRows[0].date; // วันแรกที่มีการลงยอดผลิต
     } catch (e) {
       gapRows = [];
-      body.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-red-500">โหลดข้อมูลไม่สำเร็จ: ${esc(e.message)}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="9" class="p-4 text-center text-red-500">โหลดข้อมูลไม่สำเร็จ: ${esc(e.message)}</td></tr>`;
       return;
     }
     renderGaps();
@@ -570,7 +571,7 @@
     const list = $('mk-gap-filter').value === 'missing' ? gapRows.filter(r => !r.check) : gapRows;
     const body = $('mk-gap-body');
     if (!list.length) {
-      body.innerHTML = `<tr><td colspan="7" class="p-4 text-center ${total ? 'text-green-700 font-bold' : 'text-gray-400'}">${total ? 'มี Daily Check ครบทุกกะที่ผลิต ✔' : 'ไม่พบข้อมูล'}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="9" class="p-4 text-center ${total ? 'text-green-700 font-bold' : 'text-gray-400'}">${total ? 'มี Daily Check ครบทุกกะที่ผลิต ✔' : 'ไม่พบข้อมูล'}</td></tr>`;
       return;
     }
     const MAX = 2000;
@@ -584,11 +585,13 @@
         <td class="p-1.5 text-center">${esc(SHIFT_LABEL[r.shift] || r.shift)}</td>
         <td class="p-1.5 text-center">${esc(r.crew || '-')}</td>
         <td class="p-1.5 text-center font-bold">${esc(r.machine)}</td>
+        <td class="p-1.5 text-center whitespace-nowrap">${esc(hm(r.firstTs))}${r.lastTs && r.lastTs !== r.firstTs ? '–' + esc(hm(r.lastTs)) : ''}</td>
+        <td class="p-1.5">${esc(r.recorders || '-')}</td>
         <td class="p-1.5 text-right">${Number(r.fg || 0).toLocaleString()}</td>
         <td class="p-1.5 text-center">${st}</td>
         <td class="p-1.5 text-center">${act}</td>
       </tr>`;
-    }).join('') + (list.length > MAX ? `<tr><td colspan="7" class="p-2 text-center text-gray-500">แสดง ${MAX} จาก ${list.length} แถว — ดูทั้งหมดใน CSV</td></tr>` : '');
+    }).join('') + (list.length > MAX ? `<tr><td colspan="9" class="p-2 text-center text-gray-500">แสดง ${MAX} จาก ${list.length} แถว — ดูทั้งหมดใน CSV</td></tr>` : '');
     body.querySelectorAll('.mk-gap-bf').forEach(b => b.addEventListener('click', () => startBackfill(b.dataset.date, b.dataset.mc, b.dataset.shift)));
   }
 
@@ -600,12 +603,126 @@
     openForm(machine);
   }
 
+  function hm(ts){ const m = String(ts || '').match(/(\d{1,2}:\d{2})/); return m ? m[1] : ''; }
+  function downloadCsv(name, rows){
+    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const blob = new Blob(['\ufeff' + rows.map(r => r.map(q).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // ===== แม่แบบ + นำเข้า ผลตรวจย้อนหลัง (กรอกจากใบตรวจจริง) =====
+  // แม่แบบมีเฉพาะ วันที่/กะ/เครื่อง ของกะที่ขาด — ช่องผลตรวจเว้นว่างทั้งหมด ระบบไม่เติมหรือสุ่มค่าให้
+  const TPL_HEAD = ['วันที่ (yyyy-mm-dd)', 'กะ (Day/Night)', 'เครื่อง', 'เวลาตรวจจริง (HH:mm)', 'AM1 (OK/NG)', 'AM2 ลม (bar)', 'AM3 (OK/NG)', 'AM4 (OK/NG)',
+    'สิ่งผิดปกติ', 'ผล (PASS/FAIL — ว่าง=คำนวณจาก AM1-4)', 'SESA ผู้ตรวจจริง', 'ชื่อผู้ตรวจ', 'แหล่งที่มา/หลักฐาน'];
+  function downloadTemplate(){
+    const miss = gapRows.filter(r => !r.check);
+    if (!gapRows.length) return alert('กดค้นหา (หรือ "ตั้งแต่วันแรก") ก่อน');
+    if (!miss.length) return alert('ไม่มีกะที่ขาด Daily Check ในช่วงนี้');
+    downloadCsv(`DailyCheckMachine_Backfill_Template_${$('mk-gap-from').value}_${$('mk-gap-to').value}.csv`,
+      [TPL_HEAD].concat(miss.map(r => [r.date, r.shift, r.machine, '', '', '', '', '', '', '', '', '', ''])));
+  }
+
+  function parseCsv(text){
+    const rows = []; let row = [], cur = '', q = false;
+    text = text.replace(/^\ufeff/, '');
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) {
+        if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+        else cur += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === ',') { row.push(cur); cur = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(cur); rows.push(row); row = []; cur = '';
+      } else cur += ch;
+    }
+    if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+    return rows.filter(r => r.some(c => String(c).trim() !== ''));
+  }
+  function normDate(v){
+    v = String(v || '').trim();
+    let m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) { let y = +m[1]; if (y > 2500) y -= 543; return y + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0'); }
+    m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m) { let y = +m[3]; if (y > 2500) y -= 543; return y + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0'); }
+    return '';
+  }
+  function normTime(v){ const m = String(v || '').trim().match(/^(\d{1,2})[:.](\d{2})/); return m ? m[1].padStart(2, '0') + ':' + m[2] : ''; }
+  function normMcName(v){ const m = String(v || '').toUpperCase().match(/CWM[\s\-_]*0*(\d{1,2})\b/); return m ? 'CWM-' + m[1].padStart(2, '0') : ''; }
+  function okNg(it, v){
+    const t = String(v || '').trim();
+    if (/^(ok|pass|ปกติ|✓|1)$/i.test(t) || t === it.ok) return it.ok;
+    if (/^(ng|nok|fail|ผิดปกติ|ชำรุด|✗|0)$/i.test(t) || t === it.ng) return it.ng;
+    return '';
+  }
+
+  function importCsv(){
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.csv,text/csv';
+    input.addEventListener('change', async () => {
+      const f = input.files && input.files[0];
+      if (!f) return;
+      let rows;
+      try { rows = parseCsv(await f.text()); } catch (e) { return alert('อ่านไฟล์ไม่ได้: ' + e.message); }
+      if (rows.length < 2) return alert('ไม่พบข้อมูลในไฟล์');
+      const errs = [], items = [];
+      rows.slice(1).forEach((c, i) => {
+        const line = i + 2;
+        const st = {
+          AM1: okNg(ITEMS[0], c[4]), AM2: String(c[5] || '').trim(), AM3: okNg(ITEMS[2], c[6]), AM4: okNg(ITEMS[3], c[7])
+        };
+        const shift = /night|ดึก|^n$/i.test(String(c[1] || '').trim()) ? 'Night' : /day|เช้า|^d$/i.test(String(c[1] || '').trim()) ? 'Day' : '';
+        const it = {
+          line, shiftDate: normDate(c[0]), shift, machine: normMcName(c[2]), checkTime: normTime(c[3]),
+          AM1: st.AM1, AM2: st.AM2, AM3: st.AM3, AM4: st.AM4, abnormal: String(c[8] || '').trim(),
+          sesa: String(c[10] || '').trim(), inspector: String(c[11] || '').trim(), backfillRef: String(c[12] || '').trim()
+        };
+        const blank = !it.checkTime && !st.AM1 && !st.AM2 && !st.AM3 && !st.AM4 && !it.sesa;
+        if (blank) return; // แถวที่ยังไม่ได้กรอก (ไม่มีใบตรวจ) — ข้าม ไม่สร้างข้อมูล
+        const prob = [];
+        if (!it.shiftDate || !it.shift || !it.machine) prob.push('วันที่/กะ/เครื่อง');
+        if (!it.checkTime) prob.push('เวลาตรวจจริง');
+        if (!st.AM1 || !st.AM3 || !st.AM4) prob.push('AM1/AM3/AM4 (OK/NG)');
+        if (st.AM2 === '' || isNaN(parseFloat(st.AM2))) prob.push('AM2 (ตัวเลข bar)');
+        if (!/^\d+$/.test(it.sesa)) prob.push('SESA');
+        if (!it.backfillRef) prob.push('แหล่งที่มา/หลักฐาน');
+        const auto = autoResult(st);
+        const r = String(c[9] || '').trim().toUpperCase();
+        it.result = r === 'PASS' || r === 'FAIL' ? r : auto;
+        if (it.result === 'FAIL' && !it.abnormal) prob.push('สิ่งผิดปกติ (ผล FAIL)');
+        if (prob.length) errs.push(`แถว ${line}: ไม่ครบ/ไม่ถูกต้อง — ${prob.join(', ')}`);
+        else items.push(it);
+      });
+      if (errs.length) return alert(`ยังไม่ได้นำเข้า — แก้ไขไฟล์ก่อน (${errs.length} แถว)\n` + errs.slice(0, 25).join('\n') + (errs.length > 25 ? '\n...' : ''));
+      if (!items.length) return alert('ไม่มีแถวที่กรอกผลตรวจไว้ (แถวว่างถูกข้าม)');
+      const fails = items.filter(x => x.result === 'FAIL').length;
+      if (!confirm(`นำเข้าผลตรวจย้อนหลัง ${items.length} แถว (FAIL ${fails})\n\nยืนยันว่าทุกแถวกรอกตามใบตรวจ/หลักฐานจริง และ SESA คือผู้ที่ตรวจจริง?\nทุกแถวจะติดสถานะ "ย้อนหลัง" และบันทึกชื่อคุณเป็นผู้นำเข้า`)) return;
+      const btn = $('btn-mk-bf-import'); const label = btn.textContent;
+      btn.disabled = true; btn.textContent = 'กำลังนำเข้า...';
+      try {
+        const res = await post({ action: 'IMPORT_MACHINE_CHECKS', rows: items.map(x => Object.assign({ lineName: LINE }, x)),
+          username: window.currentUser?.username || '', role: window.currentUser?.role || '' });
+        if (res && res.status === 'success') {
+          alert(`นำเข้าแล้ว ${res.imported} แถว` + (res.skipped ? ` · ข้าม ${res.skipped} แถว (กะนั้นมีผลตรวจอยู่แล้ว)` : ''));
+          loadGaps(); loadDay(); loadHistory();
+        } else {
+          alert('นำเข้าไม่สำเร็จ: ' + (res?.message || '') + (res?.errors ? '\n' + res.errors.join('\n') : ''));
+        }
+      } catch (e) { alert('นำเข้าไม่สำเร็จ: ' + e.message); }
+      finally { btn.disabled = false; btn.textContent = label; }
+    });
+    input.click();
+  }
+
   function exportGapCsv(){
     if (!gapRows.length) return alert('กดค้นหาก่อน');
     const list = $('mk-gap-filter').value === 'missing' ? gapRows.filter(r => !r.check) : gapRows;
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const lines = [['วันที่', 'กะ', 'กะทีม', 'เครื่อง', 'FG (ชิ้น)', 'Daily Check Machine', 'ประเภทการบันทึก'].map(q).join(',')]
-      .concat(list.map(r => [r.date, SHIFT_LABEL[r.shift] || r.shift, r.crew, r.machine, r.fg, r.check || 'ไม่มีบันทึก',
+    const lines = [['วันที่', 'กะ', 'กะทีม', 'เครื่อง', 'ลงยอดผลิตครั้งแรก', 'ลงยอดผลิตล่าสุด', 'ผู้ลงยอดผลิต', 'จำนวนครั้งที่ลงยอด', 'FG (ชิ้น)', 'Daily Check Machine', 'ประเภทการบันทึก'].map(q).join(',')]
+      .concat(list.map(r => [r.date, SHIFT_LABEL[r.shift] || r.shift, r.crew, r.machine, r.firstTs, r.lastTs, r.recorders, r.entries, r.fg, r.check || 'ไม่มีบันทึก',
         r.check ? (r.backfill ? 'ย้อนหลัง' : 'ปกติ') : ''].map(q).join(',')));
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
@@ -675,7 +792,10 @@
       card.classList.toggle('hidden');
       if (!card.classList.contains('hidden')) { loadGaps(); card.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     });
-    $('btn-mk-gap-load').addEventListener('click', loadGaps);
+    $('btn-mk-gap-load').addEventListener('click', () => loadGaps());
+    $('btn-mk-gap-all').addEventListener('click', () => loadGaps(true));
+    $('btn-mk-bf-template').addEventListener('click', downloadTemplate);
+    $('btn-mk-bf-import').addEventListener('click', importCsv);
     $('mk-gap-filter').addEventListener('change', renderGaps);
     $('btn-mk-gap-csv').addEventListener('click', exportGapCsv);
   }

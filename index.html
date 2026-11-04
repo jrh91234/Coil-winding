@@ -1612,7 +1612,14 @@
                         </select>
                     </div>
                     <button type="button" id="btn-mk-gap-load" class="bg-amber-100 hover:bg-amber-200 border border-amber-300 px-3 py-1.5 rounded-lg text-sm font-bold">ค้นหา</button>
+                    <button type="button" id="btn-mk-gap-all" class="bg-amber-50 hover:bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-lg text-sm font-bold" title="ดึงทุกกะที่มีการลงยอดผลิต ตั้งแต่วันแรกที่มีข้อมูล">📅 ตั้งแต่วันแรก</button>
                     <button type="button" id="btn-mk-gap-csv" class="bg-gray-100 hover:bg-gray-200 border border-gray-300 px-3 py-1.5 rounded-lg text-sm font-bold">⬇️ CSV</button>
+                </div>
+                <div class="flex flex-wrap gap-2 items-center mb-3 text-xs bg-purple-50 border border-purple-200 rounded-lg p-2">
+                    <span class="font-bold text-purple-900">🕘 ลงย้อนหลังหลายแถวจากใบตรวจจริง:</span>
+                    <button type="button" id="btn-mk-bf-template" class="bg-white hover:bg-purple-100 border border-purple-300 text-purple-800 px-3 py-1 rounded-lg font-bold">⬇️ แม่แบบ (เฉพาะกะที่ขาด)</button>
+                    <button type="button" id="btn-mk-bf-import" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg font-bold">⬆️ นำเข้า CSV</button>
+                    <span class="text-purple-800">แม่แบบมีแค่ วันที่/กะ/เครื่อง — กรอกเวลา, ผล AM1-AM4, SESA และหลักฐาน ตามใบตรวจจริงเท่านั้น · ทุกแถวที่นำเข้าติดสถานะ "ย้อนหลัง"</span>
                 </div>
                 <div id="mk-gap-summary" class="text-sm"></div>
                 <div id="mk-gap-machines" class="mt-3 overflow-x-auto"></div>
@@ -1620,9 +1627,10 @@
                     <table class="w-full text-xs">
                         <thead class="bg-amber-50 sticky top-0"><tr>
                             <th class="p-1.5 text-left">วันที่</th><th class="p-1.5">กะ</th><th class="p-1.5">กะทีม</th><th class="p-1.5">MC</th>
+                            <th class="p-1.5">ลงยอดผลิต (แรก–ล่าสุด)</th><th class="p-1.5 text-left">ผู้ลงยอดผลิต</th>
                             <th class="p-1.5 text-right">FG (ชิ้น)</th><th class="p-1.5">Daily Check</th><th class="p-1.5"></th>
                         </tr></thead>
-                        <tbody id="mk-gap-body"><tr><td colspan="7" class="p-4 text-center text-gray-400">กดค้นหา</td></tr></tbody>
+                        <tbody id="mk-gap-body"><tr><td colspan="9" class="p-4 text-center text-gray-400">กดค้นหา</td></tr></tbody>
                     </table>
                 </div>
             </div>
