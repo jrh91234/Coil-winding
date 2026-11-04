@@ -1855,6 +1855,128 @@ function doPost(e) {
     }
   }
 
+  // --- Daily Check Machine (AM) — js/machinecheck.js (หัวข้อตาม Google Form เดิม B-CWMxx) ---
+  const MACHINE_CHECK_HEADERS = ["Check_ID", "Timestamp", "Shift_Date", "Shift", "Check_Time", "Line", "Machine",
+    "AM1", "AM2", "AM3", "AM4", "Abnormal", "Result", "SESA", "Inspector", "Recorded_By"];
+
+  if (action === "SAVE_MACHINE_CHECK") {
+    const machine = String(data.machine || "").trim();
+    const shiftDate = String(data.shiftDate || "").trim();
+    const shift = String(data.shift || "").trim();
+    const sesa = String(data.sesa || "").trim();
+    if (!machine || !/^\d{4}-\d{2}-\d{2}$/.test(shiftDate) || (shift !== "Day" && shift !== "Night")) {
+      return jsonOut_({status: "error", message: "ข้อมูลเครื่อง/วันที่/กะ ไม่ถูกต้อง"});
+    }
+    if (!/^\d+$/.test(sesa)) return jsonOut_({status: "error", message: "SESA ผู้ตรวจ ต้องเป็นตัวเลข"});
+    if (!data.AM1 || data.AM2 === undefined || data.AM2 === "" || !data.AM3 || !data.AM4) {
+      return jsonOut_({status: "error", message: "กรุณาตอบข้อ 1-4 ให้ครบ"});
+    }
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      let sheet = ss.getSheetByName("Machine_Check");
+      if (!sheet) {
+        sheet = ss.insertSheet("Machine_Check");
+        sheet.appendRow(MACHINE_CHECK_HEADERS);
+        sheet.setFrozenRows(1);
+      }
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      MACHINE_CHECK_HEADERS.forEach(function(h) {
+        if (headers.indexOf(h) === -1) {
+          sheet.getRange(1, headers.length + 1).setValue(h);
+          headers.push(h);
+        }
+      });
+      const now = new Date();
+      const checkId = "MK-" + Utilities.formatDate(now, "GMT+7", "yyyyMMdd") + "-" + Utilities.getUuid().substring(0, 8).toUpperCase();
+      const rowMap = {
+        Check_ID: checkId,
+        Timestamp: Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss"),
+        Shift_Date: "'" + shiftDate,
+        Shift: shift,
+        Check_Time: "'" + String(data.checkTime || Utilities.formatDate(now, "GMT+7", "HH:mm")),
+        Line: data.line || "S/A.. CoilWinding",
+        Machine: machine,
+        AM1: String(data.AM1),
+        AM2: String(data.AM2),
+        AM3: String(data.AM3),
+        AM4: String(data.AM4),
+        Abnormal: data.abnormal || "",
+        Result: data.result === "PASS" ? "PASS" : "FAIL",
+        SESA: "'" + sesa,                                  // เก็บเป็นข้อความ กันเลข 0 นำหน้าหาย
+        Inspector: data.inspector || "",
+        Recorded_By: data.username || ""
+      };
+      sheet.appendRow(headers.map(h => rowMap.hasOwnProperty(h) ? rowMap[h] : ""));
+      SpreadsheetApp.flush();
+      logUserAction(data.username || data.inspector || "System", data.role || "User", "SAVE_MACHINE_CHECK", "Machine Check: " + checkId + " | " + machine + " | " + shiftDate + " " + shift + " | " + rowMap.Result);
+      return jsonOut_({status: "success", checkId: checkId});
+    } catch (err) {
+      return jsonOut_({status: "error", message: err.toString()});
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  if (action === "GET_MACHINE_CHECKS") {
+    const sheet = ss.getSheetByName("Machine_Check");
+    if (!sheet) return jsonOut_({status: "success", data: []});
+    const rows = sheet.getDataRange().getValues();
+    if (rows.length <= 1) return jsonOut_({status: "success", data: []});
+    const headers = rows[0].map(h => String(h).trim());
+    const dateFrom = String(data.dateFrom || "").trim();
+    const dateTo = String(data.dateTo || "").trim();
+    const filterMc = String(data.machine || "").trim();
+    const results = [];
+    for (let i = 1; i < rows.length; i++) {
+      const obj = {};
+      headers.forEach(function(h, idx) {
+        let v = rows[i][idx];
+        if (v instanceof Date) {
+          v = h === "Check_Time" ? Utilities.formatDate(v, ss.getSpreadsheetTimeZone(), "HH:mm")
+            : h === "Shift_Date" ? Utilities.formatDate(v, "GMT+7", "yyyy-MM-dd")
+            : Utilities.formatDate(v, "GMT+7", "yyyy-MM-dd HH:mm:ss");
+        }
+        obj[h] = v !== undefined && v !== null ? v : "";
+      });
+      if (!obj.Check_ID) continue;
+      const d = String(obj.Shift_Date || "").substring(0, 10);
+      if (dateFrom && d < dateFrom) continue;
+      if (dateTo && d > dateTo) continue;
+      if (filterMc && String(obj.Machine) !== filterMc) continue;
+      results.push(obj);
+    }
+    results.sort(function(a, b) {
+      return String(b.Shift_Date).localeCompare(String(a.Shift_Date)) || String(b.Timestamp || "").localeCompare(String(a.Timestamp || ""));
+    });
+    return jsonOut_({status: "success", data: results});
+  }
+
+  if (action === "DELETE_MACHINE_CHECK") {
+    const checkId = String(data.checkId || "").trim();
+    if (!checkId) return jsonOut_({status: "error", message: "ไม่พบรหัสรายการ"});
+    if (data.role !== "Admin") return jsonOut_({status: "error", message: "เฉพาะ Admin เท่านั้นที่ลบได้"});
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+      const sheet = ss.getSheetByName("Machine_Check");
+      if (!sheet) return jsonOut_({status: "error", message: "ไม่พบชีต Machine_Check"});
+      const ids = sheet.getRange(1, 1, sheet.getLastRow(), 1).getValues();
+      for (let i = 1; i < ids.length; i++) {
+        if (String(ids[i][0] || "").trim() !== checkId) continue;
+        sheet.deleteRow(i + 1);
+        SpreadsheetApp.flush();
+        logUserAction(data.username || "System", data.role || "User", "DELETE_MACHINE_CHECK", "ลบ Machine Check: " + checkId);
+        return jsonOut_({status: "success"});
+      }
+      return jsonOut_({status: "error", message: "ไม่พบรายการ"});
+    } catch (err) {
+      return jsonOut_({status: "error", message: err.toString()});
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
   // --- 5ส. หลังเลิกงาน (Production) — js/fives.js ---
   // ทุกกะ (A/B) ปิดวันทำงาน (จ.–ส.) ด้วยรูปพื้นที่ทำงาน 3 รูป (บังคับครบ) แล้วให้ Leader ยืนยัน หรือตีกลับให้ทำใหม่
   // วันทำงานตัดรอบ 08:00 เหมือนส่วนอื่นของระบบ · EntryID = "5SE-yyyyMMdd-XXXXXX"

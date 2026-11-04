@@ -104,6 +104,13 @@
 - Sheet `Daily_Check`: Check_ID, Timestamp, Shift_Date, Shift, Check_Time, Machine, Product, Check_Type, C1..C11, Result, Inspector, Recorded_By, Remark, Supervisor, Confirmed_At (สร้างอัตโนมัติ)
 - Backend actions (POST): `SAVE_DAILY_CHECK`, `GET_DAILY_CHECKS` (dateFrom/dateTo/machine), `CONFIRM_DAILY_CHECK` (หัวหน้างานยืนยัน), `DELETE_DAILY_CHECK` (Admin)
 
+## Daily Check Machine (AM) — tab ย่อยในหน้า Daily Check
+- Frontend: `js/machinecheck.js` + `#dc-sub-machine` ใน `section-dailycheck` (ปุ่มสลับ `dc-subtab-ok1st` / `dc-subtab-machine`, จำ tab ล่าสุดใน localStorage `cwm_dc_subtab`)
+- หัวข้อคัดลอกตาม Google Form เดิม (B-CWMxx): Select Line (`S/A.. CoilWinding`), Select Machine, 1. AM1 Emergency Stop, 2. AM2 ระบบลม 5-7 bar (ตัวเลข, นอกสเปค = FAIL), 3. AM3 ไฟ Power on/จอ, 4. AM4 หล่อลื่น/ชุดปอก wire, 5.สิ่งผิดปกติ (บังคับเมื่อ FAIL), 6. ผลการตรวจ PASS/FAIL (คำนวณอัตโนมัติ แก้ได้), 7. SESA ผู้ตรวจ (ตัวเลข, จำใน localStorage `cwm_mk_sesa`)
+- ตารางสถานะ 16 เครื่องต่อวัน + ตารางรายเดือน (เครื่อง × วัน) + ประวัติ/CSV (หัวคอลัมน์แบบ response sheet เดิม)
+- Sheet `Machine_Check`: Check_ID (`MK-yyyyMMdd-XXXXXXXX`), Timestamp, Shift_Date, Shift, Check_Time, Line, Machine, AM1, AM2, AM3, AM4, Abnormal, Result, SESA, Inspector, Recorded_By (สร้างอัตโนมัติ)
+- Backend actions (POST): `SAVE_MACHINE_CHECK`, `GET_MACHINE_CHECKS` (dateFrom/dateTo/machine), `DELETE_MACHINE_CHECK` (Admin)
+
 ## 5ส. หลังเลิกงาน (Production)
 - Frontend: `js/fives.js` + `section-fives` (+ กล้องเต็มจอ `fs-cam`, หน้าต่างดูรูป `fs-photo-modal`) ใน index.html, เมนู `tab-fives` (Admin / Production) · CSS `.fs-*` ใน `css/style.css`
 - ทุกกะ (A/B) ทำวันละ 1 ครั้ง จ.–ส. (วันอาทิตย์ไม่มี) วันทำงานตัดรอบ 08:00 · ผู้ใช้เลือก "กะของฉัน" เอง (จำใน localStorage `cwm_fives_crew`)

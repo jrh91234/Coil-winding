@@ -33,6 +33,7 @@ Read `.ai/PROJECT_CONTEXT.md` for full project structure, rules, and data flow.
 | Dashboard loader | `js/report/dashboard.js` |
 | Parts tracking | `js/parts.js` |
 | Daily Check (OK 1st Part) | `js/dailycheck.js` |
+| Daily Check Machine (AM) | `js/machinecheck.js` |
 | 5ส. หลังเลิกงาน | `js/fives.js` |
 | Menu/role access | `js/globals.js` |
 | Backend data | `scr/backend.gs` |

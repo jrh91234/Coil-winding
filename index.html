@@ -106,7 +106,7 @@
             <button onclick="window.openMaintenanceModal(); window.toggleMenu()" id="tab-maint" class="hidden py-4 px-6 text-left text-orange-600 font-bold border-l-4 border-transparent hover:bg-orange-50 transition-colors text-lg border-t border-gray-100">🛠️ แจ้งซ่อมเครื่องจักร</button>
             <button onclick="window.switchTab('parts'); window.toggleMenu()" id="tab-parts" class="hidden py-4 px-6 text-left text-cyan-600 font-bold border-l-4 border-transparent hover:bg-cyan-50 transition-colors text-lg border-t border-gray-100">⚙️ จัดการอะไหล่เครื่องจักร</button>
             <button onclick="window.switchTab('rtv'); window.toggleMenu()" id="tab-rtv" class="hidden py-4 px-6 text-left text-teal-600 font-bold border-l-4 border-transparent hover:bg-teal-50 transition-colors text-lg border-t border-gray-100">📦 บันทึกงานเคลม (RTV)</button>
-            <button onclick="window.switchTab('dailycheck'); window.toggleMenu()" id="tab-dailycheck" class="hidden py-4 px-6 text-left text-green-700 font-bold border-l-4 border-transparent hover:bg-green-50 transition-colors text-lg border-t border-gray-100">✅ Daily Check (OK 1st Part)</button>
+            <button onclick="window.switchTab('dailycheck'); window.toggleMenu()" id="tab-dailycheck" class="hidden py-4 px-6 text-left text-green-700 font-bold border-l-4 border-transparent hover:bg-green-50 transition-colors text-lg border-t border-gray-100">✅ Daily Check (OK 1st Part / Machine)</button>
             <button onclick="window.switchTab('fives'); window.toggleMenu()" id="tab-fives" class="hidden py-4 px-6 text-left text-emerald-700 font-bold border-l-4 border-transparent hover:bg-emerald-50 transition-colors text-lg border-t border-gray-100">🧹 5ส. หลังเลิกงาน</button>
             <button onclick="window.switchTab('scrap'); window.toggleMenu()" id="tab-scrap" class="hidden py-4 px-6 text-left text-amber-700 font-bold border-l-4 border-transparent hover:bg-amber-50 transition-colors text-lg border-t border-gray-100">🗑️ ทิ้งขยะ (Scrap List)</button>
 
@@ -1451,6 +1451,11 @@
 
     <!-- SECTION: DAILY CHECK (OK 1st Part Workstation Check list) — js/dailycheck.js -->
     <main id="section-dailycheck" class="max-w-6xl mx-auto p-4 space-y-4 hidden print-hide">
+        <div class="flex flex-wrap gap-2">
+            <button type="button" id="dc-subtab-ok1st" class="px-4 py-2 rounded-lg border-2 font-bold text-sm bg-green-600 text-white border-green-600">✅ OK 1st Part</button>
+            <button type="button" id="dc-subtab-machine" class="px-4 py-2 rounded-lg border-2 font-bold text-sm bg-white text-green-700 border-green-300 hover:bg-green-50">🛠️ Daily Check Machine (AM)</button>
+        </div>
+        <div id="dc-sub-ok1st" class="space-y-4">
         <div class="bg-white rounded-xl shadow-lg p-4 border border-green-100">
             <div class="flex flex-wrap items-end gap-3 justify-between">
                 <div>
@@ -1546,6 +1551,122 @@
                         <tr><td class="p-4 text-center text-gray-400">ยังไม่มีรายการ</td></tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+        </div>
+
+        <!-- Daily Check Machine (AM) — js/machinecheck.js · หัวข้อตาม Google Form เดิม -->
+        <div id="dc-sub-machine" class="space-y-4 hidden">
+            <div class="bg-white rounded-xl shadow-lg p-4 border border-green-100">
+                <div class="flex flex-wrap items-end gap-3 justify-between">
+                    <div>
+                        <h2 class="text-lg font-bold text-green-700">🛠️ Daily Check Machine (AM)</h2>
+                        <div class="text-xs text-gray-500">Line: S/A.. CoilWinding · ตรวจเช็คเครื่องจักรก่อนเดินเครื่อง ทุกเครื่อง ทุกวัน</div>
+                    </div>
+                    <div class="flex flex-wrap gap-2 items-end">
+                        <div>
+                            <label class="text-xs font-bold text-gray-600 block">วันที่ (กะ)</label>
+                            <input id="mk-date" type="date" class="border rounded-lg p-2">
+                        </div>
+                        <button type="button" id="btn-mk-refresh" class="bg-green-100 hover:bg-green-200 border border-green-300 px-3 py-2 rounded-lg text-sm font-bold">🔄 โหลด</button>
+                        <button type="button" id="btn-mk-month" class="bg-white hover:bg-green-50 border border-green-300 px-3 py-2 rounded-lg text-sm font-bold text-green-700">📅 ตารางรายเดือน</button>
+                    </div>
+                </div>
+                <div id="mk-summary" class="mt-3 text-sm"></div>
+                <div id="mk-machine-grid" class="mt-3 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2"></div>
+                <div class="mt-2 text-[11px] text-gray-500">กดที่เครื่องเพื่อทำ Daily Check · <span class="text-green-700 font-bold">เขียว</span> = PASS · <span class="text-red-600 font-bold">แดง</span> = FAIL · <span class="text-gray-500 font-bold">เทา</span> = ยังไม่ตรวจ</div>
+            </div>
+
+            <div id="mk-month-card" class="bg-white rounded-xl shadow-lg p-4 border border-green-100 hidden">
+                <div class="flex flex-wrap gap-2 items-end mb-3">
+                    <h3 class="font-bold text-gray-800 mr-auto">📅 Daily check sheet for machine (รายเดือน)</h3>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block">เดือน</label>
+                        <input id="mk-month" type="month" class="border rounded-lg p-1.5 text-sm">
+                    </div>
+                </div>
+                <div id="mk-month-table" class="overflow-x-auto"></div>
+                <div class="mt-2 text-[11px] text-gray-500">✓ = PASS · <span class="text-red-600 font-bold">✗</span> = FAIL · <span class="inline-block w-3 h-3 bg-gray-100 border align-middle"></span> = ไม่ได้ตรวจ (วันที่ผ่านมาแล้ว ไม่นับวันอาทิตย์) · ชี้ที่ช่องเพื่อดูรายละเอียด</div>
+            </div>
+
+            <div id="mk-form-card" class="bg-white rounded-xl shadow-lg p-4 border-t-4 border-green-600 hidden">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-bold text-gray-800">📝 Daily Check Machine <span id="mk-form-title" class="text-green-700"></span></h3>
+                    <button type="button" id="btn-mk-close" class="text-gray-400 hover:text-gray-700 text-xl px-2">✕</button>
+                </div>
+                <div id="mk-already" class="hidden mb-3 text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg p-2"></div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block">Select Line <span class="text-red-600">*</span></label>
+                        <input id="mk-line" type="text" readonly class="w-full border rounded-lg p-2 bg-gray-100 text-gray-700">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block">Select Machine <span class="text-red-600">*</span></label>
+                        <select id="mk-machine" class="w-full border rounded-lg p-2 bg-white font-bold"></select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block">กะ</label>
+                        <select id="mk-shift" class="w-full border rounded-lg p-2 bg-white">
+                            <option value="Day">กะเช้า</option>
+                            <option value="Night">กะดึก</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block">เวลา</label>
+                        <input id="mk-time" type="time" class="w-full border rounded-lg p-2">
+                    </div>
+                </div>
+                <div class="flex justify-end mt-3">
+                    <button type="button" id="btn-mk-all-ok" class="bg-green-50 hover:bg-green-100 border border-green-300 text-green-700 px-3 py-1.5 rounded-lg text-xs font-bold">✔ ตั้งทุกข้อเป็นปกติ</button>
+                </div>
+                <div id="mk-items" class="mt-2 space-y-2"></div>
+                <div class="mt-2 border rounded-lg p-3 border-gray-200">
+                    <label class="text-sm font-bold text-gray-800 block mb-2"><span id="mk-t-abn"></span> <span id="mk-abn-req" class="text-red-600 hidden">* (จำเป็นเมื่อ FAIL)</span></label>
+                    <textarea id="mk-abn" rows="2" class="w-full border rounded-lg p-2 text-sm" placeholder="คำตอบของคุณ"></textarea>
+                </div>
+                <div class="mt-2 border rounded-lg p-3 border-gray-200">
+                    <div class="text-sm font-bold text-gray-800 mb-2"><span id="mk-t-result"></span> <span class="text-red-600">*</span></div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" id="mk-res-PASS">PASS</button>
+                        <button type="button" id="mk-res-FAIL">FAIL</button>
+                        <span id="mk-res-hint" class="text-xs text-gray-500"></span>
+                    </div>
+                </div>
+                <div class="mt-2 border rounded-lg p-3 border-gray-200">
+                    <label class="text-sm font-bold text-gray-800 block mb-2"><span id="mk-t-sesa"></span> <span class="text-red-600">*</span></label>
+                    <input id="mk-sesa" type="text" inputmode="numeric" pattern="[0-9]*" class="w-full md:w-64 border rounded-lg p-2 text-sm" placeholder="คำตอบของคุณ">
+                </div>
+                <div class="mt-3 flex justify-end">
+                    <button type="button" id="btn-mk-save" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow">📨 ส่ง (Submit)</button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-4 border border-green-100">
+                <div class="flex flex-wrap gap-2 items-end mb-3">
+                    <h3 class="font-bold text-gray-800 mr-auto">📋 ประวัติ Daily Check Machine</h3>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block">จาก</label>
+                        <input id="mk-hist-from" type="date" class="border rounded-lg p-1.5 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block">ถึง</label>
+                        <input id="mk-hist-to" type="date" class="border rounded-lg p-1.5 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block">เครื่อง</label>
+                        <select id="mk-hist-machine" class="border rounded-lg p-1.5 text-sm bg-white"></select>
+                    </div>
+                    <button type="button" id="btn-mk-hist" class="bg-green-100 hover:bg-green-200 border border-green-300 px-3 py-1.5 rounded-lg text-sm font-bold">ค้นหา</button>
+                    <button type="button" id="btn-mk-csv" class="bg-gray-100 hover:bg-gray-200 border border-gray-300 px-3 py-1.5 rounded-lg text-sm font-bold">⬇️ CSV</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs">
+                        <thead id="mk-hist-head" class="bg-green-50"></thead>
+                        <tbody id="mk-hist-body">
+                            <tr><td class="p-4 text-center text-gray-400">ยังไม่มีรายการ</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </main>
@@ -2077,6 +2198,7 @@
 
     <script src="js/scrap.js?v=2.1"></script>
     <script src="js/dailycheck.js?v=1.0"></script>
+    <script src="js/machinecheck.js?v=1.0"></script>
     <script src="js/fives.js?v=1.4"></script>
     <script src="js/parts.js?v=5.5"></script>
     <script src="js/inbox.js?v=2.7"></script>

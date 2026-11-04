@@ -422,6 +422,7 @@ window.switchTab = function(tab) {
     if(tab === 'cost' && typeof window.loadCostModule === 'function') window.loadCostModule();
     if(tab === 'scrap' && typeof window.refreshScrapRecorder === 'function') window.refreshScrapRecorder();
     if(tab === 'dailycheck' && typeof window.loadDailyCheck === 'function') window.loadDailyCheck();
+    if(tab === 'dailycheck' && typeof window.loadMachineCheckIfActive === 'function') window.loadMachineCheckIfActive();
     if(tab === 'fives' && typeof window.loadFiveS === 'function') window.loadFiveS();
     if(tab === 'planning' && typeof window.loadJobOrders === 'function') window.loadJobOrders();
     // เข้าหน้าบันทึกผลิต: โหลด Job Order ที่ยังเปิดอยู่มาให้เลือก (โหลดครั้งแรกครั้งเดียว)
