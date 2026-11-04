@@ -1,0 +1,416 @@
+// 🛠️ Daily Check Machine (AM) — ตรวจเช็คเครื่องจักรประจำวัน ทุกเครื่อง (CWM-01..16)
+// หัวข้อ/ตัวเลือกคัดลอกตาม Google Form เดิม (B-CWMxx) — เก็บลงชีต Machine_Check (SAVE_MACHINE_CHECK / GET_MACHINE_CHECKS / DELETE_MACHINE_CHECK)
+(function(){
+  const MACHINES = Array.from({length: 16}, (_, i) => 'CWM-' + String(i + 1).padStart(2, '0'));
+  const LINE = 'S/A.. CoilWinding';
+  const AIR_MIN = 5, AIR_MAX = 7; // bar
+
+  // ข้อความตามแบบฟอร์มเดิม (ok = คำตอบที่ถูกต้อง, ng = คำตอบเมื่อผิดปกติ)
+  const ITEMS = [
+    { key: 'AM1', type: 'choice', title: '1. ตรวจเช็คปุ่มกดหยุดฉุกเฉิน(Emergency Stop) (AM1)',
+      ok: 'อยู่ในสภาพสมบรูณ์ พร้อมใช้งาน ไม่แตกชำรุดและต้องคลายออก',
+      ng: 'ชำรุด ไม่สามารถคลายออกได้' },
+    { key: 'AM2', type: 'number', title: '2. ตรวจเช็คระบบลม สเปค 5-7 bar/ 0.5-0.7 Mpa (AM2)' },
+    { key: 'AM3', type: 'choice', title: '3.ตรวจเช็คสัญญาณไฟโชว์ (Power on) และจอแสดงผล (AM3)',
+      ok: 'อยู่ในสภาพสมบรูณ์ หลอดไฟต้องติดสว่างและหน้าแสดงตัวอักษรปกติ พร้อมใช้งาน',
+      ng: 'ชำรุด หลอดไฟไม่ติด หรือหน้าจอแสดงผลผิดปกติ' },
+    { key: 'AM4', type: 'choice', title: '4.หล่อลื่นตามคู่มือกำหนด และชุดปอก wire(AM4)',
+      ok: 'อยู่ในสภาพสมบรูณ์ หยอดตามจุดที่กำหนด ดูที่แผ่นแมนนวล',
+      ng: 'ผิดปกติ ไม่ได้หยอดตามจุดที่กำหนด หรือชุดปอก wire ชำรุด' }
+  ];
+  const T_ABN = '5.สิ่งผิดปกติที่ตรวจพบเพิ่มเติม';
+  const T_RESULT = '6. ผลการตรวจ';
+  const T_SESA = '7. SESA ผู้ตรวจ กรอกแต่ตัวเลข';
+  const SHIFT_LABEL = { Day: 'กะเช้า', Night: 'กะดึก' };
+  const SESA_KEY = 'cwm_mk_sesa';
+
+  let dayRecords = [];
+  let histRecords = [];
+  let monthRecords = [];
+  let state = {};          // { AM1: text, AM2: '6', AM3: text, AM4: text }
+  let resultOverride = ''; // '' = อัตโนมัติ, 'PASS' / 'FAIL'
+  let initialized = false;
+
+  function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function $(id){ return document.getElementById(id); }
+  function userName(){ return window.currentUser?.name || window.currentUser?.username || '-'; }
+  function post(payload){
+    return fetch(`${SCRIPT_URL}?_t=${Date.now()}`, { method: 'POST', cache: 'no-store', body: JSON.stringify(payload) }).then(r => r.json());
+  }
+  function currentShift(){ const h = new Date().getHours(); return (h >= 8 && h < 20) ? 'Day' : 'Night'; }
+  function nowTime(){ const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+  function addDays(dateStr, n){
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function lsGet(k){ try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+  function lsSet(k, v){ try { localStorage.setItem(k, v); } catch (e) {} }
+
+  // ข้อนี้ผ่านไหม: true / false / null (ยังไม่ตอบ)
+  function itemOk(it, v){
+    if (v === undefined || v === null || v === '') return null;
+    if (it.type === 'number') {
+      const n = parseFloat(v);
+      if (isNaN(n)) return null;
+      return n >= AIR_MIN && n <= AIR_MAX;
+    }
+    return v === it.ok;
+  }
+  function autoResult(st){
+    const oks = ITEMS.map(it => itemOk(it, st[it.key]));
+    if (oks.some(o => o === false)) return 'FAIL';
+    if (oks.every(o => o === true)) return 'PASS';
+    return '';
+  }
+  function finalResult(){ return resultOverride || autoResult(state); }
+  function recordFailed(r){ return String(r.Result || '').toUpperCase() !== 'PASS'; }
+
+  // ===== สถานะเครื่องประจำวัน =====
+  async function loadDay(){
+    const date = $('mk-date').value;
+    const grid = $('mk-machine-grid');
+    grid.innerHTML = '<div class="col-span-full text-center text-gray-400 py-3">กำลังโหลด...</div>';
+    try {
+      const res = await post({ action: 'GET_MACHINE_CHECKS', dateFrom: date, dateTo: date });
+      dayRecords = res && res.status === 'success' ? res.data : [];
+    } catch (e) {
+      dayRecords = [];
+      grid.innerHTML = '<div class="col-span-full text-center text-red-500 py-3">โหลดข้อมูลไม่สำเร็จ</div>';
+      return;
+    }
+    renderGrid();
+  }
+
+  function renderGrid(){
+    const grid = $('mk-machine-grid');
+    let pass = 0, fail = 0;
+    grid.innerHTML = MACHINES.map(mc => {
+      const recs = dayRecords.filter(r => r.Machine === mc);
+      const last = recs[0];
+      let cls = 'bg-gray-50 border-gray-300 text-gray-500', status = 'ยังไม่ตรวจ';
+      if (last) {
+        if (recordFailed(last)) { cls = 'bg-red-50 border-red-400 text-red-700'; status = 'FAIL'; fail++; }
+        else { cls = 'bg-green-50 border-green-400 text-green-700'; status = 'PASS'; pass++; }
+      }
+      const sub = last ? `${esc(last.Check_Time)} · ${esc(last.AM2)} bar` : '&nbsp;';
+      return `<button type="button" data-mc="${mc}" class="mk-mc-btn border-2 rounded-lg p-2 text-center hover:shadow ${cls}">
+        <div class="font-bold text-sm">${mc}</div>
+        <div class="text-xs font-bold">${status}</div>
+        <div class="text-[10px] truncate">${sub}</div>
+      </button>`;
+    }).join('');
+    grid.querySelectorAll('.mk-mc-btn').forEach(btn => btn.addEventListener('click', () => openForm(btn.dataset.mc)));
+    const missing = MACHINES.length - pass - fail;
+    $('mk-summary').innerHTML = `<span class="font-bold">${esc($('mk-date').value)}</span> — ` +
+      `ตรวจแล้ว <b class="text-green-700">${pass + fail}/${MACHINES.length}</b> เครื่อง` +
+      (fail ? ` · <b class="text-red-600">FAIL ${fail}</b>` : '') +
+      (missing ? ` · <b class="text-gray-600">ยังไม่ตรวจ ${missing}</b>` : ' · <b class="text-green-700">ครบทุกเครื่อง ✔</b>');
+  }
+
+  // ===== ฟอร์ม (เหมือน Google Form) =====
+  function qCard(title, required, inner, bad){
+    return `<div class="border rounded-lg p-3 ${bad ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white'}">
+      <div class="text-sm font-bold text-gray-800 mb-2">${esc(title)}${required ? ' <span class="text-red-600">*</span>' : ''}</div>
+      ${inner}
+    </div>`;
+  }
+  function radio(name, value, checked, tone){
+    const ring = tone === 'ng' ? 'peer-checked:border-red-500 peer-checked:bg-red-50' : 'peer-checked:border-green-500 peer-checked:bg-green-50';
+    return `<label class="block cursor-pointer">
+      <input type="radio" name="${name}" value="${esc(value)}" class="peer sr-only mk-radio" data-key="${name.replace('mk-q-', '')}" ${checked ? 'checked' : ''}>
+      <div class="flex items-start gap-2 border-2 border-gray-200 rounded-lg px-3 py-2 text-sm ${ring}">
+        <span class="mt-0.5 inline-block w-4 h-4 rounded-full border-2 ${checked ? (tone === 'ng' ? 'border-red-500 bg-red-500' : 'border-green-500 bg-green-500') : 'border-gray-400'} shrink-0"></span>
+        <span>${esc(value)}</span>
+      </div>
+    </label>`;
+  }
+
+  function renderItems(){
+    const html = ITEMS.map(it => {
+      const v = state[it.key];
+      const ok = itemOk(it, v);
+      if (it.type === 'number') {
+        const chips = [5, 6, 7].map(n => `<button type="button" data-air="${n}" class="mk-air px-4 py-1.5 rounded-lg border-2 text-sm font-bold ${String(v) === String(n) ? 'bg-green-600 text-white border-green-600' : 'bg-white text-green-700 border-green-300'}">${n}</button>`).join('');
+        const note = ok === false ? `<div class="text-xs text-red-600 font-bold mt-1">⚠ ไม่อยู่ในสเปค ${AIR_MIN}-${AIR_MAX} bar</div>` : '';
+        return qCard(it.title, true, `<div class="flex flex-wrap items-center gap-2">
+            ${chips}
+            <input id="mk-air-input" type="number" step="0.1" min="0" inputmode="decimal" value="${esc(v || '')}" placeholder="ค่าอื่น" class="w-24 border rounded-lg p-1.5 text-sm">
+            <span class="text-xs text-gray-500">bar</span>
+          </div>${note}`, ok === false);
+      }
+      return qCard(it.title, true, `<div class="space-y-1.5">${radio('mk-q-' + it.key, it.ok, v === it.ok, 'ok')}${radio('mk-q-' + it.key, it.ng, v === it.ng, 'ng')}</div>`, ok === false);
+    }).join('');
+    $('mk-items').innerHTML = html;
+    $('mk-items').querySelectorAll('.mk-radio').forEach(r => r.addEventListener('change', () => {
+      state[r.dataset.key] = r.value; resultOverride = ''; renderItems();
+    }));
+    $('mk-items').querySelectorAll('.mk-air').forEach(b => b.addEventListener('click', () => {
+      state.AM2 = b.dataset.air; resultOverride = ''; renderItems();
+    }));
+    const air = $('mk-air-input');
+    air.addEventListener('change', () => { state.AM2 = air.value.trim(); resultOverride = ''; renderItems(); });
+    renderResult();
+  }
+
+  function renderResult(){
+    const auto = autoResult(state);
+    const res = finalResult();
+    ['PASS', 'FAIL'].forEach(v => {
+      const b = $('mk-res-' + v);
+      const on = res === v;
+      b.className = 'px-6 py-2 rounded-lg border-2 font-bold text-sm ' + (on
+        ? (v === 'PASS' ? 'bg-green-600 text-white border-green-600' : 'bg-red-600 text-white border-red-600')
+        : (v === 'PASS' ? 'bg-white text-green-700 border-green-300' : 'bg-white text-red-600 border-red-300'));
+    });
+    $('mk-res-hint').textContent = auto ? (resultOverride && resultOverride !== auto ? `(ระบบคำนวณได้ ${auto})` : '(คำนวณอัตโนมัติจากข้อ 1-4)') : 'ตอบข้อ 1-4 ให้ครบ';
+    $('mk-abn-req').classList.toggle('hidden', res !== 'FAIL');
+  }
+
+  function openForm(machine){
+    $('mk-form-card').classList.remove('hidden');
+    $('mk-machine').value = machine;
+    $('mk-form-title').textContent = `${machine} · ${$('mk-date').value}`;
+    $('mk-time').value = nowTime();
+    $('mk-shift').value = currentShift();
+    $('mk-abn').value = '';
+    $('mk-sesa').value = lsGet(SESA_KEY);
+    state = {}; resultOverride = '';
+    const done = dayRecords.filter(r => r.Machine === machine);
+    $('mk-already').classList.toggle('hidden', !done.length);
+    if (done.length) $('mk-already').textContent = `เครื่องนี้ตรวจแล้ววันนี้ ${done.length} ครั้ง (ล่าสุด ${done[0].Check_Time} · ${done[0].Result}) — บันทึกซ้ำได้ถ้าตรวจใหม่`;
+    renderItems();
+    $('mk-form-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function saveForm(){
+    const machine = $('mk-machine').value;
+    if (!machine) return alert('กรุณาเลือกเครื่อง (Select Machine)');
+    const miss = ITEMS.filter(it => itemOk(it, state[it.key]) === null);
+    if (miss.length) return alert('กรุณาตอบให้ครบ: ' + miss.map(m => m.title).join('\n'));
+    const result = finalResult();
+    if (!result) return alert('กรุณาเลือก "6. ผลการตรวจ"');
+    const abn = $('mk-abn').value.trim();
+    if (result === 'FAIL' && !abn) return alert('ผลการตรวจ FAIL — กรุณากรอก "5.สิ่งผิดปกติที่ตรวจพบเพิ่มเติม"');
+    const sesa = $('mk-sesa').value.trim();
+    if (!/^\d+$/.test(sesa)) return alert('กรุณากรอก "7. SESA ผู้ตรวจ" เป็นตัวเลขเท่านั้น');
+    lsSet(SESA_KEY, sesa);
+
+    const btn = $('btn-mk-save');
+    btn.disabled = true; btn.textContent = 'กำลังส่ง...';
+    try {
+      const res = await post({
+        action: 'SAVE_MACHINE_CHECK',
+        shiftDate: $('mk-date').value,
+        shift: $('mk-shift').value,
+        checkTime: $('mk-time').value,
+        line: LINE,
+        machine: machine,
+        AM1: state.AM1, AM2: state.AM2, AM3: state.AM3, AM4: state.AM4,
+        abnormal: abn,
+        result: result,
+        sesa: sesa,
+        inspector: userName(),
+        username: window.currentUser?.username || '',
+        role: window.currentUser?.role || ''
+      });
+      if (res && res.status === 'success') {
+        $('mk-form-card').classList.add('hidden');
+        if (result === 'FAIL') alert('บันทึกแล้ว (ผล FAIL) — แจ้งหัวหน้างาน/ช่างซ่อมบำรุงเพื่อแก้ไขก่อนเดินเครื่อง');
+        await loadDay();
+        loadHistory();
+        if (!$('mk-month-card').classList.contains('hidden')) loadMonth();
+      } else {
+        alert('บันทึกไม่สำเร็จ: ' + (res?.message || 'unknown error'));
+      }
+    } catch (e) {
+      alert('บันทึกไม่สำเร็จ: ' + e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = '📨 ส่ง (Submit)';
+    }
+  }
+
+  // ===== ประวัติ =====
+  function shortAns(it, v){
+    const ok = itemOk(it, v);
+    if (it.type === 'number') return `<span class="${ok === false ? 'text-red-600 font-bold' : 'text-green-700'}">${esc(v || '-')}</span>`;
+    if (ok === true) return '<span class="text-green-700">✓</span>';
+    if (ok === false) return `<span class="text-red-600 font-bold" title="${esc(v)}">✗</span>`;
+    return '<span class="text-gray-400">-</span>';
+  }
+
+  async function loadHistory(){
+    const body = $('mk-hist-body');
+    body.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-gray-400">กำลังโหลด...</td></tr>';
+    try {
+      const res = await post({ action: 'GET_MACHINE_CHECKS', dateFrom: $('mk-hist-from').value, dateTo: $('mk-hist-to').value, machine: $('mk-hist-machine').value });
+      histRecords = res && res.status === 'success' ? res.data : [];
+    } catch (e) {
+      histRecords = [];
+      body.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-red-500">โหลดข้อมูลไม่สำเร็จ</td></tr>';
+      return;
+    }
+    if (!histRecords.length) { body.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-gray-400">ไม่พบข้อมูล</td></tr>'; return; }
+    const isAdmin = window.currentUser?.role === 'Admin';
+    body.innerHTML = histRecords.map(r => {
+      const fail = recordFailed(r);
+      const del = isAdmin ? `<button type="button" data-id="${esc(r.Check_ID)}" class="mk-del text-red-500 hover:text-red-700" title="ลบ">🗑️</button>` : '';
+      return `<tr class="border-t ${fail ? 'bg-red-50/50' : ''}">
+        <td class="p-1.5 whitespace-nowrap">${esc(r.Shift_Date)}</td>
+        <td class="p-1.5 text-center">${esc(SHIFT_LABEL[r.Shift] || r.Shift)}</td>
+        <td class="p-1.5 text-center">${esc(r.Check_Time)}</td>
+        <td class="p-1.5 text-center font-bold">${esc(r.Machine)}</td>
+        ${ITEMS.map(it => `<td class="p-1.5 text-center">${shortAns(it, r[it.key])}</td>`).join('')}
+        <td class="p-1.5">${esc(r.Abnormal)}</td>
+        <td class="p-1.5 text-center font-bold ${fail ? 'text-red-600' : 'text-green-700'}">${esc(r.Result)}</td>
+        <td class="p-1.5 text-center">${esc(r.SESA)}</td>
+        <td class="p-1.5 whitespace-nowrap">${esc(r.Inspector)}</td>
+        <td class="p-1.5 text-center">${del}</td>
+      </tr>`;
+    }).join('');
+    body.querySelectorAll('.mk-del').forEach(b => b.addEventListener('click', () => deleteCheck(b)));
+  }
+
+  async function deleteCheck(btn){
+    if (!confirm('ลบรายการตรวจนี้?')) return;
+    btn.disabled = true;
+    try {
+      const res = await post({ action: 'DELETE_MACHINE_CHECK', checkId: btn.dataset.id, username: window.currentUser?.username || '', role: window.currentUser?.role || '' });
+      if (res && res.status === 'success') { loadHistory(); loadDay(); }
+      else { alert('ลบไม่สำเร็จ: ' + (res?.message || '')); btn.disabled = false; }
+    } catch (e) { alert('ลบไม่สำเร็จ: ' + e.message); btn.disabled = false; }
+  }
+
+  function exportCsv(){
+    if (!histRecords.length) return alert('ไม่มีข้อมูลสำหรับ export');
+    // หัวคอลัมน์เรียงแบบ Google Form response sheet เดิม
+    const header = ['ประทับเวลา', 'Select Line', 'Select Machine'].concat(ITEMS.map(it => it.title))
+      .concat([T_ABN, T_RESULT, T_SESA, 'วันที่ (กะ)', 'กะ', 'ผู้บันทึก']);
+    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const lines = [header.map(q).join(',')].concat(histRecords.map(r => [r.Timestamp, r.Line || LINE, r.Machine]
+      .concat(ITEMS.map(it => r[it.key]))
+      .concat([r.Abnormal, r.Result, r.SESA, r.Shift_Date, SHIFT_LABEL[r.Shift] || r.Shift, r.Inspector]).map(q).join(',')));
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `DailyCheckMachine_${$('mk-hist-from').value}_${$('mk-hist-to').value}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // ===== ตารางรายเดือน (เครื่อง × วัน แบบ check sheet) =====
+  async function loadMonth(){
+    const ym = $('mk-month').value;
+    if (!ym) return;
+    const [y, m] = ym.split('-').map(Number);
+    const days = new Date(y, m, 0).getDate();
+    const from = `${ym}-01`, to = `${ym}-${String(days).padStart(2, '0')}`;
+    const wrap = $('mk-month-table');
+    wrap.innerHTML = '<div class="text-center text-gray-400 py-3">กำลังโหลด...</div>';
+    try {
+      const res = await post({ action: 'GET_MACHINE_CHECKS', dateFrom: from, dateTo: to });
+      monthRecords = res && res.status === 'success' ? res.data : [];
+    } catch (e) {
+      wrap.innerHTML = '<div class="text-center text-red-500 py-3">โหลดข้อมูลไม่สำเร็จ</div>';
+      return;
+    }
+    const today = getShiftDateStr();
+    const map = {};
+    monthRecords.forEach(r => {
+      const k = r.Machine + '|' + String(r.Shift_Date).substring(0, 10);
+      (map[k] = map[k] || []).push(r);
+    });
+    let head = '<th class="p-1 sticky left-0 bg-green-50 z-10 text-left">MC</th>';
+    for (let d = 1; d <= days; d++) {
+      const dow = new Date(y, m - 1, d).getDay();
+      head += `<th class="p-1 min-w-[22px] ${dow === 0 ? 'text-red-500' : ''}">${d}</th>`;
+    }
+    head += '<th class="p-1">ตรวจ</th><th class="p-1">FAIL</th>';
+    const rows = MACHINES.map(mc => {
+      let cnt = 0, fails = 0, cells = '';
+      for (let d = 1; d <= days; d++) {
+        const ds = `${ym}-${String(d).padStart(2, '0')}`;
+        const recs = map[mc + '|' + ds] || [];
+        let cell = '', cls = '';
+        if (recs.length) {
+          cnt++;
+          const f = recs.some(recordFailed);
+          if (f) fails++;
+          cell = f ? '✗' : '✓';
+          cls = f ? 'bg-red-100 text-red-700 font-bold' : 'bg-green-50 text-green-700';
+        } else if (ds < today && new Date(y, m - 1, d).getDay() !== 0) {
+          cls = 'bg-gray-100';
+        }
+        const tip = recs.map(r => `${r.Check_Time} ${r.Result} ${r.AM2}bar SESA ${r.SESA}`).join('\n');
+        cells += `<td class="p-1 text-center border ${cls}" title="${esc(tip)}">${cell}</td>`;
+      }
+      return `<tr><td class="p-1 font-bold sticky left-0 bg-white border whitespace-nowrap">${mc}</td>${cells}<td class="p-1 text-center border font-bold">${cnt}</td><td class="p-1 text-center border ${fails ? 'text-red-600 font-bold' : ''}">${fails}</td></tr>`;
+    }).join('');
+    wrap.innerHTML = `<table class="text-[11px] border-collapse"><thead class="bg-green-50"><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  // ===== สลับ tab ย่อยใน Daily Check =====
+  function switchSub(which){
+    const isMk = which === 'machine';
+    $('dc-sub-ok1st').classList.toggle('hidden', isMk);
+    $('dc-sub-machine').classList.toggle('hidden', !isMk);
+    const on = 'bg-green-600 text-white border-green-600', off = 'bg-white text-green-700 border-green-300 hover:bg-green-50';
+    $('dc-subtab-ok1st').className = 'px-4 py-2 rounded-lg border-2 font-bold text-sm ' + (isMk ? off : on);
+    $('dc-subtab-machine').className = 'px-4 py-2 rounded-lg border-2 font-bold text-sm ' + (isMk ? on : off);
+    lsSet('cwm_dc_subtab', which);
+    if (isMk) { init(); loadDay(); loadHistory(); }
+  }
+  window.switchDailyCheckSub = switchSub;
+
+  function init(){
+    if (initialized) return;
+    initialized = true;
+    const today = getShiftDateStr();
+    $('mk-date').value = today;
+    $('mk-hist-from').value = addDays(today, -6);
+    $('mk-hist-to').value = today;
+    $('mk-month').value = today.substring(0, 7);
+    $('mk-line').value = LINE;
+    $('mk-machine').innerHTML = MACHINES.map(m => `<option value="${m}">${m}</option>`).join('');
+    $('mk-hist-machine').innerHTML = '<option value="">ทั้งหมด</option>' + MACHINES.map(m => `<option value="${m}">${m}</option>`).join('');
+    $('mk-hist-head').innerHTML = `<tr>
+      <th class="p-1.5 text-left">วันที่</th><th class="p-1.5">กะ</th><th class="p-1.5">เวลา</th><th class="p-1.5">MC</th>
+      ${ITEMS.map(it => `<th class="p-1.5" title="${esc(it.title)}">${it.key}${it.type === 'number' ? ' (bar)' : ''}</th>`).join('')}
+      <th class="p-1.5 text-left">สิ่งผิดปกติ</th><th class="p-1.5">ผล</th><th class="p-1.5">SESA</th><th class="p-1.5 text-left">ผู้บันทึก</th><th class="p-1.5"></th>
+    </tr>`;
+    $('mk-t-abn').textContent = T_ABN;
+    $('mk-t-result').textContent = T_RESULT;
+    $('mk-t-sesa').textContent = T_SESA;
+
+    $('btn-mk-refresh').addEventListener('click', loadDay);
+    $('mk-date').addEventListener('change', () => { loadDay(); $('mk-form-card').classList.add('hidden'); });
+    $('mk-machine').addEventListener('change', () => openForm($('mk-machine').value));
+    $('btn-mk-close').addEventListener('click', () => $('mk-form-card').classList.add('hidden'));
+    $('btn-mk-all-ok').addEventListener('click', () => {
+      ITEMS.forEach(it => { state[it.key] = it.type === 'number' ? (state.AM2 || '6') : it.ok; });
+      resultOverride = '';
+      renderItems();
+    });
+    ['PASS', 'FAIL'].forEach(v => $('mk-res-' + v).addEventListener('click', () => { resultOverride = v; renderResult(); }));
+    $('btn-mk-save').addEventListener('click', saveForm);
+    $('btn-mk-hist').addEventListener('click', loadHistory);
+    $('btn-mk-csv').addEventListener('click', exportCsv);
+    $('btn-mk-month').addEventListener('click', () => {
+      const card = $('mk-month-card');
+      card.classList.toggle('hidden');
+      if (!card.classList.contains('hidden')) loadMonth();
+    });
+    $('mk-month').addEventListener('change', loadMonth);
+  }
+
+  // เปิดเมนู Daily Check → กลับไป tab ย่อยที่ใช้ล่าสุด
+  document.addEventListener('DOMContentLoaded', () => {
+    const a = $('dc-subtab-ok1st'), b = $('dc-subtab-machine');
+    if (!a || !b) return;
+    a.addEventListener('click', () => switchSub('ok1st'));
+    b.addEventListener('click', () => switchSub('machine'));
+  });
+  window.loadMachineCheckIfActive = function(){
+    if (lsGet('cwm_dc_subtab') === 'machine') switchSub('machine');
+  };
+})();
