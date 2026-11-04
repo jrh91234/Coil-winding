@@ -1927,6 +1927,93 @@ function doPost(e) {
     }
   }
 
+  // --- นำเข้าผลตรวจย้อนหลังหลายแถว (กรอกจากใบตรวจจริงลงแม่แบบ CSV) — ทุกแถวติด Entry_Type=Backfill ---
+  // Timestamp = เวลานำเข้าจริง · Recorded_By = ผู้ที่ login นำเข้า · ข้ามแถวที่ วันที่+เครื่อง+กะ มีผลตรวจอยู่แล้ว
+  if (action === "IMPORT_MACHINE_CHECKS") {
+    const items = Array.isArray(data.rows) ? data.rows : [];
+    if (!items.length) return jsonOut_({status: "error", message: "ไม่มีข้อมูลนำเข้า"});
+    if (items.length > 2000) return jsonOut_({status: "error", message: "นำเข้าได้ครั้งละไม่เกิน 2000 แถว"});
+    if (!data.username) return jsonOut_({status: "error", message: "กรุณา login ก่อนนำเข้า"});
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(20000);
+      let sheet = ss.getSheetByName("Machine_Check");
+      if (!sheet) {
+        sheet = ss.insertSheet("Machine_Check");
+        sheet.appendRow(MACHINE_CHECK_HEADERS);
+        sheet.setFrozenRows(1);
+      }
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      MACHINE_CHECK_HEADERS.forEach(function(h) {
+        if (headers.indexOf(h) === -1) {
+          sheet.getRange(1, headers.length + 1).setValue(h);
+          headers.push(h);
+        }
+      });
+      const existing = {};
+      if (sheet.getLastRow() > 1) {
+        const vals = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+        const iD = headers.indexOf("Shift_Date"), iM = headers.indexOf("Machine"), iS = headers.indexOf("Shift");
+        vals.forEach(function(v) {
+          let d = v[iD];
+          d = d instanceof Date ? Utilities.formatDate(d, "GMT+7", "yyyy-MM-dd") : String(d || "").replace(/^'/, "").substring(0, 10);
+          existing[d + "|" + String(v[iM]).trim() + "|" + String(v[iS]).trim()] = true;
+        });
+      }
+      const now = new Date();
+      const nowStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
+      const out = [], errors = [];
+      let skipped = 0;
+      items.forEach(function(it, idx) {
+        const line = it.line || (idx + 2);
+        const machine = String(it.machine || "").trim();
+        const shiftDate = String(it.shiftDate || "").trim();
+        const shift = String(it.shift || "").trim();
+        const time = String(it.checkTime || "").trim();
+        const sesa = String(it.sesa || "").trim();
+        const ref = String(it.backfillRef || "").trim();
+        if (!/^CWM-\d{2}$/.test(machine) || !/^\d{4}-\d{2}-\d{2}$/.test(shiftDate) || (shift !== "Day" && shift !== "Night")) { errors.push("แถว " + line + ": เครื่อง/วันที่/กะ ไม่ถูกต้อง"); return; }
+        if (!/^\d{2}:\d{2}$/.test(time)) { errors.push("แถว " + line + ": ไม่มีเวลาตรวจจริง"); return; }
+        if (!/^\d+$/.test(sesa)) { errors.push("แถว " + line + ": SESA ต้องเป็นตัวเลข"); return; }
+        if (!it.AM1 || it.AM2 === undefined || it.AM2 === "" || !it.AM3 || !it.AM4) { errors.push("แถว " + line + ": AM1-AM4 ไม่ครบ"); return; }
+        if (!ref) { errors.push("แถว " + line + ": ไม่มีแหล่งที่มา/หลักฐาน"); return; }
+        if (it.result !== "PASS" && !String(it.abnormal || "").trim()) { errors.push("แถว " + line + ": ผล FAIL ต้องกรอกสิ่งผิดปกติ"); return; }
+        const k = shiftDate + "|" + machine + "|" + shift;
+        if (existing[k]) { skipped++; return; }
+        existing[k] = true;
+        const rowMap = {
+          Check_ID: "MK-" + Utilities.formatDate(now, "GMT+7", "yyyyMMdd") + "-" + Utilities.getUuid().substring(0, 8).toUpperCase(),
+          Timestamp: nowStr,
+          Shift_Date: "'" + shiftDate,
+          Shift: shift,
+          Check_Time: "'" + time,
+          Line: it.lineName || "S/A.. CoilWinding",
+          Machine: machine,
+          AM1: String(it.AM1), AM2: String(it.AM2), AM3: String(it.AM3), AM4: String(it.AM4),
+          Abnormal: it.abnormal || "",
+          Result: it.result === "PASS" ? "PASS" : "FAIL",
+          SESA: "'" + sesa,
+          Inspector: it.inspector || "",
+          Recorded_By: data.username,
+          Entry_Type: "Backfill",
+          Backfill_Ref: ref
+        };
+        out.push(headers.map(h => rowMap.hasOwnProperty(h) ? rowMap[h] : ""));
+      });
+      if (errors.length) return jsonOut_({status: "error", message: "พบข้อผิดพลาด " + errors.length + " แถว — ยังไม่ได้บันทึก", errors: errors.slice(0, 50)});
+      if (out.length) {
+        sheet.getRange(sheet.getLastRow() + 1, 1, out.length, headers.length).setValues(out);
+        SpreadsheetApp.flush();
+      }
+      logUserAction(data.username, data.role || "User", "IMPORT_MACHINE_CHECKS", "นำเข้า Machine Check ย้อนหลัง " + out.length + " แถว (ข้าม " + skipped + ")");
+      return jsonOut_({status: "success", imported: out.length, skipped: skipped});
+    } catch (err) {
+      return jsonOut_({status: "error", message: err.toString()});
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
   if (action === "GET_MACHINE_CHECKS") {
     const sheet = ss.getSheetByName("Machine_Check");
     if (!sheet) return jsonOut_({status: "success", data: []});
@@ -2023,6 +2110,8 @@ function doPost(e) {
       const hd = rows[0].map(h => String(h || "").trim().toLowerCase());
       const c = function(n) { return hd.indexOf(n.toLowerCase()); };
       const cDate = c("Date"), cMc = c("Machine"), cCrew = c("Shift"), cType = c("Shift_Type"), cFg = c("FG"), cBatch = c("Batch_ID");
+      const cTs = c("Timestamp"), cRec = c("Recorder");
+      const tz = ss.getSpreadsheetTimeZone();
       for (let i = 1; i < rows.length; i++) {
         const r = rows[i];
         if (cBatch !== -1 && /^SORT-/i.test(String(r[cBatch] || ""))) continue;
@@ -2032,9 +2121,18 @@ function doPost(e) {
         if (!mc) continue;
         const sh = cType !== -1 ? normShift(r[cType]) : "Day";
         const k = d + "|" + mc + "|" + sh;
-        if (!prod[k]) prod[k] = { date: d, machine: mc, shift: sh, crew: {}, fg: 0, entries: 0 };
+        if (!prod[k]) prod[k] = { date: d, machine: mc, shift: sh, crew: {}, rec: {}, fg: 0, entries: 0, firstTs: "", lastTs: "" };
         const crew = cCrew !== -1 ? String(r[cCrew] || "").trim() : "";
         if (crew) prod[k].crew[crew] = true;
+        const rec = cRec !== -1 ? String(r[cRec] || "").trim() : "";
+        if (rec) prod[k].rec[rec] = true;
+        // เวลาที่ลงยอดจริง (Timestamp ของแถว) — ไว้เทียบว่า Daily Check ควรอยู่ช่วงไหน
+        let ts = cTs !== -1 ? r[cTs] : "";
+        ts = ts instanceof Date && !isNaN(ts.getTime()) ? Utilities.formatDate(ts, tz, "yyyy-MM-dd HH:mm") : String(ts || "").trim();
+        if (ts) {
+          if (!prod[k].firstTs || ts < prod[k].firstTs) prod[k].firstTs = ts;
+          if (!prod[k].lastTs || ts > prod[k].lastTs) prod[k].lastTs = ts;
+        }
         prod[k].fg += cFg !== -1 ? (parseFloat(r[cFg]) || 0) : 0;
         prod[k].entries++;
       }
@@ -2062,6 +2160,7 @@ function doPost(e) {
     const out = Object.keys(prod).map(function(k) {
       const p = prod[k];
       return { date: p.date, machine: p.machine, shift: p.shift, crew: Object.keys(p.crew).sort().join("/"),
+        recorders: Object.keys(p.rec).sort().join(", "), firstTs: p.firstTs, lastTs: p.lastTs,
         fg: p.fg, entries: p.entries, check: checks[k] || "", backfill: !!(backfilled[k] && !realtime[k]) };
     });
     out.sort(function(a, b) {
