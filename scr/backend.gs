@@ -1977,6 +1977,74 @@ function doPost(e) {
     }
   }
 
+  // --- รูปแนบประกอบหัวข้อ Daily Check Machine (Admin แนบ / ทุกคนเห็น) — sheet Machine_Check_Images ---
+  const MK_IMG_HEADERS = ["Image_ID", "Item", "Machine", "Url", "Caption", "Uploaded_By", "Uploaded_At"];
+  const MK_IMG_ITEMS = ["FORM", "AM1", "AM2", "AM3", "AM4"];
+
+  if (action === "GET_MACHINE_CHECK_IMAGES") {
+    const sheet = ss.getSheetByName("Machine_Check_Images");
+    if (!sheet || sheet.getLastRow() <= 1) return jsonOut_({status: "success", data: []});
+    const rows = sheet.getDataRange().getValues();
+    const headers = rows[0].map(h => String(h).trim());
+    const out = [];
+    for (let i = 1; i < rows.length; i++) {
+      const obj = {};
+      headers.forEach(function(h, idx) {
+        const v = rows[i][idx];
+        obj[h] = v instanceof Date ? Utilities.formatDate(v, "GMT+7", "yyyy-MM-dd HH:mm:ss") : (v == null ? "" : v);
+      });
+      if (obj.Image_ID && obj.Url) out.push(obj);
+    }
+    return jsonOut_({status: "success", data: out});
+  }
+
+  if (action === "SAVE_MACHINE_CHECK_IMAGE" || action === "DELETE_MACHINE_CHECK_IMAGE") {
+    if (data.role !== "Admin") return jsonOut_({status: "error", message: "เฉพาะ Admin เท่านั้นที่แนบ/ลบรูปได้"});
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(20000);
+      let sheet = ss.getSheetByName("Machine_Check_Images");
+      if (!sheet) {
+        sheet = ss.insertSheet("Machine_Check_Images");
+        sheet.appendRow(MK_IMG_HEADERS);
+        sheet.setFrozenRows(1);
+      }
+      if (action === "DELETE_MACHINE_CHECK_IMAGE") {
+        const imageId = String(data.imageId || "").trim();
+        const vals = sheet.getRange(1, 1, Math.max(sheet.getLastRow(), 1), 4).getValues();
+        for (let i = 1; i < vals.length; i++) {
+          if (String(vals[i][0]).trim() !== imageId) continue;
+          const m = String(vals[i][3] || "").match(/\/d\/([^/?#]+)/);
+          if (m) { try { DriveApp.getFileById(m[1]).setTrashed(true); } catch (e) { /* ไฟล์อาจถูกลบไปแล้ว */ } }
+          sheet.deleteRow(i + 1);
+          SpreadsheetApp.flush();
+          logUserAction(data.username || "System", data.role, "DELETE_MACHINE_CHECK_IMAGE", "ลบรูป Daily Check Machine: " + imageId);
+          return jsonOut_({status: "success"});
+        }
+        return jsonOut_({status: "error", message: "ไม่พบรูป"});
+      }
+      const item = String(data.item || "").trim();
+      if (MK_IMG_ITEMS.indexOf(item) === -1) return jsonOut_({status: "error", message: "หัวข้อไม่ถูกต้อง"});
+      if (!data.image) return jsonOut_({status: "error", message: "ไม่พบไฟล์รูป"});
+      const machine = String(data.machine || "").trim(); // "" = ใช้กับทุกเครื่อง
+      const now = new Date();
+      const imageId = "MKI-" + Utilities.formatDate(now, "GMT+7", "yyyyMMdd") + "-" + Utilities.getUuid().substring(0, 6).toUpperCase();
+      const url = saveImageToDrive(data.image, "MachineCheck_" + item + "_" + (machine || "ALL") + "_" + imageId + ".jpg");
+      if (!url) return jsonOut_({status: "error", message: "อัปโหลดรูปไป Google Drive ไม่สำเร็จ"});
+      const rowMap = { Image_ID: imageId, Item: item, Machine: machine, Url: url, Caption: String(data.caption || ""),
+        Uploaded_By: data.username || "", Uploaded_At: Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss") };
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+      sheet.appendRow(headers.map(h => rowMap.hasOwnProperty(h) ? rowMap[h] : ""));
+      SpreadsheetApp.flush();
+      logUserAction(data.username || "System", data.role, "SAVE_MACHINE_CHECK_IMAGE", "แนบรูป Daily Check Machine: " + item + " | " + (machine || "ทุกเครื่อง"));
+      return jsonOut_({status: "success", image: rowMap});
+    } catch (err) {
+      return jsonOut_({status: "error", message: err.toString()});
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
   // --- 5ส. หลังเลิกงาน (Production) — js/fives.js ---
   // ทุกกะ (A/B) ปิดวันทำงาน (จ.–ส.) ด้วยรูปพื้นที่ทำงาน 3 รูป (บังคับครบ) แล้วให้ Leader ยืนยัน หรือตีกลับให้ทำใหม่
   // วันทำงานตัดรอบ 08:00 เหมือนส่วนอื่นของระบบ · EntryID = "5SE-yyyyMMdd-XXXXXX"

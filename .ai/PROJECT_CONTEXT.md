@@ -110,6 +110,7 @@
 - ตารางสถานะ 16 เครื่องต่อวัน + ตารางรายเดือน (เครื่อง × วัน) + ประวัติ/CSV (หัวคอลัมน์แบบ response sheet เดิม)
 - Sheet `Machine_Check`: Check_ID (`MK-yyyyMMdd-XXXXXXXX`), Timestamp, Shift_Date, Shift, Check_Time, Line, Machine, AM1, AM2, AM3, AM4, Abnormal, Result, SESA, Inspector, Recorded_By (สร้างอัตโนมัติ)
 - Backend actions (POST): `SAVE_MACHINE_CHECK`, `GET_MACHINE_CHECKS` (dateFrom/dateTo/machine), `DELETE_MACHINE_CHECK` (Admin)
+- **รูปแนบประกอบหัวข้อ** (Admin แนบ/ลบ, ทุกคนเห็น): ต่อหัวข้อ `FORM` (บนสุดของฟอร์ม) / `AM1`..`AM4`, เลือกใช้กับทุกเครื่องหรือเฉพาะเครื่อง · ย่อ 1600px JPEG · Sheet `Machine_Check_Images` (Image_ID, Item, Machine ว่าง=ทุกเครื่อง, Url, Caption, Uploaded_By, Uploaded_At) รูปเก็บ Drive ผ่าน `saveImageToDrive` · actions `GET_MACHINE_CHECK_IMAGES`, `SAVE_MACHINE_CHECK_IMAGE`, `DELETE_MACHINE_CHECK_IMAGE` (ลบไฟล์ใน Drive ด้วย)
 
 ## 5ส. หลังเลิกงาน (Production)
 - Frontend: `js/fives.js` + `section-fives` (+ กล้องเต็มจอ `fs-cam`, หน้าต่างดูรูป `fs-photo-modal`) ใน index.html, เมนู `tab-fives` (Admin / Production) · CSS `.fs-*` ใน `css/style.css`

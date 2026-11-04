@@ -29,7 +29,10 @@
   let monthRecords = [];
   let state = {};          // { AM1: text, AM2: '6', AM3: text, AM4: text }
   let resultOverride = ''; // '' = อัตโนมัติ, 'PASS' / 'FAIL'
+  let images = [];         // รูปแนบประกอบหัวข้อ (Admin แนบ) — { Image_ID, Item, Machine, Url, Caption }
+  let imagesLoaded = false;
   let initialized = false;
+  const IMG_MAX = 1600, IMG_QUALITY = 0.85;
 
   function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function $(id){ return document.getElementById(id); }
@@ -108,10 +111,133 @@
       (missing ? ` · <b class="text-gray-600">ยังไม่ตรวจ ${missing}</b>` : ' · <b class="text-green-700">ครบทุกเครื่อง ✔</b>');
   }
 
+  // ===== รูปแนบประกอบหัวข้อ (Admin แนบได้ / ทุกคนเห็น) =====
+  function isAdmin(){ return window.currentUser?.role === 'Admin'; }
+  function driveId(url){ const m = String(url || '').match(/\/d\/([^/?#]+)/) || String(url || '').match(/id=([^&]+)/); return m ? m[1] : ''; }
+  function thumbUrl(url, w){ const id = driveId(url); return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w${w || 400}` : url; }
+
+  async function loadImages(force){
+    if (imagesLoaded && !force) return;
+    try {
+      const res = await post({ action: 'GET_MACHINE_CHECK_IMAGES' });
+      images = res && res.status === 'success' ? res.data : [];
+      imagesLoaded = true;
+    } catch (e) { images = []; }
+  }
+
+  // รูปของหัวข้อนี้: รูปที่ใช้กับทุกเครื่อง + รูปเฉพาะเครื่องที่เลือก
+  function imgBlock(item){
+    const mc = $('mk-machine').value;
+    const list = images.filter(im => im.Item === item && (!im.Machine || im.Machine === mc));
+    const admin = isAdmin();
+    if (!list.length && !admin) return '';
+    const thumbs = list.map(im => `<div class="relative group w-28">
+        <img src="${esc(thumbUrl(im.Url))}" data-url="${esc(im.Url)}" data-cap="${esc(im.Caption)}" alt="${esc(im.Caption || 'รูปประกอบ')}" loading="lazy"
+          class="mk-img w-28 h-24 object-cover rounded-lg border cursor-zoom-in bg-gray-100">
+        <div class="text-[10px] text-gray-500 truncate" title="${esc(im.Caption)}">${esc(im.Caption || '')}${im.Machine ? ` <span class="text-blue-600">(${esc(im.Machine)})</span>` : ''}</div>
+        ${admin ? `<button type="button" data-id="${esc(im.Image_ID)}" class="mk-img-del absolute top-1 right-1 bg-white/90 hover:bg-red-600 hover:text-white text-red-600 rounded-full w-6 h-6 text-xs font-bold shadow" title="ลบรูป">✕</button>` : ''}
+      </div>`).join('');
+    const up = admin ? `<div class="flex flex-col gap-1 justify-center">
+        <button type="button" data-item="${item}" class="mk-img-add border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg px-3 py-2 text-xs font-bold">📷 แนบรูป</button>
+        <select data-item="${item}" class="mk-img-scope border rounded p-1 text-[11px] bg-white">
+          <option value="">ใช้กับทุกเครื่อง</option>
+          <option value="${esc(mc)}">เฉพาะ ${esc(mc)}</option>
+        </select>
+      </div>` : '';
+    return `<div class="flex flex-wrap gap-2 mb-2">${thumbs}${up}</div>`;
+  }
+
+  function bindImgEvents(root){
+    root.querySelectorAll('.mk-img').forEach(img => {
+      img.addEventListener('click', () => {
+        if (typeof window.openPmPhoto === 'function') window.openPmPhoto(img.dataset.url, img.dataset.cap);
+        else window.open(img.dataset.url, '_blank');
+      });
+      img.addEventListener('error', () => { img.onerror = null; img.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="112" height="96"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" font-size="11" text-anchor="middle" fill="#9ca3af">โหลดรูปไม่ได้</text></svg>'); }, { once: true });
+    });
+    root.querySelectorAll('.mk-img-add').forEach(b => b.addEventListener('click', () => {
+      const scope = root.querySelector(`.mk-img-scope[data-item="${b.dataset.item}"]`);
+      pickAndUpload(b.dataset.item, scope ? scope.value : '', b);
+    }));
+    root.querySelectorAll('.mk-img-del').forEach(b => b.addEventListener('click', () => deleteImage(b)));
+  }
+
+  function resizeImage(file){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('อ่านไฟล์ไม่ได้'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('ไฟล์นี้ไม่ใช่รูปภาพ'));
+        img.onload = () => {
+          const scale = Math.min(1, IMG_MAX / Math.max(img.width, img.height));
+          const c = document.createElement('canvas');
+          c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+          const ctx = c.getContext('2d');
+          ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+          ctx.drawImage(img, 0, 0, c.width, c.height);
+          resolve(c.toDataURL('image/jpeg', IMG_QUALITY));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function pickAndUpload(item, machine, btn){
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+    input.addEventListener('change', async () => {
+      const files = Array.from(input.files || []);
+      if (!files.length) return;
+      const caption = prompt('คำอธิบายรูป (ไม่บังคับ)', '') ;
+      if (caption === null) return;
+      const label = btn.textContent;
+      btn.disabled = true;
+      let ok = 0; const errs = [];
+      for (let i = 0; i < files.length; i++) {
+        btn.textContent = `กำลังอัปโหลด ${i + 1}/${files.length}...`;
+        try {
+          const dataUrl = await resizeImage(files[i]);
+          const res = await post({ action: 'SAVE_MACHINE_CHECK_IMAGE', item, machine, caption: caption.trim(), image: dataUrl,
+            username: window.currentUser?.username || '', role: window.currentUser?.role || '' });
+          if (res && res.status === 'success') { images.push(res.image); ok++; }
+          else errs.push(files[i].name + ': ' + (res?.message || 'error'));
+        } catch (e) { errs.push(files[i].name + ': ' + e.message); }
+      }
+      btn.disabled = false; btn.textContent = label;
+      if (errs.length) alert(`แนบสำเร็จ ${ok} รูป, ไม่สำเร็จ ${errs.length} รูป\n` + errs.join('\n'));
+      renderFormImages(); renderItems();
+    });
+    input.click();
+  }
+
+  async function deleteImage(btn){
+    if (!confirm('ลบรูปนี้? (รูปจะถูกลบออกจาก Google Drive ด้วย)')) return;
+    btn.disabled = true;
+    try {
+      const res = await post({ action: 'DELETE_MACHINE_CHECK_IMAGE', imageId: btn.dataset.id, username: window.currentUser?.username || '', role: window.currentUser?.role || '' });
+      if (res && res.status === 'success') {
+        images = images.filter(im => im.Image_ID !== btn.dataset.id);
+        renderFormImages(); renderItems();
+      } else { alert('ลบไม่สำเร็จ: ' + (res?.message || '')); btn.disabled = false; }
+    } catch (e) { alert('ลบไม่สำเร็จ: ' + e.message); btn.disabled = false; }
+  }
+
+  // รูปประกอบทั้งฟอร์ม (เช่น รูปเครื่อง / แผ่นแมนนวล) แสดงบนสุดของฟอร์ม
+  function renderFormImages(){
+    const box = $('mk-form-images');
+    const html = imgBlock('FORM');
+    box.innerHTML = html ? `<div class="text-xs font-bold text-gray-600 mb-1">🖼️ รูปประกอบ / คู่มือ${isAdmin() ? ' <span class="font-normal text-gray-400">(Admin: แนบรูปที่ทุกคนต้องดูก่อนตรวจ)</span>' : ''}</div>${html}` : '';
+    box.classList.toggle('hidden', !html);
+    bindImgEvents(box);
+  }
+
   // ===== ฟอร์ม (เหมือน Google Form) =====
-  function qCard(title, required, inner, bad){
+  function qCard(title, required, inner, bad, item){
     return `<div class="border rounded-lg p-3 ${bad ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white'}">
       <div class="text-sm font-bold text-gray-800 mb-2">${esc(title)}${required ? ' <span class="text-red-600">*</span>' : ''}</div>
+      ${item ? imgBlock(item) : ''}
       ${inner}
     </div>`;
   }
@@ -137,11 +263,12 @@
             ${chips}
             <input id="mk-air-input" type="number" step="0.1" min="0" inputmode="decimal" value="${esc(v || '')}" placeholder="ค่าอื่น" class="w-24 border rounded-lg p-1.5 text-sm">
             <span class="text-xs text-gray-500">bar</span>
-          </div>${note}`, ok === false);
+          </div>${note}`, ok === false, it.key);
       }
-      return qCard(it.title, true, `<div class="space-y-1.5">${radio('mk-q-' + it.key, it.ok, v === it.ok, 'ok')}${radio('mk-q-' + it.key, it.ng, v === it.ng, 'ng')}</div>`, ok === false);
+      return qCard(it.title, true, `<div class="space-y-1.5">${radio('mk-q-' + it.key, it.ok, v === it.ok, 'ok')}${radio('mk-q-' + it.key, it.ng, v === it.ng, 'ng')}</div>`, ok === false, it.key);
     }).join('');
     $('mk-items').innerHTML = html;
+    bindImgEvents($('mk-items'));
     $('mk-items').querySelectorAll('.mk-radio').forEach(r => r.addEventListener('change', () => {
       state[r.dataset.key] = r.value; resultOverride = ''; renderItems();
     }));
@@ -179,8 +306,10 @@
     const done = dayRecords.filter(r => r.Machine === machine);
     $('mk-already').classList.toggle('hidden', !done.length);
     if (done.length) $('mk-already').textContent = `เครื่องนี้ตรวจแล้ววันนี้ ${done.length} ครั้ง (ล่าสุด ${done[0].Check_Time} · ${done[0].Result}) — บันทึกซ้ำได้ถ้าตรวจใหม่`;
+    renderFormImages();
     renderItems();
     $('mk-form-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!imagesLoaded) loadImages().then(() => { if ($('mk-machine').value === machine) { renderFormImages(); renderItems(); } });
   }
 
   async function saveForm(){
@@ -358,7 +487,7 @@
     $('dc-subtab-ok1st').className = 'px-4 py-2 rounded-lg border-2 font-bold text-sm ' + (isMk ? off : on);
     $('dc-subtab-machine').className = 'px-4 py-2 rounded-lg border-2 font-bold text-sm ' + (isMk ? on : off);
     lsSet('cwm_dc_subtab', which);
-    if (isMk) { init(); loadDay(); loadHistory(); }
+    if (isMk) { init(); loadDay(); loadHistory(); loadImages(true); }
   }
   window.switchDailyCheckSub = switchSub;
 
