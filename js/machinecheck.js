@@ -57,7 +57,7 @@
     return fetch(`${SCRIPT_URL}?_t=${Date.now()}`, { method: 'POST', cache: 'no-store', body: JSON.stringify(payload) }).then(r => r.json());
   }
   function currentShift(){ const h = new Date().getHours(); return (h >= 8 && h < 20) ? 'Day' : 'Night'; }
-  function nowTime(){ const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+  function nowTime(){ const d = new Date(); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':'); }
   function addDays(dateStr, n){
     const d = new Date(dateStr + 'T00:00:00');
     d.setDate(d.getDate() + n);
@@ -650,7 +650,7 @@
     if (m) { let y = +m[3]; if (y > 2500) y -= 543; return y + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0'); }
     return '';
   }
-  function normTime(v){ const m = String(v || '').trim().match(/^(\d{1,2})[:.](\d{2})/); return m ? m[1].padStart(2, '0') + ':' + m[2] : ''; }
+  function normTime(v){ const m = String(v || '').trim().match(/^(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?/); return m ? m[1].padStart(2, '0') + ':' + m[2] + ':' + (m[3] || '00') : ''; }
   function normMcName(v){ const m = String(v || '').toUpperCase().match(/CWM[\s\-_]*0*(\d{1,2})\b/); return m ? 'CWM-' + m[1].padStart(2, '0') : ''; }
   function okNg(it, v){
     const t = String(v || '').trim();
