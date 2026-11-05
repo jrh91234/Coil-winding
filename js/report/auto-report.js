@@ -29,6 +29,18 @@ window.renderAutoReportContent = async function() {
     const filterShiftVal = document.getElementById('filterShift').value.trim();
     const filterShiftTypeVal = document.getElementById('filterShiftType').value.trim();
 
+    // 👥 Manpower (เข้างาน / OT) — ดึงคู่ขนานไปกับข้อมูลอื่น ช่วงวันที่เดียวกับรายงาน; ถ้าดึงไม่ได้ รายงานยังออกได้ปกติ
+    const mpMeta = (typeof window.getLoadedQueryMeta === 'function') ? window.getLoadedQueryMeta() : null;
+    const mpStart = (mpMeta && mpMeta.start) || sDate;
+    const mpEnd = (mpMeta && mpMeta.end) || eDate || mpStart;
+    const manpowerPromise = fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify(Object.assign(
+            { action: 'GET_MANPOWER_REPORT', username: (window.currentUser && window.currentUser.username) || '' },
+            mpStart ? { start: mpStart, end: mpEnd } : { range: 'all' }
+        ))
+    }).then(r => r.json()).catch(e => ({ status: 'error', message: String((e && e.message) || e) }));
+
     // 🌟 ฟังก์ชันจัดการสีของเส้นกราฟแต่ละอาการ (Fixed Colors) 🌟
     const getSymptomColor = (symptomName) => {
         // ทำการ trim และ lowercase เพื่อให้เทียบง่ายขึ้น
@@ -1105,6 +1117,96 @@ window.renderAutoReportContent = async function() {
     }
     machineAnalysisHtml += `</div>`;
 
+    // 👥 Manpower — เข้างาน / OT (จาก GET_MANPOWER_REPORT)
+    const mpEsc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    let manpower = null;
+    try { manpower = await manpowerPromise; } catch (e) { manpower = { status: 'error', message: String(e) }; }
+    const mpOk = !!(manpower && manpower.status !== 'error' && !manpower.missing);
+    const mpSub = mpEsc((manpower && manpower.subDepartment) || 'Coil winding');
+    const mpPeople = (mpOk && Array.isArray(manpower.people)) ? manpower.people : [];
+    const mpByDate = (mpOk && Array.isArray(manpower.byDate)) ? manpower.byDate : [];
+    const mpWork = mpOk ? (manpower.workCount || 0) : 0;
+    const mpOt = mpOk ? (manpower.otCount || 0) : 0;
+    const mpMultiDay = mpByDate.length > 1 || (manpower && manpower.range && (manpower.range.all || manpower.range.start !== manpower.range.end));
+
+    let manpowerKpiHtml = '';
+    if (mpOk && (mpWork > 0 || mpOt > 0)) {
+        const ratio = mpWork > 0 ? ((mpOt / mpWork) * 100).toFixed(1) : '0.0';
+        manpowerKpiHtml = `
+                <div class="mt-4 border border-teal-200 bg-teal-50 rounded p-3 text-sm text-center text-teal-900 font-bold shadow-sm">
+                    👥 Manpower ${mpSub} เข้างาน: <span class="text-teal-700">${mpWork.toLocaleString()} คน</span>
+                    <span class="text-gray-400 mx-2">|</span> Manpower ${mpSub} OT: <span class="text-orange-600">${mpOt.toLocaleString()} คน</span>
+                    <span class="text-gray-400 mx-2">|</span> OT ratio: <span class="text-indigo-700">${ratio}%</span> <span class="font-normal text-gray-600">(${mpOt.toLocaleString()}/${mpWork.toLocaleString()})</span>
+                </div>`;
+    }
+
+    let manpowerHtml = `
+        <div class="mt-6 bg-white border border-teal-200 rounded-lg shadow-sm overflow-hidden">
+            <div class="bg-teal-50 border-b border-teal-200 px-4 py-2">
+                <h4 class="text-sm font-bold text-teal-800 flex items-center gap-2">👥 Manpower — ${mpSub} (เข้างาน / OT)</h4>
+            </div>`;
+    if (!mpOk) {
+        const why = manpower && manpower.message ? mpEsc(manpower.message) : 'ไม่สามารถดึงข้อมูลได้';
+        manpowerHtml += `<div class="p-3 text-xs text-gray-500 text-center">⚠️ ไม่มีข้อมูล Manpower — ${why}</div></div>`;
+    } else if (mpPeople.length === 0) {
+        manpowerHtml += `<div class="p-3 text-xs text-gray-500 text-center">ไม่มีรายชื่อเข้างาน / OT ของ ${mpSub} ในช่วงวันที่เลือก</div></div>`;
+    } else {
+        manpowerHtml += `
+            <div class="grid grid-cols-3 gap-3 p-3 text-center page-break-inside-avoid">
+                <div class="border border-gray-200 rounded p-2"><p class="text-[10px] text-gray-500 font-bold uppercase">เข้างาน</p><p class="text-xl font-black text-teal-700">${mpWork.toLocaleString()} <span class="text-xs font-normal">คน</span></p></div>
+                <div class="border border-gray-200 rounded p-2"><p class="text-[10px] text-gray-500 font-bold uppercase">เข้า OT</p><p class="text-xl font-black text-orange-600">${mpOt.toLocaleString()} <span class="text-xs font-normal">คน</span></p></div>
+                <div class="border border-gray-200 rounded p-2"><p class="text-[10px] text-gray-500 font-bold uppercase">รวมรายชื่อ</p><p class="text-xl font-black text-gray-800">${mpPeople.length.toLocaleString()} <span class="text-xs font-normal">คน</span></p></div>
+            </div>
+            <div class="px-4 pt-1 pb-1 text-xs font-bold text-gray-700">Manpower list</div>
+            <table class="w-full text-sm text-left">
+                <thead class="bg-gray-100 text-gray-700 font-bold uppercase text-[11px] border-b">
+                    <tr>
+                        <th class="px-3 py-2 text-left">รหัส</th>
+                        <th class="px-3 py-2 text-left">ชื่อ</th>
+                        <th class="px-3 py-2 text-left">ตำแหน่ง</th>
+                        <th class="px-3 py-2 text-center">เข้างาน${mpMultiDay ? ' (วัน)' : ''}</th>
+                        <th class="px-3 py-2 text-center">OT${mpMultiDay ? ' (วัน)' : ''}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">`;
+        mpPeople.forEach(p => {
+            const w = p.workDays || 0, o = p.otDays || 0;
+            const wCell = mpMultiDay ? (w ? w.toLocaleString() : '-') : (w ? '✓' : '');
+            const oCell = mpMultiDay ? (o ? o.toLocaleString() : '-') : (o ? '✓' : '');
+            const leader = /leader/i.test(p.position || '');
+            manpowerHtml += `<tr class="page-break-inside-avoid">
+                <td class="px-3 py-1.5 text-xs text-gray-600">${mpEsc(p.employeeId)}</td>
+                <td class="px-3 py-1.5 ${leader ? 'font-bold text-gray-900' : 'text-gray-800'}">${mpEsc(p.name || '-')}</td>
+                <td class="px-3 py-1.5 text-xs text-gray-600">${mpEsc(p.position || '-')}</td>
+                <td class="px-3 py-1.5 text-center font-bold text-teal-700">${mpEsc(wCell)}</td>
+                <td class="px-3 py-1.5 text-center font-bold text-orange-600">${mpEsc(oCell)}</td>
+            </tr>`;
+        });
+        manpowerHtml += `</tbody></table>`;
+        if (mpMultiDay && mpByDate.length > 0) {
+            manpowerHtml += `
+            <div class="px-4 pt-3 pb-1 text-xs font-bold text-gray-700 page-break-inside-avoid">Manpower by day</div>
+            <table class="w-full text-sm text-left">
+                <thead class="bg-gray-100 text-gray-700 font-bold uppercase text-[11px] border-b">
+                    <tr>
+                        <th class="px-3 py-2 text-left">วันที่</th>
+                        <th class="px-3 py-2 text-right">เข้างาน (คน)</th>
+                        <th class="px-3 py-2 text-right">OT (คน)</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">`;
+            mpByDate.forEach(d => {
+                manpowerHtml += `<tr class="page-break-inside-avoid">
+                    <td class="px-3 py-1.5 text-gray-800">${mpEsc(d.date)}</td>
+                    <td class="px-3 py-1.5 text-right font-bold text-teal-700">${(d.work || 0).toLocaleString()}</td>
+                    <td class="px-3 py-1.5 text-right font-bold text-orange-600">${(d.ot || 0).toLocaleString()}</td>
+                </tr>`;
+            });
+            manpowerHtml += `</tbody></table>`;
+        }
+        manpowerHtml += `</div>`;
+    }
+
     // 🌟 ประกอบร่าง HTML สำหรับรายงาน พร้อมเพิ่มโลโก้บริษัทด้านบนสุด 🌟
     let html = `
         <div class="md:hidden bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-bold text-center py-2 px-4 rounded-lg mb-4 shadow-sm print-hide flex items-center justify-center gap-2">
@@ -1151,9 +1253,11 @@ window.renderAutoReportContent = async function() {
                         <p class="text-2xl font-black ${isPassTarget ? 'text-green-700' : 'text-gray-800'} mt-1">${yieldPct}%</p>
                     </div>
                 </div>
+                ${manpowerKpiHtml}
                 ${productBreakdownHtml}
                 ${sortingBreakdownHtml}
                 ${jobOrderHtml}
+                ${manpowerHtml}
             </div>
 
             <!-- เพิ่มคลาส page-break-inside-avoid ครอบไว้เพื่อไม่ให้หัวข้อขาดจากกราฟ -->
