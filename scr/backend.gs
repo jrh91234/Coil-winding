@@ -1885,7 +1885,8 @@ function doPost(e) {
 
   // --- Daily Check Machine (AM) — js/machinecheck.js (หัวข้อตาม Google Form เดิม B-CWMxx) ---
   const MACHINE_CHECK_HEADERS = ["Check_ID", "Timestamp", "Shift_Date", "Shift", "Check_Time", "Line", "Machine",
-    "AM1", "AM2", "AM3", "AM4", "Abnormal", "Result", "SESA", "Inspector", "Recorded_By", "Entry_Type", "Backfill_Ref"];
+    "AM1", "AM2", "AM3", "AM4", "Abnormal", "Result", "Inspector", "Entry_Type", "Backfill_Ref"];
+  // ไม่มีคอลัมน์ SESA / Recorded_By แล้ว — SESA อยู่ในช่อง Inspector ("65003 ชื่อ"), ผู้บันทึกย้อนหลังอยู่ใน Backfill_Ref + Logs
 
   if (action === "SAVE_MACHINE_CHECK") {
     const machine = String(data.machine || "").trim();
@@ -1938,11 +1939,9 @@ function doPost(e) {
         AM4: String(data.AM4),
         Abnormal: data.abnormal || "",
         Result: data.result === "PASS" ? "PASS" : "FAIL",
-        SESA: "'" + sesa,                                  // เก็บเป็นข้อความ กันเลข 0 นำหน้าหาย
-        Inspector: data.inspector || "",
-        Recorded_By: data.username || "",
+        Inspector: machineCheckInspector_(sesa, data.inspector),
         Entry_Type: isBackfill ? "Backfill" : "Realtime",
-        Backfill_Ref: isBackfill ? backfillRef : ""
+        Backfill_Ref: isBackfill ? backfillRef + " (บันทึกโดย " + (data.username || "-") + ")" : ""
       };
       sheet.appendRow(headers.map(h => rowMap.hasOwnProperty(h) ? rowMap[h] : ""));
       SpreadsheetApp.flush();
@@ -1957,7 +1956,7 @@ function doPost(e) {
   }
 
   // --- นำเข้าผลตรวจย้อนหลังหลายแถว (กรอกจากใบตรวจจริงลงแม่แบบ CSV) — ทุกแถวติด Entry_Type=Backfill ---
-  // Timestamp = เวลานำเข้าจริง · Recorded_By = ผู้ที่ login นำเข้า · ข้ามแถวที่ วันที่+เครื่อง+กะ มีผลตรวจอยู่แล้ว
+  // Timestamp = เวลานำเข้าจริง · ผู้ที่ login นำเข้า ต่อท้ายใน Backfill_Ref · ข้ามแถวที่ วันที่+เครื่อง+กะ มีผลตรวจอยู่แล้ว
   if (action === "IMPORT_MACHINE_CHECKS") {
     const items = Array.isArray(data.rows) ? data.rows : [];
     if (!items.length) return jsonOut_({status: "error", message: "ไม่มีข้อมูลนำเข้า"});
@@ -2021,11 +2020,9 @@ function doPost(e) {
           AM1: String(it.AM1), AM2: String(it.AM2), AM3: String(it.AM3), AM4: String(it.AM4),
           Abnormal: it.abnormal || "",
           Result: it.result === "PASS" ? "PASS" : "FAIL",
-          SESA: "'" + sesa,
-          Inspector: it.inspector || "",
-          Recorded_By: data.username,
+          Inspector: machineCheckInspector_(sesa, it.inspector),
           Entry_Type: "Backfill",
-          Backfill_Ref: ref
+          Backfill_Ref: ref + " (นำเข้าโดย " + data.username + ")"
         };
         out.push(headers.map(h => rowMap.hasOwnProperty(h) ? rowMap[h] : ""));
       });
@@ -2070,6 +2067,11 @@ function doPost(e) {
         obj[h] = v !== undefined && v !== null ? v : "";
       });
       if (!obj.Check_ID) continue;
+      // SESA: แถวเก่าอาจยังมีคอลัมน์ SESA · แถวใหม่ดึงจากเลขนำหน้าในช่อง Inspector
+      if (!String(obj.SESA || "").replace(/^'/, "").trim()) {
+        const sm = String(obj.Inspector || "").trim().match(/^(\d{3,})\b/);
+        obj.SESA = sm ? sm[1] : "";
+      }
       const d = String(obj.Shift_Date || "").substring(0, 10);
       if (dateFrom && d < dateFrom) continue;
       if (dateTo && d > dateTo) continue;
@@ -7040,4 +7042,49 @@ function fixMachineCheckTimes() {
   const n = fixMachineCheckTimeColumn_(sheet);
   Logger.log("Machine_Check: แก้ Check_Time เป็น HH:mm:ss แล้ว " + n + " แถว");
   return n;
+}
+
+
+// Inspector ของ Machine_Check = "SESA ชื่อ" (เช่น "65003 พีรพล") — แทนคอลัมน์ SESA ที่เลิกใช้
+function machineCheckInspector_(sesa, name) {
+  sesa = String(sesa || "").trim();
+  name = String(name || "").trim();
+  if (!sesa) return name;
+  if (name.indexOf(sesa) === 0) return name;           // มีเลข SESA นำหน้าอยู่แล้ว
+  name = name.replace(/^\d{3,}\s*/, "");             // ชื่อมีเลขคนอื่นนำหน้า → ใช้ SESA ที่ตรวจจริง
+  return name ? sesa + " " + name : sesa;
+}
+
+// รันเองครั้งเดียวจาก Apps Script editor: ลบคอลัมน์ SESA และ Recorded_By ออกจากแท็บ Machine_Check
+// ก่อนลบ จะย้ายเลข SESA ไปไว้หน้าชื่อในช่อง Inspector (ถ้ายังไม่มี) เพื่อไม่ให้ข้อมูลผู้ตรวจหาย
+function removeMachineCheckSesaColumns() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Machine_Check");
+  if (!sheet) { Logger.log("ไม่พบแท็บ Machine_Check"); return 0; }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const iSesa = headers.indexOf("SESA"), iInsp = headers.indexOf("Inspector");
+    let moved = 0;
+    if (iSesa > -1 && iInsp > -1 && sheet.getLastRow() > 1) {
+      const n = sheet.getLastRow() - 1;
+      const sesaVals = sheet.getRange(2, iSesa + 1, n, 1).getDisplayValues();
+      const inspRange = sheet.getRange(2, iInsp + 1, n, 1);
+      const insp = inspRange.getValues();
+      const out = insp.map(function(r, i) {
+        const v = machineCheckInspector_(String(sesaVals[i][0]).replace(/^'/, "").trim(), r[0]);
+        if (v !== String(r[0] == null ? "" : r[0]).trim()) moved++;
+        return [v];
+      });
+      if (moved) inspRange.setValues(out);
+    }
+    // ลบจากคอลัมน์ขวาไปซ้าย ตำแหน่งจะได้ไม่เลื่อน
+    const del = ["SESA", "Recorded_By"].map(h => headers.indexOf(h)).filter(i => i > -1).sort((a, b) => b - a);
+    del.forEach(function(i) { sheet.deleteColumn(i + 1); });
+    SpreadsheetApp.flush();
+    Logger.log("ย้าย SESA เข้า Inspector " + moved + " แถว · ลบคอลัมน์ " + del.length + " คอลัมน์");
+    return del.length;
+  } finally {
+    lock.releaseLock();
+  }
 }
