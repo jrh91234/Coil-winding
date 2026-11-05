@@ -31,6 +31,7 @@
   let images = [];         // รูปแนบประกอบหัวข้อ (Admin แนบ) — { Image_ID, Item, Machine, Url, Caption }
   let imagesLoaded = false;
   let initialized = false;
+  let autoKey = '';                // วัน|กะ ปัจจุบันที่ตารางสถานะตามอัตโนมัติ
   let backfill = null;     // โหมดบันทึกย้อนหลัง: { date, machine, shift } — ผู้ตรวจจริงกรอกตามใบตรวจ/หลักฐาน
   const IMG_MAX = 1600, IMG_QUALITY = 0.85;
 
@@ -57,6 +58,10 @@
     return fetch(`${SCRIPT_URL}?_t=${Date.now()}`, { method: 'POST', cache: 'no-store', body: JSON.stringify(payload) }).then(r => r.json());
   }
   function currentShift(){ const h = new Date().getHours(); return (h >= 8 && h < 20) ? 'Day' : 'Night'; }
+  // กะที่ตารางสถานะเครื่องกำลังแสดง (ค่าเริ่มต้น = กะปัจจุบัน) — ตารางแยกกะ เพื่อให้ขึ้นกะดึก 20:00 แล้วเริ่มนับใหม่
+  function gridShift(){ const v = $('mk-grid-shift') && $('mk-grid-shift').value; return v === 'Night' ? 'Night' : 'Day'; }
+  function nowShiftKey(){ return getShiftDateStr() + '|' + currentShift(); }
+  function viewKey(){ return $('mk-date').value + '|' + gridShift(); }
   function nowTime(){ const d = new Date(); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':'); }
   function addDays(dateStr, n){
     const d = new Date(dateStr + 'T00:00:00');
@@ -106,8 +111,9 @@
   function renderGrid(){
     const grid = $('mk-machine-grid');
     let pass = 0, fail = 0;
+    const gShift = gridShift();
     grid.innerHTML = MACHINES.map(mc => {
-      const recs = dayRecords.filter(r => r.Machine === mc);
+      const recs = dayRecords.filter(r => r.Machine === mc && r.Shift === gShift);
       const last = recs[0];
       let cls = 'bg-gray-50 border-gray-300 text-gray-500', status = 'ยังไม่ตรวจ';
       if (last) {
@@ -123,7 +129,7 @@
     }).join('');
     grid.querySelectorAll('.mk-mc-btn').forEach(btn => btn.addEventListener('click', () => openForm(btn.dataset.mc)));
     const missing = MACHINES.length - pass - fail;
-    $('mk-summary').innerHTML = `<span class="font-bold">${esc($('mk-date').value)}</span> — ` +
+    $('mk-summary').innerHTML = `<span class="font-bold">${esc($('mk-date').value)} · ${esc(SHIFT_LABEL[gShift] || gShift)}</span> — ` +
       `ตรวจแล้ว <b class="text-green-700">${pass + fail}/${MACHINES.length}</b> เครื่อง` +
       (fail ? ` · <b class="text-red-600">FAIL ${fail}</b>` : '') +
       (missing ? ` · <b class="text-gray-600">ยังไม่ตรวจ ${missing}</b>` : ' · <b class="text-green-700">ครบทุกเครื่อง ✔</b>');
@@ -321,14 +327,14 @@
     $('mk-backfill-box').classList.toggle('hidden', !bf);
     $('mk-backfill-ref').value = '';
     $('mk-time').value = bf ? '' : nowTime();           // ย้อนหลัง: ต้องกรอกเวลาตรวจจริงจากใบตรวจ
-    $('mk-shift').value = bf ? bf.shift : currentShift();
+    $('mk-shift').value = bf ? bf.shift : gridShift();
     if (bf) $('mk-form-title').textContent += ' · ' + (SHIFT_LABEL[bf.shift] || bf.shift) + ' (ย้อนหลัง)';
     $('mk-abn').value = '';
     applyLoginSesa();
     state = {}; resultOverride = '';
-    const done = dayRecords.filter(r => r.Machine === machine);
+    const done = dayRecords.filter(r => r.Machine === machine && r.Shift === $('mk-shift').value);
     $('mk-already').classList.toggle('hidden', !done.length);
-    if (done.length) $('mk-already').textContent = `เครื่องนี้ตรวจแล้ววันนี้ ${done.length} ครั้ง (ล่าสุด ${done[0].Check_Time} · ${done[0].Result}) — บันทึกซ้ำได้ถ้าตรวจใหม่`;
+    if (done.length) $('mk-already').textContent = `เครื่องนี้ตรวจแล้วกะนี้ ${done.length} ครั้ง (ล่าสุด ${done[0].Check_Time} · ${done[0].Result}) — บันทึกซ้ำได้ถ้าตรวจใหม่`;
     renderFormImages();
     renderItems();
     $('mk-form-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -599,6 +605,7 @@
   async function startBackfill(date, machine, shift){
     backfill = { date, machine, shift };
     $('mk-date').value = date;
+    if (shift === 'Day' || shift === 'Night') $('mk-grid-shift').value = shift;
     await loadDay();
     openForm(machine);
   }
@@ -750,6 +757,8 @@
     initialized = true;
     const today = getShiftDateStr();
     $('mk-date').value = today;
+    $('mk-grid-shift').value = currentShift();
+    autoKey = nowShiftKey();
     $('mk-hist-from').value = addDays(today, -6);
     $('mk-hist-to').value = today;
     $('mk-month').value = today.substring(0, 7);
@@ -767,6 +776,18 @@
 
     $('btn-mk-refresh').addEventListener('click', loadDay);
     $('mk-date').addEventListener('change', () => { backfill = null; loadDay(); $('mk-form-card').classList.add('hidden'); });
+    $('mk-grid-shift').addEventListener('change', () => { backfill = null; renderGrid(); $('mk-form-card').classList.add('hidden'); });
+    // เปลี่ยนกะอัตโนมัติ (08:00 → กะเช้า, 20:00 → กะดึก) ถ้าผู้ใช้ยังดูกะปัจจุบันอยู่ และไม่ได้เปิดฟอร์มค้างไว้
+    setInterval(() => {
+      const k = nowShiftKey();
+      if (k === autoKey) return;
+      if (viewKey() !== autoKey) { autoKey = k; return; }        // ผู้ใช้เลือกดูวัน/กะอื่นเอง — ไม่ไปเปลี่ยนให้
+      if (!$('mk-form-card').classList.contains('hidden')) return; // กำลังกรอกฟอร์มอยู่ — รอปิดก่อน
+      autoKey = k;
+      const [d, sh] = k.split('|');
+      $('mk-grid-shift').value = sh;
+      if ($('mk-date').value !== d) { $('mk-date').value = d; loadDay(); } else { loadDay(); }
+    }, 60000);
     $('btn-mk-backfill-cancel').addEventListener('click', () => { backfill = null; openForm($('mk-machine').value); });
     $('mk-machine').addEventListener('change', () => openForm($('mk-machine').value));
     $('btn-mk-close').addEventListener('click', () => { backfill = null; $('mk-form-card').classList.add('hidden'); });
