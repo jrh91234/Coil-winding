@@ -1903,7 +1903,7 @@ function doPost(e) {
     const isBackfill = data.backfill === true || data.backfill === "true";
     const backfillRef = String(data.backfillRef || "").trim();
     if (isBackfill) {
-      if (!/^\d{2}:\d{2}$/.test(String(data.checkTime || ""))) return jsonOut_({status: "error", message: "บันทึกย้อนหลัง: กรุณาระบุเวลาที่ตรวจจริง"});
+      if (!normalizeCheckTime_(data.checkTime)) return jsonOut_({status: "error", message: "บันทึกย้อนหลัง: กรุณาระบุเวลาที่ตรวจจริง"});
       if (!backfillRef) return jsonOut_({status: "error", message: "บันทึกย้อนหลัง: กรุณาระบุแหล่งที่มา/หลักฐาน"});
     }
     const lock = LockService.getScriptLock();
@@ -1929,7 +1929,7 @@ function doPost(e) {
         Timestamp: Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss"),
         Shift_Date: "'" + shiftDate,
         Shift: shift,
-        Check_Time: "'" + String(data.checkTime || Utilities.formatDate(now, "GMT+7", "HH:mm")),
+        Check_Time: "'" + (normalizeCheckTime_(data.checkTime) || Utilities.formatDate(now, "GMT+7", "HH:mm:ss")),
         Line: data.line || "S/A.. CoilWinding",
         Machine: machine,
         AM1: String(data.AM1),
@@ -1946,6 +1946,7 @@ function doPost(e) {
       };
       sheet.appendRow(headers.map(h => rowMap.hasOwnProperty(h) ? rowMap[h] : ""));
       SpreadsheetApp.flush();
+      try { fixMachineCheckTimeColumn_(sheet); } catch (fixErr) { /* ไม่ให้การบันทึกล้มเพราะจัดรูปแบบเวลา */ }
       logUserAction(data.username || data.inspector || "System", data.role || "User", "SAVE_MACHINE_CHECK", "Machine Check: " + checkId + " | " + machine + " | " + shiftDate + " " + shift + " | " + rowMap.Result + (isBackfill ? " | ย้อนหลัง: " + backfillRef : ""));
       return jsonOut_({status: "success", checkId: checkId});
     } catch (err) {
@@ -1997,11 +1998,11 @@ function doPost(e) {
         const machine = String(it.machine || "").trim();
         const shiftDate = String(it.shiftDate || "").trim();
         const shift = String(it.shift || "").trim();
-        const time = String(it.checkTime || "").trim();
+        const time = normalizeCheckTime_(it.checkTime);
         const sesa = String(it.sesa || "").trim();
         const ref = String(it.backfillRef || "").trim();
         if (!/^CWM-\d{2}$/.test(machine) || !/^\d{4}-\d{2}-\d{2}$/.test(shiftDate) || (shift !== "Day" && shift !== "Night")) { errors.push("แถว " + line + ": เครื่อง/วันที่/กะ ไม่ถูกต้อง"); return; }
-        if (!/^\d{2}:\d{2}$/.test(time)) { errors.push("แถว " + line + ": ไม่มีเวลาตรวจจริง"); return; }
+        if (!time) { errors.push("แถว " + line + ": ไม่มีเวลาตรวจจริง"); return; }
         if (!/^\d+$/.test(sesa)) { errors.push("แถว " + line + ": SESA ต้องเป็นตัวเลข"); return; }
         if (!it.AM1 || it.AM2 === undefined || it.AM2 === "" || !it.AM3 || !it.AM4) { errors.push("แถว " + line + ": AM1-AM4 ไม่ครบ"); return; }
         if (!ref) { errors.push("แถว " + line + ": ไม่มีแหล่งที่มา/หลักฐาน"); return; }
@@ -2032,6 +2033,7 @@ function doPost(e) {
       if (out.length) {
         sheet.getRange(sheet.getLastRow() + 1, 1, out.length, headers.length).setValues(out);
         SpreadsheetApp.flush();
+        try { fixMachineCheckTimeColumn_(sheet); } catch (fixErr) { /* ไม่ให้การนำเข้าล้มเพราะจัดรูปแบบเวลา */ }
       }
       logUserAction(data.username, data.role || "User", "IMPORT_MACHINE_CHECKS", "นำเข้า Machine Check ย้อนหลัง " + out.length + " แถว (ข้าม " + skipped + ")");
       return jsonOut_({status: "success", imported: out.length, skipped: skipped});
@@ -2052,13 +2054,17 @@ function doPost(e) {
     const dateTo = String(data.dateTo || "").trim();
     const filterMc = String(data.machine || "").trim();
     const results = [];
+    // Check_Time: ใช้ค่าที่แสดงในชีต (ค่าเวลาแบบ Date ของ Sheets อ่านผ่าน Apps Script แล้วเพี้ยนได้) → HH:mm:ss เสมอ
+    const ctIdx = headers.indexOf("Check_Time");
+    const ctDisplay = ctIdx > -1 ? sheet.getRange(1, ctIdx + 1, rows.length, 1).getDisplayValues() : [];
     for (let i = 1; i < rows.length; i++) {
       const obj = {};
       headers.forEach(function(h, idx) {
         let v = rows[i][idx];
-        if (v instanceof Date) {
-          v = h === "Check_Time" ? Utilities.formatDate(v, ss.getSpreadsheetTimeZone(), "HH:mm")
-            : h === "Shift_Date" ? Utilities.formatDate(v, "GMT+7", "yyyy-MM-dd")
+        if (h === "Check_Time") {
+          v = normalizeCheckTime_(ctDisplay[i] ? ctDisplay[i][0] : v) || (v instanceof Date ? "" : v);
+        } else if (v instanceof Date) {
+          v = h === "Shift_Date" ? Utilities.formatDate(v, "GMT+7", "yyyy-MM-dd")
             : Utilities.formatDate(v, "GMT+7", "yyyy-MM-dd HH:mm:ss");
         }
         obj[h] = v !== undefined && v !== null ? v : "";
@@ -6987,4 +6993,51 @@ function normalizeAttendanceDate_(v) {
   m = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
   if (m) return fixYear(m[3]) + "-" + pad(m[2]) + "-" + pad(m[1]);
   return "";
+}
+
+// ==================================================
+// ⏱️ Machine_Check: Check_Time รูปแบบเดียวทั้งคอลัมน์ = ข้อความ "HH:mm:ss"
+// ==================================================
+// รับ "8:24" / "08:24" / "08:24:07" / "08.24" / "8:24:07 PM" → "08:24:00" / "08:24:07" / "20:24:07" · ค่าไม่ถูกต้อง → ""
+function normalizeCheckTime_(v) {
+  const m = String(v == null ? "" : v).trim().replace(/^'/, "").match(/^(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?(?:\s*([AaPp])\.?[Mm]\.?)?$/);
+  if (!m) return "";
+  let hh = parseInt(m[1], 10);
+  const mm = parseInt(m[2], 10), ss = m[3] ? parseInt(m[3], 10) : 0;
+  if (m[4]) { const pm = /p/i.test(m[4]); if (hh === 12) hh = pm ? 12 : 0; else if (pm) hh += 12; }
+  if (hh > 23 || mm > 59 || ss > 59) return "";
+  const p2 = function(n) { return String(n).padStart(2, "0"); };
+  return p2(hh) + ":" + p2(mm) + ":" + p2(ss);
+}
+
+// แปลงทั้งคอลัมน์ Check_Time ให้เป็นข้อความ HH:mm:ss (อ่านจากค่าที่แสดงในชีต) — เขียนเฉพาะเมื่อมีแถวที่ต้องแก้
+// คืนจำนวนแถวที่แก้ · ค่าเดิมที่มีแค่ HH:mm (ไม่รู้วินาทีจริง) จะเติม ":00"
+function fixMachineCheckTimeColumn_(sheet) {
+  if (!sheet || sheet.getLastRow() < 2) return 0;
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  const col = headers.indexOf("Check_Time");
+  if (col === -1) return 0;
+  const range = sheet.getRange(2, col + 1, sheet.getLastRow() - 1, 1);
+  const shown = range.getDisplayValues();
+  const raw = range.getValues();
+  let changed = 0;
+  const out = shown.map(function(r, i) {
+    const t = normalizeCheckTime_(r[0]);
+    if (!t) return [raw[i][0]];                       // ค่าว่าง/แปลก — คงไว้ตามเดิม
+    if (raw[i][0] !== t) changed++;
+    return [t];
+  });
+  if (!changed) return 0;
+  range.setNumberFormat("@");                          // เก็บเป็นข้อความ ชิดซ้ายเหมือนกันทั้งคอลัมน์
+  range.setValues(out);
+  SpreadsheetApp.flush();
+  return changed;
+}
+
+// รันเองครั้งเดียวจาก Apps Script editor ได้ (ปกติระบบแก้ให้อัตโนมัติตอนมีการบันทึก/นำเข้า Machine Check)
+function fixMachineCheckTimes() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Machine_Check");
+  const n = fixMachineCheckTimeColumn_(sheet);
+  Logger.log("Machine_Check: แก้ Check_Time เป็น HH:mm:ss แล้ว " + n + " แถว");
+  return n;
 }
