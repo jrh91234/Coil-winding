@@ -508,6 +508,18 @@
                     <div class="flex-1 overflow-y-auto" id="jobOrderDashList"></div>
                 </div>
 
+                <div id="card-manpower" class="widget-card p-4 h-[350px]">
+                    <div class="widget-header drag-handle mb-2 flex justify-between items-start">
+                        <h3 id="manpowerDashTitle" class="font-bold text-gray-700 text-sm">👥 Manpower (เข้างาน / OT)</h3>
+                        <div class="flex gap-2">
+                            <button onclick="window.toggleCardHeight(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide">↕</button>
+                            <button onclick="window.toggleCardSize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide">↔</button>
+                            <button onclick="window.toggleCardMaximize(this)" class="text-gray-400 hover:text-blue-600 font-bold text-lg leading-none print-hide">⛶</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto" id="manpowerDashList"></div>
+                </div>
+
                 <div id="card-pareto" class="widget-card p-4 h-[350px]">
                     <div class="widget-header drag-handle mb-2 flex justify-between items-start">
                         <div class="flex items-center gap-2">
@@ -2137,14 +2149,15 @@
     </div>
 
     <!-- Scripts (แก้เป็นเวอร์ชันเพื่อกัน Cache) -->
-    <script src="js/globals.js?v=3.59"></script>
+    <script src="js/globals.js?v=3.60"></script>
     <script src="js/auth.js?v=3.60"></script>
     <script src="js/form.js?v=3.60"></script>
     <script src="js/planning.js?v=1.1"></script>
     <script src="js/report/widgets.js?v=4.0"></script>
-    <script src="js/report/auto-report.js?v=4.6"></script>
+    <script src="js/report/manpower.js?v=1.0"></script>
+    <script src="js/report/auto-report.js?v=4.7"></script>
     <script src="js/report/export.js?v=4.1"></script>
-    <script src="js/report/dashboard.js?v=4.2"></script>
+    <script src="js/report/dashboard.js?v=4.3"></script>
     <script src="js/report/pptx-export.js?v=2.2"></script>
     <script src="js/charts/helpers.js?v=4.2"></script>
     <script src="js/charts/draw-tool.js?v=4.0"></script>

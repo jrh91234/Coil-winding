@@ -131,7 +131,9 @@
 - ที่มา: ไฟล์ JR Organize แท็บ `Attendance` → ดึงเข้ามาที่แท็บ `Attendance_JR` ของ Spreadsheet นี้ด้วย `=IMPORTRANGE("1LxRYOtg0LL6_VSuNsaNuNuBUHal_T4eOYgy4tOrHNfE","Attendance!A:J")` ที่ A1 (โค้ดห้ามเปิดไฟล์ JR Organize ตรงๆ, **ห้ามใส่แท็บนี้ใน ensureColumns/syncHeaders**)
 - Config: `APP_CONFIG.ATTENDANCE = { SHEET, SUB_DEPARTMENT }` บนสุดของ `scr/backend.gs`
 - Backend: `getManpowerReport(username, {start,end}|'all')` + `parseReportDateRange_` + `normalizeAttendanceDate_` · action (POST) `GET_MANPOWER_REPORT` (ต้องส่ง `username`) → `{subDepartment, sheet, missing, message?, people[{employeeId,name,position,workDays,otDays}], byDate[{date,work,ot}], workCount, otCount}` (หาคอลัมน์จากชื่อหัว, ตัดซ้ำ วัน+รหัส+Type, Leader ขึ้นก่อน, count = จำนวนคน)
-- Frontend: `js/report/auto-report.js` (`manpowerPromise`, `manpowerKpiHtml` ในกรอบ KPI หน้าแรก, `manpowerHtml` ต่อท้าย Section 1) — ดึงไม่ได้/missing รายงานยังออกได้
+- Frontend กลาง: `js/report/manpower.js` — `window.fetchManpower(start,end,{all,force})` (cache ต่อช่วงวัน ใช้ร่วม Dashboard + Report), `renderManpowerDashCard`, `loadManpowerDashCard` (เรียกจาก `loadDashboard` หลังโหลดข้อมูล ไม่ block; All Time → range all)
+- Dashboard: การ์ด `card-manpower` (index.html ถัดจาก `card-job-orders`, อยู่ใน WIDGET_LIST ซ่อน/แสดงได้) — สรุปเข้างาน/OT/OT ratio, by day (หลายวัน), รายชื่อ
+- Report: `js/report/auto-report.js` (`manpowerPromise` ใช้ `fetchManpower`, `manpowerKpiHtml` ในกรอบ KPI หน้าแรก, `manpowerHtml` ต่อท้าย Section 1) — ดึงไม่ได้/missing รายงานยังออกได้
 
 ## Architecture Notes
 - All chart functions use `window.functionName` — no ES modules, no imports

@@ -21,6 +21,7 @@ const WIDGET_LIST = [
     { id: 'card-stat-uph', label: 'UPH' },
     { id: 'card-fg-model', label: 'FG & ACH by Model' },
     { id: 'card-job-orders', label: 'Job Order (แผนการผลิต)' },
+    { id: 'card-manpower', label: 'Manpower (เข้างาน / OT)' },
     { id: 'card-pareto', label: 'NG Analysis (Pareto)' },
     { id: 'card-simulator', label: 'Yield Simulator' },
     { id: 'card-model-analysis', label: 'Model Analysis' },

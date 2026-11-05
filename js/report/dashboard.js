@@ -212,6 +212,10 @@ window.loadDashboard = async function() {
         if (typeof window.renderJobOrderDashCard === 'function') {
             window.renderJobOrderDashCard(data);
         }
+        // 👥 การ์ด Manpower (เข้างาน / OT) — โหลดแยก ไม่ทำให้ Dashboard ช้าลง
+        if (typeof window.loadManpowerDashCard === 'function') {
+            window.loadManpowerDashCard(start, end, allTime);
+        }
         // เก็บรายการ Job Order ล่าสุดไว้ให้ฟอร์มบันทึกผลิตใช้เลือกได้ทันที
         if (data.jobOrders && data.jobOrders.length > 0) {
             window.jobOrderList = data.jobOrders;

@@ -33,13 +33,10 @@ window.renderAutoReportContent = async function() {
     const mpMeta = (typeof window.getLoadedQueryMeta === 'function') ? window.getLoadedQueryMeta() : null;
     const mpStart = (mpMeta && mpMeta.start) || sDate;
     const mpEnd = (mpMeta && mpMeta.end) || eDate || mpStart;
-    const manpowerPromise = fetch(SCRIPT_URL, {
-        method: 'POST',
-        body: JSON.stringify(Object.assign(
-            { action: 'GET_MANPOWER_REPORT', username: (window.currentUser && window.currentUser.username) || '' },
-            mpStart ? { start: mpStart, end: mpEnd } : { range: 'all' }
-        ))
-    }).then(r => r.json()).catch(e => ({ status: 'error', message: String((e && e.message) || e) }));
+    const mpAll = !!(mpMeta && mpMeta.allTime) || !mpStart;
+    const manpowerPromise = (typeof window.fetchManpower === 'function')
+        ? window.fetchManpower(mpStart, mpEnd, { all: mpAll })   // ใช้ cache เดียวกับการ์ด Dashboard ถ้าช่วงตรงกัน
+        : Promise.resolve({ status: 'error', message: 'ไม่พบโมดูล Manpower' });
 
     // 🌟 ฟังก์ชันจัดการสีของเส้นกราฟแต่ละอาการ (Fixed Colors) 🌟
     const getSymptomColor = (symptomName) => {
