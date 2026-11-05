@@ -127,6 +127,12 @@
 - Sheet `FiveSEndLog`: EntryID (`5SE-yyyyMMdd-XXXXXX`), Timestamp, Date, Day, Shift, DoneBy, DoneByName, Photos (URL คั่น ", "), Remark, Status (done/confirmed/rejected), ConfirmedBy, ConfirmedName, ConfirmedAt, RejectReason, ClientRequestID, Score, ScoreNote, ScoredBy, ScoredAt (สร้าง/เติมคอลัมน์อัตโนมัติ) · รูปเก็บ Drive โฟลเดอร์ `5S_Photos` (Script Property `FIVES_PHOTOS_FOLDER_ID`)
 - Backend actions (POST): `GET_FIVES_WEEK` (date → endEntries/endToday/pending ย้อน 31 วัน/canConfirm), `SAVE_FIVES_END` (shift, photos[3], remark, clientRequestId กันส่งซ้ำ), `CONFIRM_FIVES` (entryIds[], score 0–10, scoreNote), `REJECT_FIVES` (entryId, reason)
 
+## Manpower (เข้างาน / OT) ใน Auto Report PDF
+- ที่มา: ไฟล์ JR Organize แท็บ `Attendance` → ดึงเข้ามาที่แท็บ `Attendance_JR` ของ Spreadsheet นี้ด้วย `=IMPORTRANGE("1LxRYOtg0LL6_VSuNsaNuNuBUHal_T4eOYgy4tOrHNfE","Attendance!A:J")` ที่ A1 (โค้ดห้ามเปิดไฟล์ JR Organize ตรงๆ, **ห้ามใส่แท็บนี้ใน ensureColumns/syncHeaders**)
+- Config: `APP_CONFIG.ATTENDANCE = { SHEET, SUB_DEPARTMENT }` บนสุดของ `scr/backend.gs`
+- Backend: `getManpowerReport(username, {start,end}|'all')` + `parseReportDateRange_` + `normalizeAttendanceDate_` · action (POST) `GET_MANPOWER_REPORT` (ต้องส่ง `username`) → `{subDepartment, sheet, missing, message?, people[{employeeId,name,position,workDays,otDays}], byDate[{date,work,ot}], workCount, otCount}` (หาคอลัมน์จากชื่อหัว, ตัดซ้ำ วัน+รหัส+Type, Leader ขึ้นก่อน, count = จำนวนคน)
+- Frontend: `js/report/auto-report.js` (`manpowerPromise`, `manpowerKpiHtml` ในกรอบ KPI หน้าแรก, `manpowerHtml` ต่อท้าย Section 1) — ดึงไม่ได้/missing รายงานยังออกได้
+
 ## Architecture Notes
 - All chart functions use `window.functionName` — no ES modules, no imports
 - Shared state: `currentDashboardData`, `charts` object, `machineMapping`

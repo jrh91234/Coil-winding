@@ -23,6 +23,24 @@ const PLAN_COLUMNS = [
   "Job_Order", "Status", "Recorder", "Updated_At"
 ];
 
+// ==================================================
+// ⚙️ APP_CONFIG — ค่าตั้งค่าของระบบ
+// ==================================================
+// ATTENDANCE: รายชื่อพนักงานเข้างาน / เข้า OT สำหรับ Auto Report (PDF)
+//   ข้อมูลมาจากไฟล์ JR Organize แท็บ "Attendance" แต่โค้ดนี้ "ไม่เปิดไฟล์นั้นตรงๆ"
+//   วิธีตั้งค่า (ทำครั้งเดียว ใน Spreadsheet ของเว็บนี้):
+//     1) สร้างแท็บชื่อ "Attendance_JR"
+//     2) ที่เซลล์ A1 ใส่สูตร
+//        =IMPORTRANGE("1LxRYOtg0LL6_VSuNsaNuNuBUHal_T4eOYgy4tOrHNfE","Attendance!A:J")
+//     3) กด "อนุญาตการเข้าถึง" (Allow access) ที่เซลล์ A1 หนึ่งครั้ง
+//   หัวคอลัมน์ (แถว 1) มาจาก IMPORTRANGE: WorkDate | Timestamp | Username | Name | Department |
+//   Type | CheckedByUsername | CheckedByName | SubDepartment | Position
+//   ⚠️ ห้ามเอาแท็บนี้ไปใส่ ensureColumns/syncHeaders หรือ schema ที่เติมหัวคอลัมน์อัตโนมัติ
+//   SUB_DEPARTMENT = ค่าในคอลัมน์ SubDepartment ที่จะนับ (ไม่สนตัวพิมพ์เล็กใหญ่/ช่องว่าง)
+const APP_CONFIG = {
+  ATTENDANCE: { SHEET: 'Attendance_JR', SUB_DEPARTMENT: 'Coil winding' }
+};
+
 const PLAN_STATUS_OPEN = "Open";
 const PLAN_STATUS_CLOSED = "Closed";
 const PLAN_STATUS_CANCELLED = "Cancelled";
@@ -1011,6 +1029,16 @@ function doPost(e) {
   }
 
   const action = data.action;
+
+  // 👥 Manpower เข้างาน / OT (read action, ต้อง login) — ใช้ใน Auto Report PDF
+  if (action === "GET_MANPOWER_REPORT") {
+    try {
+      const mp = getManpowerReport(data.username, { start: data.start, end: data.end, all: data.all === true || data.range === "all" });
+      return ContentService.createTextOutput(JSON.stringify(mp)).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: String(err && err.message || err) })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
 
   if (action === "GET_SORTING_PROD_SUMMARY") {
     try {
@@ -6826,4 +6854,137 @@ function getSortEvalData_(ss, start, end) {
     models: Object.keys(modelSet).sort(),
     symptoms: Object.keys(symptomSet).sort()
   };
+}
+
+// ==================================================
+// 👥 Manpower Report — รายชื่อพนักงานเข้างาน / เข้า OT (จากแท็บ Attendance_JR ที่ IMPORTRANGE มา)
+// ==================================================
+// token     = username ของผู้ที่ login อยู่ (ระบบนี้ไม่มี session token — ต้องมีค่าเท่านั้นจึงจะอ่านได้)
+// dateRange = { start: 'yyyy-mm-dd', end: 'yyyy-mm-dd' } | 'all' | { all: true }
+// คืนค่า: { status, subDepartment, sheet, missing, message?, people[], byDate[], workCount, otCount, range }
+function getManpowerReport(token, dateRange) {
+  const cfg = (APP_CONFIG && APP_CONFIG.ATTENDANCE) || {};
+  const sheetName = String(cfg.SHEET || "Attendance_JR");
+  const subDept = String(cfg.SUB_DEPARTMENT || "");
+  const base = {
+    status: "success", subDepartment: subDept, sheet: sheetName, missing: false,
+    people: [], byDate: [], workCount: 0, otCount: 0
+  };
+
+  if (!String(token == null ? "" : token).trim()) {
+    return { status: "error", message: "กรุณาเข้าสู่ระบบก่อน", subDepartment: subDept, sheet: sheetName, missing: false,
+      people: [], byDate: [], workCount: 0, otCount: 0 };
+  }
+
+  const range = parseReportDateRange_(dateRange);
+  base.range = range;
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    base.missing = true;
+    base.message = "ไม่พบแท็บ \"" + sheetName + "\" — สร้างแท็บแล้วใส่ IMPORTRANGE ที่ A1";
+    return base;
+  }
+
+  const rows = sheet.getDataRange().getValues();
+  if (!rows || rows.length === 0) {
+    base.missing = true;
+    base.message = "แท็บ \"" + sheetName + "\" ยังไม่มีข้อมูล (ตรวจสอบสูตร IMPORTRANGE / การอนุญาตเข้าถึง)";
+    return base;
+  }
+
+  const norm = function(v) { return String(v == null ? "" : v).replace(/\s+/g, "").toLowerCase(); };
+  const headers = rows[0].map(norm);
+  const col = function(name) { return headers.indexOf(norm(name)); };
+  const c = {
+    date: col("WorkDate"), user: col("Username"), name: col("Name"),
+    type: col("Type"), sub: col("SubDepartment"), pos: col("Position")
+  };
+  const need = ["date", "user", "type", "sub"].filter(function(k) { return c[k] === -1; });
+  if (need.length) {
+    base.missing = true;
+    base.message = "แท็บ \"" + sheetName + "\" ไม่มีคอลัมน์ที่ต้องใช้: " +
+      need.map(function(k) { return ({ date: "WorkDate", user: "Username", type: "Type", sub: "SubDepartment" })[k]; }).join(", ");
+    return base;
+  }
+
+  const wantSub = norm(subDept);
+  const seen = {};          // date|id|type → นับครั้งเดียว
+  const peopleMap = {};     // id → { employeeId, name, position, workDays, otDays }
+  const dateMap = {};       // date → { work: {id:1}, ot: {id:1} }
+  const workIds = {}, otIds = {};
+
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (norm(r[c.sub]) !== wantSub) continue;
+    const type = norm(r[c.type]);
+    if (type !== "work" && type !== "ot") continue;
+    const id = String(r[c.user] == null ? "" : r[c.user]).trim();
+    if (!id) continue;
+    const d = normalizeAttendanceDate_(r[c.date]);
+    if (!d) continue;
+    if (!range.all && (d < range.start || d > range.end)) continue;
+
+    const key = d + "|" + id.toLowerCase() + "|" + type;
+    if (seen[key]) continue;
+    seen[key] = true;
+
+    const pKey = id.toLowerCase();
+    if (!peopleMap[pKey]) {
+      peopleMap[pKey] = { employeeId: id, name: "", position: "", workDays: 0, otDays: 0 };
+    }
+    const p = peopleMap[pKey];
+    const nm = c.name > -1 ? String(r[c.name] == null ? "" : r[c.name]).trim() : "";
+    const ps = c.pos > -1 ? String(r[c.pos] == null ? "" : r[c.pos]).trim() : "";
+    if (nm) p.name = nm;
+    if (ps) p.position = ps;
+    if (type === "work") { p.workDays++; workIds[pKey] = true; }
+    else { p.otDays++; otIds[pKey] = true; }
+
+    if (!dateMap[d]) dateMap[d] = { work: 0, ot: 0 };
+    dateMap[d][type]++;
+  }
+
+  const isLeader = function(p) { return /leader/i.test(p.position || "") ? 0 : 1; };
+  base.people = Object.keys(peopleMap).map(function(k) { return peopleMap[k]; }).sort(function(a, b) {
+    const la = isLeader(a), lb = isLeader(b);
+    if (la !== lb) return la - lb;
+    const na = (a.name || a.employeeId).toLowerCase(), nb = (b.name || b.employeeId).toLowerCase();
+    return na < nb ? -1 : (na > nb ? 1 : 0);
+  });
+  base.byDate = Object.keys(dateMap).sort().map(function(d) { return { date: d, work: dateMap[d].work, ot: dateMap[d].ot }; });
+  base.workCount = Object.keys(workIds).length;
+  base.otCount = Object.keys(otIds).length;
+  return base;
+}
+
+// ตัวแปลงช่วงวันที่ของรายงาน (ใช้กติกาเดียวกับ GET_DASHBOARD: ไม่ระบุ = วันนี้, 'all' = ไม่กรองวัน)
+function parseReportDateRange_(dateRange) {
+  if (dateRange === "all" || (dateRange && (dateRange.all === true || dateRange.range === "all"))) {
+    return { all: true, start: "", end: "" };
+  }
+  const today = Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyy-MM-dd");
+  let start = normalizeAttendanceDate_(dateRange && dateRange.start) || today;
+  let end = normalizeAttendanceDate_(dateRange && dateRange.end) || start;
+  if (start > end) { const t = start; start = end; end = t; }
+  return { all: false, start: start, end: end };
+}
+
+// WorkDate → 'yyyy-mm-dd' (Date ใช้เวลา Asia/Bangkok, ข้อความรองรับ yyyy-mm-dd และ d/m/yyyy, ปี พ.ศ. → ค.ศ.)
+function normalizeAttendanceDate_(v) {
+  if (v == null || v === "") return "";
+  const pad = function(n) { return String(n).padStart(2, "0"); };
+  const fixYear = function(y) { y = parseInt(y, 10) || 0; if (y > 0 && y < 100) y += 2000; if (y > 2500) y -= 543; return y; };
+  if (v instanceof Date) {
+    if (isNaN(v.getTime())) return "";
+    const s = Utilities.formatDate(v, "Asia/Bangkok", "yyyy-MM-dd");
+    return fixYear(s.substring(0, 4)) + s.substring(4);
+  }
+  const text = String(v).trim();
+  let m = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return fixYear(m[1]) + "-" + pad(m[2]) + "-" + pad(m[3]);
+  m = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (m) return fixYear(m[3]) + "-" + pad(m[2]) + "-" + pad(m[1]);
+  return "";
 }
