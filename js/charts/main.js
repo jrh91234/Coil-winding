@@ -622,6 +622,8 @@ const ctxQC = document.getElementById('qcTrendChart');
                 };
             });
 
+            const dailyTrendRows = displayTrendData; // เก็บข้อมูลรายวันไว้ใช้คำนวณเส้น Projection
+
             // 📅 รวมเป็นรายสัปดาห์ / เดือน / ไตรมาส / ปี (แบบกราฟหุ้น) — รวม Kg/ชิ้น แล้วคำนวณ % ใหม่จากยอดรวม
             const qcPeriod = window.getChartPeriod ? window.getChartPeriod('qcTrend') : 'day';
             if (qcPeriod !== 'day' && window.groupRowsByPeriod) {
@@ -659,7 +661,7 @@ const ctxQC = document.getElementById('qcTrendChart');
             }
 
             // คำนวณ % NG / Worst / Best / Forecast ของแต่ละจุด (ใช้สูตรเดียวกันทั้งรายวันและรายช่วง)
-            displayTrendData.forEach(d => {
+            const calcTrendRates = d => {
                 const mFgKg = d.fgKg, mNgKg = d.ngKg, mPendingKg = d.pendingKg;
                 const modelNgBreakdownKg = d.ngBreakdownKg || {};
                 const totalKg = mFgKg + mNgKg;
@@ -696,7 +698,9 @@ const ctxQC = document.getElementById('qcTrendChart');
                 }
 
                 Object.assign(d, { ngRate, worstNgRate, bestNgRate, forecastNgRate, projectedNgKg });
-            });
+            };
+            displayTrendData.forEach(calcTrendRates);
+            if (dailyTrendRows !== displayTrendData) dailyTrendRows.forEach(calcTrendRates);
 
             const hasPendingSort = displayTrendData.some(d => d.pendingSortQty > 0);
             
@@ -774,11 +778,39 @@ const ctxQC = document.getElementById('qcTrendChart');
                 order: 10
             });
 
+            // 🌟 2.6 เส้น Projection: ทำนาย % NG ช่วงถัดไป (Holt) + ประเมินช่วงที่ยังไม่จบ + แถบช่วง 95% 🌟
+            const chartLabels = displayTrendData.map(d => d.label || d.date);
+            const projection = window.buildNgRateProjection ? window.buildNgRateProjection(dailyTrendRows, displayTrendData, qcPeriod) : null;
+            if (projection) {
+                chartLabels.push(...projection.extraLabels);
+                const n = chartLabels.length;
+                const pick = fn => Array.from({ length: n }, (_, i) => {
+                    const p = projection.points[i];
+                    return p ? fn(p) : null;
+                });
+                const line = pick(p => Math.min(p.rate, 100));
+                if (projection.anchorIdx !== null) line[projection.anchorIdx] = Math.min(projection.anchorRate, 100);
+                datasets.push({label: '📈 Projection (แนวโน้ม)', data: line, borderColor: 'rgba(13, 148, 136, 0.9)', borderWidth: 2.5, borderDash: [2, 4], pointRadius: 4, pointStyle: 'rectRot', fill: false, spanGaps: true, tension: 0});
+                datasets.push({label: '_projLo', _role: 'projLo', data: pick(p => Math.max(0, p.lo)), borderColor: 'transparent', pointRadius: 0, pointHitRadius: 0, fill: false, spanGaps: true});
+                datasets.push({label: 'ช่วงคาดการณ์ 95%', _role: 'projHi', data: pick(p => Math.min(p.hi, 100)), borderColor: 'transparent', backgroundColor: 'rgba(13, 148, 136, 0.12)', pointRadius: 0, pointHitRadius: 0, fill: '-1', spanGaps: true});
+                datasets.push({
+                    type: 'bar',
+                    label: 'คาดการณ์ยอดผลิต (ชิ้น)',
+                    data: pick(p => Math.max(0, Math.round(p.remainingPcs))),
+                    backgroundColor: 'rgba(13, 148, 136, 0.15)',
+                    borderColor: 'rgba(13, 148, 136, 0.5)',
+                    borderWidth: 1,
+                    stack: 'qty',
+                    yAxisID: 'yQty',
+                    order: 10
+                });
+            }
+
             // 🌟 3. สร้างกราฟ Chart.js 🌟
             charts.qcTrend = new Chart(ctxQC, {
                 type: 'line',
                 data: {
-                    labels: displayTrendData.map(d => d.label || d.date),
+                    labels: chartLabels,
                     datasets: datasets
                 },
                 plugins: [window.qcCrosshairPlugin],
@@ -831,6 +863,7 @@ const ctxQC = document.getElementById('qcTrendChart');
                     layout: { padding: { top: 20 } },
                     plugins: {
                         qcCrosshair: { refreshOnMove: () => window.qcTrendShowLabels === false },
+                        legend: { labels: { filter: item => !String(item.text).startsWith('_') } },
                         zoom: {
                             limits: { y: { min: 0 }, yQty: { min: 0 } },
                             // pan แนวนอนผ่าน plugin (2 หน้าต่างเลื่อนพร้อมกัน), pan แนวตั้งแยกหน้าต่างด้วย initQcPanePan
@@ -844,12 +877,20 @@ const ctxQC = document.getElementById('qcTrendChart');
                         tooltip: {
                             callbacks: {
                                 title: function(items) {
-                                    const d = items.length ? displayTrendData[items[0].dataIndex] : null;
-                                    return d ? (d.title || d.date) : '';
+                                    if (!items.length) return '';
+                                    const d = displayTrendData[items[0].dataIndex];
+                                    if (d) return d.title || d.date;
+                                    const p = projection && projection.points[items[0].dataIndex];
+                                    return p ? `${p.title} (คาดการณ์)` : '';
                                 },
                                 label: function(ctx) {
                                     const v = ctx.parsed.y;
                                     if (v === null || v === undefined) return null;
+                                    if (ctx.dataset._role === 'projLo') return null;
+                                    if (ctx.dataset._role === 'projHi') {
+                                        const p = projection && projection.points[ctx.dataIndex];
+                                        return p ? `ช่วงคาดการณ์ 95%: ${Math.max(0, p.lo).toFixed(2)}% – ${Math.min(p.hi, 100).toFixed(2)}%` : null;
+                                    }
                                     if (ctx.dataset.yAxisID === 'yQty') {
                                         return `${ctx.dataset.label}: ${Math.round(v).toLocaleString()} ชิ้น`;
                                     }
@@ -858,8 +899,19 @@ const ctxQC = document.getElementById('qcTrendChart');
                                 afterBody: function(tooltipItems) {
                                     const idx = tooltipItems[0].dataIndex;
                                     const d = displayTrendData[idx];
-                                    if (!d) return '';
-                                    let lines = [];
+                                    const p = projection && projection.points[idx];
+                                    const projLines = [];
+                                    if (p) {
+                                        const word = projection.periodWord;
+                                        projLines.push(p.isPartial
+                                            ? `📈 คาดการณ์สิ้น${word}: NG ≈ ${p.rate.toFixed(2)}%`
+                                            : `📈 คาดการณ์${word}นี้: NG ≈ ${p.rate.toFixed(2)}%`);
+                                        if (p.isPartial && p.progress) projLines.push(`   (ผ่านไปแล้ว ${p.progress})`);
+                                        projLines.push(`   ยอดผลิตคาด ≈ ${Math.round(p.estPcs).toLocaleString()} ชิ้น → NG ≈ ${Math.round(p.estPcs * p.rate / 100).toLocaleString()} ชิ้น`);
+                                        if (projection.mape !== null) projLines.push(`   ทำนายย้อนหลังคลาดเคลื่อนเฉลี่ย ${projection.mape.toFixed(1)}% ของค่าจริง (MAPE)`);
+                                    }
+                                    if (!d) return projLines.join('\n');
+                                    let lines = projLines;
                                     if (d.pendingSortQty > 0) lines.push(`รองาน Sort: ${d.pendingSortQty.toLocaleString()} ชิ้น`);
                                     if (d.coilChanges > 0) {
                                         lines.push(`🔄 เปลี่ยนม้วน: ${d.coilChanges} ม้วน`);
@@ -1141,3 +1193,157 @@ window.initQcPanePan = function(canvas) {
 if (window.registerChartPeriod) window.registerChartPeriod('qcTrend', () => {
     if (typeof currentDashboardData !== 'undefined' && currentDashboardData) window.renderCharts(currentDashboardData);
 });
+
+// 📈 เส้น Projection ของกราฟ Daily NG Rate Trend
+//   ทำนาย % NG ด้วย Holt (damped trend) บนช่วงฐาน: วัน/สัปดาห์/เดือน — ไตรมาส/ปี มีจุดน้อย จึงทำนายรายเดือนแล้วรวมขึ้น
+//   ช่วงที่ยังไม่จบ (เช่นเดือนนี้) = ยอดจริงถึงวันล่าสุด + ส่วนที่เหลือตามค่าที่ทำนาย ถ่วงด้วยยอดผลิตต่อวัน
+//   NG ของแต่ละวันรวมผลประเมินงานรอ Sort (เส้น Forecast) แล้ว
+//   คืน { points: {index: {rate, lo, hi, estPcs, remainingPcs, isPartial, progress, title}}, extraLabels, anchorIdx, anchorRate, mape, periodWord } หรือ null
+window.buildNgRateProjection = function(dailyRows, displayRows, period) {
+    period = period || 'day';
+    const HORIZON = { day: 7, week: 4, month: 3, quarter: 2, year: 1 };
+    const baseUnit = (period === 'quarter' || period === 'year') ? 'month' : period;
+    const toDisplayKey = baseKey => baseUnit === period ? baseKey : window.getPeriodKey(baseKey, period);
+
+    // 1) รวมเป็นช่วงฐาน เฉพาะช่วงที่มีการผลิต
+    const base = window.groupRowsByPeriod(dailyRows || [], baseUnit, r => r.date,
+        () => ({ ngKg: 0, totKg: 0, pcs: 0, lastDate: '' }),
+        (acc, r) => {
+            const hasProj = r.forecastNgRate != null;
+            const totKg = r.fgKg + r.ngKg + (hasProj ? (r.pendingKg || 0) : 0);
+            acc.ngKg += r.ngKg + (hasProj ? (r.projectedNgKg || 0) : 0);
+            acc.totKg += totKg;
+            acc.pcs += (r.fgPcs || 0) + (r.ngPcs || 0);
+            if (totKg > 0 && r.date > acc.lastDate) acc.lastDate = r.date;
+        }).filter(b => b.totKg > 0);
+    if (base.length < 2 || !displayRows.length) return null;
+
+    // 2) ช่วงล่าสุดยังไม่จบ? (รายวันถือว่าจบทุกวัน)
+    const lastBase = base[base.length - 1];
+    let partial = null;
+    if (baseUnit !== 'day') {
+        const prog = window.periodDayProgress(lastBase.key, baseUnit, lastBase.lastDate);
+        if (prog.elapsed > 0 && prog.elapsed < prog.total) partial = Object.assign({ prog }, lastBase);
+    }
+    const done = partial ? base.slice(0, -1) : base;
+    const lastDoneKey = done.length ? done[done.length - 1].key : null;
+    if (!lastDoneKey) return null;
+
+    // 3) จำนวนช่วงฐานที่ต้องทำนาย
+    let steps = HORIZON[period] + (partial ? 1 : 0);
+    if (baseUnit !== period) {
+        const lastDisplayKey = toDisplayKey(partial ? partial.key : lastDoneKey);
+        const targetKey = window.addPeriods(lastDisplayKey, period, HORIZON[period]);
+        steps = 0;
+        while (toDisplayKey(window.addPeriods(lastDoneKey, baseUnit, steps + 1)) <= targetKey && steps < 36) steps++;
+    }
+
+    const fit = window.holtForecast(done.map(b => b.ngKg / b.totKg * 100), steps);
+    if (!fit) return null;
+    const recent = done.slice(-6);
+    const avgKg = recent.reduce((s, b) => s + b.totKg, 0) / recent.length;
+    const avgPcs = recent.reduce((s, b) => s + b.pcs, 0) / recent.length;
+
+    // รายวัน: ข้ามวันในสัปดาห์ที่ 4 สัปดาห์ล่าสุดไม่มีการผลิต (เช่นวันอาทิตย์) และใช้ยอดผลิตเฉลี่ยของวันนั้น ๆ
+    let weekdayAvg = null;
+    if (baseUnit === 'day') {
+        const since = window.addPeriods(lastBase.lastDate, 'day', -27);
+        weekdayAvg = Array.from({ length: 7 }, () => ({ kg: 0, pcs: 0 }));
+        (dailyRows || []).forEach(r => {
+            if (r.date < since || r.date > lastBase.lastDate) return;
+            const w = weekdayAvg[window.periodStartDate(r.date, 'day').getDay()];
+            w.kg += (r.fgKg + r.ngKg) / 4; w.pcs += ((r.fgPcs || 0) + (r.ngPcs || 0)) / 4;
+        });
+    }
+    const futureKeys = [];
+    for (let k = lastDoneKey, guard = 0; futureKeys.length < steps && guard < 60; guard++) {
+        k = window.addPeriods(k, baseUnit, 1);
+        if (weekdayAvg && !(weekdayAvg[window.periodStartDate(k, 'day').getDay()].kg > 0)) continue;
+        futureKeys.push(k);
+    }
+    steps = futureKeys.length;
+
+    // 4) ค่าคาดการณ์ของแต่ละช่วงฐาน (sd = ส่วนเบี่ยงเบนของ % NG)
+    const baseProj = [];
+    for (let i = 0; i < steps; i++) {
+        const key = futureKeys[i];
+        const rate = fit.forecast[i];
+        const sd = fit.sd[i];
+        if (i === 0 && partial) {
+            const f = partial.prog.elapsed / partial.prog.total;
+            const remKg = partial.totKg / f * (1 - f);
+            baseProj.push({ key, ngKg: partial.ngKg + remKg * rate / 100, totKg: partial.totKg + remKg,
+                            pcs: partial.pcs / f, actualPcs: partial.pcs, sd: sd * (1 - f),
+                            progress: `${partial.prog.elapsed}/${partial.prog.total} วัน` });
+        } else {
+            const w = weekdayAvg ? weekdayAvg[window.periodStartDate(key, 'day').getDay()] : null;
+            const kg = w ? w.kg : avgKg, pcs = w ? w.pcs : avgPcs;
+            baseProj.push({ key, ngKg: kg * rate / 100, totKg: kg, pcs, actualPcs: 0, sd });
+        }
+    }
+
+    // 5) รวมเป็นช่วงที่แสดงบนกราฟ (ไตรมาส/ปี รวมเดือนที่จบแล้วในช่วงเดียวกันด้วย)
+    const groups = {};
+    const order = [];
+    const groupOf = key => {
+        if (!groups[key]) { groups[key] = { ngKg: 0, totKg: 0, pcs: 0, actualPcs: 0, sdW: 0, progress: '' }; order.push(key); }
+        return groups[key];
+    };
+    baseProj.forEach(b => {
+        const g = groupOf(toDisplayKey(b.key));
+        g.ngKg += b.ngKg; g.totKg += b.totKg; g.pcs += b.pcs; g.actualPcs += b.actualPcs;
+        g.sdW += b.sd * b.totKg;
+        if (b.progress) g.progress = b.progress;
+    });
+    if (baseUnit !== period) {
+        done.forEach(b => {
+            const g = groups[toDisplayKey(b.key)];
+            if (!g) return;
+            g.ngKg += b.ngKg; g.totKg += b.totKg; g.pcs += b.pcs; g.actualPcs += b.pcs;
+            g.progress = '';
+        });
+        if (partial) {
+            const g = groups[toDisplayKey(partial.key)];
+            const e = window.periodDayProgress(toDisplayKey(partial.key), period, partial.lastDate);
+            if (g) g.progress = `${e.elapsed}/${e.total} วัน`;
+        }
+    }
+
+    // 6) จับคู่กับตำแหน่งบนแกน X (ช่วงที่มีอยู่แล้ว หรือเพิ่มต่อท้าย)
+    const indexByKey = {};
+    displayRows.forEach((d, i) => { indexByKey[d.key || d.date] = i; });
+    const points = {};
+    const extraLabels = [];
+    order.forEach(key => {
+        const g = groups[key];
+        if (!(g.totKg > 0)) return;
+        let idx = indexByKey[key];
+        if (idx === undefined) {
+            idx = displayRows.length + extraLabels.length;
+            extraLabels.push(window.formatPeriodLabel(key, period));
+        }
+        const rate = g.ngKg / g.totKg * 100;
+        const sd = g.sdW / g.totKg;
+        points[idx] = {
+            rate, lo: rate - 1.96 * sd, hi: rate + 1.96 * sd,
+            estPcs: g.pcs, remainingPcs: g.pcs - g.actualPcs,
+            isPartial: g.actualPcs > 0, progress: g.progress,
+            title: window.formatPeriodTitle(key, period)
+        };
+    });
+    const firstIdx = Math.min(...Object.keys(points).map(Number));
+    if (!Number.isFinite(firstIdx)) return null;
+
+    // จุดเริ่มเส้น = ช่วงจริงล่าสุดก่อนช่วงคาดการณ์ (ให้เส้นต่อจากข้อมูลจริง)
+    let anchorIdx = null, anchorRate = null;
+    for (let i = Math.min(firstIdx, displayRows.length) - 1; i >= 0; i--) {
+        const d = displayRows[i];
+        if (d && (d.fgKg + d.ngKg) > 0) { anchorIdx = i; anchorRate = d.forecastNgRate != null ? d.forecastNgRate : d.ngRate; break; }
+    }
+
+    return {
+        points, extraLabels, anchorIdx, anchorRate,
+        mape: fit.mape,
+        periodWord: (window.CHART_PERIODS.find(p => p.value === period) || {}).short || 'ช่วง'
+    };
+};

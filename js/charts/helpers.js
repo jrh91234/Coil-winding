@@ -173,6 +173,97 @@ window.groupRowsByPeriod = function(rows, period, getDate, init, add) {
     }));
 };
 
+// วันแรกของช่วง (Date) จาก key ของ getPeriodKey
+window.periodStartDate = function(key, period) {
+    if (period === 'quarter') {
+        const m = String(key).match(/^(\d{4})-Q(\d)$/);
+        return m ? new Date(+m[1], (+m[2] - 1) * 3, 1) : null;
+    }
+    if (period === 'year') return new Date(+key, 0, 1);
+    return _parsePeriodDate(key);
+};
+
+// วันแรกของช่วงถัดไป n ช่วง (Date)
+const _shiftPeriodStart = function(key, period, n) {
+    const s = window.periodStartDate(key, period);
+    if (!s) return null;
+    if (!period || period === 'day') s.setDate(s.getDate() + n);
+    else if (period === 'week') s.setDate(s.getDate() + 7 * n);
+    else if (period === 'month') s.setMonth(s.getMonth() + n);
+    else if (period === 'quarter') s.setMonth(s.getMonth() + 3 * n);
+    else if (period === 'year') s.setFullYear(s.getFullYear() + n);
+    return s;
+};
+
+// key ของช่วงถัดไป n ช่วง เช่น addPeriods('2026-10', 'month', 2) → '2026-12'
+window.addPeriods = function(key, period, n) {
+    const s = _shiftPeriodStart(key, period, n);
+    if (!s) return key;
+    return window.getPeriodKey(`${s.getFullYear()}-${_periodPad2(s.getMonth() + 1)}-${_periodPad2(s.getDate())}`, period);
+};
+
+// จำนวนวันในช่วง และจำนวนวันที่ผ่านไปแล้วถึง lastDateStr (นับรวมวันนั้น)
+window.periodDayProgress = function(key, period, lastDateStr) {
+    const s = window.periodStartDate(key, period);
+    const e = _shiftPeriodStart(key, period, 1);
+    const last = _parsePeriodDate(lastDateStr);
+    if (!s || !e || !last) return { total: 1, elapsed: 1 };
+    const DAY = 86400000;
+    const total = Math.round((e - s) / DAY);
+    const elapsed = Math.min(total, Math.max(0, Math.round((last - s) / DAY) + 1));
+    return { total, elapsed };
+};
+
+// 📈 Holt's Linear Exponential Smoothing แบบ Damped Trend (กันแนวโน้มพุ่งเกินจริง)
+//   series: ตัวเลขเรียงตามเวลา (อย่างน้อย 4 จุด) · horizon: จำนวนช่วงที่ทำนาย
+//   เลือก alpha/beta อัตโนมัติจาก error ทำนายล่วงหน้า 1 ช่วงที่น้อยที่สุด
+//   คืน { forecast: [h1..hN], sd: [SD ของค่าทำนายแต่ละช่วง], mape (% คลาดเคลื่อนเฉลี่ยย้อนหลัง) } หรือ null
+window.holtForecast = function(series, horizon) {
+    const y = (series || []).filter(v => Number.isFinite(v));
+    if (y.length < 4 || horizon < 1) return null;
+    const PHI = 0.9;
+    const run = (alpha, beta) => {
+        let level = y[0], trend = y[1] - y[0], sse = 0, ape = 0, apeN = 0;
+        const errs = [];
+        for (let t = 1; t < y.length; t++) {
+            const pred = level + PHI * trend;
+            const err = y[t] - pred;
+            errs.push(err);
+            sse += err * err;
+            if (y[t] !== 0) { ape += Math.abs(err / y[t]); apeN++; }
+            const prevLevel = level;
+            level = alpha * y[t] + (1 - alpha) * (level + PHI * trend);
+            trend = beta * (level - prevLevel) + (1 - beta) * PHI * trend;
+        }
+        return { alpha, beta, level, trend, sse, errs, mape: apeN ? (ape / apeN) * 100 : null };
+    };
+    let best = null;
+    for (let a = 0.1; a <= 0.91; a += 0.1) {
+        for (let b = 0.05; b <= 0.51; b += 0.05) {
+            const r = run(a, b);
+            if (!best || r.sse < best.sse) best = r;
+        }
+    }
+    const forecast = [];
+    let damp = 0;
+    for (let h = 1; h <= horizon; h++) {
+        damp += Math.pow(PHI, h);
+        forecast.push(Math.max(0, best.level + damp * best.trend));
+    }
+    // ไม่นับ error ช่วงแรก ๆ ที่โมเดลยังไม่นิ่ง
+    const errs = best.errs.length > 3 ? best.errs.slice(2) : best.errs;
+    const sigma = Math.sqrt(errs.reduce((s, e) => s + e * e, 0) / Math.max(1, errs.length - 1));
+    // ความแปรปรวนค่าทำนาย h ช่วงของ Holt damped: σ²·(1 + Σ_{j<h} (α + αβ·Σ_{i≤j} φ^i)²)
+    const sd = [];
+    let acc = 0, phiSum = 0;
+    for (let h = 1; h <= horizon; h++) {
+        sd.push(sigma * Math.sqrt(1 + acc));
+        phiSum += Math.pow(PHI, h);
+        acc += Math.pow(best.alpha + best.alpha * best.beta * phiSum, 2);
+    }
+    return { forecast, sd, mape: best.mape };
+};
+
 // รวม object ตัวเลข { key: n } เข้าด้วยกัน (เช่น ngBreakdown)
 window.mergeNumberMap = function(target, src) {
     Object.entries(src || {}).forEach(([k, v]) => { target[k] = (target[k] || 0) + (Number(v) || 0); });
