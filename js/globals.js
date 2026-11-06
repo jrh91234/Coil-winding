@@ -390,6 +390,42 @@ window.updateHourSlots = function(type) {
     if(match) select.value = match;
 };
 
+// ===== ไม่โหลดซ้ำเมื่อสลับ tab ไปมา =====
+// ข้อมูลที่โหลดสำเร็จแล้วและยังไม่เก่าเกิน TAB_FRESH_MS จะไม่ถูกดึงใหม่ จนกว่าจะมีการบันทึก/แก้ไขข้อมูล (ล้างอัตโนมัติ)
+const TAB_FRESH_MS = 3 * 60 * 1000;
+const tabLoadedAt = {};
+function tabMarkLoaded(tab) { tabLoadedAt[tab] = Date.now(); }
+window.invalidateTabCache = function(tab) { if (tab) delete tabLoadedAt[tab]; else Object.keys(tabLoadedAt).forEach(k => delete tabLoadedAt[k]); };
+function tabHasData(tab) {
+    try {
+        if (tab === 'inbox') return typeof inboxData !== 'undefined' && !!inboxData && inboxData.status === 'success';
+        if (tab === 'dashboard') { const el = document.getElementById('dashboard-content'); return !!el && !el.classList.contains('hidden'); }
+        if (tab === 'planning') return Array.isArray(window.jobOrderList) && window.jobOrderList.length > 0;
+    } catch (e) {}
+    return false;
+}
+function tabNeedsReload(tab) {
+    const at = tabLoadedAt[tab];
+    if (!at || Date.now() - at > TAB_FRESH_MS) return true;
+    return !tabHasData(tab); // โหลดค้าง/ล้มเหลว → โหลดใหม่
+}
+// ล้างแคชของทุก tab เมื่อมีการส่งคำสั่งที่ไม่ใช่การอ่าน (บันทึก/แก้ไข/ลบ)
+(function () {
+    if (window.__tabFetchWrapped || typeof window.fetch !== 'function') return;
+    window.__tabFetchWrapped = true;
+    const orig = window.fetch.bind(window);
+    window.fetch = function (input, init) {
+        try {
+            if (init && String(init.method || '').toUpperCase() === 'POST') {
+                let action = '';
+                try { action = String(JSON.parse(init.body).action || ''); } catch (e) {}
+                if (!/^(GET|LIST|LOGIN|CHECK|VERIFY)/i.test(action)) window.invalidateTabCache();
+            }
+        } catch (e) {}
+        return orig(input, init);
+    };
+})();
+
 // 🌟 อัปเดตสิทธิ์การเข้าถึง (สลับ Section) 🌟
 window.switchTab = function(tab) {
     if (!window.currentUser) return;
@@ -417,15 +453,15 @@ window.switchTab = function(tab) {
             }
         }
     });
-    if(tab === 'inbox' && typeof window.loadInbox === 'function') window.loadInbox();
-    if(tab === 'dashboard' && typeof window.loadDashboard === 'function') window.loadDashboard();
+    if(tab === 'inbox' && typeof window.loadInbox === 'function' && tabNeedsReload('inbox')) { tabMarkLoaded('inbox'); window.loadInbox(); }
+    if(tab === 'dashboard' && typeof window.loadDashboard === 'function' && tabNeedsReload('dashboard')) { tabMarkLoaded('dashboard'); window.loadDashboard(); }
     if(tab === 'parts' && typeof window.loadPartsMaster === 'function') window.loadPartsMaster();
     if(tab === 'cost' && typeof window.loadCostModule === 'function') window.loadCostModule();
     if(tab === 'scrap' && typeof window.refreshScrapRecorder === 'function') window.refreshScrapRecorder();
     if(tab === 'dailycheck' && typeof window.loadDailyCheck === 'function') window.loadDailyCheck();
     if(tab === 'dailycheck' && typeof window.loadMachineCheckIfActive === 'function') window.loadMachineCheckIfActive();
     if(tab === 'fives' && typeof window.loadFiveS === 'function') window.loadFiveS();
-    if(tab === 'planning' && typeof window.loadJobOrders === 'function') window.loadJobOrders();
+    if(tab === 'planning' && typeof window.loadJobOrders === 'function' && tabNeedsReload('planning')) { tabMarkLoaded('planning'); window.loadJobOrders(); }
     // เข้าหน้าบันทึกผลิต: โหลด Job Order ที่ยังเปิดอยู่มาให้เลือก (โหลดครั้งแรกครั้งเดียว)
     if(tab === 'form' && typeof window.loadJobOrders === 'function' && (!window.jobOrderList || window.jobOrderList.length === 0)) {
         window.loadJobOrders(true);
