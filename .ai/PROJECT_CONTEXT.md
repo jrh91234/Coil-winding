@@ -32,6 +32,8 @@
 4. NO global sort ratio fallback — skip symptoms without sort data, re-normalize
 5. Setup format: "Setup - {symptom}" stored in NG_Details_JSON
 6. **Day cutoff 08:00-07:59** — before 08:00 counts as previous day (Production form, Sorting form, backend read, RawMaterial)
+   - **Sorting_Data.Date is already the locked production day** (the Sorting form shifts it back before saving, keeping the real time, e.g. `2026-11-05 03:00`). Every backend path that reads it — dashboard read AND the QC-approval write to Production_Data (`SORT-<Job_ID>` rows) — must use the date as stored and use the time only for shift/hour slot. Never apply the 08:00 cutoff to it again (it put night-time Sorting rows one day early until Nov 2026)
+   - One-off repair of old `SORT-` rows (from 2026-10-01): run `repairSortProductionDatesDryRun`, check sheet `Sort_Date_Repair_Log`, then `repairSortProductionDatesApply` in the Apps Script editor. Tests: `node --test tests/sort-date-repair.test.js`
 7. **getWppStrict/getKgFromPcs** — defined ONLY in helpers.js, all other files use shared version (no local duplicates)
 
 ## Data Flow
