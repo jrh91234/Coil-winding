@@ -3399,24 +3399,19 @@ function doPost(e) {
                           }
                       }
 
-                      // === แปลงวันที่จาก Sorting_Data (ตัดวัน 08:00) ===
+                      // === แปลงวันที่จาก Sorting_Data ===
+                      // วันที่ใน Sorting_Data ถูกล็อกเป็น "วันผลิต" แล้วจากหน้า Sorting (ก่อน 08:00 = วันก่อนหน้า)
+                      // จึงใช้วันที่ตามที่เก็บไว้ ห้ามตัดวัน 08:00 ซ้ำ (เหมือน getAdvancedDashboardData)
+                      // เวลาใช้หา กะ/ช่วงชั่วโมง เท่านั้น
                       let dateStr = "";
                       let hourNum = 0;
                       if (sortDateRaw instanceof Date && !isNaN(sortDateRaw.getTime())) {
                           hourNum = parseInt(Utilities.formatDate(sortDateRaw, "GMT+7", "HH")) || 0;
-                          let shiftD = new Date(sortDateRaw.getTime());
-                          if (hourNum < 8) shiftD.setDate(shiftD.getDate() - 1);
-                          dateStr = Utilities.formatDate(shiftD, "GMT+7", "yyyy-MM-dd");
+                          dateStr = Utilities.formatDate(sortDateRaw, "GMT+7", "yyyy-MM-dd");
                       } else if (sortDateRaw) {
                           const dateParts = String(sortDateRaw).split(" ");
                           dateStr = dateParts[0] || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
-                          const rawTime = dateParts[1] || "";
-                          hourNum = parseInt(rawTime.split(":")[0]) || 0;
-                          if (hourNum < 8 && rawTime) {
-                              const tmpD = new Date(dateStr + "T00:00:00");
-                              tmpD.setDate(tmpD.getDate() - 1);
-                              dateStr = tmpD.getFullYear() + "-" + String(tmpD.getMonth() + 1).padStart(2, '0') + "-" + String(tmpD.getDate()).padStart(2, '0');
-                          }
+                          hourNum = parseInt((dateParts[1] || "").split(":")[0]) || 0;
                       } else {
                           dateStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
                       }
@@ -7084,6 +7079,173 @@ function removeMachineCheckSesaColumns() {
     SpreadsheetApp.flush();
     Logger.log("ย้าย SESA เข้า Inspector " + moved + " แถว · ลบคอลัมน์ " + del.length + " คอลัมน์");
     return del.length;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// =====================================================================
+// ซ่อมวันที่ของแถว SORT- ใน Production_Data ที่ถูกตัดวัน 08:00 ซ้ำ
+// ---------------------------------------------------------------------
+// ก่อนแก้ (พ.ย. 2026) งาน Sorting ที่บันทึกช่วง 00:00-07:59 ลง Production_Data ผิดไป 1 วัน
+// เพราะหน้า Sorting ล็อกวันผลิตให้แล้ว แต่ตอน QC อนุมัติ backend ตัดวันอีกรอบ
+// ฟังก์ชันนี้ "ไม่ทำงานเอง" ต้องกด Run ในหน้า Apps Script:
+//   1) repairSortProductionDatesDryRun  — ดูรายการที่จะเปลี่ยน (ไม่แก้ข้อมูล) ผลอยู่ในชีต Sort_Date_Repair_Log
+//   2) repairSortProductionDatesApply   — แก้จริง (เก็บค่าเดิมไว้ในชีต Sort_Date_Repair_Log เพื่อย้อนกลับ)
+// แก้เฉพาะแถวที่วันผลิตจริง (จากใบงาน Sorting) ตั้งแต่ SORT_DATE_REPAIR_FROM เป็นต้นไป
+// และมีรูปแบบ "ผิดเพราะตัดซ้ำ" เท่านั้น: เวลา < 08:00 และวันที่ใน Production_Data = วันผลิต - 1
+// แถวที่ถูกแก้ด้วยมือแล้ว (วันตรงกับใบงานแล้ว) จะไม่ถูกแตะ แถวที่ผิดแบบอื่นแสดงเป็น REVIEW และไม่ถูกแก้
+// รันซ้ำได้ ผลเหมือนเดิม
+// =====================================================================
+const SORT_DATE_REPAIR_FROM = "2026-10-01";
+const SORT_DATE_REPAIR_LOG = "Sort_Date_Repair_Log";
+
+function repairSortProductionDatesDryRun() { return repairSortProductionDates_(true); }
+function repairSortProductionDatesApply() { return repairSortProductionDates_(false); }
+
+// คืน { date: "yyyy-MM-dd", hour: เลขชั่วโมง | null } จากค่า Date หรือข้อความ "yyyy-MM-dd HH:mm"
+function sortDateParts_(raw) {
+  let date = "";
+  let hour = null;
+  if (raw instanceof Date && !isNaN(raw.getTime())) {
+    date = Utilities.formatDate(raw, "GMT+7", "yyyy-MM-dd");
+    hour = parseInt(Utilities.formatDate(raw, "GMT+7", "HH"), 10);
+  } else if (raw) {
+    const parts = String(raw).trim().split(" ");
+    date = parts[0].substring(0, 10);
+    if (parts[1]) hour = parseInt(parts[1].split(":")[0], 10);
+  }
+  const year = parseInt(date.substring(0, 4), 10) || 0;
+  if (year > 2500) date = (year - 543) + date.substring(4);
+  return { date: date, hour: (hour === null || isNaN(hour)) ? null : hour };
+}
+
+function addDaysISO_(dateStr, days) {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// กะ A/B ของแถว SORT- — ตรรกะเดียวกับตอนบันทึก (หาแถวผลิตเครื่องเดียวกัน วันเดียวกัน ช่วงชั่วโมงตรงกัน)
+function findSortShift_(prodValues, cols, byDate, skipIdx, dateStr, baseMachine, hourNum, shiftType) {
+  let matched = "-";
+  let fallback = "-";
+  const idxs = byDate.get(dateStr) || [];
+  for (let k = idxs.length - 1; k >= 0; k--) {
+    const i = idxs[k];
+    if (i === skipIdx) continue;
+    const r = prodValues[i];
+    const pMach = String(r[cols.machine] || "").trim();
+    const pShift = String(r[cols.shift] || "").trim();
+    if (pMach !== baseMachine || (pShift !== "A" && pShift !== "B")) continue;
+    if (fallback === "-") fallback = pShift;
+    const hParts = cols.hour === -1 ? [] : String(r[cols.hour] || "").trim().split("-");
+    if (hParts.length === 2) {
+      const rangeStart = parseInt(hParts[0].split(":")[0]) || 0;
+      const rangeEnd = parseInt(hParts[1].split(":")[0]) || 0;
+      if (hourNum >= rangeStart && hourNum < rangeEnd) { matched = pShift; break; }
+    } else {
+      matched = pShift;
+      break;
+    }
+  }
+  if (matched === "-") matched = fallback;
+  if (matched === "-") matched = shiftType === "Day" ? "A" : "B";
+  return matched;
+}
+
+// วางแผนอย่างเดียว ไม่เขียนชีต — prodValues/sortValues คือ getDataRange().getValues() ของแต่ละชีต
+function planSortDateRepair_(prodValues, sortValues, fromDate) {
+  const norm = row => row.map(h => String(h).trim().toLowerCase());
+  const pHead = norm(prodValues[0] || []);
+  const sHead = norm(sortValues[0] || []);
+  const cols = { date: pHead.indexOf("date"), batch: pHead.indexOf("batch_id"), machine: pHead.indexOf("machine"), shift: pHead.indexOf("shift"), hour: pHead.indexOf("hour"), product: pHead.indexOf("product") };
+  const sJob = sHead.indexOf("job_id");
+  const sDate = sHead.indexOf("date");
+  if (cols.date < 0 || cols.batch < 0 || cols.machine < 0 || cols.shift < 0) throw new Error("Production_Data ขาดคอลัมน์ Date / Batch_ID / Machine / Shift");
+  if (sJob < 0 || sDate < 0) throw new Error("Sorting_Data ขาดคอลัมน์ Job_ID / Date");
+
+  const source = new Map();
+  for (let i = 1; i < sortValues.length; i++) {
+    const id = String(sortValues[i][sJob] || "").trim();
+    if (id) source.set(id, sortDateParts_(sortValues[i][sDate]));
+  }
+  const dates = prodValues.map((r, i) => i === 0 ? "" : sortDateParts_(r[cols.date]).date);
+  const byDate = new Map();
+  dates.forEach((d, i) => { if (i > 0 && d) { if (!byDate.has(d)) byDate.set(d, []); byDate.get(d).push(i); } });
+
+  const plan = { fixes: [], review: [], counts: { sortRows: 0, alreadyCorrect: 0, beforeFrom: 0, noSource: 0 } };
+  for (let i = 1; i < prodValues.length; i++) {
+    const batch = String(prodValues[i][cols.batch] || "").trim();
+    if (batch.indexOf("SORT-") !== 0) continue;
+    plan.counts.sortRows++;
+    const src = source.get(batch.substring(5));
+    if (!src || !src.date) { plan.counts.noSource++; continue; }
+    if (src.date < fromDate) { plan.counts.beforeFrom++; continue; }
+    const current = dates[i];
+    if (current === src.date) { plan.counts.alreadyCorrect++; continue; }
+
+    const machine = String(prodValues[i][cols.machine] || "").trim();
+    const info = {
+      row: i + 1, jobId: batch.substring(5), machine: machine,
+      product: cols.product >= 0 ? String(prodValues[i][cols.product] || "") : "",
+      oldDate: current, sourceDate: src.date, oldShift: String(prodValues[i][cols.shift] || "").trim()
+    };
+    const doubleCut = src.hour !== null && src.hour < 8 && current === addDaysISO_(src.date, -1);
+    if (!doubleCut) { plan.review.push(info); continue; }
+
+    const shiftType = (src.hour >= 8 && src.hour < 20) ? "Day" : "Night";
+    const baseMachine = machine.replace(/\([AB]\)$/, "").trim();
+    info.newDate = src.date;
+    info.newShift = findSortShift_(prodValues, cols, byDate, i, src.date, baseMachine, src.hour, shiftType);
+    plan.fixes.push(info);
+  }
+  return plan;
+}
+
+function repairSortProductionDates_(dryRun) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const prodSheet = ss.getSheetByName("Production_Data");
+    const sortSheet = ss.getSheetByName("Sorting_Data");
+    if (!prodSheet || !sortSheet) throw new Error("ไม่พบชีต Production_Data หรือ Sorting_Data");
+
+    const plan = planSortDateRepair_(prodSheet.getDataRange().getValues(), sortSheet.getDataRange().getValues(), SORT_DATE_REPAIR_FROM);
+    const headers = prodSheet.getRange(1, 1, 1, prodSheet.getLastColumn()).getValues()[0].map(h => String(h).trim().toLowerCase());
+    const dateCol = headers.indexOf("date") + 1;
+    const shiftCol = headers.indexOf("shift") + 1;
+
+    let log = ss.getSheetByName(SORT_DATE_REPAIR_LOG);
+    if (!log) {
+      log = ss.insertSheet(SORT_DATE_REPAIR_LOG);
+      log.appendRow(["RunAt", "Mode", "Prod_Row", "Job_ID", "Machine", "Product", "Old_Date", "New_Date", "Old_Shift", "New_Shift"]);
+    }
+    const runAt = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss");
+    const mode = dryRun ? "DRY_RUN" : "APPLIED";
+    const rows = plan.fixes.map(f => [runAt, mode, f.row, f.jobId, f.machine, f.product, f.oldDate, f.newDate, f.oldShift, f.newShift])
+      .concat(plan.review.map(f => [runAt, "REVIEW (ไม่แก้)", f.row, f.jobId, f.machine, f.product, f.oldDate, f.sourceDate, f.oldShift, ""]));
+    if (rows.length) {
+      const start = log.getLastRow() + 1;
+      log.getRange(start, 1, rows.length, rows[0].length).setNumberFormat("@").setValues(rows);
+    }
+
+    if (!dryRun) {
+      plan.fixes.forEach(f => {
+        prodSheet.getRange(f.row, dateCol).setValue(f.newDate);
+        if (shiftCol > 0 && f.newShift !== f.oldShift) prodSheet.getRange(f.row, shiftCol).setValue(f.newShift);
+      });
+      SpreadsheetApp.flush();
+    }
+
+    const c = plan.counts;
+    const summary = (dryRun ? "[DRY RUN ไม่แก้ข้อมูล] " : "[แก้แล้ว] ") +
+      "แถว SORT- ทั้งหมด " + c.sortRows + " | จะแก้/แก้แล้ว " + plan.fixes.length +
+      " | ถูกต้องอยู่แล้ว (รวมที่แก้มือ) " + c.alreadyCorrect + " | ต้องตรวจเอง " + plan.review.length +
+      " | ก่อน " + SORT_DATE_REPAIR_FROM + " " + c.beforeFrom + " | หาใบงานไม่เจอ " + c.noSource;
+    Logger.log(summary);
+    return summary;
   } finally {
     lock.releaseLock();
   }
