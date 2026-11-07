@@ -3674,6 +3674,11 @@ function doPost(e) {
           if (closedByCol > 0) sheet.getRange(foundRow, closedByCol).setValue("");
           // 3. ล้าง Closed_Date
           if (closedDateCol > 0) sheet.getRange(foundRow, closedDateCol).setValue("");
+          // 3.1 ล้างสถานะอนุมัติแยก FG/NG เพื่อให้ QC อนุมัติใหม่ได้ทั้งสองด้าน
+          const qcFgApprovedIdx = getCol("QC_FG_Approved");
+          const qcNgApprovedIdx = getCol("QC_NG_Approved");
+          if (qcFgApprovedIdx > -1) sheet.getRange(foundRow, qcFgApprovedIdx + 1).setValue(false);
+          if (qcNgApprovedIdx > -1) sheet.getRange(foundRow, qcNgApprovedIdx + 1).setValue(false);
           // 4. เพิ่ม Remark ว่า Recall โดยใคร
           let oldRemark = sheet.getRange(foundRow, remCol).getValue();
           const now = new Date();
