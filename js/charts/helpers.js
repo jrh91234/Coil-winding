@@ -264,6 +264,105 @@ window.holtForecast = function(series, horizon) {
     return { forecast, sd, mape: best.mape };
 };
 
+// 📈 ทำนายยอดรวม (เช่น ยอดผลิตชิ้น) ของช่วงถัดไป — ใช้กับกราฟ Daily Output
+//   daily: [{date:'yyyy-MM-dd', value}] ยอดรายวัน · period: day/week/month/quarter/year
+//   ทำนาย "ยอดต่อวันทำงาน" (ไม่ผันผวนตามจำนวนวันในเดือน) แล้วคูณจำนวนวันทำงานที่คาดในแต่ละช่วง
+//   วันทำงาน = วันในสัปดาห์ที่ 4 สัปดาห์ล่าสุดมีการผลิต · ไตรมาส/ปี ทำนายรายเดือนแล้วรวมขึ้น
+//   ช่วงที่ยังไม่จบ = ยอดจริง + วันทำงานที่เหลือ × ค่าทำนาย
+//   คืน { order: [key], points: {key: {value, lo, hi, actual, isPartial, progress}}, mape } หรือ null
+window.projectPeriodTotals = function(daily, period) {
+    period = period || 'day';
+    const HORIZON = { day: 7, week: 4, month: 3, quarter: 2, year: 1 };
+    const baseUnit = (period === 'quarter' || period === 'year') ? 'month' : period;
+    const toDisplayKey = k => baseUnit === period ? k : window.getPeriodKey(k, period);
+    const weekday = d => window.periodStartDate(d, 'day').getDay();
+    const rows = (daily || []).filter(r => r && r.date);
+
+    const base = window.groupRowsByPeriod(rows, baseUnit, r => r.date, () => ({ value: 0, days: 0, lastDate: '' }), (acc, r) => {
+        acc.value += r.value || 0;
+        if (r.value > 0) { acc.days++; if (r.date > acc.lastDate) acc.lastDate = r.date; }
+    }).filter(b => b.value > 0);
+    if (base.length < 2) return null;
+    const lastBase = base[base.length - 1];
+    const lastDate = lastBase.lastDate;
+
+    // วันในสัปดาห์ที่มีการผลิตใน 4 สัปดาห์ล่าสุด
+    const since = window.addPeriods(lastDate, 'day', -27);
+    const workDays = Array(7).fill(false);
+    rows.forEach(r => { if (r.value > 0 && r.date >= since && r.date <= lastDate) workDays[weekday(r.date)] = true; });
+    // จำนวนวันทำงานที่คาดในช่วง key (นับเฉพาะวันหลัง afterDate ถ้าระบุ)
+    const expectedDays = (key, afterDate) => {
+        if (baseUnit === 'day') return 1;
+        const end = window.addPeriods(key, baseUnit, 1);
+        let n = 0;
+        const s0 = window.periodStartDate(key, baseUnit);
+        for (let d = `${s0.getFullYear()}-${_periodPad2(s0.getMonth() + 1)}-${_periodPad2(s0.getDate())}`; ; d = window.addPeriods(d, 'day', 1)) {
+            if (window.getPeriodKey(d, baseUnit) === end) break;
+            if ((!afterDate || d > afterDate) && workDays[weekday(d)]) n++;
+            if (n > 400) break;
+        }
+        return n;
+    };
+
+    let partial = null;
+    if (baseUnit !== 'day') {
+        const prog = window.periodDayProgress(lastBase.key, baseUnit, lastDate);
+        if (prog.elapsed > 0 && prog.elapsed < prog.total) partial = Object.assign({ prog }, lastBase);
+    }
+    const done = partial ? base.slice(0, -1) : base;
+    if (!done.length) return null;
+    const lastDoneKey = done[done.length - 1].key;
+
+    let steps = HORIZON[period] + (partial ? 1 : 0);
+    if (baseUnit !== period) {
+        const targetKey = window.addPeriods(toDisplayKey(partial ? partial.key : lastDoneKey), period, HORIZON[period]);
+        steps = 0;
+        while (toDisplayKey(window.addPeriods(lastDoneKey, baseUnit, steps + 1)) <= targetKey && steps < 36) steps++;
+    }
+    const futureKeys = [];
+    for (let k = lastDoneKey, guard = 0; futureKeys.length < steps && guard < 60; guard++) {
+        k = window.addPeriods(k, baseUnit, 1);
+        if (baseUnit === 'day' && !workDays[weekday(k)]) continue;
+        futureKeys.push(k);
+    }
+
+    const fit = window.holtForecast(done.map(b => b.value / b.days), futureKeys.length);
+    if (!fit) return null;
+
+    const points = {};
+    const order = [];
+    const add = (key, value, actual, sd, progress) => {
+        const dk = toDisplayKey(key);
+        if (!points[dk]) { points[dk] = { value: 0, actual: 0, sd: 0, progress: '' }; order.push(dk); }
+        const p = points[dk];
+        p.value += value; p.actual += actual; p.sd += sd;
+        if (progress) p.progress = progress;
+    };
+    futureKeys.forEach((key, i) => {
+        if (i === 0 && partial) {
+            const remDays = expectedDays(key, lastDate);
+            add(key, partial.value + fit.forecast[0] * remDays, partial.value, fit.sd[0] * remDays,
+                `${partial.prog.elapsed}/${partial.prog.total} วัน`);
+        } else {
+            const nDays = expectedDays(key);
+            add(key, fit.forecast[i] * nDays, 0, fit.sd[i] * nDays);
+        }
+    });
+    if (baseUnit !== period) {
+        done.forEach(b => { const p = points[toDisplayKey(b.key)]; if (p) { p.value += b.value; p.actual += b.value; } });
+        const lastKey = toDisplayKey(partial ? partial.key : lastDoneKey);
+        if (points[lastKey] && points[lastKey].actual > 0) {
+            const e = window.periodDayProgress(lastKey, period, lastDate);
+            points[lastKey].progress = `${e.elapsed}/${e.total} วัน`;
+        }
+    }
+    order.forEach(k => {
+        const p = points[k];
+        Object.assign(p, { lo: Math.max(0, p.value - 1.96 * p.sd), hi: p.value + 1.96 * p.sd, isPartial: p.actual > 0 });
+    });
+    return { order, points, mape: fit.mape };
+};
+
 // รวม object ตัวเลข { key: n } เข้าด้วยกัน (เช่น ngBreakdown)
 window.mergeNumberMap = function(target, src) {
     Object.entries(src || {}).forEach(([k, v]) => { target[k] = (target[k] || 0) + (Number(v) || 0); });

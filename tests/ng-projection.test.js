@@ -77,3 +77,26 @@ test('day projection skips weekdays with no recent production', () => {
   const r = win.buildNgRateProjection(rows, rows, 'day');
   assert.ok(!r.extraLabels.includes('2026-11-08'), r.extraLabels.join(','));
 });
+
+test('projectPeriodTotals: all periods, partial month, skips Sundays', () => {
+  const win = env();
+  const daily = [];
+  for (let k = '2026-02-02'; k <= '2026-11-05'; k = win.addPeriods(k, 'day', 1)) {
+    daily.push({ date: k, value: win.periodStartDate(k, 'day').getDay() === 0 ? 0 : 100000 });
+  }
+  const expectFuture = { day: 7, week: 4, month: 3, quarter: 2, year: 1 };
+  for (const p of Object.keys(expectFuture)) {
+    const r = win.projectPeriodTotals(daily, p);
+    assert.ok(r, p);
+    const lastKey = win.getPeriodKey('2026-11-05', p);
+    assert.equal(r.order.filter(k => k > lastKey).length, expectFuture[p], p);
+  }
+  const d = win.projectPeriodTotals(daily, 'day');
+  assert.ok(!d.order.includes('2026-11-08'));
+  // คงที่ 100,000 ชิ้น/วันทำงาน: พ.ย. มี 25 วันทำงาน (ไม่นับอาทิตย์) → ≈ 2.5 ล้าน
+  const m = win.projectPeriodTotals(daily, 'month');
+  const nov = m.points['2026-11'];
+  assert.equal(nov.isPartial, true);
+  assert.equal(nov.actual, 400000); // 2–5 พ.ย. (1 พ.ย. เป็นวันอาทิตย์)
+  assert.ok(Math.abs(nov.value - 2500000) < 1000, String(nov.value));
+});

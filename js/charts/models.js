@@ -392,6 +392,7 @@ window.getDailyOutputSeries = function() {
     // รวมยอด FG/NG (งานผลิต + งานคัดแยก) + ชั่วโมง ตามรุ่นที่เลือก แล้วจัดกลุ่มตามช่วงเวลา
     const order = [];
     const grp = {};
+    const dailyTotals = []; // ยอดรวมรายวัน (ชิ้น) ใช้ทำนายเส้น Forecast
     trendData.forEach(d => {
         let fg, ng, sFg, sNg, hrs, pendFromFg, pendFromNg;
         if (model === 'all') {
@@ -418,6 +419,8 @@ window.getDailyOutputSeries = function() {
             pendFromFg = pm ? (pm.fromFg || 0) : 0;
             pendFromNg = pm ? (pm.fromNg || 0) : 0;
         }
+        dailyTotals.push({ date: d.date, value: fg + ng + sFg + sNg +
+            (pendingMode !== 'merge' ? pendFromNg + Math.max(0, pendFromFg - fg) : 0) });
         const key = window.getPeriodKey ? window.getPeriodKey(d.date, period) : d.date;
         if (!(key in grp)) { grp[key] = { fg: 0, ng: 0, sFg: 0, sNg: 0, hours: 0, pendFromFg: 0, pendFromNg: 0 }; order.push(key); }
         grp[key].fg += fg;
@@ -477,7 +480,7 @@ window.getDailyOutputSeries = function() {
     const avgTotal = totalPcsData.length ? totalPcsData.reduce((a, b) => a + b, 0) / totalPcsData.length : 0;
     const avgFg = fgPcsData.length ? fgPcsData.reduce((a, b) => a + b, 0) / fgPcsData.length : 0;
 
-    return { model, period, mode, avgMode, hoursMode, pendingMode, labels, periods,
+    return { model, period, mode, avgMode, hoursMode, pendingMode, labels, periods, dailyTotals,
              fgData, ngData, sortFgData, sortNgData, pendingData, totalPcsData, fgPcsData, hoursData, avgTotal, avgFg };
 };
 
@@ -488,7 +491,7 @@ window.renderDailyOutputChart = function() {
 
     // การแสดงตัวเลขบนกราฟ: auto (เมื่อขยาย) / hide (ซ่อน) / show (แสดงเสมอ)
     const labelSel = document.getElementById('dailyOutputLabelSelector');
-    const labelMode = labelSel ? labelSel.value : 'auto';
+    const labelMode = labelSel ? labelSel.value : 'hide';
 
     // ใช้แหล่งข้อมูลเดียวกับ Audit เพื่อให้ตัวเลขตรงกัน
     const S = window.getDailyOutputSeries();
@@ -635,11 +638,41 @@ window.renderDailyOutputChart = function() {
         });
     }
 
+    // 📈 Forecast ยอดรวม (ชิ้น): ทำนายช่วงถัดไป + ประเมินช่วงที่ยังไม่จบ + แถบช่วง 95% (เฉพาะโหมดชิ้น)
+    const chartLabels = labels.slice();
+    const projByIdx = {};
+    const proj = (mode === 'pcs' && window.projectPeriodTotals) ? window.projectPeriodTotals(S.dailyTotals, period) : null;
+    if (proj) {
+        const idxByKey = {};
+        periods.forEach((p, i) => { idxByKey[p.key] = i; });
+        proj.order.forEach(key => {
+            let idx = idxByKey[key];
+            if (idx === undefined) { idx = chartLabels.length; chartLabels.push(window.formatPeriodLabel(key, period)); }
+            projByIdx[idx] = Object.assign({ key }, proj.points[key]);
+        });
+        const n = chartLabels.length;
+        const pick = fn => Array.from({ length: n }, (_, i) => projByIdx[i] ? fn(projByIdx[i]) : null);
+        const firstIdx = Math.min(...Object.keys(projByIdx).map(Number));
+        const line = pick(p => Math.round(p.value));
+        for (let i = Math.min(firstIdx, totalPcsData.length) - 1; i >= 0; i--) {
+            if (totalPcsData[i] > 0) { line[i] = totalPcsData[i]; break; } // ต่อเส้นจากยอดจริงล่าสุด
+        }
+        // stack แยกกันทุกเส้น ไม่ให้ซ้อนทับกับแท่ง
+        chartDatasets.push({type: 'bar', label: 'คาดการณ์ยอดผลิต (ชิ้น)', data: pick(p => Math.max(0, Math.round(p.value - p.actual))),
+            backgroundColor: 'rgba(13, 148, 136, 0.18)', borderColor: 'rgba(13, 148, 136, 0.5)', borderWidth: 1, borderRadius: 2, datalabels: { display: false }});
+        chartDatasets.push({type: 'line', label: '📈 Forecast ยอดรวม', stack: 'projLine', data: line, borderColor: 'rgba(13, 148, 136, 0.9)',
+            backgroundColor: 'rgba(13, 148, 136, 0.9)', borderWidth: 2.5, borderDash: [2, 4], pointRadius: 4, pointStyle: 'rectRot', fill: false, spanGaps: true, datalabels: { display: false }});
+        chartDatasets.push({type: 'line', label: '_projLo', _role: 'projLo', stack: 'projLo', data: pick(p => Math.round(p.lo)), borderColor: 'transparent',
+            pointRadius: 0, pointHitRadius: 0, fill: false, spanGaps: true, datalabels: { display: false }});
+        chartDatasets.push({type: 'line', label: 'ช่วงคาดการณ์ 95%', _role: 'projHi', stack: 'projHi', data: pick(p => Math.round(p.hi)), borderColor: 'transparent',
+            backgroundColor: 'rgba(13, 148, 136, 0.12)', pointRadius: 0, pointHitRadius: 0, fill: '-1', spanGaps: true, datalabels: { display: false }});
+    }
+
     charts.dailyOutput = new Chart(ctxDaily, {
          type: 'bar',
          plugins: activePlugins.concat([totalLabelPlugin, avgLinePlugin], window.qcCrosshairPlugin ? [window.qcCrosshairPlugin] : []),
          data: {
-             labels: labels,
+             labels: chartLabels,
              datasets: chartDatasets
          },
          options: {
@@ -648,22 +681,40 @@ window.renderDailyOutputChart = function() {
              layout: { padding: { top: 18 } },
              plugins: {
                  ...commonOpts.plugins,
+                 legend: { labels: { filter: item => !String(item.text).startsWith('_') } },
                  tooltip: {
                      callbacks: {
                          title: function(items) {
                              const p = periods[items[0].dataIndex];
                              if (p && window.formatPeriodTitle) return window.formatPeriodTitle(p.key, period);
+                             const pr = projByIdx[items[0].dataIndex];
+                             if (pr && window.formatPeriodTitle) return window.formatPeriodTitle(pr.key, period) + ' (คาดการณ์)';
                              return items[0].label;
                          },
                          label: function(context) {
+                             if (context.parsed.y === null || context.parsed.y === undefined) return null;
+                             if (context.dataset._role === 'projLo') return null;
+                             if (context.dataset._role === 'projHi') {
+                                 const pr = projByIdx[context.dataIndex];
+                                 return pr ? `ช่วงคาดการณ์ 95%: ${Math.round(pr.lo).toLocaleString()} – ${Math.round(pr.hi).toLocaleString()} ชิ้น` : null;
+                             }
                              if (context.dataset.yAxisID === 'yHours') {
                                  return `${context.dataset.label}: ${context.parsed.y} ชม.`;
                              }
-                             return `${context.dataset.label}: ${context.parsed.y}${mode === 'percent' ? '%' : ' ชิ้น'}`;
+                             return `${context.dataset.label}: ${mode === 'percent' ? context.parsed.y + '%' : Math.round(context.parsed.y).toLocaleString() + ' ชิ้น'}`;
                          },
                          footer: function(items) {
                              const idx = items[0].dataIndex;
-                             const lines = ['รวมทั้งหมด: ' + (totalPcsData[idx] || 0).toLocaleString() + ' ชิ้น'];
+                             const pr = projByIdx[idx];
+                             const projLines = [];
+                             if (pr) {
+                                 const word = ((window.CHART_PERIODS || []).find(x => x.value === period) || {}).short || 'ช่วง';
+                                 projLines.push(`📈 คาดการณ์${pr.isPartial ? 'สิ้น' + word : word + 'นี้'}: ยอดรวม ≈ ${Math.round(pr.value).toLocaleString()} ชิ้น`);
+                                 if (pr.isPartial) projLines.push(`   ผลิตจริงแล้ว ${Math.round(pr.actual).toLocaleString()} ชิ้น${pr.progress ? ` (ผ่านไป ${pr.progress})` : ''}`);
+                                 if (proj.mape !== null) projLines.push(`   ทำนายย้อนหลังคลาดเคลื่อนเฉลี่ย ${proj.mape.toFixed(1)}% (MAPE)`);
+                             }
+                             if (idx >= totalPcsData.length) return projLines;
+                             const lines = ['รวมทั้งหมด: ' + (totalPcsData[idx] || 0).toLocaleString() + ' ชิ้น'].concat(projLines);
                              const p = periods[idx];
                              if (p && p.pending > 0) {
                                  lines.push(`รอ Sort ${p.pending.toLocaleString()} ชิ้น — พบระหว่างผลิต ${(p.fromLine || 0).toLocaleString()} (ยอดใหม่) · พบที่ FG/RTV ${p.cutFromFg.toLocaleString()} (หักจาก FG แล้ว)`);
