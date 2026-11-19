@@ -1014,6 +1014,7 @@ window.openPmSetManager = function() {
                 </div>
                 <div>
                     <label class="block font-bold text-gray-700 mb-1">1) เลือกหัวข้อที่จะรวม (อย่างน้อย 2) และเลือกหัวข้อหลัก</label>
+                    <div class="text-[11px] text-gray-500 mb-1">เลือกชุดเดิม 🧩 อย่างเดียว + กด "หลัก" ที่ชุดนั้น = จัดรอบของชุดใหม่ (ทุกเครื่องเข้ารอบปัจจุบันพร้อมกัน) / เปลี่ยนชื่อ / เปลี่ยนความถี่</div>
                     <div class="border rounded-lg divide-y max-h-64 overflow-y-auto">
                         ${topics.map(t => `<div class="flex items-start gap-2 px-3 py-2 hover:bg-gray-50">
                             <input type="checkbox" class="pm-set-topic mt-1 accent-violet-600" value="${escapePmAttr(t.key)}" data-freq="${escapePmAttr(t.frequency)}" data-iv="${t.intervalValue || ''}">
@@ -1074,7 +1075,8 @@ window.submitPmSet = async function(unset) {
     const intervalValue = document.getElementById('pm-set-iv').value;
     if (!topics.length) { alert('กรุณาเลือกหัวข้อ'); return; }
     if (!unset) {
-        if (topics.length < 2) { alert('กรุณาเลือกอย่างน้อย 2 หัวข้อ'); return; }
+        const reapply = topics.length === 1 && topics[0].startsWith('set:');
+        if (topics.length < 2 && !reapply) { alert('กรุณาเลือกอย่างน้อย 2 หัวข้อ (หรือเลือกชุดเดิม 1 ชุดเพื่อจัดรอบใหม่)'); return; }
         if (!mainTopic || topics.indexOf(mainTopic) < 0) { alert('กรุณาเลือกหัวข้อหลัก (ใช้วันครบกำหนดและกะของหัวข้อนี้)'); return; }
         if (!groupName) { alert('กรุณาตั้งชื่อชุดงาน'); return; }
         if (frequency === 'Custom' && !intervalValue) { alert('กรุณาระบุจำนวนวัน'); return; }
