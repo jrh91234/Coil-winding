@@ -1094,7 +1094,7 @@ function renderGanttChart(container, data) {
         const timeline = `<div class="flex-1 whitespace-nowrap overflow-hidden relative">${cells}<div class="absolute inset-0 pointer-events-none" style="z-index:5">${overlay}</div></div>`;
         // แถวย่อยในกลุ่ม: ชื่องานอยู่ที่หัวกลุ่มแล้ว แสดงรหัสเครื่องตัวใหญ่แทน
         const childHtml = (gid) => `<div class="flex border-b border-gray-100 hover:bg-gray-50 group" data-gantt-group="${gid}">
-            <div class="shrink-0 w-48 py-1.5 pl-6 pr-1.5 border-r bg-white sticky left-0 z-10 flex items-center justify-between gap-1">
+            <div class="shrink-0 w-48 py-1.5 pl-6 pr-1.5 border-r bg-white sticky left-0 z-20 flex items-center justify-between gap-1">
                 <div class="min-w-0 flex items-center gap-1.5 flex-wrap">
                     <span class="bg-slate-800 text-white text-[11px] px-1.5 py-0.5 rounded font-mono font-bold">${plan.machine}</span>
                     ${overdueDays >= 0 ? `<span class="text-red-600 text-[10px] font-bold">${overdueDays ? 'เกิน ' + overdueDays + ' วัน' : 'วันนี้'}</span>` : ''}
@@ -1104,7 +1104,7 @@ function renderGanttChart(container, data) {
             ${timeline}
         </div>`;
         return { plan, overdueDays, childHtml, html: `<div class="flex border-b border-gray-100 hover:bg-gray-50 group">
-            <div class="shrink-0 w-48 p-1.5 border-r bg-white sticky left-0 z-10 flex items-start justify-between gap-1">
+            <div class="shrink-0 w-48 p-1.5 border-r bg-white sticky left-0 z-20 flex items-start justify-between gap-1">
                 <div class="min-w-0">
                     <div class="text-xs font-bold text-gray-800 truncate" title="${escapePmAttr(plan.taskName)}">${plan.taskName}${overdueLabel}</div>
                     <div class="text-[9px] text-gray-400">${plan.machine} · ${plan.frequency}${plan.assignedTo ? ' · ' + plan.assignedTo : ''} ${pmShiftBadge(plan.assignedShift)}</div>
@@ -1133,7 +1133,7 @@ function renderGanttChart(container, data) {
         const maxLate = Math.max(...list.map(r => r.overdueDays));
         const shifts = [...new Set(list.map(r => r.plan.assignedShift).filter(Boolean))];
         planRows.push(`<div class="flex border-b border-indigo-100 bg-indigo-50/60 cursor-pointer hover:bg-indigo-100/60" data-gid="${gid}" data-key="${escapePmAttr(key)}" onclick="window.togglePmGanttGroup(this)">
-            <div class="shrink-0 w-48 p-1.5 border-r bg-indigo-50 sticky left-0 z-10">
+            <div class="shrink-0 w-48 p-1.5 border-r bg-indigo-50 sticky left-0 z-20">
                 <div class="flex items-start gap-1">
                     <span data-gantt-caret="${gid}" class="text-indigo-500 text-[10px] mt-0.5 transition-transform ${collapsed ? '' : 'rotate-90'}">▶</span>
                     <div class="min-w-0">
@@ -1167,10 +1167,19 @@ function renderGanttChart(container, data) {
     container.innerHTML = `
         ${statsHtml}
         ${legendHtml}
+        <!-- ปุ่มเลื่อนช่วงวันที่ (scrollbar แนวนอนอยู่ล่างสุดของกล่อง มักมองไม่เห็น) -->
+        <div class="flex flex-wrap items-center gap-1.5 mb-2 text-xs font-bold">
+            <button onclick="window.scrollPmGantt(-28)" class="px-2.5 py-1.5 bg-white border rounded-lg hover:bg-gray-50 text-gray-700">⏪ 4 สัปดาห์</button>
+            <button onclick="window.scrollPmGantt(-7)" class="px-2.5 py-1.5 bg-white border rounded-lg hover:bg-gray-50 text-gray-700">◀ 1 สัปดาห์</button>
+            <button onclick="window.scrollPmGantt(0)" class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">📍 วันนี้</button>
+            <button onclick="window.scrollPmGantt(7)" class="px-2.5 py-1.5 bg-white border rounded-lg hover:bg-gray-50 text-gray-700">1 สัปดาห์ ▶</button>
+            <button onclick="window.scrollPmGantt(28)" class="px-2.5 py-1.5 bg-white border rounded-lg hover:bg-gray-50 text-gray-700">4 สัปดาห์ ⏩</button>
+            <span class="text-[11px] font-normal text-gray-400 ml-1">หรือ กดค้างแล้วลากกราฟซ้าย-ขวา</span>
+        </div>
         <!-- เลื่อนทั้งแนวตั้ง/แนวนอนภายในกล่องนี้ เพื่อให้หัววันที่ (sticky top) และคอลัมน์ชื่อแผน (sticky left) ล็อคอยู่กับที่ -->
         <div class="bg-white rounded-lg shadow-sm border overflow-auto max-h-[70vh] lg:max-h-[calc(100vh-200px)] overscroll-contain" id="gantt-scroll-container">
             <div class="min-w-max">
-                <div class="flex border-b bg-gray-50 sticky top-0 z-20 shadow-sm">
+                <div class="flex border-b bg-gray-50 sticky top-0 z-40 shadow-sm">
                     <div class="shrink-0 w-48 p-2 border-r font-bold text-xs text-gray-600 sticky left-0 bg-gray-50 z-30">แผน PM</div>
                     <div class="flex-1 whitespace-nowrap">
                         <div>${monthRow}</div>
@@ -1188,9 +1197,54 @@ function renderGanttChart(container, data) {
         const labelWidth = 192; // w-48 = 192px
         const todayPx = todayIndex * 20;
         const visibleWidth = scrollEl.clientWidth - labelWidth;
-        scrollEl.scrollLeft = Math.max(0, todayPx - visibleWidth / 2);
+        const target = Math.max(0, todayPx - visibleWidth / 2);
+        scrollEl.dataset.todayLeft = String(target);
+        scrollEl.scrollLeft = target;
+        // เผื่อสไตล์ยังไม่พร้อมตอน render (Tailwind CDN สร้างคลาสทีหลัง) → ลองอีกครั้งในเฟรมถัดไป
+        requestAnimationFrame(() => { if (!scrollEl.scrollLeft) scrollEl.scrollLeft = target; });
+        enablePmGanttDrag(scrollEl);
     }
 }
+
+window.scrollPmGantt = function(days) {
+    const el = document.getElementById('gantt-scroll-container');
+    if (!el) return;
+    if (!days) el.scrollTo({ left: Number(el.dataset.todayLeft || 0), behavior: 'smooth' });
+    else el.scrollBy({ left: days * 20, behavior: 'smooth' });
+};
+
+// กดค้างแล้วลากเพื่อเลื่อนกราฟ (ขยับเกิน 5px ถึงนับเป็นการลาก เพื่อให้คลิกจุด/หัวกลุ่มยังใช้ได้)
+let pmGanttDrag = null;
+let pmGanttDragBound = false;
+function enablePmGanttDrag(el) {
+    el.style.cursor = 'grab';
+    el.addEventListener('mousedown', e => {
+        if (e.button !== 0 || e.target.closest('button, a, input, select')) return;
+        pmGanttDrag = { el, x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop, moved: false };
+    });
+    if (pmGanttDragBound) return;
+    pmGanttDragBound = true;
+    window.addEventListener('mousemove', e => {
+        const d = pmGanttDrag;
+        if (!d) return;
+        const dx = e.clientX - d.x, dy = e.clientY - d.y;
+        if (!d.moved && Math.abs(dx) + Math.abs(dy) > 5) { d.moved = true; d.el.style.cursor = 'grabbing'; d.el.style.userSelect = 'none'; }
+        if (d.moved) { d.el.scrollLeft = d.left - dx; d.el.scrollTop = d.top - dy; }
+    });
+    window.addEventListener('mouseup', () => {
+        const d = pmGanttDrag;
+        if (!d) return;
+        pmGanttDrag = null;
+        d.el.style.cursor = 'grab'; d.el.style.userSelect = '';
+        // กันไม่ให้การปล่อยเมาส์หลังลากไปนับเป็นคลิก (เช่น ยุบกลุ่มโดยไม่ตั้งใจ)
+        if (d.moved) {
+            const swallow = ev => { ev.stopPropagation(); ev.preventDefault(); };
+            d.el.addEventListener('click', swallow, { capture: true, once: true });
+            setTimeout(() => d.el.removeEventListener('click', swallow, { capture: true }), 0); // ถ้าปล่อยนอกกล่อง จะไม่มี click ตามมา
+        }
+    });
+}
+
 
 // ==================================================
 // 🗂️ ประวัติแผน PM ที่ทำ/ปิดงานไปแล้ว — ย้อนกลับมาตรวจดูได้
