@@ -894,6 +894,9 @@ window.showPmGantt = async function() {
     }
 };
 
+const GANTT_ROW_H = 34;  // สูงพอให้มีตัวเลขกำกับด้านบนจุด
+const GANTT_MID = 21;    // แนวกึ่งกลางของจุด/เส้นเชื่อม
+
 function renderGanttChart(container, data) {
     const { plans, logs, stats } = data;
     const today = new Date();
@@ -912,6 +915,8 @@ function renderGanttChart(container, data) {
     });
     logs.forEach(l => {
         const dd = toDateEarly(l.doneDate);
+        const du = toDateEarly(l.dueDate);
+        if (du && du < minDate) minDate = new Date(du);
         if (dd && dd < minDate) minDate = new Date(dd);
         if (dd && dd > maxDate) maxDate = new Date(dd);
     });
@@ -1017,24 +1022,59 @@ function renderGanttChart(container, data) {
 
             // due date marker
             if (nextDue && d.getTime() === nextDue.getTime()) {
-                marker = `<div class="absolute inset-0 flex items-center justify-center"><div class="w-3 h-3 rounded-full ${isToday ? 'bg-indigo-600' : d < today ? 'bg-red-500' : 'bg-blue-500'} border-2 border-white shadow"></div></div>`;
+                marker = `<div class="absolute inset-x-0 flex items-center justify-center" style="top:${GANTT_MID - 6}px;height:12px;z-index:10"><div class="w-3 h-3 rounded-full ${isToday ? 'bg-indigo-600' : d < today ? 'bg-red-500' : 'bg-blue-500'} border-2 border-white shadow"></div></div>`;
             } else if (projectedDueTimes.has(d.getTime())) {
-                marker = `<div class="absolute inset-0 flex items-center justify-center" title="กำหนดถัดไป (คาดการณ์)"><div class="w-2.5 h-2.5 rounded-full bg-white border-2 border-blue-300"></div></div>`;
+                marker = `<div class="absolute inset-x-0 flex items-center justify-center" style="top:${GANTT_MID - 6}px;height:12px;z-index:10" title="กำหนดถัดไป (คาดการณ์)"><div class="w-2.5 h-2.5 rounded-full bg-white border-2 border-blue-300"></div></div>`;
             }
 
             // log markers — คลิกเพื่อย้อนดูรายละเอียดงานที่ทำไปแล้ว
             planLogs.forEach(l => {
                 const doneD = toDate(l.doneDate);
                 if (doneD && d.getTime() === doneD.getTime()) {
-                    const color = l.status === 'Approved' ? (l.daysDiff <= 0 ? 'bg-green-500' : 'bg-orange-500') : l.status === 'Wait Approve' ? 'bg-yellow-400' : 'bg-gray-400';
-                    marker = `<div class="absolute inset-0 flex items-center justify-center cursor-pointer" onclick="window.openPmLogDetail('${escapePmAttr(l.logId)}')"><div class="w-3 h-3 ${color} rounded-sm border border-white shadow hover:scale-150 transition-transform" title="${l.status} (${l.daysDiff > 0 ? '+' + l.daysDiff + ' วัน' : 'ตรงเวลา'})${l.doneShift ? ' · ทำโดยกะ ' + l.doneShift : ''} — คลิกดูรายละเอียด"></div></div>`;
+                    const dueL = toDate(l.dueDate);
+                    const lDiff = dueL ? Math.round((doneD - dueL) / 86400000) : (l.daysDiff || 0);
+                    const color = l.status === 'Approved' ? (lDiff <= 0 ? 'bg-green-500' : 'bg-orange-500') : l.status === 'Wait Approve' ? 'bg-yellow-400' : 'bg-gray-400';
+                    marker = `<div class="absolute inset-x-0 flex items-center justify-center cursor-pointer" style="top:${GANTT_MID - 6}px;height:12px;z-index:10" onclick="window.openPmLogDetail('${escapePmAttr(l.logId)}')"><div class="w-3 h-3 ${color} rounded-sm border border-white shadow hover:scale-150 transition-transform" title="${l.status} (${lDiff > 0 ? 'ช้า ' + lDiff + ' วัน' : 'ตรงเวลา'})${l.dueDate ? ' · กำหนด ' + l.dueDate : ''} · ทำ ${l.doneDate}${l.doneShift ? ' · ทำโดยกะ ' + l.doneShift : ''} — คลิกดูรายละเอียด"></div></div>`;
                 }
             });
 
             if (isToday) bg = 'bg-indigo-50';
             else if (d.getDay() === 0) bg = 'bg-gray-50';
 
-            cells += `<div class="inline-block relative" style="width:20px;min-width:20px;height:28px"><div class="h-full border-r border-gray-100 ${bg}"></div>${marker}</div>`;
+            cells += `<div class="inline-block relative" style="width:20px;min-width:20px;height:${GANTT_ROW_H}px"><div class="h-full border-r border-gray-100 ${bg}"></div>${marker}</div>`;
+        }
+
+        // 🔗 เส้นเชื่อม "วันครบกำหนด" → "วันที่ทำจริง" + ตัวเลขช้า/เร็วกี่วัน
+        const clampX = (idx) => Math.max(0, Math.min(totalDays - 1, idx)) * 20 + 10;
+        const inRange = (idx) => idx >= 0 && idx < totalDays;
+        let overlay = '';
+        const link = (fromIdx, toIdx, color, dashed, label, labelColor, title) => {
+            if ((fromIdx < 0 && toIdx < 0) || (fromIdx >= totalDays && toIdx >= totalDays)) return;
+            const x1 = clampX(Math.min(fromIdx, toIdx)), x2 = clampX(Math.max(fromIdx, toIdx));
+            if (x2 > x1) {
+                overlay += `<div class="absolute pointer-events-none" style="left:${x1}px;width:${x2 - x1}px;top:${GANTT_MID - 1}px;height:0;border-top:2px ${dashed ? 'dashed' : 'solid'} ${color};opacity:.75"></div>`;
+                // ขีดเล็ก ๆ ตรงวันครบกำหนด
+                if (inRange(fromIdx)) overlay += `<div class="absolute pointer-events-none" style="left:${fromIdx * 20 + 9}px;top:${GANTT_MID - 5}px;width:2px;height:10px;background:${color};opacity:.75" title="${title}"></div>`;
+            }
+            if (label && inRange(toIdx)) {
+                overlay += `<div class="absolute pointer-events-none text-[9px] font-black leading-none whitespace-nowrap" style="left:${toIdx * 20 + 10}px;top:1px;transform:translateX(-50%);color:${labelColor}">${label}</div>`;
+            }
+        };
+        planLogs.forEach(l => {
+            const doneD = toDate(l.doneDate);
+            if (!doneD) return;
+            const dueD = toDate(l.dueDate);
+            const diff = dueD ? Math.round((doneD - dueD) / 86400000) : (l.daysDiff || 0);
+            const label = diff > 0 ? `+${diff}` : diff < 0 ? `${diff}` : '✓';
+            const color = diff > 0 ? '#f97316' : '#22c55e';
+            if (dueD) link(dayIndex(dueD), dayIndex(doneD), color, false, label, diff > 0 ? '#c2410c' : '#15803d', `กำหนด ${l.dueDate}`);
+            else link(dayIndex(doneD), dayIndex(doneD), color, false, label, diff > 0 ? '#c2410c' : '#15803d', '');
+        });
+        // รอบปัจจุบันที่เลยกำหนดแล้วยังไม่ทำ: เส้นประแดงจากวันครบกำหนดถึงวันนี้
+        if (nextDue && nextDue < today) {
+            const late = dayIndex(today) - dayIndex(nextDue);
+            link(dayIndex(nextDue), todayIndex, '#ef4444', true, '', '', `กำหนด ${plan.nextDueDate}`);
+            if (inRange(dayIndex(nextDue))) overlay += `<div class="absolute pointer-events-none text-[9px] font-black leading-none whitespace-nowrap text-red-600" style="left:${dayIndex(nextDue) * 20 + 10}px;top:1px;transform:translateX(-50%)">ค้าง ${late}</div>`;
         }
 
         const overdueLabel = nextDue && nextDue <= today ? `<span class="text-red-600 text-[9px] font-bold ml-1">เกิน ${dayIndex(today) - dayIndex(nextDue)} วัน</span>` : '';
@@ -1047,22 +1087,25 @@ function renderGanttChart(container, data) {
                 </div>
                 <button data-plan-id="${escapePmAttr(plan.planId)}" data-task-name="${escapePmAttr(plan.taskName)}" data-machine="${escapePmAttr(plan.machine)}" onclick="window.deletePmPlan(this)" title="ลบแผนนี้" class="shrink-0 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm">🗑️</button>
             </div>
-            <div class="flex-1 whitespace-nowrap overflow-hidden">${cells}</div>
+            <div class="flex-1 whitespace-nowrap overflow-hidden relative">${cells}<div class="absolute inset-0 pointer-events-none" style="z-index:5">${overlay}</div></div>
         </div>`;
     });
 
     // Legend
-    const legendHtml = `<div class="flex flex-wrap gap-3 mt-3 text-[10px] text-gray-600">
+    const legendHtml = `<div class="flex flex-wrap gap-x-4 gap-y-1 mb-2 px-3 py-2 bg-white border rounded-lg text-[11px] text-gray-600">
         <span><span class="inline-block w-3 h-3 bg-blue-500 rounded-full align-middle"></span> กำหนดถัดไป</span>
         <span><span class="inline-block w-3 h-3 bg-red-500 rounded-full align-middle"></span> เลยกำหนด</span>
         <span><span class="inline-block w-2.5 h-2.5 rounded-full bg-white border-2 border-blue-300 align-middle"></span> รอบถัดไป (คาดการณ์ตามความถี่)</span>
         <span><span class="inline-block w-3 h-3 bg-green-500 rounded-sm align-middle"></span> ทำตรงเวลา</span>
         <span><span class="inline-block w-3 h-3 bg-orange-500 rounded-sm align-middle"></span> ทำแต่ช้า</span>
+        <span><span class="inline-block w-6 align-middle border-t-2 border-orange-500"></span> เส้นจากวันครบกำหนด → วันที่ทำจริง (<b class="text-orange-700">+3</b> = ช้า 3 วัน, <b class="text-green-700">✓</b> = ตรงเวลา)</span>
+        <span><span class="inline-block w-6 align-middle border-t-2 border-dashed border-red-500"></span> ค้างอยู่ นับจากวันครบกำหนดถึงวันนี้ (<b class="text-red-600">ค้าง 5</b> = เลยมา 5 วัน)</span>
         <span><span class="inline-block w-3 h-3 bg-yellow-400 rounded-sm align-middle"></span> รออนุมัติ</span>
     </div>`;
 
     container.innerHTML = `
         ${statsHtml}
+        ${legendHtml}
         <!-- เลื่อนทั้งแนวตั้ง/แนวนอนภายในกล่องนี้ เพื่อให้หัววันที่ (sticky top) และคอลัมน์ชื่อแผน (sticky left) ล็อคอยู่กับที่ -->
         <div class="bg-white rounded-lg shadow-sm border overflow-auto max-h-[70vh] lg:max-h-[calc(100vh-200px)] overscroll-contain" id="gantt-scroll-container">
             <div class="min-w-max">
@@ -1076,7 +1119,6 @@ function renderGanttChart(container, data) {
                 ${planRows.length > 0 ? planRows.join('') : '<div class="text-center text-gray-400 py-8">ยังไม่มีแผน PM — กรุณาเพิ่มข้อมูลในชีท Maintenance_Plan</div>'}
             </div>
         </div>
-        ${legendHtml}
     `;
 
     // Auto-scroll ให้วันปัจจุบันอยู่กลางจอ
