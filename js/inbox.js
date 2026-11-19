@@ -153,6 +153,21 @@ window.inboxCloseJob = function(jobId) {
     if (typeof window.loadPendingJob === 'function') window.loadPendingJob(job);
 };
 
+// โหลดข้อมูล Inbox ใหม่เบื้องหลัง (ไม่เปลี่ยนหน้าที่เปิดอยู่ เช่น Gantt) — ใช้หลังรวมชุด/เพิ่ม/ลบแผน PM
+// จะได้ไม่ต้องกดรีเฟรชเองตอนกลับไปดูรายการ Inbox
+async function refreshInboxDataSilently() {
+    const user = window.currentUser;
+    if (!user) return;
+    try {
+        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'GET_INBOX', role: user.role, userName: user.name }) });
+        const d = await res.json();
+        if (d.status !== 'success') return;
+        inboxData = d;
+        renderInboxSidebar();
+        updateInboxBadge(d.counts.total);
+    } catch (e) { /* ไม่บังคับ — กดรีเฟรชเองได้ */ }
+}
+
 window.loadInbox = async function() {
     const container = document.getElementById('inbox-content');
     const sidebar = document.getElementById('inbox-sidebar');
@@ -767,6 +782,7 @@ window.deletePmPlan = async function(btn) {
         const result = await res.json();
         if (result.status !== 'success') throw new Error(result.message || 'ลบไม่สำเร็จ');
         window.showPmGantt();
+        refreshInboxDataSilently();
     } catch (e) {
         alert('❌ เกิดข้อผิดพลาด: ' + e.message);
         btn.disabled = false;
@@ -947,6 +963,7 @@ window.submitAddPmPlan = async function() {
 
         document.getElementById('modal-add-pm-plan').classList.add('hidden');
         window.showPmGantt();
+        refreshInboxDataSilently();
     } catch (e) {
         alert('❌ เกิดข้อผิดพลาด: ' + e.message);
     } finally {
@@ -1067,6 +1084,7 @@ window.submitPmSet = async function(unset) {
         alert(result.message);
         document.getElementById('modal-pm-set')?.remove();
         window.showPmGantt();
+        refreshInboxDataSilently();
     } catch (e) {
         alert('❌ ' + e.message);
         btn.disabled = false; btn.innerHTML = '🧩 รวมเป็นชุด';
