@@ -1335,7 +1335,6 @@ window.printPmPlan = function() {
     const pad = (n) => String(n).padStart(2, '0');
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
-    const daysTo = (s) => { const d = new Date(s + 'T00:00:00'); return isNaN(d) ? null : Math.round((d - today) / 86400000); };
     // แผนที่มีอะไรเกิดขึ้นในช่วงที่เลือก: ครบกำหนดในช่วง, ค้างอยู่ (กำหนดก่อนช่วงแต่ยังไม่ทำ), หรือมีการทำ/ครบกำหนดของรอบที่ทำไปแล้วในช่วง
     const logs = (pmGanttData && pmGanttData.logs) || [];
     const inR = (s) => s && s >= fromStr && s <= toStr;
@@ -1353,32 +1352,11 @@ window.printPmPlan = function() {
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(p);
     });
-    const shiftCell = (s) => s ? `<span class="sh sh${s}">กะ ${s}</span>` : '-';
-    let no = 0;
-    const body = [...groups.values()].map(g => {
-        g.sort((a, b) => String(a.nextDueDate).localeCompare(String(b.nextDueDate)) || String(a.machine).localeCompare(String(b.machine), undefined, { numeric: true }));
-        const f = g[0];
-        const rows = g.map(p => {
-            const dt = daysTo(p.nextDueDate);
-            const st = dt === null ? '-' : dt < 0 ? `<b class="late">เกิน ${-dt} วัน</b>` : dt === 0 ? '<b class="today">วันนี้</b>' : `อีก ${dt} วัน`;
-            return `<tr>
-                <td class="c">${++no}</td>
-                <td class="c"><b>${pmEscapeHtml(p.machine)}</b></td>
-                <td class="c">${pmEscapeHtml(p.nextDueDate || '-')}</td>
-                <td class="c">${st}</td>
-                <td class="c">${shiftCell(p.assignedShift)}</td>
-                <td class="c sub">${pmEscapeHtml(p.lastDoneDate || '-')}</td>
-                <td></td><td></td><td></td><td></td>
-            </tr>`;
-        }).join('');
-        return `<tr class="grp"><td colspan="10">📋 ${pmEscapeHtml(f.taskName)} <span class="sub">· ${pmEscapeHtml(f.planType || 'PM')} · ความถี่ ${pmEscapeHtml(f.frequency)} · ${g.length} เครื่อง</span></td></tr>${rows}`;
-    }).join('');
-
+    // เรียงเครื่องในแต่ละกลุ่ม: วันครบกำหนดก่อน แล้วตามรหัสเครื่อง
+    groups.forEach(g => g.sort((a, b) => String(a.nextDueDate).localeCompare(String(b.nextDueDate)) || String(a.machine).localeCompare(String(b.machine), undefined, { numeric: true })));
     const chartHtml = buildPmPrintChart([...groups.values()], start, end, today);
     const rangeLabel = `ช่วง ${fromStr} ถึง ${toStr}`;
-    const cnt = (s) => list.filter(p => p.assignedShift === s).length;
-    const printedBy = (window.currentUser && (window.currentUser.name || window.currentUser.username)) || '-';
-    const html = `<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>แผน PM ${todayStr}</title>
+    const html = `<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>Chart แผน PM ${todayStr}</title>
     <style>
         * { box-sizing: border-box; }
         body { font-family: "Segoe UI", Tahoma, sans-serif; padding: 16px; color: #1f2937; font-size: 12px; }
@@ -1430,19 +1408,6 @@ window.printPmPlan = function() {
         พิมพ์โดย: ${pmEscapeHtml((window.currentUser && (window.currentUser.name || window.currentUser.username)) || '-')} · วันที่พิมพ์: ${pmEscapeHtml(new Date().toLocaleString('th-TH'))}
     </div>
     ${chartHtml}
-    <h1 class="page-break">📋 แผนงาน PM — ใบตรวจเช็คเครื่องจักร</h1>
-    <div class="meta">
-        เงื่อนไข: ${pmEscapeHtml(rangeLabel)} · ${shift ? 'กะ ' + shift : 'ทุกกะ'} · ${list.length} รายการ (กะ A ${cnt('A')} · กะ B ${cnt('B')})<br>
-        พิมพ์โดย: ${pmEscapeHtml(printedBy)} · วันที่พิมพ์: ${pmEscapeHtml(new Date().toLocaleString('th-TH'))}
-    </div>
-    <table>
-        <colgroup><col style="width:4%"><col style="width:9%"><col style="width:10%"><col style="width:9%"><col style="width:8%"><col style="width:10%"><col style="width:15%"><col style="width:9%"><col style="width:13%"><col style="width:13%"></colgroup>
-        <thead><tr>
-            <th>#</th><th>เครื่อง</th><th>วันครบกำหนด</th><th>สถานะ</th><th>กะรับผิดชอบ</th><th>ทำล่าสุด</th>
-            <th>ผู้ทำ (ลายเซ็น)</th><th>วันที่ทำ</th><th>หมายเหตุ</th><th>ผู้ตรวจ</th>
-        </tr></thead>
-        <tbody>${body}</tbody>
-    </table>
     <div class="sign"><div>หัวหน้ากะ A</div><div>หัวหน้ากะ B</div><div>หัวหน้าแผนก</div></div>
     </body></html>`;
     const w = window.open('', '_blank');
