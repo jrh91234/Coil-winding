@@ -940,7 +940,10 @@ function renderGanttChart(container, data, opts) {
     const endDate = opts.range ? new Date(opts.range.end) : new Date(today);
     if (!opts.range) endDate.setDate(endDate.getDate() + padAfter);
     const totalDays = Math.round((endDate - startDate) / 86400000) + 1;
-    const todayIndex = Math.round((today - startDate) / 86400000); // อาจอยู่นอกช่วง (ติดลบ/เกิน) เมื่อกำหนดช่วงเอง
+    const todayIndex = Math.round((today - startDate) / 86400000);
+    // ความกว้างช่องวัน: บนเว็บ 20px, ตอนพิมพ์ขยายให้เต็มกระดาษ A3 แนวนอน (420mm - ขอบ 2×8mm ≈ 1520px ที่ 96dpi)
+    const PRINT_W = 1520;
+    const CW = opts.print ? Math.max(20, Math.min(60, Math.floor((PRINT_W - 192) / totalDays))) : 20; // อาจอยู่นอกช่วง (ติดลบ/เกิน) เมื่อกำหนดช่วงเอง
 
     const toDate = (s) => { const d = new Date(s + 'T00:00:00'); return isNaN(d.getTime()) ? null : d; };
     const dayIndex = (d) => Math.round((d - startDate) / 86400000);
@@ -1005,9 +1008,9 @@ function renderGanttChart(container, data, opts) {
         months[months.length - 1].span++;
         const isToday = d.getTime() === today.getTime();
         const isSun = d.getDay() === 0;
-        dayHeaders.push(`<div class="inline-block text-center" style="width:20px;min-width:20px"><div class="text-[8px] ${isToday ? 'bg-indigo-600 text-white rounded-full font-bold' : isSun ? 'text-red-400' : 'text-gray-400'}">${d.getDate()}</div></div>`);
+        dayHeaders.push(`<div class="inline-block text-center" style="width:${CW}px;min-width:${CW}px"><div class="${opts.print ? 'text-[11px]' : 'text-[8px]'} ${isToday ? 'bg-indigo-600 text-white rounded-full font-bold' : isSun ? 'text-red-400' : 'text-gray-400'}">${d.getDate()}</div></div>`);
     }
-    const monthRow = months.map(m => `<div class="inline-block text-center text-[9px] font-bold text-gray-500 border-b" style="width:${m.span * 20}px">${m.label}</div>`).join('');
+    const monthRow = months.map(m => `<div class="inline-block text-center ${opts.print ? 'text-xs' : 'text-[9px]'} font-bold text-gray-500 border-b" style="width:${m.span * CW}px">${m.label}</div>`).join('');
 
     // สร้างแถว Gantt ต่อ plan
     const planRowObjs = plans.map(plan => {
@@ -1056,11 +1059,11 @@ function renderGanttChart(container, data, opts) {
             if (isToday) bg = 'bg-indigo-50';
             else if (d.getDay() === 0) bg = 'bg-gray-50';
 
-            cells += `<div class="inline-block relative" style="width:20px;min-width:20px;height:${GANTT_ROW_H}px"><div class="h-full border-r border-gray-100 ${bg}"></div>${marker}</div>`;
+            cells += `<div class="inline-block relative" style="width:${CW}px;min-width:${CW}px;height:${GANTT_ROW_H}px"><div class="h-full border-r border-gray-100 ${bg}"></div>${marker}</div>`;
         }
 
         // 🔗 เส้นเชื่อม "วันครบกำหนด" → "วันที่ทำจริง" + ตัวเลขช้า/เร็วกี่วัน
-        const clampX = (idx) => Math.max(0, Math.min(totalDays - 1, idx)) * 20 + 10;
+        const clampX = (idx) => Math.max(0, Math.min(totalDays - 1, idx)) * CW + CW / 2;
         const inRange = (idx) => idx >= 0 && idx < totalDays;
         let overlay = '';
         const link = (fromIdx, toIdx, color, dashed, label, labelColor, title) => {
@@ -1069,10 +1072,10 @@ function renderGanttChart(container, data, opts) {
             if (x2 > x1) {
                 overlay += `<div class="absolute pointer-events-none" style="left:${x1}px;width:${x2 - x1}px;top:${GANTT_MID - 1}px;height:0;border-top:2px ${dashed ? 'dashed' : 'solid'} ${color};opacity:.75"></div>`;
                 // ขีดเล็ก ๆ ตรงวันครบกำหนด
-                if (inRange(fromIdx)) overlay += `<div class="absolute pointer-events-none" style="left:${fromIdx * 20 + 9}px;top:${GANTT_MID - 5}px;width:2px;height:10px;background:${color};opacity:.75" title="${title}"></div>`;
+                if (inRange(fromIdx)) overlay += `<div class="absolute pointer-events-none" style="left:${fromIdx * CW + CW / 2 - 1}px;top:${GANTT_MID - 5}px;width:2px;height:10px;background:${color};opacity:.75" title="${title}"></div>`;
             }
             if (label && inRange(toIdx)) {
-                overlay += `<div class="absolute pointer-events-none text-[9px] font-black leading-none whitespace-nowrap" style="left:${toIdx * 20 + 10}px;top:1px;transform:translateX(-50%);color:${labelColor}">${label}</div>`;
+                overlay += `<div class="absolute pointer-events-none text-[9px] font-black leading-none whitespace-nowrap" style="left:${toIdx * CW + CW / 2}px;top:1px;transform:translateX(-50%);color:${labelColor}">${label}</div>`;
             }
         };
         planLogs.forEach(l => {
@@ -1091,7 +1094,7 @@ function renderGanttChart(container, data, opts) {
             const base = shift === 'A' ? 'background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc' : 'background:#fef3c7;color:#92400e;border:1px solid #fcd34d';
             const style = kind === 'cover' ? 'background:#fff;color:#c2410c;border:1px dashed #f97316' : base;
             const text = kind === 'cover' ? `แทน ${shift}` : kind === 'done' ? `ทำ ${shift}` : shift;
-            overlay += `<div class="absolute pointer-events-none text-[9px] font-black leading-none whitespace-nowrap rounded px-1" style="left:${idx * 20 + 10}px;top:${GANTT_MID + 9}px;padding-top:2px;padding-bottom:2px;transform:translateX(-50%);${style}">${text}</div>`;
+            overlay += `<div class="absolute pointer-events-none text-[9px] font-black leading-none whitespace-nowrap rounded px-1" style="left:${idx * CW + CW / 2}px;top:${GANTT_MID + 9}px;padding-top:2px;padding-bottom:2px;transform:translateX(-50%);${style}">${text}</div>`;
         };
         const tags = new Map(); // dayIndex → { shift, kind } (ป้ายแรกที่ลงวันนั้นชนะ ยกเว้นการทำแทนซึ่งสำคัญกว่า)
         const putTag = (idx, shift, kind) => {
@@ -1117,7 +1120,7 @@ function renderGanttChart(container, data, opts) {
         if (nextDue && nextDue < today) {
             const late = dayIndex(today) - dayIndex(nextDue);
             link(dayIndex(nextDue), todayIndex, '#ef4444', true, '', '', `กำหนด ${plan.nextDueDate}`);
-            if (inRange(dayIndex(nextDue))) overlay += `<div class="absolute pointer-events-none text-[9px] font-black leading-none whitespace-nowrap text-red-600" style="left:${dayIndex(nextDue) * 20 + 10}px;top:1px;transform:translateX(-50%)">ค้าง ${late}</div>`;
+            if (inRange(dayIndex(nextDue))) overlay += `<div class="absolute pointer-events-none text-[9px] font-black leading-none whitespace-nowrap text-red-600" style="left:${dayIndex(nextDue) * CW + CW / 2}px;top:1px;transform:translateX(-50%)">ค้าง ${late}</div>`;
         }
 
         const overdueLabel = nextDue && nextDue <= today ? `<span class="text-red-600 text-[9px] font-bold ml-1">เกิน ${dayIndex(today) - dayIndex(nextDue)} วัน</span>` : '';
@@ -1200,8 +1203,9 @@ function renderGanttChart(container, data, opts) {
     </div>`;
 
     if (opts.print) {
-        const width = 192 + totalDays * 20;
-        const zoom = Math.min(1, 1040 / width); // ย่อให้พอดีกระดาษ A4 แนวนอน
+        const width = 192 + totalDays * CW;
+        // ช่วงยาวจนเกินกระดาษ → ย่อลง (ช่วงสั้นขยายด้วยการกว้างช่องวันแทน ตัวหนังสือจึงไม่ใหญ่เกิน)
+        const zoom = Math.min(1, PRINT_W / width);
         return `${legendHtml}
         <div style="zoom:${zoom.toFixed(3)}">
             <div class="bg-white border" style="width:${width}px">
@@ -1232,6 +1236,18 @@ function renderGanttChart(container, data, opts) {
                 <select id="pm-print-shift" class="py-1.5 px-2 border rounded-lg bg-white font-normal">
                     <option value="">ทุกกะ</option><option value="A">กะ A</option><option value="B">กะ B</option>
                 </select>
+                <details id="pm-print-topics" class="relative">
+                    <summary class="list-none cursor-pointer py-1.5 px-2 border rounded-lg bg-white font-normal select-none">📋 <span id="pm-print-topic-label">ทุกหัวข้อ</span> ▾</summary>
+                    <div class="absolute right-0 mt-1 z-50 bg-white border rounded-lg shadow-lg p-2 w-80 max-h-72 overflow-y-auto font-normal">
+                        <label class="flex items-center gap-2 px-1 py-1 border-b mb-1 font-bold cursor-pointer">
+                            <input type="checkbox" checked onchange="window.pmPrintToggleAllTopics(this.checked)"> เลือกทั้งหมด
+                        </label>
+                        ${pmTopicOptions(plans).map(t => `<label class="flex items-start gap-2 px-1 py-1 hover:bg-gray-50 rounded cursor-pointer">
+                            <input type="checkbox" class="pm-print-topic mt-0.5" value="${escapePmAttr(t.key)}" checked onchange="window.pmPrintUpdateTopicLabel()">
+                            <span>${pmEscapeHtml(t.name)} <span class="text-gray-400">· ${pmEscapeHtml(t.frequency)} · ${t.count} เครื่อง</span></span>
+                        </label>`).join('')}
+                    </div>
+                </details>
                 <span class="font-normal text-gray-500">ช่วง</span>
                 <input type="date" id="pm-print-from" value="${pmPrintDefaultRange().from}" class="py-1 px-2 border rounded-lg bg-white font-normal">
                 <span class="font-normal text-gray-500">ถึง</span>
@@ -1269,6 +1285,38 @@ function renderGanttChart(container, data, opts) {
     }
 }
 
+function pmTopicKey(p) {
+    return String(p.taskName || '').trim().toLowerCase() + '|' + String(p.frequency || '').trim().toLowerCase();
+}
+
+function pmTopicOptions(plans) {
+    const m = new Map();
+    plans.forEach(p => {
+        const k = pmTopicKey(p);
+        if (!m.has(k)) m.set(k, { key: k, name: p.taskName || '-', frequency: p.frequency || '', count: 0 });
+        m.get(k).count++;
+    });
+    return [...m.values()].sort((a, b) => a.name.localeCompare(b.name, 'th'));
+}
+
+// ปิดรายการหัวข้อเมื่อคลิกที่อื่น
+document.addEventListener('click', e => {
+    const dd = document.getElementById('pm-print-topics');
+    if (dd && dd.open && !dd.contains(e.target)) dd.open = false;
+});
+
+window.pmPrintToggleAllTopics = function(on) {
+    document.querySelectorAll('.pm-print-topic').forEach(cb => { cb.checked = on; });
+    window.pmPrintUpdateTopicLabel();
+};
+
+window.pmPrintUpdateTopicLabel = function() {
+    const all = [...document.querySelectorAll('.pm-print-topic')];
+    const on = all.filter(cb => cb.checked);
+    const label = document.getElementById('pm-print-topic-label');
+    if (label) label.textContent = on.length === all.length ? 'ทุกหัวข้อ' : on.length === 0 ? 'ยังไม่เลือกหัวข้อ' : `เลือก ${on.length} หัวข้อ`;
+};
+
 function pmPrintDefaultRange() {
     const pad = (n) => String(n).padStart(2, '0');
     const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -1295,7 +1343,11 @@ window.printPmPlan = function() {
     // แผนที่มีอะไรเกิดขึ้นในช่วงที่เลือก: ครบกำหนดในช่วง, ค้างอยู่ (กำหนดก่อนช่วงแต่ยังไม่ทำ), หรือมีการทำ/ครบกำหนดของรอบที่ทำไปแล้วในช่วง
     const logs = (pmGanttData && pmGanttData.logs) || [];
     const inR = (s) => s && s >= fromStr && s <= toStr;
+    const topicBoxes = [...document.querySelectorAll('.pm-print-topic')];
+    const topics = new Set(topicBoxes.filter(cb => cb.checked).map(cb => cb.value));
+    if (topicBoxes.length && !topics.size) { alert('กรุณาเลือกหัวข้อ PM อย่างน้อย 1 หัวข้อ'); return; }
     const list = plans.filter(p => {
+        if (topicBoxes.length && !topics.has(pmTopicKey(p))) return false;
         if (shift && p.assignedShift !== shift) return false;
         const nd = p.nextDueDate || '';
         if (inR(nd) || (nd && nd < fromStr && nd <= todayStr)) return true;
@@ -1310,13 +1362,13 @@ window.printPmPlan = function() {
     const html = `<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>Chart แผน PM ${todayStr}</title>
     ${pageStyles}
     <style>
-        body { background: #fff !important; padding: 12px; color: #1f2937; }
+        body { background: #fff !important; padding: 12px; color: #1f2937; width: 1544px; }
         .pm-print-title { font-size: 18px; font-weight: bold; margin: 0 0 2px; }
         .pm-print-meta { font-size: 11px; color: #6b7280; margin-bottom: 8px; line-height: 1.6; }
         .pm-print-sign { margin-top: 28px; display: flex; gap: 40px; font-size: 11px; }
         .pm-print-sign div { flex: 1; border-top: 1px dotted #6b7280; padding-top: 4px; text-align: center; color: #6b7280; }
         .group { break-inside: avoid; page-break-inside: avoid; }
-        @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } body { padding: 0; } @page { size: A4 landscape; margin: 8mm; } }
+        @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } body { padding: 0; } @page { size: A3 landscape; margin: 8mm; } }
     </style></head><body>
     <div class="pm-print-title">📊 Chart แผน PM</div>
     <div class="pm-print-meta">
