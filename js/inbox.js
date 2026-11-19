@@ -1063,9 +1063,10 @@ function renderGanttChart(container, data) {
 
     container.innerHTML = `
         ${statsHtml}
-        <div class="bg-white rounded-lg shadow-sm border overflow-x-auto" id="gantt-scroll-container">
+        <!-- เลื่อนทั้งแนวตั้ง/แนวนอนภายในกล่องนี้ เพื่อให้หัววันที่ (sticky top) และคอลัมน์ชื่อแผน (sticky left) ล็อคอยู่กับที่ -->
+        <div class="bg-white rounded-lg shadow-sm border overflow-auto max-h-[70vh] lg:max-h-[calc(100vh-200px)] overscroll-contain" id="gantt-scroll-container">
             <div class="min-w-max">
-                <div class="flex border-b bg-gray-50 sticky top-0 z-20">
+                <div class="flex border-b bg-gray-50 sticky top-0 z-20 shadow-sm">
                     <div class="shrink-0 w-48 p-2 border-r font-bold text-xs text-gray-600 sticky left-0 bg-gray-50 z-30">แผน PM</div>
                     <div class="flex-1 whitespace-nowrap">
                         <div>${monthRow}</div>
