@@ -37,16 +37,113 @@ function savePmShift(shift) {
 window.setInboxPmShiftFilter = function(shift) {
     inboxPmShiftFilter = shift;
     try { localStorage.setItem('pmInboxShiftFilter', shift); } catch (e) { /* ไม่บังคับ */ }
-    renderInboxList('pmTasks');
+    renderInboxList(inboxActiveCategory);
 };
 
-function renderPmShiftFilterBar(tasks) {
-    const opts = [{ key: '', label: 'ทุกกะ', count: tasks.length }]
-        .concat(PM_SHIFT_LIST.map(s => ({ key: s, label: `กะ ${s}`, count: tasks.filter(t => t.assignedShift === s).length })));
-    return `<div class="flex flex-wrap items-center gap-2 mb-3">
-        <span class="text-xs font-bold text-gray-500">🔄 งานของกะ:</span>
-        ${opts.map(o => `<button onclick="window.setInboxPmShiftFilter('${o.key}')" class="text-xs font-bold px-3 py-1 rounded-full border ${inboxPmShiftFilter === o.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}">${o.label} (${o.count})</button>`).join('')}
-    </div>`;
+// === 🔎 ตัวกรอง Inbox (ค้นหา / เครื่อง / สถานะ PM / จัดกลุ่ม) ===
+let inboxSearch = '';
+let inboxMachineFilter = '';
+let inboxPmStatusFilter = '';   // '' | 'late' (≥3 วัน) | 'overdue' (≥1 วัน) | 'today'
+let inboxPmGrouped = true;
+try { inboxPmGrouped = localStorage.getItem('pmInboxGrouped') !== '0'; } catch (e) { /* ใช้ค่าเริ่มต้น */ }
+
+const PM_STATUS_OPTS = [
+    { key: '', label: 'ทั้งหมด', test: () => true },
+    { key: 'late', label: '🔥 เกิน ≥3 วัน', test: t => (t.daysOverdue || 0) >= 3 },
+    { key: 'overdue', label: '⏰ เกินกำหนด', test: t => (t.daysOverdue || 0) >= 1 },
+    { key: 'today', label: '📅 ครบวันนี้', test: t => (t.daysOverdue || 0) <= 0 },
+];
+
+function inboxEsc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function inboxItemText(d) {
+    return ['taskName', 'machine', 'jobId', 'partName', 'partId', 'planId', 'issueType', 'remark', 'product', 'symptom', 'recorder', 'planType']
+        .map(k => d[k] || '').join(' ').toLowerCase();
+}
+
+window.setInboxSearch = function(v) {
+    inboxSearch = v || '';
+    renderInboxListBody(inboxActiveCategory);
+};
+window.setInboxMachineFilter = function(v) {
+    inboxMachineFilter = v || '';
+    renderInboxList(inboxActiveCategory);
+};
+window.setInboxPmStatusFilter = function(v) {
+    inboxPmStatusFilter = v || '';
+    renderInboxList(inboxActiveCategory);
+};
+window.toggleInboxPmGrouped = function() {
+    inboxPmGrouped = !inboxPmGrouped;
+    try { localStorage.setItem('pmInboxGrouped', inboxPmGrouped ? '1' : '0'); } catch (e) { /* ไม่บังคับ */ }
+    renderInboxList(inboxActiveCategory);
+};
+window.clearInboxFilters = function() {
+    inboxSearch = ''; inboxMachineFilter = ''; inboxPmStatusFilter = '';
+    window.setInboxPmShiftFilter('');
+};
+
+function segBtn(active, onclick, label, count, tone) {
+    const on = tone === 'amber' ? 'bg-amber-500 text-white shadow' : tone === 'sky' ? 'bg-sky-600 text-white shadow' : 'bg-indigo-600 text-white shadow';
+    return `<button onclick="${onclick}" class="text-xs font-bold px-3 py-1.5 rounded-md transition-all whitespace-nowrap ${active ? on : 'text-gray-600 hover:bg-white'}">${label}${count !== undefined ? ` <span class="${active ? 'opacity-90' : 'text-gray-400'}">${count}</span>` : ''}</button>`;
+}
+
+function renderInboxToolbar(category, baseItems) {
+    const machines = [...new Set(baseItems.map(it => it.data.machine).filter(Boolean))]
+        .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+    const isPm = category === 'pmTasks';
+    const hasFilter = inboxSearch || inboxMachineFilter || inboxPmStatusFilter || (isPm && inboxPmShiftFilter);
+
+    let pmRow = '';
+    if (isPm) {
+        // นับตามตัวกรองอื่นที่เหลือ เพื่อให้ตัวเลขบนปุ่มตรงกับผลจริง
+        const tasks = baseItems.map(it => it.data).filter(t => !inboxMachineFilter || t.machine === inboxMachineFilter);
+        const statusTest = (PM_STATUS_OPTS.find(o => o.key === inboxPmStatusFilter) || PM_STATUS_OPTS[0]).test;
+        const forShift = tasks.filter(statusTest);
+        const forStatus = tasks.filter(t => !inboxPmShiftFilter || t.assignedShift === inboxPmShiftFilter);
+        const shiftOpts = [{ key: '', label: 'ทุกกะ' }].concat(PM_SHIFT_LIST.map(s => ({ key: s, label: `กะ ${s}`, tone: s === 'A' ? 'sky' : 'amber' })));
+        pmRow = `<div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div class="flex items-center gap-2">
+                <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">กะ</span>
+                <div class="inline-flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
+                    ${shiftOpts.map(o => segBtn(inboxPmShiftFilter === o.key, `window.setInboxPmShiftFilter('${o.key}')`, o.label,
+                        forShift.filter(t => !o.key || t.assignedShift === o.key).length, o.tone)).join('')}
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">สถานะ</span>
+                <div class="inline-flex bg-gray-100 rounded-lg p-0.5 gap-0.5 flex-wrap">
+                    ${PM_STATUS_OPTS.map(o => segBtn(inboxPmStatusFilter === o.key, `window.setInboxPmStatusFilter('${o.key}')`, o.label, forStatus.filter(o.test).length)).join('')}
+                </div>
+            </div>
+            <button type="button" onclick="window.toggleInboxPmGrouped()" class="flex items-center gap-2 text-xs font-bold text-gray-600 select-none ml-auto" title="รวมงานชื่อเดียวกันหลายเครื่องไว้ในการ์ดเดียว">
+                <span>จัดกลุ่มตามงาน</span>
+                <span class="relative inline-block w-9 h-5 rounded-full transition-colors ${inboxPmGrouped ? 'bg-indigo-600' : 'bg-gray-300'}">
+                    <span class="absolute top-0.5 ${inboxPmGrouped ? 'left-4' : 'left-0.5'} w-4 h-4 bg-white rounded-full shadow transition-all"></span>
+                </span>
+            </button>
+        </div>`;
+    }
+
+    return `<div class="sticky -top-3 lg:-top-4 z-10 -mx-3 lg:-mx-4 -mt-3 lg:-mt-4 mb-3 px-3 lg:px-4 py-3 bg-white/95 backdrop-blur border-b border-gray-200 space-y-2">
+        <div class="flex flex-wrap items-center gap-2">
+            <div class="relative flex-1 min-w-[180px]">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔎</span>
+                <input id="inbox-search" type="search" value="${inboxEsc(inboxSearch)}" oninput="window.setInboxSearch(this.value)"
+                    placeholder="ค้นหา ชื่องาน / เครื่อง / รหัส..." class="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400">
+            </div>
+            <select onchange="window.setInboxMachineFilter(this.value)" class="py-2 px-3 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 ${inboxMachineFilter ? 'border-indigo-400 text-indigo-700 font-bold' : 'text-gray-700'}">
+                <option value="">🏭 ทุกเครื่อง</option>
+                ${machines.map(m => `<option value="${inboxEsc(m)}" ${m === inboxMachineFilter ? 'selected' : ''}>${inboxEsc(m)}</option>`).join('')}
+            </select>
+            ${hasFilter ? `<button onclick="window.clearInboxFilters()" class="text-xs font-bold text-gray-500 hover:text-red-600 px-2 py-2">✕ ล้างตัวกรอง</button>` : ''}
+        </div>
+        ${pmRow}
+        <div id="inbox-result-count" class="text-[11px] text-gray-400"></div>
+    </div>
+    <div id="inbox-list"></div>`;
 }
 
 window.inboxCloseJob = function(jobId) {
@@ -140,12 +237,9 @@ window.filterInbox = function(category) {
     renderInboxList(category);
 };
 
-function renderInboxList(category) {
-    const container = document.getElementById('inbox-content');
-    if (!container || !inboxData) return;
+function collectInboxItems(category) {
     const cats = inboxData.categories;
     let items = [];
-
     if (category === 'all') {
         cats.maintenance.forEach(m => items.push({ type: 'maintenance', data: m, priority: m.daysAgo >= 3 ? 1 : 2 }));
         (cats.pmTasks || []).forEach(p => items.push({ type: 'pmTasks', data: p, priority: p.daysOverdue >= 3 ? 1 : 2 }));
@@ -155,24 +249,67 @@ function renderInboxList(category) {
         items.sort((a, b) => a.priority - b.priority);
     } else if (cats[category]) {
         cats[category].forEach(d => items.push({ type: category, data: d }));
+        if (category === 'pmTasks') items.sort((a, b) => (b.data.daysOverdue || 0) - (a.data.daysOverdue || 0));
     }
+    return items;
+}
 
-    let headerHtml = '';
-    if (category === 'pmTasks') {
-        headerHtml = renderPmShiftFilterBar(cats.pmTasks || []);
-        if (inboxPmShiftFilter) items = items.filter(it => it.data.assignedShift === inboxPmShiftFilter);
-    }
+function filterInboxItems(category, items) {
+    const q = inboxSearch.trim().toLowerCase();
+    const statusTest = (PM_STATUS_OPTS.find(o => o.key === inboxPmStatusFilter) || PM_STATUS_OPTS[0]).test;
+    return items.filter(it => {
+        const d = it.data;
+        if (inboxMachineFilter && d.machine !== inboxMachineFilter) return false;
+        if (q && !inboxItemText(d).includes(q)) return false;
+        if (category === 'pmTasks') {
+            if (inboxPmShiftFilter && d.assignedShift !== inboxPmShiftFilter) return false;
+            if (!statusTest(d)) return false;
+        }
+        return true;
+    });
+}
 
-    if (items.length === 0) {
-        container.innerHTML = headerHtml + `<div class="flex flex-col items-center justify-center h-64 text-gray-400">
+function renderInboxList(category) {
+    const container = document.getElementById('inbox-content');
+    if (!container || !inboxData) return;
+    const baseItems = collectInboxItems(category);
+    if (baseItems.length === 0) {
+        container.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-gray-400">
             <div class="text-5xl mb-3">✅</div>
             <div class="text-lg font-bold">ไม่มีรายการค้าง</div>
             <div class="text-sm">หมวดนี้ว่างเปล่า — ทุกอย่างเรียบร้อย</div>
         </div>`;
         return;
     }
+    // ถ้าเครื่องที่เลือกไว้ไม่มีในหมวดนี้ ให้ล้างทิ้ง จะได้ไม่เห็นหน้าว่างโดยไม่รู้สาเหตุ
+    if (inboxMachineFilter && !baseItems.some(it => it.data.machine === inboxMachineFilter)) inboxMachineFilter = '';
+    container.innerHTML = renderInboxToolbar(category, baseItems);
+    renderInboxListBody(category);
+}
 
-    container.innerHTML = headerHtml + items.map((item, idx) => renderInboxItem(item, idx)).join('');
+function renderInboxListBody(category) {
+    const list = document.getElementById('inbox-list');
+    if (!list || !inboxData) return;
+    const baseItems = collectInboxItems(category);
+    const items = filterInboxItems(category, baseItems);
+    const countEl = document.getElementById('inbox-result-count');
+    if (countEl) countEl.textContent = items.length === baseItems.length
+        ? `ทั้งหมด ${baseItems.length} รายการ`
+        : `แสดง ${items.length} จาก ${baseItems.length} รายการ`;
+
+    if (items.length === 0) {
+        list.innerHTML = `<div class="flex flex-col items-center justify-center py-16 text-gray-400">
+            <div class="text-4xl mb-2">🔍</div>
+            <div class="font-bold">ไม่พบรายการตามตัวกรอง</div>
+            <button onclick="window.clearInboxFilters()" class="mt-3 text-xs font-bold text-indigo-600 hover:underline">ล้างตัวกรอง</button>
+        </div>`;
+        return;
+    }
+    if (category === 'pmTasks' && inboxPmGrouped) {
+        list.innerHTML = renderPmGroups(items.map(it => it.data));
+        return;
+    }
+    list.innerHTML = items.map((item, idx) => renderInboxItem(item, idx)).join('');
 }
 
 function renderInboxItem(item, idx) {
@@ -291,37 +428,121 @@ function renderSortingItem(d) {
     </div>`;
 }
 
-function renderPmTaskItem(d) {
-    const urgency = d.daysOverdue >= 3 ? 'border-l-red-500 bg-red-50/30' : d.daysOverdue >= 1 ? 'border-l-indigo-500' : 'border-l-indigo-400';
-    const daysLabel = d.daysOverdue === 0 ? 'ถึงกำหนดวันนี้' : `เกินกำหนด ${d.daysOverdue} วัน`;
-    const photoUrls = (Array.isArray(d.photoUrls) && d.photoUrls.length ? d.photoUrls : (d.photoUrl ? [d.photoUrl] : [])).filter(Boolean);
-    const thumbs = photoUrls
+function pmDaysInfo(days) {
+    days = days || 0;
+    if (days >= 3) return { label: `เกิน ${days} วัน`, cls: 'bg-red-100 text-red-700', bar: 'border-l-red-500' };
+    if (days >= 1) return { label: `เกิน ${days} วัน`, cls: 'bg-orange-100 text-orange-700', bar: 'border-l-orange-400' };
+    return { label: 'ครบวันนี้', cls: 'bg-emerald-100 text-emerald-700', bar: 'border-l-indigo-400' };
+}
+
+function pmPhotoUrls(d) {
+    return (Array.isArray(d.photoUrls) && d.photoUrls.length ? d.photoUrls : (d.photoUrl ? [d.photoUrl] : [])).filter(Boolean);
+}
+
+function pmThumbsHtml(d, size) {
+    const thumbs = pmPhotoUrls(d)
         .map(u => ({ url: u, thumb: typeof getThumbUrl === 'function' ? getThumbUrl(u) : null }))
         .filter(t => t.thumb);
-    const photoHtml = thumbs.length
-        ? `<div class="flex flex-wrap gap-1 shrink-0 max-w-[7.5rem] justify-end">${thumbs.map((t, i) => `
-            <img src="${t.thumb}" onclick="window.open('${t.url}', '_blank')" onerror="this.style.display='none'" class="w-14 h-14 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity" title="แนบรูปอ้างอิง ${i + 1}/${thumbs.length} คลิกเพื่อดูขนาดเต็ม">`).join('')}</div>`
-        : '';
-    return `<div class="border-l-4 ${urgency} bg-white rounded-r-lg shadow-sm p-4 mb-2 hover:shadow-md transition-shadow">
-        <div class="flex items-start justify-between gap-3">
+    if (!thumbs.length) return '';
+    const sz = size || 'w-14 h-14';
+    return `<div class="flex flex-wrap gap-1.5">${thumbs.map((t, i) => `
+        <img src="${t.thumb}" onclick="window.open('${t.url}', '_blank')" onerror="this.style.display='none'" class="${sz} object-cover rounded-lg border border-gray-200 cursor-pointer hover:ring-2 hover:ring-indigo-300 transition" title="รูปอ้างอิง ${i + 1}/${thumbs.length} คลิกเพื่อดูขนาดเต็ม">`).join('')}</div>`;
+}
+
+// ขั้นตอนการทำ: พับเก็บไว้ก่อน กดเพื่อดู แต่ละบรรทัดแสดงเป็นข้อ อ่านง่าย
+function pmInstructionHtml(instruction, open) {
+    if (!instruction) return '';
+    const lines = String(instruction).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const body = lines.map(l => {
+        const isHead = /^\d+[.)]/.test(l) || /:$/.test(l) || /^(การ|หาก)[^\s]{0,20}:/.test(l);
+        return `<li class="${isHead ? 'font-semibold text-gray-800 mt-2 first:mt-0' : 'text-gray-600 pl-3 border-l-2 border-gray-200'}">${inboxEsc(l)}</li>`;
+    }).join('');
+    return `<details class="group mt-2" ${open ? 'open' : ''}>
+        <summary class="cursor-pointer list-none inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 select-none">
+            <span class="transition-transform group-open:rotate-90">▶</span> 📝 ขั้นตอนการทำ (${lines.length} บรรทัด)
+        </summary>
+        <ul class="mt-2 space-y-1 text-[13px] leading-relaxed bg-slate-50 border border-slate-200 rounded-lg p-3">${body}</ul>
+    </details>`;
+}
+
+function renderPmTaskItem(d) {
+    const info = pmDaysInfo(d.daysOverdue);
+    const photos = pmThumbsHtml(d);
+    return `<div class="border-l-4 ${info.bar} bg-white rounded-r-xl shadow-sm p-4 mb-2 hover:shadow-md transition-shadow">
+        <div class="flex items-start gap-3">
             <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-1">
+                <div class="flex items-center gap-2 flex-wrap">
                     <span class="text-lg">📋</span>
-                    <span class="font-bold text-gray-800 text-sm">${d.taskName}</span>
-                    <span class="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full">${d.planType}</span>
-                    <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded-full font-mono">${d.machine}</span>
-                    ${pmShiftBadge(d.assignedShift, '🔄 ')}
+                    <span class="font-bold text-gray-800">${inboxEsc(d.taskName)}</span>
                 </div>
-                <div class="text-xs text-gray-600">กำหนด: <b>${d.dueDate}</b> · <span class="${d.daysOverdue >= 3 ? 'text-red-600 font-bold' : 'text-indigo-600'}">${daysLabel}</span></div>
-                <div class="text-[10px] text-gray-400 mt-1">ความถี่: ${d.frequency} · ${d.planId}${d.note ? ' · ' + d.note : ''}</div>
-                ${d.instruction ? `<div class="text-xs text-gray-600 bg-gray-50 p-2 rounded mt-2 whitespace-pre-line">📝 ${d.instruction}</div>` : ''}
+                <div class="flex items-center gap-1.5 flex-wrap mt-1.5">
+                    <span class="bg-slate-800 text-white text-[11px] px-2 py-0.5 rounded font-mono font-bold">${inboxEsc(d.machine)}</span>
+                    <span class="${info.cls} text-[11px] px-2 py-0.5 rounded-full font-bold">${info.label}</span>
+                    ${pmShiftBadge(d.assignedShift, '🔄 ')}
+                    <span class="bg-indigo-50 text-indigo-600 text-[10px] px-2 py-0.5 rounded-full">${inboxEsc(d.planType)}</span>
+                    <span class="text-[11px] text-gray-500">กำหนด <b class="text-gray-700">${inboxEsc(d.dueDate)}</b> · ${inboxEsc(d.frequency)}</span>
+                </div>
+                ${d.note ? `<div class="text-xs text-gray-500 mt-1">💬 ${inboxEsc(d.note)}</div>` : ''}
+                ${pmInstructionHtml(d.instruction)}
+                <div class="text-[10px] text-gray-300 mt-1 font-mono">${inboxEsc(d.planId)}</div>
             </div>
-            ${photoHtml}
-            <div class="flex flex-col gap-1 ml-1 shrink-0">
-                <button onclick="window.openPmCompleteModal('${d.planId}')" class="text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700 font-bold">📸 ทำเสร็จ</button>
-            </div>
+            ${photos ? `<div class="shrink-0 max-w-[7.5rem]">${photos}</div>` : ''}
+            <button onclick="window.openPmCompleteModal('${d.planId}')" class="shrink-0 text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 font-bold shadow-sm">📸 ทำเสร็จ</button>
         </div>
     </div>`;
+}
+
+// มุมมองจัดกลุ่ม: งานชื่อเดียวกันหลายเครื่อง → การ์ดเดียว ขั้นตอนแสดงครั้งเดียว แล้วไล่รายการเครื่องเป็นแถว
+function renderPmGroups(tasks) {
+    const groups = new Map();
+    tasks.forEach(t => {
+        const key = (t.taskName || '') + '||' + (t.planType || '') + '||' + (t.instruction || '');
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(t);
+    });
+    const arr = [...groups.values()].map(list => ({
+        list: list.sort((a, b) => (b.daysOverdue || 0) - (a.daysOverdue || 0)
+            || String(a.machine).localeCompare(String(b.machine), undefined, { numeric: true })),
+        worst: Math.max(...list.map(t => t.daysOverdue || 0)),
+    })).sort((a, b) => b.worst - a.worst);
+
+    return arr.map(g => {
+        const first = g.list[0];
+        const info = pmDaysInfo(g.worst);
+        const shifts = [...new Set(g.list.map(t => t.assignedShift).filter(Boolean))];
+        const lateCount = g.list.filter(t => (t.daysOverdue || 0) >= 1).length;
+        const photos = pmThumbsHtml(first, 'w-16 h-16');
+        const rows = g.list.map(t => {
+            const ti = pmDaysInfo(t.daysOverdue);
+            return `<div class="flex items-center gap-3 px-4 py-2.5 hover:bg-indigo-50/40 transition-colors">
+                <span class="bg-slate-800 text-white text-xs px-2 py-1 rounded font-mono font-bold w-20 text-center shrink-0">${inboxEsc(t.machine)}</span>
+                <span class="text-xs text-gray-500 w-28 shrink-0 hidden sm:inline">📅 ${inboxEsc(t.dueDate)}</span>
+                <span class="${ti.cls} text-[11px] px-2 py-0.5 rounded-full font-bold shrink-0">${ti.label}</span>
+                ${pmShiftBadge(t.assignedShift)}
+                <span class="text-[11px] text-gray-400 truncate hidden md:inline" title="${inboxEsc(t.planId)}">${inboxEsc(t.frequency)}${t.note ? ' · 💬 ' + inboxEsc(t.note) : ''}</span>
+                <button onclick="window.openPmCompleteModal('${t.planId}')" class="ml-auto shrink-0 text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 font-bold shadow-sm">📸 ทำเสร็จ</button>
+            </div>`;
+        }).join('');
+        return `<div class="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 ${info.bar} mb-3 overflow-hidden">
+            <div class="p-4 flex items-start gap-3">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-lg">📋</span>
+                        <span class="font-bold text-gray-800 text-base">${inboxEsc(first.taskName)}</span>
+                        <span class="bg-indigo-50 text-indigo-600 text-[10px] px-2 py-0.5 rounded-full">${inboxEsc(first.planType)}</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-wrap mt-1.5 text-[11px]">
+                        <span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full font-bold">🏭 ${g.list.length} เครื่อง</span>
+                        ${lateCount ? `<span class="${info.cls} px-2 py-0.5 rounded-full font-bold">⏰ เกินกำหนด ${lateCount} · สูงสุด ${g.worst} วัน</span>` : `<span class="${info.cls} px-2 py-0.5 rounded-full font-bold">ครบวันนี้</span>`}
+                        ${shifts.map(s => pmShiftBadge(s, '🔄 ')).join('')}
+                    </div>
+                    ${pmInstructionHtml(first.instruction)}
+                </div>
+                ${photos ? `<div class="shrink-0 max-w-[9rem]">${photos}</div>` : ''}
+            </div>
+            <div class="border-t border-gray-100 divide-y divide-gray-100 bg-gray-50/40">${rows}</div>
+        </div>`;
+    }).join('');
 }
 
 window.openPmCompleteModal = function(planId) {
