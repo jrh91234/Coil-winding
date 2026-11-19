@@ -1023,7 +1023,7 @@ function renderGanttChart(container, data) {
             // due date marker
             if (nextDue && d.getTime() === nextDue.getTime()) {
                 marker = `<div class="absolute inset-x-0 flex items-center justify-center" style="top:${GANTT_MID - 6}px;height:12px;z-index:10"><div class="w-3 h-3 rounded-full ${isToday ? 'bg-indigo-600' : d < today ? 'bg-red-500' : 'bg-blue-500'} border-2 border-white shadow"></div></div>`;
-            } else if (projectedDueTimes.has(d.getTime())) {
+            } else if (projectedDueTimes.has(d.getTime()) && d >= today) { // ไม่แสดงรอบคาดการณ์ที่อยู่ในอดีต (ทำให้เข้าใจผิดว่ามีนัดที่ผ่านไปแล้ว)
                 marker = `<div class="absolute inset-x-0 flex items-center justify-center" style="top:${GANTT_MID - 6}px;height:12px;z-index:10" title="กำหนดถัดไป (คาดการณ์)"><div class="w-2.5 h-2.5 rounded-full bg-white border-2 border-blue-300"></div></div>`;
             }
 
