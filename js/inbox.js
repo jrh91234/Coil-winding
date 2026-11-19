@@ -1209,13 +1209,10 @@ function renderGanttChart(container, data) {
                 <select id="pm-print-shift" class="py-1.5 px-2 border rounded-lg bg-white font-normal">
                     <option value="">ทุกกะ</option><option value="A">กะ A</option><option value="B">กะ B</option>
                 </select>
-                <select id="pm-print-range" class="py-1.5 px-2 border rounded-lg bg-white font-normal">
-                    <option value="7">ค้าง + ครบใน 7 วัน</option>
-                    <option value="14">ค้าง + ครบใน 14 วัน</option>
-                    <option value="30">ค้าง + ครบใน 30 วัน</option>
-                    <option value="overdue">เฉพาะที่ค้าง</option>
-                    <option value="all">ทั้งหมด</option>
-                </select>
+                <span class="font-normal text-gray-500">ช่วง</span>
+                <input type="date" id="pm-print-from" value="${pmPrintDefaultRange().from}" class="py-1 px-2 border rounded-lg bg-white font-normal">
+                <span class="font-normal text-gray-500">ถึง</span>
+                <input type="date" id="pm-print-to" value="${pmPrintDefaultRange().to}" class="py-1 px-2 border rounded-lg bg-white font-normal">
                 <button onclick="window.printPmPlan()" class="px-3 py-1.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900">🖨️ พิมพ์แผน</button>
             </div>
         </div>
@@ -1249,23 +1246,104 @@ function renderGanttChart(container, data) {
     }
 }
 
+// 📊 สร้าง Gantt แบบตาราง (พิมพ์ได้ ไม่ต้องเลื่อน) — ช่วงวันที่: ย้อนหลัง 3 สัปดาห์ (หรือถึงวันค้างเก่าสุด) ถึงล่วงหน้าตามช่วงที่เลือก
+function pmPrintDefaultRange() {
+    const pad = (n) => String(n).padStart(2, '0');
+    const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const t = new Date();
+    const a = new Date(t); a.setDate(a.getDate() - 14);
+    const b = new Date(t); b.setDate(b.getDate() + 14);
+    return { from: fmt(a), to: fmt(b) };
+}
+
+function buildPmPrintChart(groupList, start, end, today) {
+    const logs = (pmGanttData && pmGanttData.logs) || [];
+    const toD = (s) => { const d = new Date(String(s || '') + 'T00:00:00'); return isNaN(d) ? null : d; };
+    const days = Math.round((end - start) / 86400000) + 1;
+    const idxOf = (d) => Math.round((d - start) / 86400000);
+    const todayIdx = idxOf(today); // อาจอยู่นอกช่วงที่เลือก (ติดลบ/เกิน) ก็ได้
+    const dates = Array.from({ length: days }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return d; });
+
+    // หัวตาราง เดือน + วัน
+    const months = [];
+    dates.forEach(d => {
+        const m = d.toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
+        if (!months.length || months[months.length - 1].m !== m) months.push({ m, n: 0 });
+        months[months.length - 1].n++;
+    });
+    const head = `<tr><th class="mo" rowspan="2">เครื่อง / กะ</th>${months.map(x => `<th class="mo" colspan="${x.n}">${x.m}</th>`).join('')}</tr>
+        <tr>${dates.map((d, i) => `<th class="d ${i === todayIdx ? 'today' : d.getDay() === 0 ? 'sun' : ''}">${d.getDate()}</th>`).join('')}</tr>`;
+
+    const shiftTxt = (s, cls) => s ? `<div class="gt ${cls || 't' + s}">${s}</div>` : '';
+    const rowHtml = (p) => {
+        const cells = Array.from({ length: days }, () => ({ mark: '', text: '' }));
+        const put = (i, mark, text, force) => { if (i < 0 || i >= days) return; if (force || !cells[i].mark) cells[i].mark = mark; if (text) cells[i].text += text; };
+        logs.filter(l => l.planId === p.planId).forEach(l => {
+            const done = toD(l.doneDate); if (!done) return;
+            const due = toD(l.dueDate);
+            const diff = due ? Math.round((done - due) / 86400000) : (l.daysDiff || 0);
+            const cls = l.status === 'Wait Approve' ? 'wait' : diff > 0 ? 'late' : 'ok';
+            const di = idxOf(done);
+            const cover = l.doneShift && l.assignedShift && l.doneShift !== l.assignedShift;
+            if (due && idxOf(due) !== di) put(idxOf(due), '<i class="tick"></i>', shiftTxt(l.assignedShift));
+            put(di, `<i class="sq ${cls}"></i>`,
+                `<div class="gt ${diff > 0 ? 'tl' : 'tok'}">${diff > 0 ? '+' + diff : '✓'}</div>` +
+                (cover ? `<div class="gt tc">แทน${l.doneShift}</div>` : (due && idxOf(due) === di ? shiftTxt(l.assignedShift) : '')), true);
+        });
+        const nd = toD(p.nextDueDate);
+        let overFrom = null; // index วันครบกำหนดที่ค้าง (ติดลบได้ ถ้าอยู่ก่อนช่วงที่เลือก)
+        if (nd) {
+            const ni = idxOf(nd);
+            const cls = nd < today ? 'over' : ni === todayIdx ? 'now' : 'due';
+            put(ni, `<i class="dot ${cls}"></i>`, shiftTxt(p.assignedShift), true);
+            if (nd < today) overFrom = ni;
+        }
+        const late = nd && nd < today ? Math.round((today - nd) / 86400000) : 0;
+        return `<tr><td class="lbl"><b>${pmEscapeHtml(p.machine)}</b> ${p.assignedShift ? `<span class="t${p.assignedShift}">กะ ${p.assignedShift}</span>` : ''}${late ? ` <span class="tl">ค้าง ${late}</span>` : ''}</td>${cells.map((c, i) => {
+            const bg = overFrom !== null && i > overFrom && i <= todayIdx ? 'over' : i === todayIdx ? 'today' : dates[i].getDay() === 0 ? 'sun' : '';
+            return `<td class="cell ${bg}"><div class="gm">${c.mark}</div>${c.text}</td>`;
+        }).join('')}</tr>`;
+    };
+
+    const body = groupList.map(g => {
+        const f = g[0];
+        return `<tr class="g"><td colspan="${days + 1}">📋 ${pmEscapeHtml(f.taskName)} <span class="sub">· ความถี่ ${pmEscapeHtml(f.frequency)} · ${g.length} เครื่อง</span></td></tr>${g.map(rowHtml).join('')}`;
+    }).join('');
+
+    return `<div class="legend">
+        <span><i class="dot due"></i> กำหนดถัดไป</span><span><i class="dot over"></i> เลยกำหนด (ค้าง)</span>
+        <span><i class="sq ok"></i> ทำตรงเวลา ✓</span><span><i class="sq late"></i> ทำช้า (+วัน)</span>
+        <span><i class="tick"></i> วันครบกำหนดของรอบที่ทำไปแล้ว</span>
+        <span><b class="tA">A</b>/<b class="tB">B</b> ใต้จุด = กะที่รับผิดชอบ</span><span><b class="tc">แทนA</b> = อีกกะทำแทน</span>
+        <span style="background:#fee2e2;padding:0 6px">ช่วงที่ค้าง</span><span style="background:#e0e7ff;padding:0 6px">วันนี้</span>
+    </div>
+    <table class="gantt"><colgroup><col style="width:12%">${dates.map(() => `<col>`).join('')}</colgroup>
+        <thead>${head}</thead><tbody>${body}</tbody></table>`;
+}
+
 // 🖨️ พิมพ์แผน PM — ใบงานให้ช่างเซ็น แยกกลุ่มตามงาน แสดงกะรับผิดชอบชัด ๆ
 window.printPmPlan = function() {
     const plans = (pmGanttData && pmGanttData.plans) || [];
     if (!plans.length) { alert('ยังไม่มีแผน PM'); return; }
     const shift = (document.getElementById('pm-print-shift') || {}).value || '';
-    const range = (document.getElementById('pm-print-range') || {}).value || '7';
+    const def = pmPrintDefaultRange();
+    const fromStr = (document.getElementById('pm-print-from') || {}).value || def.from;
+    const toStr = (document.getElementById('pm-print-to') || {}).value || def.to;
+    const start = new Date(fromStr + 'T00:00:00'), end = new Date(toStr + 'T00:00:00');
+    if (isNaN(start) || isNaN(end) || end < start) { alert('กรุณาเลือกช่วงวันที่ให้ถูกต้อง (วันเริ่มต้องไม่เกินวันสิ้นสุด)'); return; }
+    if ((end - start) / 86400000 > 92) { alert('เลือกช่วงได้ไม่เกิน 3 เดือน เพื่อให้กราฟพิมพ์ลงหน้ากระดาษได้'); return; }
     const pad = (n) => String(n).padStart(2, '0');
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
     const daysTo = (s) => { const d = new Date(s + 'T00:00:00'); return isNaN(d) ? null : Math.round((d - today) / 86400000); };
+    // แผนที่มีอะไรเกิดขึ้นในช่วงที่เลือก: ครบกำหนดในช่วง, ค้างอยู่ (กำหนดก่อนช่วงแต่ยังไม่ทำ), หรือมีการทำ/ครบกำหนดของรอบที่ทำไปแล้วในช่วง
+    const logs = (pmGanttData && pmGanttData.logs) || [];
+    const inR = (s) => s && s >= fromStr && s <= toStr;
     const list = plans.filter(p => {
         if (shift && p.assignedShift !== shift) return false;
-        const dt = daysTo(p.nextDueDate);
-        if (range === 'all') return true;
-        if (dt === null) return false;
-        if (range === 'overdue') return dt <= 0;
-        return dt <= Number(range);
+        const nd = p.nextDueDate || '';
+        if (inR(nd) || (nd && nd < fromStr && nd <= todayStr)) return true;
+        return logs.some(l => l.planId === p.planId && (inR(l.doneDate) || inR(l.dueDate)));
     });
     if (!list.length) { alert('ไม่มีแผนตามเงื่อนไขที่เลือก'); return; }
 
@@ -1296,7 +1374,8 @@ window.printPmPlan = function() {
         return `<tr class="grp"><td colspan="10">📋 ${pmEscapeHtml(f.taskName)} <span class="sub">· ${pmEscapeHtml(f.planType || 'PM')} · ความถี่ ${pmEscapeHtml(f.frequency)} · ${g.length} เครื่อง</span></td></tr>${rows}`;
     }).join('');
 
-    const rangeLabel = { '7': 'ค้าง + ครบกำหนดใน 7 วัน', '14': 'ค้าง + ครบกำหนดใน 14 วัน', '30': 'ค้าง + ครบกำหนดใน 30 วัน', overdue: 'เฉพาะที่ค้าง (เลย/ถึงกำหนด)', all: 'ทั้งหมด' }[range];
+    const chartHtml = buildPmPrintChart([...groups.values()], start, end, today);
+    const rangeLabel = `ช่วง ${fromStr} ถึง ${toStr}`;
     const cnt = (s) => list.filter(p => p.assignedShift === s).length;
     const printedBy = (window.currentUser && (window.currentUser.name || window.currentUser.username)) || '-';
     const html = `<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>แผน PM ${todayStr}</title>
@@ -1320,8 +1399,38 @@ window.printPmPlan = function() {
         .sign { margin-top: 28px; display: flex; gap: 40px; font-size: 11px; }
         .sign div { flex: 1; border-top: 1px dotted #6b7280; padding-top: 4px; text-align: center; color: #6b7280; }
         @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 0; } @page { size: A4 landscape; margin: 10mm; } }
+        /* --- Gantt สำหรับพิมพ์ --- */
+        .page-break { page-break-before: always; break-before: page; }
+        table.gantt { table-layout: fixed; font-size: 8px; }
+        table.gantt th, table.gantt td { border: 1px solid #e5e7eb; padding: 1px 0; text-align: center; }
+        table.gantt th.mo { background: #f8fafc; font-size: 9px; }
+        table.gantt th.d { background: #f8fafc; font-weight: normal; color: #6b7280; }
+        table.gantt th.d.sun { color: #ef4444; }
+        table.gantt th.d.today { background: #4f46e5; color: #fff; font-weight: bold; }
+        table.gantt td.lbl { text-align: left; padding: 2px 4px; font-size: 9px; white-space: nowrap; overflow: hidden; }
+        table.gantt tr.g td { background: #eef2ff; text-align: left; padding: 3px 4px; font-size: 10px; font-weight: bold; }
+        table.gantt td.sun { background: #f8fafc; }
+        table.gantt td.today { background: #e0e7ff; }
+        table.gantt td.over { background: #fee2e2; }
+        table.gantt td.cell { height: 30px; vertical-align: top; }
+        .gm { height: 12px; display: flex; align-items: center; justify-content: center; margin-top: 3px; }
+        .gt { font-size: 7px; font-weight: bold; line-height: 1.1; }
+        i.sq { display: inline-block; width: 9px; height: 9px; border-radius: 2px; }
+        i.sq.ok { background: #22c55e; } i.sq.late { background: #f97316; } i.sq.wait { background: #facc15; }
+        i.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+        i.dot.due { background: #3b82f6; } i.dot.over { background: #ef4444; } i.dot.now { background: #4f46e5; }
+        i.tick { display: inline-block; width: 2px; height: 10px; background: #fb923c; }
+        .tA { color: #0369a1; } .tB { color: #b45309; } .tc { color: #c2410c; }
+        .tl { color: #c2410c; } .tok { color: #15803d; }
+        .legend { font-size: 9px; color: #4b5563; margin: 6px 0 2px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
     </style></head><body>
-    <h1>📋 แผนงาน PM — ใบตรวจเช็คเครื่องจักร</h1>
+    <h1>📊 Chart แผน PM</h1>
+    <div class="meta">
+        เงื่อนไข: ${pmEscapeHtml(rangeLabel)} · ${shift ? 'กะ ' + shift : 'ทุกกะ'} · ${list.length} รายการ (กะ A ${list.filter(p => p.assignedShift === 'A').length} · กะ B ${list.filter(p => p.assignedShift === 'B').length})<br>
+        พิมพ์โดย: ${pmEscapeHtml((window.currentUser && (window.currentUser.name || window.currentUser.username)) || '-')} · วันที่พิมพ์: ${pmEscapeHtml(new Date().toLocaleString('th-TH'))}
+    </div>
+    ${chartHtml}
+    <h1 class="page-break">📋 แผนงาน PM — ใบตรวจเช็คเครื่องจักร</h1>
     <div class="meta">
         เงื่อนไข: ${pmEscapeHtml(rangeLabel)} · ${shift ? 'กะ ' + shift : 'ทุกกะ'} · ${list.length} รายการ (กะ A ${cnt('A')} · กะ B ${cnt('B')})<br>
         พิมพ์โดย: ${pmEscapeHtml(printedBy)} · วันที่พิมพ์: ${pmEscapeHtml(new Date().toLocaleString('th-TH'))}
