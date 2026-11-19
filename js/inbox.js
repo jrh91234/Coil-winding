@@ -59,7 +59,7 @@ function inboxEsc(v) {
 }
 
 function inboxItemText(d) {
-    return ['taskName', 'machine', 'jobId', 'partName', 'partId', 'planId', 'issueType', 'remark', 'product', 'symptom', 'recorder', 'planType']
+    return ['taskName', 'groupName', 'machine', 'jobId', 'partName', 'partId', 'planId', 'issueType', 'remark', 'product', 'symptom', 'recorder', 'planType']
         .map(k => d[k] || '').join(' ').toLowerCase();
 }
 
@@ -450,7 +450,7 @@ function pmThumbsHtml(d, size) {
 }
 
 // ขั้นตอนการทำ: พับเก็บไว้ก่อน กดเพื่อดู แต่ละบรรทัดแสดงเป็นข้อ อ่านง่าย
-function pmInstructionHtml(instruction, open) {
+function pmInstructionHtml(instruction, open, title) {
     if (!instruction) return '';
     const lines = String(instruction).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const body = lines.map(l => {
@@ -459,7 +459,7 @@ function pmInstructionHtml(instruction, open) {
     }).join('');
     return `<details class="group mt-2" ${open ? 'open' : ''}>
         <summary class="cursor-pointer list-none inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 select-none">
-            <span class="transition-transform group-open:rotate-90">▶</span> 📝 ขั้นตอนการทำ (${lines.length} บรรทัด)
+            <span class="transition-transform group-open:rotate-90">▶</span> 📝 ${title ? inboxEsc(title) + ' — ' : ''}ขั้นตอนการทำ (${lines.length} บรรทัด)
         </summary>
         <ul class="mt-2 space-y-1 text-[13px] leading-relaxed bg-slate-50 border border-slate-200 rounded-lg p-3">${body}</ul>
     </details>`;
@@ -493,7 +493,75 @@ function renderPmTaskItem(d) {
 }
 
 // มุมมองจัดกลุ่ม: งานชื่อเดียวกันหลายเครื่อง → การ์ดเดียว ขั้นตอนแสดงครั้งเดียว แล้วไล่รายการเครื่องเป็นแถว
+// 🧩 ชุดงาน: หลายหัวข้อ PM ที่ถึงกำหนดพร้อมกัน → การ์ดเดียว แถวละ 1 เครื่อง (กดทำเสร็จครั้งเดียว ปิดทุกหัวข้อของเครื่องนั้น)
+function renderPmSetCard(name, tasks) {
+    const topics = [];
+    tasks.forEach(t => { if (!topics.some(x => x.taskName === t.taskName)) topics.push(t); });
+    const byMachine = new Map();
+    tasks.forEach(t => {
+        const k = t.machine + '|' + t.dueDate;
+        if (!byMachine.has(k)) byMachine.set(k, []);
+        byMachine.get(k).push(t);
+    });
+    const machines = [...byMachine.values()].sort((a, b) => (b[0].daysOverdue || 0) - (a[0].daysOverdue || 0)
+        || String(a[0].machine).localeCompare(String(b[0].machine), undefined, { numeric: true }));
+    const worst = Math.max(...tasks.map(t => t.daysOverdue || 0));
+    const info = pmDaysInfo(worst);
+    const shifts = [...new Set(tasks.map(t => t.assignedShift).filter(Boolean))];
+    const lateMachines = machines.filter(m => (m[0].daysOverdue || 0) >= 1).length;
+    const topicIdx = (t) => topics.findIndex(x => x.taskName === t.taskName) + 1;
+    const rows = machines.map(list => {
+        const t = list[0];
+        const ti = pmDaysInfo(t.daysOverdue);
+        const ids = list.map(x => x.planId).join(',');
+        return `<div class="flex items-center gap-3 px-4 py-2.5 hover:bg-indigo-50/40 transition-colors flex-wrap sm:flex-nowrap">
+            <span class="bg-slate-800 text-white text-xs px-2 py-1 rounded font-mono font-bold w-20 text-center shrink-0">${inboxEsc(t.machine)}</span>
+            <span class="text-xs text-gray-500 w-28 shrink-0 hidden sm:inline">📅 ${inboxEsc(t.dueDate)}</span>
+            <span class="${ti.cls} text-[11px] px-2 py-0.5 rounded-full font-bold shrink-0">${ti.label}</span>
+            ${pmShiftBadge(t.assignedShift)}
+            <span class="flex flex-wrap gap-1 min-w-0">${list.sort((a, b) => topicIdx(a) - topicIdx(b)).map(x => `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] px-1.5 py-0.5 rounded font-bold" title="${inboxEsc(x.taskName)}">${topicIdx(x)}. ${inboxEsc(pmShortName(x.taskName))}</span>`).join('')}</span>
+            <button onclick="window.openPmCompleteModal('${ids}')" class="ml-auto shrink-0 text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 font-bold shadow-sm">📸 ทำเสร็จ${list.length > 1 ? ` (${list.length})` : ''}</button>
+        </div>`;
+    }).join('');
+    const photos = pmThumbsHtml(topics[0], 'w-16 h-16');
+    return { worst, html: `<div class="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 ${info.bar} mb-3 overflow-hidden">
+        <div class="p-4 flex items-start gap-3">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-lg">🧩</span>
+                    <span class="font-bold text-gray-800 text-base">${inboxEsc(name)}</span>
+                    <span class="bg-violet-100 text-violet-700 text-[10px] px-2 py-0.5 rounded-full font-bold">ชุดงาน ${topics.length} หัวข้อ</span>
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap mt-1.5 text-[11px]">
+                    <span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full font-bold">🏭 ${machines.length} เครื่อง</span>
+                    ${lateMachines ? `<span class="${info.cls} px-2 py-0.5 rounded-full font-bold">⏰ เกินกำหนด ${lateMachines} · สูงสุด ${worst} วัน</span>` : `<span class="${info.cls} px-2 py-0.5 rounded-full font-bold">ครบวันนี้</span>`}
+                    ${shifts.map(s => pmShiftBadge(s, '🔄 ')).join('')}
+                </div>
+                <div class="mt-2 space-y-0.5">${topics.map((t, i) => `<div class="text-xs text-gray-700"><b class="text-indigo-700">${i + 1}.</b> ${inboxEsc(t.taskName)} <span class="text-gray-400">· ${tasks.filter(x => x.taskName === t.taskName).length} เครื่อง</span></div>`).join('')}</div>
+                ${topics.map((t, i) => pmInstructionHtml(t.instruction, false, `${i + 1}. ${pmShortName(t.taskName)}`)).join('')}
+            </div>
+            ${photos ? `<div class="shrink-0 max-w-[9rem]">${photos}</div>` : ''}
+        </div>
+        <div class="border-t border-gray-100 divide-y divide-gray-100 bg-gray-50/40">${rows}</div>
+    </div>` };
+}
+
+// ชื่อหัวข้อแบบสั้น (ตัดส่วนชื่อชุดอุปกรณ์ท้ายชื่อ เช่น " ชุด Stripper Cutter")
+function pmShortName(name) {
+    const s = String(name || '');
+    const cut = s.replace(/\s+ชุด\s+.+$/, '').trim();
+    return cut.length > 2 ? cut : s;
+}
+
 function renderPmGroups(tasks) {
+    const sets = new Map();
+    tasks.filter(t => t.groupName).forEach(t => {
+        const k = t.groupName.trim().toLowerCase();
+        if (!sets.has(k)) sets.set(k, { name: t.groupName.trim(), list: [] });
+        sets.get(k).list.push(t);
+    });
+    const setCards = [...sets.values()].map(x => renderPmSetCard(x.name, x.list));
+    tasks = tasks.filter(t => !t.groupName);
     const groups = new Map();
     tasks.forEach(t => {
         const key = (t.taskName || '') + '||' + (t.planType || '') + '||' + (t.instruction || '');
@@ -504,9 +572,10 @@ function renderPmGroups(tasks) {
         list: list.sort((a, b) => (b.daysOverdue || 0) - (a.daysOverdue || 0)
             || String(a.machine).localeCompare(String(b.machine), undefined, { numeric: true })),
         worst: Math.max(...list.map(t => t.daysOverdue || 0)),
-    })).sort((a, b) => b.worst - a.worst);
+    })).concat(setCards.map(c => ({ set: c, worst: c.worst }))).sort((a, b) => b.worst - a.worst);
 
     return arr.map(g => {
+        if (g.set) return g.set.html;
         const first = g.list[0];
         const info = pmDaysInfo(g.worst);
         const shifts = [...new Set(g.list.map(t => t.assignedShift).filter(Boolean))];
@@ -546,8 +615,11 @@ function renderPmGroups(tasks) {
 }
 
 window.openPmCompleteModal = function(planId) {
-    const task = inboxData && inboxData.categories.pmTasks.find(t => t.planId === planId);
-    if (!task) { alert('ไม่พบแผน ' + planId); return; }
+    // planId อาจเป็นหลายแผนคั่นด้วย , (ชุดงาน: ทุกหัวข้อของเครื่องเดียวกัน)
+    const ids = String(planId || '').split(',').filter(Boolean);
+    const tasksSel = ids.map(id => inboxData && inboxData.categories.pmTasks.find(t => t.planId === id)).filter(Boolean);
+    if (!tasksSel.length || tasksSel.length !== ids.length) { alert('ไม่พบแผน ' + planId); return; }
+    const task = tasksSel[0];
     const refPhotos = Array.isArray(task.photoUrls) && task.photoUrls.length
         ? task.photoUrls
         : (task.photoUrl ? [task.photoUrl] : []);
@@ -563,9 +635,13 @@ window.openPmCompleteModal = function(planId) {
             </div>
             <div class="px-5 flex-1 overflow-y-auto overscroll-contain">
                 <div class="bg-indigo-50 p-3 rounded-lg mb-3 text-sm">
-                    <div class="font-bold text-indigo-800">${task.taskName}</div>
+                    ${task.groupName ? `<div class="text-[11px] font-bold text-violet-700 mb-1">🧩 ชุดงาน: ${inboxEsc(task.groupName)}</div>` : ''}
                     <div class="text-indigo-600 text-xs">${task.machine} · ${task.planType} · กำหนด ${task.dueDate}</div>
-                    ${task.instruction ? `<div class="text-gray-700 text-xs mt-2 whitespace-pre-line">📝 ${task.instruction}</div>` : ''}
+                    ${tasksSel.map((t, i) => `<div class="mt-2 ${i ? 'pt-2 border-t border-indigo-100' : ''}">
+                        <div class="font-bold text-indigo-800">${tasksSel.length > 1 ? (i + 1) + '. ' : ''}${inboxEsc(t.taskName)}</div>
+                        ${t.instruction ? `<div class="text-gray-700 text-xs mt-1 whitespace-pre-line">📝 ${inboxEsc(t.instruction)}</div>` : ''}
+                    </div>`).join('')}
+                    ${tasksSel.length > 1 ? `<div class="mt-2 text-[11px] font-bold text-violet-700">✅ ยืนยันครั้งเดียว บันทึกทั้ง ${tasksSel.length} หัวข้อ</div>` : ''}
                     ${refPhotoHtml}
                 </div>
                 <div class="mb-3">
@@ -644,7 +720,8 @@ window.submitPmComplete = async function(planId) {
             method: 'POST',
             body: JSON.stringify({
                 action: 'COMPLETE_PM_TASK',
-                planId: planId,
+                planId: String(planId).split(',')[0],
+                planIds: String(planId).split(',').filter(Boolean),
                 username: window.currentUser?.name || window.currentUser?.username || 'Unknown',
                 role: window.currentUser?.role || '',
                 note: document.getElementById('pm-note').value,
@@ -721,6 +798,11 @@ window.openAddPmPlanModal = function() {
     if (instructionInput) instructionInput.value = '';
     const startShiftInput = document.getElementById('pmplan-startshift');
     if (startShiftInput) startShiftInput.value = '';
+    const groupInput = document.getElementById('pmplan-groupname');
+    if (groupInput) groupInput.value = '';
+    const groupList = document.getElementById('pmplan-group-list');
+    if (groupList) groupList.innerHTML = [...new Set(((pmGanttData && pmGanttData.plans) || []).map(p => p.groupName).filter(Boolean))]
+        .map(n => `<option value="${escapePmAttr(n)}">`).join('');
     const intervalInput = document.getElementById('pmplan-interval');
     if (intervalInput) intervalInput.value = '';
     document.getElementById('pmplan-interval-wrap').classList.add('hidden');
@@ -815,6 +897,7 @@ window.submitAddPmPlan = async function() {
     const note = document.getElementById('pmplan-note').value.trim();
     const instruction = document.getElementById('pmplan-instruction').value.trim();
     const startShift = document.getElementById('pmplan-startshift')?.value || '';
+    const groupName = (document.getElementById('pmplan-groupname')?.value || '').trim();
     const photoFiles = pmPlanPhotoFiles.slice(0, PM_PLAN_MAX_PHOTOS);
 
     if (machines.length === 0 || !taskName || !nextDueDate) {
@@ -852,7 +935,7 @@ window.submitAddPmPlan = async function() {
                 action: 'ADD_PM_PLAN',
                 machines, planType, taskName, frequency,
                 intervalValue: intervalValue || 0,
-                nextDueDate, assignedTo, note, instruction, startShift,
+                nextDueDate, assignedTo, note, instruction, startShift, groupName,
                 imagesBase64,
                 imageBase64: imagesBase64[0] || '', // เผื่อ backend เวอร์ชันเก่า
                 username: window.currentUser?.username || window.currentUser?.name || '',
@@ -869,6 +952,124 @@ window.submitAddPmPlan = async function() {
     } finally {
         btn.disabled = false;
         btn.innerHTML = originalText;
+    }
+};
+
+// === 🧩 ชุดงาน PM — รวมหลายหัวข้อให้ถึงกำหนดวันเดียวกัน กะเดียวกัน ทำพร้อมกัน ===
+function pmSetTopics() {
+    const plans = (pmGanttData && pmGanttData.plans) || [];
+    const m = new Map();
+    plans.forEach(p => {
+        const key = p.groupName ? 'set:' + p.groupName.trim().toLowerCase() : String(p.taskName || '').trim().toLowerCase() + '|' + String(p.frequency || '').trim().toLowerCase();
+        if (!m.has(key)) m.set(key, { key, isSet: !!p.groupName, name: p.groupName || p.taskName, frequency: p.frequency, intervalValue: p.intervalValue, tasks: new Set(), machines: new Set(), due: '', shift: '' });
+        const t = m.get(key);
+        t.tasks.add(p.taskName); t.machines.add(p.machine);
+        if (p.nextDueDate && (!t.due || p.nextDueDate < t.due)) { t.due = p.nextDueDate; t.shift = p.assignedShift; }
+    });
+    return [...m.values()].sort((a, b) => (b.isSet - a.isSet) || String(a.name).localeCompare(String(b.name), 'th'));
+}
+
+window.openPmSetManager = function() {
+    const topics = pmSetTopics();
+    if (!topics.length) { alert('ยังไม่มีแผน PM'); return; }
+    document.getElementById('modal-pm-set')?.remove();
+    const freqOpts = [['Daily', 'ทุกวัน'], ['Weekly', 'ทุกสัปดาห์'], ['Monthly', 'ทุกเดือน'], ['Quarterly', 'ทุก 3 เดือน'], ['Yearly', 'ทุกปี'], ['Custom', 'กำหนดเอง (วัน)']];
+    const html = `<div id="modal-pm-set" class="fixed inset-0 bg-black bg-opacity-50 z-[300] flex items-center justify-center p-3">
+        <div class="bg-white w-full max-w-2xl rounded-xl shadow-2xl flex flex-col overflow-hidden" style="max-height:90vh;max-height:90dvh">
+            <div class="bg-violet-600 text-white px-5 py-3 flex items-center justify-between">
+                <h3 class="font-bold text-lg">🧩 ชุดงาน PM</h3>
+                <button onclick="document.getElementById('modal-pm-set').remove()" class="text-2xl leading-none">&times;</button>
+            </div>
+            <div class="p-5 overflow-y-auto space-y-4 text-sm">
+                <div class="bg-violet-50 border border-violet-200 rounded-lg p-3 text-xs text-violet-900 leading-relaxed">
+                    รวมหลายหัวข้อเป็นชุดเดียว → <b>ถึงกำหนดวันเดียวกัน กะเดียวกัน</b> สลับ A/B พร้อมกัน · ใน Inbox แสดงการ์ดเดียว กดทำเสร็จครั้งเดียวปิดทุกหัวข้อของเครื่องนั้น<br>
+                    หัวข้ออื่นจะเข้ารอบปัจจุบันของ <b>หัวข้อหลัก</b> — เครื่องที่ค้างรอบเดิมอยู่จะถูกบันทึก <b>"ขาดรอบ"</b> ในชื่อกะเดิม
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-700 mb-1">1) เลือกหัวข้อที่จะรวม (อย่างน้อย 2) และเลือกหัวข้อหลัก</label>
+                    <div class="border rounded-lg divide-y max-h-64 overflow-y-auto">
+                        ${topics.map(t => `<div class="flex items-start gap-2 px-3 py-2 hover:bg-gray-50">
+                            <input type="checkbox" class="pm-set-topic mt-1 accent-violet-600" value="${escapePmAttr(t.key)}" data-freq="${escapePmAttr(t.frequency)}" data-iv="${t.intervalValue || ''}">
+                            <div class="flex-1 min-w-0">
+                                <div class="font-bold text-gray-800">${t.isSet ? '🧩 ' : ''}${pmEscapeHtml(t.name)}</div>
+                                ${t.isSet ? `<div class="text-[11px] text-gray-500">${[...t.tasks].map(pmEscapeHtml).join(' · ')}</div>` : ''}
+                                <div class="text-[11px] text-gray-500">${pmEscapeHtml(t.frequency)}${t.frequency === 'Custom' && t.intervalValue ? ' ' + t.intervalValue + ' วัน' : ''} · ${t.machines.size} เครื่อง · รอบปัจจุบัน ${pmEscapeHtml(t.due || '-')} ${pmShiftBadge(t.shift)}</div>
+                            </div>
+                            <label class="shrink-0 flex items-center gap-1 text-xs font-bold text-violet-700 cursor-pointer"><input type="radio" name="pm-set-main" value="${escapePmAttr(t.key)}" class="accent-violet-600" onchange="window.pmSetPickMain(this)"> หลัก</label>
+                        </div>`).join('')}
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="sm:col-span-1">
+                        <label class="block font-bold text-gray-700 mb-1">2) ชื่อชุดงาน</label>
+                        <input id="pm-set-name" list="pm-set-name-list" class="w-full p-2 border rounded-lg" placeholder="เช่น ชุด Stripper Cutter">
+                        <datalist id="pm-set-name-list">${topics.filter(t => t.isSet).map(t => `<option value="${escapePmAttr(t.name)}">`).join('')}</datalist>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-gray-700 mb-1">3) ความถี่ของชุด</label>
+                        <select id="pm-set-freq" class="w-full p-2 border rounded-lg bg-white" onchange="document.getElementById('pm-set-iv-wrap').classList.toggle('hidden', this.value !== 'Custom')">
+                            ${freqOpts.map(([v, l]) => `<option value="${v}" ${v === 'Monthly' ? 'selected' : ''}>${l}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div id="pm-set-iv-wrap" class="hidden">
+                        <label class="block font-bold text-gray-700 mb-1">ทุกกี่วัน</label>
+                        <input id="pm-set-iv" type="number" min="1" class="w-full p-2 border rounded-lg" placeholder="เช่น 14">
+                    </div>
+                </div>
+            </div>
+            <div class="px-5 py-3 border-t flex flex-wrap gap-2">
+                <button onclick="window.submitPmSet(true)" class="text-xs font-bold text-red-600 border border-red-300 px-3 py-2 rounded-lg hover:bg-red-50">ยกเลิกชุด (หัวข้อที่เลือก)</button>
+                <div class="ml-auto flex gap-2">
+                    <button onclick="document.getElementById('modal-pm-set').remove()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold">ปิด</button>
+                    <button id="pm-set-submit" onclick="window.submitPmSet(false)" class="bg-violet-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-violet-700">🧩 รวมเป็นชุด</button>
+                </div>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window.pmSetPickMain = function(radio) {
+    // หัวข้อหลักต้องถูกเลือกด้วย + ตั้งความถี่/ชื่อเริ่มต้นตามหัวข้อหลัก
+    const cb = [...document.querySelectorAll('.pm-set-topic')].find(c => c.value === radio.value);
+    if (!cb) return;
+    cb.checked = true;
+    const t = pmSetTopics().find(x => x.key === radio.value);
+    const nameEl = document.getElementById('pm-set-name');
+    if (t && t.isSet && nameEl && !nameEl.value) nameEl.value = t.name;
+};
+
+window.submitPmSet = async function(unset) {
+    const topics = [...document.querySelectorAll('.pm-set-topic:checked')].map(c => c.value);
+    const groupName = unset ? '' : (document.getElementById('pm-set-name').value || '').trim();
+    const mainTopic = document.querySelector('input[name="pm-set-main"]:checked')?.value || '';
+    const frequency = document.getElementById('pm-set-freq').value;
+    const intervalValue = document.getElementById('pm-set-iv').value;
+    if (!topics.length) { alert('กรุณาเลือกหัวข้อ'); return; }
+    if (!unset) {
+        if (topics.length < 2) { alert('กรุณาเลือกอย่างน้อย 2 หัวข้อ'); return; }
+        if (!mainTopic || topics.indexOf(mainTopic) < 0) { alert('กรุณาเลือกหัวข้อหลัก (ใช้วันครบกำหนดและกะของหัวข้อนี้)'); return; }
+        if (!groupName) { alert('กรุณาตั้งชื่อชุดงาน'); return; }
+        if (frequency === 'Custom' && !intervalValue) { alert('กรุณาระบุจำนวนวัน'); return; }
+        const main = pmSetTopics().find(t => t.key === mainTopic);
+        if (!confirm(`รวม ${topics.length} หัวข้อเป็นชุด "${groupName}"\nความถี่: ${frequency}${frequency === 'Custom' ? ' ' + intervalValue + ' วัน' : ''}\nเข้ารอบปัจจุบันของ "${main ? main.name : ''}" (${main ? main.due : '-'} กะ ${main ? main.shift : '-'})\n\nเครื่องที่ค้างรอบเดิมจะถูกบันทึก "ขาดรอบ" — ยืนยัน?`)) return;
+    } else if (!confirm(`ยกเลิกชุดงานของหัวข้อที่เลือก (${topics.length})?\nวันครบกำหนดและกะจะคงเดิม แต่จะแยกเป็นหัวข้อของตัวเอง`)) return;
+
+    const btn = document.getElementById('pm-set-submit');
+    btn.disabled = true; btn.innerHTML = '⏳ กำลังบันทึก...';
+    try {
+        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({
+            action: 'SET_PM_GROUP', topics, groupName, mainTopic, frequency, intervalValue: intervalValue || 0,
+            username: window.currentUser?.name || window.currentUser?.username || '', role: window.currentUser?.role || ''
+        }) });
+        const result = await res.json();
+        if (result.status !== 'success') throw new Error(result.message || 'บันทึกไม่สำเร็จ');
+        alert(result.message);
+        document.getElementById('modal-pm-set')?.remove();
+        window.showPmGantt();
+    } catch (e) {
+        alert('❌ ' + e.message);
+        btn.disabled = false; btn.innerHTML = '🧩 รวมเป็นชุด';
     }
 };
 
@@ -965,6 +1166,9 @@ function renderGanttChart(container, data, opts) {
     let statsHtml = `<div class="flex justify-end gap-2 mb-3">
         <button onclick="window.showPmHistory()" class="bg-white border border-green-600 text-green-700 text-sm font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-green-50 transition-colors flex items-center gap-1">
             🗂️ ประวัติที่ทำแล้ว
+        </button>
+        <button onclick="window.openPmSetManager()" class="bg-white border border-violet-600 text-violet-700 text-sm font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-violet-50 transition-colors flex items-center gap-1">
+            🧩 ชุดงาน
         </button>
         <button onclick="window.openAddPmPlanModal()" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-indigo-700 transition-colors flex items-center gap-1">
             ➕ เพิ่มแผน PM
@@ -1150,10 +1354,11 @@ function renderGanttChart(container, data, opts) {
         const deleteBtn = `<button data-plan-id="${escapePmAttr(plan.planId)}" data-task-name="${escapePmAttr(plan.taskName)}" data-machine="${escapePmAttr(plan.machine)}" onclick="window.deletePmPlan(this)" title="ลบแผนนี้" class="shrink-0 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm">🗑️</button>`;
         const timeline = `<div class="flex-1 whitespace-nowrap overflow-hidden relative">${cells}<div class="absolute inset-0 pointer-events-none" style="z-index:5">${overlay}</div></div>`;
         // แถวย่อยในกลุ่ม: ชื่องานอยู่ที่หัวกลุ่มแล้ว แสดงรหัสเครื่องตัวใหญ่แทน
-        const childHtml = (gid) => `<div class="flex border-b border-gray-100 hover:bg-gray-50 group" data-gantt-group="${gid}">
+        const childHtml = (gid, topicNo) => `<div class="flex border-b border-gray-100 hover:bg-gray-50 group" data-gantt-group="${gid}">
             <div class="shrink-0 w-48 py-1.5 pl-6 pr-1.5 border-r bg-white sticky left-0 z-20 flex items-center justify-between gap-1">
                 <div class="min-w-0 flex items-center gap-1.5 flex-wrap">
                     <span class="bg-slate-800 text-white text-[11px] px-1.5 py-0.5 rounded font-mono font-bold">${plan.machine}</span>
+                    ${topicNo ? `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] px-1 rounded font-bold" title="${escapePmAttr(plan.taskName)}">${topicNo}. ${pmEscapeHtml(pmShortName(plan.taskName)).slice(0, 14)}</span>` : ''}
                     ${overdueDays >= 0 ? `<span class="text-red-600 text-[10px] font-bold">${overdueDays ? 'เกิน ' + overdueDays + ' วัน' : 'วันนี้'}</span>` : ''}
                 </div>
                 ${deleteBtn}
@@ -1175,14 +1380,19 @@ function renderGanttChart(container, data, opts) {
     // 🗂️ รวมงานชื่อเดียวกัน (ชื่อ + ความถี่ เหมือน backend pmGroupKey) เป็นกลุ่มเดียว กดหัวกลุ่มเพื่อยุบ/ขยาย
     const groupMap = new Map();
     planRowObjs.forEach(r => {
-        const key = String(r.plan.taskName || '').trim().toLowerCase() + '|' + String(r.plan.frequency || '').trim().toLowerCase();
+        const key = r.plan.groupName ? 'set:' + r.plan.groupName.trim().toLowerCase()
+            : String(r.plan.taskName || '').trim().toLowerCase() + '|' + String(r.plan.frequency || '').trim().toLowerCase();
         if (!groupMap.has(key)) groupMap.set(key, []);
         groupMap.get(key).push(r);
     });
     const planRows = [];
     [...groupMap.entries()].forEach(([key, list], gi) => {
-        if (list.length === 1) { planRows.push(list[0].html); return; }
-        list.sort((a, b) => String(a.plan.machine).localeCompare(String(b.plan.machine), undefined, { numeric: true }));
+        const isSet = key.startsWith('set:');
+        if (list.length === 1 && !isSet) { planRows.push(list[0].html); return; }
+        const topicNames = [];
+        list.forEach(r => { if (topicNames.indexOf(r.plan.taskName) < 0) topicNames.push(r.plan.taskName); });
+        const topicNo = (r) => isSet ? topicNames.indexOf(r.plan.taskName) + 1 : 0;
+        list.sort((a, b) => String(a.plan.machine).localeCompare(String(b.plan.machine), undefined, { numeric: true }) || topicNo(a) - topicNo(b));
         const gid = 'g' + gi;
         const collapsed = !opts.print && pmGanttCollapsed.has(key);
         const first = list[0].plan;
@@ -1194,9 +1404,11 @@ function renderGanttChart(container, data, opts) {
                 <div class="flex items-start gap-1">
                     <span data-gantt-caret="${gid}" class="text-indigo-500 text-[10px] mt-0.5 transition-transform ${collapsed ? '' : 'rotate-90'}">▶</span>
                     <div class="min-w-0">
-                        <div class="text-xs font-bold text-gray-800 leading-snug line-clamp-2" title="${escapePmAttr(first.taskName)}">${first.taskName}</div>
+                        ${isSet ? `<div class="text-xs font-bold text-violet-800 leading-snug">🧩 ${pmEscapeHtml(first.groupName)}</div>
+                        ${topicNames.map((n, i) => `<div class="text-[9px] text-gray-600 leading-snug truncate" title="${escapePmAttr(n)}"><b class="text-indigo-700">${i + 1}.</b> ${pmEscapeHtml(n)}</div>`).join('')}`
+                        : `<div class="text-xs font-bold text-gray-800 leading-snug line-clamp-2" title="${escapePmAttr(first.taskName)}">${first.taskName}</div>`}
                         <div class="flex items-center gap-1 flex-wrap mt-0.5 text-[9px]">
-                            <span class="bg-white text-gray-600 px-1.5 rounded-full font-bold border">🏭 ${list.length} เครื่อง</span>
+                            <span class="bg-white text-gray-600 px-1.5 rounded-full font-bold border">🏭 ${new Set(list.map(r => r.plan.machine)).size} เครื่อง${isSet ? ' · ' + list.length + ' แผน' : ''}</span>
                             <span class="text-gray-400">${first.frequency}</span>
                             ${shifts.map(sh => pmShiftBadge(sh)).join('')}
                             ${overdueCount ? `<span class="bg-red-100 text-red-700 px-1.5 rounded-full font-bold">ค้าง ${overdueCount} · สูงสุด ${maxLate} วัน</span>` : ''}
@@ -1206,7 +1418,7 @@ function renderGanttChart(container, data, opts) {
             </div>
             <div class="flex-1"></div>
         </div>`);
-        list.forEach(r => planRows.push(collapsed ? r.childHtml(gid).replace('data-gantt-group=', 'style="display:none" data-gantt-group=') : r.childHtml(gid)));
+        list.forEach(r => planRows.push(collapsed ? r.childHtml(gid, topicNo(r)).replace('data-gantt-group=', 'style="display:none" data-gantt-group=') : r.childHtml(gid, topicNo(r))));
     });
 
     // Legend
