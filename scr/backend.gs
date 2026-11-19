@@ -4551,8 +4551,10 @@ function doPost(e) {
     const frequency = String(data.frequency || "").trim();
     const intervalValue = parseInt(data.intervalValue) || 0;
     if (!topics.length) return ContentService.createTextOutput(JSON.stringify({status: "error", message: "กรุณาเลือกหัวข้อ PM"})).setMimeType(ContentService.MimeType.JSON);
-    if (groupName && (topics.length < 2 || !mainTopic || topics.indexOf(mainTopic) === -1 || !frequency)) {
-      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "กรุณาเลือกอย่างน้อย 2 หัวข้อ เลือกหัวข้อหลัก และความถี่"})).setMimeType(ContentService.MimeType.JSON);
+    // 1 หัวข้อได้ถ้าเป็นชุดเดิม (จัดรอบของชุดใหม่ / เปลี่ยนชื่อ / เปลี่ยนความถี่)
+    const minTopics = topics.length === 1 && topics[0].indexOf("set:") === 0 ? 1 : 2;
+    if (groupName && (topics.length < minTopics || !mainTopic || topics.indexOf(mainTopic) === -1 || !frequency)) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "กรุณาเลือกอย่างน้อย 2 หัวข้อ (หรือชุดเดิม 1 ชุด) เลือกหัวข้อหลัก และความถี่"})).setMimeType(ContentService.MimeType.JSON);
     }
     const rows = ensurePmPlanShifts(pmSheet);
     const lock = LockService.getScriptLock();
@@ -4589,18 +4591,16 @@ function doPost(e) {
       const anchorShift = pmMajorityShift(votes.filter(Boolean)) || "A";
       const nextRound = pmAddFrequency(anchorDue, frequency, intervalValue);
 
-      // รอบปัจจุบันของแต่ละหัวข้อ (วันที่เก่าสุดของหัวข้อนั้น) — เครื่องที่วันเลยไปแล้ว = ทำรอบนี้ไปแล้ว
-      const topicMin = {};
-      idxs.forEach(i => {
-        const t = topicOf(rows[i]), d = pmDateStr(rows[i][ix("Next_Due_Date")]);
-        if (d && (!topicMin[t] || d < topicMin[t])) topicMin[t] = d;
-      });
+      // เครื่องที่ "ทำรอบปัจจุบันของชุดไปแล้ว" = ทำตั้งแต่วันเริ่มรอบของชุด (Last_Done_Date >= anchorDue) → ไปรอบถัดไป
+      // ทำก่อนหน้านั้น (ตามตารางเดิมของหัวข้อ) ไม่นับเป็นรอบของชุด → เข้ารอบปัจจุบันของชุดพร้อมกันทั้งหมด (กะสลับต่อเนื่อง ไม่ต่อกัน 2 รอบ)
+      const lastDoneIx = ix("Last_Done_Date");
       const missed = [];
       idxs.forEach(i => {
         const d = pmDateStr(rows[i][ix("Next_Due_Date")]);
         const sh = normalizePmShift(rows[i][ix("Assigned_Shift")]);
+        const lastDone = lastDoneIx > -1 ? pmDateStr(rows[i][lastDoneIx]) : "";
         let due = anchorDue, shift = anchorShift;
-        if (d && d > topicMin[topicOf(rows[i])]) { due = nextRound; shift = nextPmShift(anchorShift); } // ทำรอบปัจจุบันของหัวข้อไปแล้ว → รอบถัดไปของชุด
+        if (lastDone && lastDone >= anchorDue) { due = nextRound; shift = nextPmShift(anchorShift); } // ทำรอบปัจจุบันของชุดไปแล้ว → รอบถัดไป
         else if (d && d <= todayStr && sh && sh !== anchorShift) missed.push({ i: i, due: d, shift: sh }); // ค้างรอบของอีกกะ → กะเดิมขาดรอบ แล้วเข้ารอบของชุด
         setCell(i, "Group_Name", groupName);
         setCell(i, "Frequency", frequency);
