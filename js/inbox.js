@@ -874,6 +874,16 @@ window.submitAddPmPlan = async function() {
 
 // === Gantt Chart ===
 let pmGanttData = null;
+const pmGanttCollapsed = new Set();   // กลุ่มงานที่ผู้ใช้ยุบไว้ (จำไว้ระหว่างรีเฟรช Gantt)
+
+window.togglePmGanttGroup = function(el) {
+    const gid = el.dataset.gid, key = el.dataset.key;
+    const collapse = !pmGanttCollapsed.has(key);
+    if (collapse) pmGanttCollapsed.add(key); else pmGanttCollapsed.delete(key);
+    document.querySelectorAll(`[data-gantt-group="${gid}"]`).forEach(el => { el.style.display = collapse ? 'none' : ''; });
+    const caret = document.querySelector(`[data-gantt-caret="${gid}"]`);
+    if (caret) caret.classList.toggle('rotate-90', !collapse);
+};
 
 window.showPmGantt = async function() {
     const container = document.getElementById('inbox-content');
@@ -995,7 +1005,7 @@ function renderGanttChart(container, data) {
     const monthRow = months.map(m => `<div class="inline-block text-center text-[9px] font-bold text-gray-500 border-b" style="width:${m.span * 20}px">${m.label}</div>`).join('');
 
     // สร้างแถว Gantt ต่อ plan
-    const planRows = plans.map(plan => {
+    const planRowObjs = plans.map(plan => {
         const planLogs = logs.filter(l => l.planId === plan.planId);
         const nextDue = toDate(plan.nextDueDate);
         const lastDone = toDate(plan.lastDoneDate);
@@ -1079,16 +1089,67 @@ function renderGanttChart(container, data) {
 
         const overdueLabel = nextDue && nextDue <= today ? `<span class="text-red-600 text-[9px] font-bold ml-1">เกิน ${dayIndex(today) - dayIndex(nextDue)} วัน</span>` : '';
 
-        return `<div class="flex border-b border-gray-100 hover:bg-gray-50 group">
+        const overdueDays = nextDue && nextDue <= today ? dayIndex(today) - dayIndex(nextDue) : -1;
+        const deleteBtn = `<button data-plan-id="${escapePmAttr(plan.planId)}" data-task-name="${escapePmAttr(plan.taskName)}" data-machine="${escapePmAttr(plan.machine)}" onclick="window.deletePmPlan(this)" title="ลบแผนนี้" class="shrink-0 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm">🗑️</button>`;
+        const timeline = `<div class="flex-1 whitespace-nowrap overflow-hidden relative">${cells}<div class="absolute inset-0 pointer-events-none" style="z-index:5">${overlay}</div></div>`;
+        // แถวย่อยในกลุ่ม: ชื่องานอยู่ที่หัวกลุ่มแล้ว แสดงรหัสเครื่องตัวใหญ่แทน
+        const childHtml = (gid) => `<div class="flex border-b border-gray-100 hover:bg-gray-50 group" data-gantt-group="${gid}">
+            <div class="shrink-0 w-48 py-1.5 pl-6 pr-1.5 border-r bg-white sticky left-0 z-10 flex items-center justify-between gap-1">
+                <div class="min-w-0 flex items-center gap-1.5 flex-wrap">
+                    <span class="bg-slate-800 text-white text-[11px] px-1.5 py-0.5 rounded font-mono font-bold">${plan.machine}</span>
+                    ${overdueDays >= 0 ? `<span class="text-red-600 text-[10px] font-bold">${overdueDays ? 'เกิน ' + overdueDays + ' วัน' : 'วันนี้'}</span>` : ''}
+                </div>
+                ${deleteBtn}
+            </div>
+            ${timeline}
+        </div>`;
+        return { plan, overdueDays, childHtml, html: `<div class="flex border-b border-gray-100 hover:bg-gray-50 group">
             <div class="shrink-0 w-48 p-1.5 border-r bg-white sticky left-0 z-10 flex items-start justify-between gap-1">
                 <div class="min-w-0">
-                    <div class="text-xs font-bold text-gray-800 truncate">${plan.taskName}${overdueLabel}</div>
+                    <div class="text-xs font-bold text-gray-800 truncate" title="${escapePmAttr(plan.taskName)}">${plan.taskName}${overdueLabel}</div>
                     <div class="text-[9px] text-gray-400">${plan.machine} · ${plan.frequency}${plan.assignedTo ? ' · ' + plan.assignedTo : ''} ${pmShiftBadge(plan.assignedShift)}</div>
                 </div>
                 <button data-plan-id="${escapePmAttr(plan.planId)}" data-task-name="${escapePmAttr(plan.taskName)}" data-machine="${escapePmAttr(plan.machine)}" onclick="window.deletePmPlan(this)" title="ลบแผนนี้" class="shrink-0 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm">🗑️</button>
             </div>
-            <div class="flex-1 whitespace-nowrap overflow-hidden relative">${cells}<div class="absolute inset-0 pointer-events-none" style="z-index:5">${overlay}</div></div>
-        </div>`;
+            ${timeline}
+        </div>` };
+    });
+
+    // 🗂️ รวมงานชื่อเดียวกัน (ชื่อ + ความถี่ เหมือน backend pmGroupKey) เป็นกลุ่มเดียว กดหัวกลุ่มเพื่อยุบ/ขยาย
+    const groupMap = new Map();
+    planRowObjs.forEach(r => {
+        const key = String(r.plan.taskName || '').trim().toLowerCase() + '|' + String(r.plan.frequency || '').trim().toLowerCase();
+        if (!groupMap.has(key)) groupMap.set(key, []);
+        groupMap.get(key).push(r);
+    });
+    const planRows = [];
+    [...groupMap.entries()].forEach(([key, list], gi) => {
+        if (list.length === 1) { planRows.push(list[0].html); return; }
+        list.sort((a, b) => String(a.plan.machine).localeCompare(String(b.plan.machine), undefined, { numeric: true }));
+        const gid = 'g' + gi;
+        const collapsed = pmGanttCollapsed.has(key);
+        const first = list[0].plan;
+        const overdueCount = list.filter(r => r.overdueDays >= 0).length;
+        const maxLate = Math.max(...list.map(r => r.overdueDays));
+        const shifts = [...new Set(list.map(r => r.plan.assignedShift).filter(Boolean))];
+        planRows.push(`<div class="flex border-b border-indigo-100 bg-indigo-50/60 cursor-pointer hover:bg-indigo-100/60" data-gid="${gid}" data-key="${escapePmAttr(key)}" onclick="window.togglePmGanttGroup(this)">
+            <div class="shrink-0 w-48 p-1.5 border-r bg-indigo-50 sticky left-0 z-10">
+                <div class="flex items-start gap-1">
+                    <span data-gantt-caret="${gid}" class="text-indigo-500 text-[10px] mt-0.5 transition-transform ${collapsed ? '' : 'rotate-90'}">▶</span>
+                    <div class="min-w-0">
+                        <div class="text-xs font-bold text-gray-800 leading-snug line-clamp-2" title="${escapePmAttr(first.taskName)}">${first.taskName}</div>
+                        <div class="flex items-center gap-1 flex-wrap mt-0.5 text-[9px]">
+                            <span class="bg-white text-gray-600 px-1.5 rounded-full font-bold border">🏭 ${list.length} เครื่อง</span>
+                            <span class="text-gray-400">${first.frequency}</span>
+                            ${shifts.map(sh => pmShiftBadge(sh)).join('')}
+                            ${overdueCount ? `<span class="bg-red-100 text-red-700 px-1.5 rounded-full font-bold">ค้าง ${overdueCount} · สูงสุด ${maxLate} วัน</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex-1"></div>
+        </div>`);
+        list.forEach(r => planRows.push(collapsed ? r.childHtml(gid).replace('data-gantt-group=', 'style="display:none" data-gantt-group=') : r.childHtml(gid)));
     });
 
     // Legend
