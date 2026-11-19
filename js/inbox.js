@@ -907,7 +907,10 @@ window.showPmGantt = async function() {
 const GANTT_ROW_H = 46;  // สูงพอให้มีตัวเลขกำกับด้านบน + ป้ายกะด้านล่างจุด
 const GANTT_MID = 21;    // แนวกึ่งกลางของจุด/เส้นเชื่อม
 
-function renderGanttChart(container, data) {
+// opts.range = { start, end } → ใช้ช่วงวันที่นี้แทนการหาอัตโนมัติ
+// opts.print = true → คืนค่า HTML ของกราฟ (ขยายทุกกลุ่ม ไม่มีปุ่ม/scroll) ไว้ใช้พิมพ์ — ใช้โค้ดวาดชุดเดียวกับบนเว็บ
+function renderGanttChart(container, data, opts) {
+    opts = opts || {};
     const { plans, logs, stats } = data;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -932,10 +935,12 @@ function renderGanttChart(container, data) {
     });
     const padBefore = Math.max(14, Math.round((today - minDate) / 86400000) + 7);
     const padAfter = Math.max(14, Math.round((maxDate - today) / 86400000) + 7);
-    const startDate = new Date(today); startDate.setDate(startDate.getDate() - padBefore);
-    const endDate = new Date(today); endDate.setDate(endDate.getDate() + padAfter);
-    const totalDays = padBefore + padAfter + 1;
-    const todayIndex = padBefore;
+    const startDate = opts.range ? new Date(opts.range.start) : new Date(today);
+    if (!opts.range) startDate.setDate(startDate.getDate() - padBefore);
+    const endDate = opts.range ? new Date(opts.range.end) : new Date(today);
+    if (!opts.range) endDate.setDate(endDate.getDate() + padAfter);
+    const totalDays = Math.round((endDate - startDate) / 86400000) + 1;
+    const todayIndex = Math.round((today - startDate) / 86400000); // อาจอยู่นอกช่วง (ติดลบ/เกิน) เมื่อกำหนดช่วงเอง
 
     const toDate = (s) => { const d = new Date(s + 'T00:00:00'); return isNaN(d.getTime()) ? null : d; };
     const dayIndex = (d) => Math.round((d - startDate) / 86400000);
@@ -1155,7 +1160,7 @@ function renderGanttChart(container, data) {
         if (list.length === 1) { planRows.push(list[0].html); return; }
         list.sort((a, b) => String(a.plan.machine).localeCompare(String(b.plan.machine), undefined, { numeric: true }));
         const gid = 'g' + gi;
-        const collapsed = pmGanttCollapsed.has(key);
+        const collapsed = !opts.print && pmGanttCollapsed.has(key);
         const first = list[0].plan;
         const overdueCount = list.filter(r => r.overdueDays >= 0).length;
         const maxLate = Math.max(...list.map(r => r.overdueDays));
@@ -1193,6 +1198,24 @@ function renderGanttChart(container, data) {
         <span><span class="inline-block text-[9px] font-black rounded px-1" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d">B</span> ใต้วันครบกำหนด = กะที่รับผิดชอบรอบนั้น</span>
         <span><span class="inline-block text-[9px] font-black rounded px-1" style="background:#fff;color:#c2410c;border:1px dashed #f97316">แทน A</span> = อีกกะมาทำแทน</span>
     </div>`;
+
+    if (opts.print) {
+        const width = 192 + totalDays * 20;
+        const zoom = Math.min(1, 1040 / width); // ย่อให้พอดีกระดาษ A4 แนวนอน
+        return `${legendHtml}
+        <div style="zoom:${zoom.toFixed(3)}">
+            <div class="bg-white border" style="width:${width}px">
+                <div class="flex border-b bg-gray-50">
+                    <div class="shrink-0 w-48 p-2 border-r font-bold text-xs text-gray-600 bg-gray-50">แผน PM</div>
+                    <div class="flex-1 whitespace-nowrap">
+                        <div>${monthRow}</div>
+                        <div>${dayHeaders.join('')}</div>
+                    </div>
+                </div>
+                ${planRows.join('')}
+            </div>
+        </div>`;
+    }
 
     container.innerHTML = `
         ${statsHtml}
@@ -1246,7 +1269,6 @@ function renderGanttChart(container, data) {
     }
 }
 
-// 📊 สร้าง Gantt แบบตาราง (พิมพ์ได้ ไม่ต้องเลื่อน) — ช่วงวันที่: ย้อนหลัง 3 สัปดาห์ (หรือถึงวันค้างเก่าสุด) ถึงล่วงหน้าตามช่วงที่เลือก
 function pmPrintDefaultRange() {
     const pad = (n) => String(n).padStart(2, '0');
     const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -1254,71 +1276,6 @@ function pmPrintDefaultRange() {
     const a = new Date(t); a.setDate(a.getDate() - 14);
     const b = new Date(t); b.setDate(b.getDate() + 14);
     return { from: fmt(a), to: fmt(b) };
-}
-
-function buildPmPrintChart(groupList, start, end, today) {
-    const logs = (pmGanttData && pmGanttData.logs) || [];
-    const toD = (s) => { const d = new Date(String(s || '') + 'T00:00:00'); return isNaN(d) ? null : d; };
-    const days = Math.round((end - start) / 86400000) + 1;
-    const idxOf = (d) => Math.round((d - start) / 86400000);
-    const todayIdx = idxOf(today); // อาจอยู่นอกช่วงที่เลือก (ติดลบ/เกิน) ก็ได้
-    const dates = Array.from({ length: days }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return d; });
-
-    // หัวตาราง เดือน + วัน
-    const months = [];
-    dates.forEach(d => {
-        const m = d.toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
-        if (!months.length || months[months.length - 1].m !== m) months.push({ m, n: 0 });
-        months[months.length - 1].n++;
-    });
-    const head = `<tr><th class="mo" rowspan="2">เครื่อง / กะ</th>${months.map(x => `<th class="mo" colspan="${x.n}">${x.m}</th>`).join('')}</tr>
-        <tr>${dates.map((d, i) => `<th class="d ${i === todayIdx ? 'today' : d.getDay() === 0 ? 'sun' : ''}">${d.getDate()}</th>`).join('')}</tr>`;
-
-    const shiftTxt = (s, cls) => s ? `<div class="gt ${cls || 't' + s}">${s}</div>` : '';
-    const rowHtml = (p) => {
-        const cells = Array.from({ length: days }, () => ({ mark: '', text: '' }));
-        const put = (i, mark, text, force) => { if (i < 0 || i >= days) return; if (force || !cells[i].mark) cells[i].mark = mark; if (text) cells[i].text += text; };
-        logs.filter(l => l.planId === p.planId).forEach(l => {
-            const done = toD(l.doneDate); if (!done) return;
-            const due = toD(l.dueDate);
-            const diff = due ? Math.round((done - due) / 86400000) : (l.daysDiff || 0);
-            const cls = l.status === 'Wait Approve' ? 'wait' : diff > 0 ? 'late' : 'ok';
-            const di = idxOf(done);
-            const cover = l.doneShift && l.assignedShift && l.doneShift !== l.assignedShift;
-            if (due && idxOf(due) !== di) put(idxOf(due), '<i class="tick"></i>', shiftTxt(l.assignedShift));
-            put(di, `<i class="sq ${cls}"></i>`,
-                `<div class="gt ${diff > 0 ? 'tl' : 'tok'}">${diff > 0 ? '+' + diff : '✓'}</div>` +
-                (cover ? `<div class="gt tc">แทน${l.doneShift}</div>` : (due && idxOf(due) === di ? shiftTxt(l.assignedShift) : '')), true);
-        });
-        const nd = toD(p.nextDueDate);
-        let overFrom = null; // index วันครบกำหนดที่ค้าง (ติดลบได้ ถ้าอยู่ก่อนช่วงที่เลือก)
-        if (nd) {
-            const ni = idxOf(nd);
-            const cls = nd < today ? 'over' : ni === todayIdx ? 'now' : 'due';
-            put(ni, `<i class="dot ${cls}"></i>`, shiftTxt(p.assignedShift), true);
-            if (nd < today) overFrom = ni;
-        }
-        const late = nd && nd < today ? Math.round((today - nd) / 86400000) : 0;
-        return `<tr><td class="lbl"><b>${pmEscapeHtml(p.machine)}</b> ${p.assignedShift ? `<span class="t${p.assignedShift}">กะ ${p.assignedShift}</span>` : ''}${late ? ` <span class="tl">ค้าง ${late}</span>` : ''}</td>${cells.map((c, i) => {
-            const bg = overFrom !== null && i > overFrom && i <= todayIdx ? 'over' : i === todayIdx ? 'today' : dates[i].getDay() === 0 ? 'sun' : '';
-            return `<td class="cell ${bg}"><div class="gm">${c.mark}</div>${c.text}</td>`;
-        }).join('')}</tr>`;
-    };
-
-    const body = groupList.map(g => {
-        const f = g[0];
-        return `<tr class="g"><td colspan="${days + 1}">📋 ${pmEscapeHtml(f.taskName)} <span class="sub">· ความถี่ ${pmEscapeHtml(f.frequency)} · ${g.length} เครื่อง</span></td></tr>${g.map(rowHtml).join('')}`;
-    }).join('');
-
-    return `<div class="legend">
-        <span><i class="dot due"></i> กำหนดถัดไป</span><span><i class="dot over"></i> เลยกำหนด (ค้าง)</span>
-        <span><i class="sq ok"></i> ทำตรงเวลา ✓</span><span><i class="sq late"></i> ทำช้า (+วัน)</span>
-        <span><i class="tick"></i> วันครบกำหนดของรอบที่ทำไปแล้ว</span>
-        <span><b class="tA">A</b>/<b class="tB">B</b> ใต้จุด = กะที่รับผิดชอบ</span><span><b class="tc">แทนA</b> = อีกกะทำแทน</span>
-        <span style="background:#fee2e2;padding:0 6px">ช่วงที่ค้าง</span><span style="background:#e0e7ff;padding:0 6px">วันนี้</span>
-    </div>
-    <table class="gantt"><colgroup><col style="width:12%">${dates.map(() => `<col>`).join('')}</colgroup>
-        <thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
 
 // 🖨️ พิมพ์แผน PM — ใบงานให้ช่างเซ็น แยกกลุ่มตามงาน แสดงกะรับผิดชอบชัด ๆ
@@ -1346,69 +1303,28 @@ window.printPmPlan = function() {
     });
     if (!list.length) { alert('ไม่มีแผนตามเงื่อนไขที่เลือก'); return; }
 
-    const groups = new Map();
-    list.forEach(p => {
-        const key = String(p.taskName || '').trim().toLowerCase() + '|' + String(p.frequency || '').trim().toLowerCase();
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(p);
-    });
-    // เรียงเครื่องในแต่ละกลุ่ม: วันครบกำหนดก่อน แล้วตามรหัสเครื่อง
-    groups.forEach(g => g.sort((a, b) => String(a.nextDueDate).localeCompare(String(b.nextDueDate)) || String(a.machine).localeCompare(String(b.machine), undefined, { numeric: true })));
-    const chartHtml = buildPmPrintChart([...groups.values()], start, end, today);
+    // วาดด้วยโค้ดเดียวกับ Gantt บนเว็บ แล้วคัดลอกสไตล์ของหน้าเว็บ (Tailwind) ไปใช้ในหน้าพิมพ์ → หน้าตาเหมือนกันทุกจุด
+    const chartHtml = renderGanttChart(null, { plans: list, logs, stats: pmGanttData.stats || {} }, { range: { start, end }, print: true });
+    const pageStyles = [...document.querySelectorAll('style, link[rel="stylesheet"]')].map(n => n.outerHTML).join('\n');
     const rangeLabel = `ช่วง ${fromStr} ถึง ${toStr}`;
     const html = `<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>Chart แผน PM ${todayStr}</title>
+    ${pageStyles}
     <style>
-        * { box-sizing: border-box; }
-        body { font-family: "Segoe UI", Tahoma, sans-serif; padding: 16px; color: #1f2937; font-size: 12px; }
-        h1 { font-size: 18px; margin: 0 0 4px; }
-        .meta { font-size: 11px; color: #6b7280; margin-bottom: 10px; line-height: 1.6; }
-        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        th, td { border: 1px solid #9ca3af; padding: 6px; vertical-align: middle; }
-        th { background: #eef2ff; font-size: 11px; }
-        td.c { text-align: center; }
-        tr { page-break-inside: avoid; }
-        thead { display: table-header-group; }
-        tr.grp td { background: #f1f5f9; font-weight: bold; font-size: 12px; }
-        .sub { font-size: 10px; color: #6b7280; font-weight: normal; }
-        .late { color: #b91c1c; } .today { color: #047857; }
-        .sh { display: inline-block; padding: 1px 8px; border-radius: 10px; font-weight: bold; font-size: 11px; }
-        .shA { background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
-        .shB { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
-        .sign { margin-top: 28px; display: flex; gap: 40px; font-size: 11px; }
-        .sign div { flex: 1; border-top: 1px dotted #6b7280; padding-top: 4px; text-align: center; color: #6b7280; }
-        @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 0; } @page { size: A4 landscape; margin: 10mm; } }
-        /* --- Gantt สำหรับพิมพ์ --- */
-        .page-break { page-break-before: always; break-before: page; }
-        table.gantt { table-layout: fixed; font-size: 8px; }
-        table.gantt th, table.gantt td { border: 1px solid #e5e7eb; padding: 1px 0; text-align: center; }
-        table.gantt th.mo { background: #f8fafc; font-size: 9px; }
-        table.gantt th.d { background: #f8fafc; font-weight: normal; color: #6b7280; }
-        table.gantt th.d.sun { color: #ef4444; }
-        table.gantt th.d.today { background: #4f46e5; color: #fff; font-weight: bold; }
-        table.gantt td.lbl { text-align: left; padding: 2px 4px; font-size: 9px; white-space: nowrap; overflow: hidden; }
-        table.gantt tr.g td { background: #eef2ff; text-align: left; padding: 3px 4px; font-size: 10px; font-weight: bold; }
-        table.gantt td.sun { background: #f8fafc; }
-        table.gantt td.today { background: #e0e7ff; }
-        table.gantt td.over { background: #fee2e2; }
-        table.gantt td.cell { height: 30px; vertical-align: top; }
-        .gm { height: 12px; display: flex; align-items: center; justify-content: center; margin-top: 3px; }
-        .gt { font-size: 7px; font-weight: bold; line-height: 1.1; }
-        i.sq { display: inline-block; width: 9px; height: 9px; border-radius: 2px; }
-        i.sq.ok { background: #22c55e; } i.sq.late { background: #f97316; } i.sq.wait { background: #facc15; }
-        i.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
-        i.dot.due { background: #3b82f6; } i.dot.over { background: #ef4444; } i.dot.now { background: #4f46e5; }
-        i.tick { display: inline-block; width: 2px; height: 10px; background: #fb923c; }
-        .tA { color: #0369a1; } .tB { color: #b45309; } .tc { color: #c2410c; }
-        .tl { color: #c2410c; } .tok { color: #15803d; }
-        .legend { font-size: 9px; color: #4b5563; margin: 6px 0 2px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+        body { background: #fff !important; padding: 12px; color: #1f2937; }
+        .pm-print-title { font-size: 18px; font-weight: bold; margin: 0 0 2px; }
+        .pm-print-meta { font-size: 11px; color: #6b7280; margin-bottom: 8px; line-height: 1.6; }
+        .pm-print-sign { margin-top: 28px; display: flex; gap: 40px; font-size: 11px; }
+        .pm-print-sign div { flex: 1; border-top: 1px dotted #6b7280; padding-top: 4px; text-align: center; color: #6b7280; }
+        .group { break-inside: avoid; page-break-inside: avoid; }
+        @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } body { padding: 0; } @page { size: A4 landscape; margin: 8mm; } }
     </style></head><body>
-    <h1>📊 Chart แผน PM</h1>
-    <div class="meta">
+    <div class="pm-print-title">📊 Chart แผน PM</div>
+    <div class="pm-print-meta">
         เงื่อนไข: ${pmEscapeHtml(rangeLabel)} · ${shift ? 'กะ ' + shift : 'ทุกกะ'} · ${list.length} รายการ (กะ A ${list.filter(p => p.assignedShift === 'A').length} · กะ B ${list.filter(p => p.assignedShift === 'B').length})<br>
         พิมพ์โดย: ${pmEscapeHtml((window.currentUser && (window.currentUser.name || window.currentUser.username)) || '-')} · วันที่พิมพ์: ${pmEscapeHtml(new Date().toLocaleString('th-TH'))}
     </div>
     ${chartHtml}
-    <div class="sign"><div>หัวหน้ากะ A</div><div>หัวหน้ากะ B</div><div>หัวหน้าแผนก</div></div>
+    <div class="pm-print-sign"><div>หัวหน้ากะ A</div><div>หัวหน้ากะ B</div><div>หัวหน้าแผนก</div></div>
     </body></html>`;
     const w = window.open('', '_blank');
     if (!w) { alert('เบราว์เซอร์บล็อกป๊อปอัพ — กรุณาอนุญาตป๊อปอัพเพื่อพิมพ์แผน'); return; }
