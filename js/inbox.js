@@ -288,7 +288,7 @@ function renderInboxList(category) {
     const container = document.getElementById('inbox-content');
     if (!container || !inboxData) return;
     const baseItems = collectInboxItems(category);
-    if (baseItems.length === 0) {
+    if (baseItems.length === 0 && !(category === 'pmTasks' && pmUpcomingRounds().length)) {
         container.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-gray-400">
             <div class="text-5xl mb-3">✅</div>
             <div class="text-lg font-bold">ไม่มีรายการค้าง</div>
@@ -312,8 +312,11 @@ function renderInboxListBody(category) {
         ? `ทั้งหมด ${baseItems.length} รายการ`
         : `แสดง ${items.length} จาก ${baseItems.length} รายการ`;
 
+    const upcomingHtml = category === 'pmTasks' ? renderPmUpcoming() : '';
     if (items.length === 0) {
-        list.innerHTML = `<div class="flex flex-col items-center justify-center py-16 text-gray-400">
+        list.innerHTML = upcomingHtml
+            ? `<div class="text-center text-sm text-gray-400 py-6">✅ ไม่มีงานที่ถึงกำหนดตามตัวกรองนี้</div>${upcomingHtml}`
+            : `<div class="flex flex-col items-center justify-center py-16 text-gray-400">
             <div class="text-4xl mb-2">🔍</div>
             <div class="font-bold">ไม่พบรายการตามตัวกรอง</div>
             <button onclick="window.clearInboxFilters()" class="mt-3 text-xs font-bold text-indigo-600 hover:underline">ล้างตัวกรอง</button>
@@ -321,10 +324,10 @@ function renderInboxListBody(category) {
         return;
     }
     if (category === 'pmTasks' && inboxPmGrouped) {
-        list.innerHTML = renderPmGroups(items.map(it => it.data));
+        list.innerHTML = renderPmGroups(items.map(it => it.data)) + upcomingHtml;
         return;
     }
-    list.innerHTML = items.map((item, idx) => renderInboxItem(item, idx)).join('');
+    list.innerHTML = items.map((item, idx) => renderInboxItem(item, idx)).join('') + upcomingHtml;
 }
 
 function renderInboxItem(item, idx) {
@@ -508,6 +511,93 @@ function renderPmTaskItem(d) {
 }
 
 // มุมมองจัดกลุ่ม: งานชื่อเดียวกันหลายเครื่อง → การ์ดเดียว ขั้นตอนแสดงครั้งเดียว แล้วไล่รายการเครื่องเป็นแถว
+// 🕒 แผนล่วงหน้า — รอบถัดไปของแต่ละหัวข้อ (ยังไม่ถึงกำหนด) แสดงจาง ๆ บอกวัน/กะ/อีกกี่วัน ยังกดทำไม่ได้
+function pmAddFreqStr(dateStr, frequency, interval) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const f = String(frequency || '').trim().toLowerCase();
+    if (f === 'daily') d.setDate(d.getDate() + 1);
+    else if (f === 'weekly') d.setDate(d.getDate() + 7);
+    else if (f === 'monthly') d.setMonth(d.getMonth() + 1);
+    else if (f === 'quarterly') d.setMonth(d.getMonth() + 3);
+    else if (f === 'yearly') d.setFullYear(d.getFullYear() + 1);
+    else d.setDate(d.getDate() + (parseInt(interval) || 30));
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function pmUpcomingRounds() {
+    if (!inboxData) return [];
+    const due = (inboxData.categories && inboxData.categories.pmTasks) || [];
+    const up = inboxData.pmUpcoming || inboxData.pmSetAhead || [];
+    const keyOf = (t) => t.groupName ? 'set:' + t.groupName.trim().toLowerCase() : String(t.taskName || '').trim().toLowerCase() + '|' + String(t.frequency || '').trim().toLowerCase();
+    const topics = new Map();
+    const add = (t, kind) => {
+        const k = keyOf(t);
+        if (!topics.has(k)) topics.set(k, { key: k, name: t.groupName || t.taskName, isSet: !!t.groupName, planType: t.planType, due: [], up: [] });
+        topics.get(k)[kind].push(t);
+    };
+    due.forEach(t => add(t, 'due'));
+    up.forEach(t => add(t, 'up'));
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const other = (s) => s === 'A' ? 'B' : s === 'B' ? 'A' : '';
+    const rounds = [];
+    topics.forEach(tp => {
+        // รอบถัดไป: จากแผนที่อยู่รอบหน้าแล้ว (ทำรอบนี้เสร็จ) หรือคำนวณจากรอบปัจจุบัน + ความถี่ (กะสลับ)
+        let date = '', shift = '';
+        tp.up.forEach(u => { if (!date || u.dueDate < date) { date = u.dueDate; shift = u.assignedShift; } });
+        if (tp.due.length) {
+            const cur = tp.due.reduce((m, t) => !m || t.dueDate < m.dueDate ? t : m, null);
+            const d2 = pmAddFreqStr(cur.dueDate, cur.frequency, cur.intervalValue);
+            if (!date || d2 < date) { date = d2; shift = other(cur.assignedShift); }
+        }
+        if (!date) return;
+        // เครื่อง/หัวข้อในรอบนั้น: ทุกแผนที่ค้างรอบนี้ (ทำแล้วหรือขาดรอบก็จะมาอยู่รอบนั้น) + แผนที่อยู่รอบนั้นแล้ว
+        const plans = tp.due.concat(tp.up.filter(u => u.dueDate === date)).map(t => ({ machine: t.machine, taskName: t.taskName }));
+        const seen = new Set();
+        const uniq = plans.filter(p => { const k = p.machine + '|' + p.taskName; if (seen.has(k)) return false; seen.add(k); return true; });
+        const days = Math.round((new Date(date + 'T00:00:00') - today) / 86400000);
+        rounds.push({ ...tp, date, shift, days, plans: uniq });
+    });
+    return rounds.sort((a, b) => a.date.localeCompare(b.date) || String(a.name).localeCompare(String(b.name), 'th'));
+}
+
+function renderPmUpcoming() {
+    if (inboxPmStatusFilter) return ''; // กรองสถานะ "เกิน/ครบวันนี้" อยู่ → ไม่แสดงแผนล่วงหน้า
+    const q = inboxSearch.trim().toLowerCase();
+    const rounds = pmUpcomingRounds()
+        .filter(r => !inboxPmShiftFilter || r.shift === inboxPmShiftFilter)
+        .map(r => ({ ...r, plans: r.plans.filter(p => !inboxMachineFilter || p.machine === inboxMachineFilter) }))
+        .filter(r => r.plans.length)
+        .filter(r => !q || (r.name + ' ' + r.plans.map(p => p.machine + ' ' + p.taskName).join(' ')).toLowerCase().includes(q));
+    if (!rounds.length) return '';
+    const fmt = (s) => { const d = new Date(s + 'T00:00:00'); return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }); };
+    return `<div class="mt-5 mb-2 flex items-center gap-2 text-xs font-bold text-gray-500">
+        <span>🕒 แผนล่วงหน้า (ยังไม่ถึงกำหนด)</span><span class="flex-1 border-t border-dashed border-gray-300"></span>
+    </div>` + rounds.map(r => {
+        const machines = [...new Set(r.plans.map(p => p.machine))].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+        const topicNames = [...new Set(r.plans.map(p => p.taskName))];
+        return `<div class="bg-white/70 border border-dashed border-gray-300 rounded-xl mb-2 p-3 opacity-75 hover:opacity-100 transition-opacity">
+            <div class="flex items-start gap-3 flex-wrap">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span>${r.isSet ? '🧩' : '📋'}</span>
+                        <span class="font-bold text-gray-600">${inboxEsc(r.name)}</span>
+                        ${pmShiftBadge(r.shift, '🔄 ')}
+                        <span class="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded-full font-bold">🏭 ${machines.length} เครื่อง</span>
+                    </div>
+                    ${r.isSet ? `<div class="text-[11px] text-gray-500 mt-1">${topicNames.map((n, i) => `${i + 1}. ${inboxEsc(pmShortName(n))}`).join(' · ')}</div>` : ''}
+                    <div class="flex flex-wrap gap-1 mt-1.5">${machines.map(m => `<span class="bg-gray-100 text-gray-500 text-[10px] px-1.5 py-0.5 rounded font-mono">${inboxEsc(m)}</span>`).join('')}</div>
+                </div>
+                <div class="shrink-0 text-right">
+                    <div class="text-sm font-bold text-gray-600">📅 ${fmt(r.date)}</div>
+                    <div class="text-[11px] font-bold ${r.days <= 3 ? 'text-amber-600' : 'text-gray-500'}">${r.days <= 0 ? 'ถึงกำหนดวันนี้' : `อีก ${r.days} วัน`}</div>
+                    <div class="text-[10px] text-gray-400 mt-0.5">⏳ ถึงวันแล้วจะขึ้นให้ทำ</div>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
 // 🧩 ชุดงาน: หลายหัวข้อ PM ที่ถึงกำหนดพร้อมกัน → การ์ดเดียว แถวละ 1 เครื่อง (กดทำเสร็จครั้งเดียว ปิดทุกหัวข้อของเครื่องนั้น)
 function renderPmSetCard(name, tasks) {
     const key = String(name).trim().toLowerCase();

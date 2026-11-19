@@ -4189,6 +4189,7 @@ function doPost(e) {
     const todayISO = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
     const result = { maintenance: [], partsCheck: [], partsNearEnd: [], sortingWaitQC: [], pmTasks: [] };
     const pmSetAhead = [];
+    const pmUpcoming = [];
 
     // 1) งานซ่อมค้าง (Maintenance_Data: End_Time ว่าง)
     try {
@@ -4328,17 +4329,23 @@ function doPost(e) {
           if (dueDateRaw instanceof Date) dueDate = Utilities.formatDate(dueDateRaw, "GMT+7", "yyyy-MM-dd");
           else dueDate = String(dueDateRaw || "").trim().substring(0, 10);
           if (dueDate && dueDate > todayISO) {
-            // หัวข้อในชุดงานที่ทำรอบนี้ไปแล้ว (รอรอบหน้า) — ส่งไปให้การ์ดชุดงานแสดงว่า "ทำแล้ว"
+            // แผนที่ยังไม่ถึงกำหนด → ส่งไปแสดงเป็น "แผนล่วงหน้า" (จาง ๆ ยังกดทำไม่ได้) + ป้าย "ทำแล้ว" ในการ์ดชุดงาน
             const gName = pi("Group_Name") > -1 ? String(pmRows[i][pi("Group_Name")] || "").trim() : "";
-            if (gName) pmSetAhead.push({
+            const up = {
               planId: String(pmRows[i][pi("Plan_ID")] || ""),
               machine: String(pmRows[i][pi("Machine")] || ""),
+              planType: String(pmRows[i][pi("Plan_Type")] || ""),
               taskName: String(pmRows[i][pi("Task_Name")] || ""),
+              frequency: String(pmRows[i][pi("Frequency")] || ""),
+              intervalValue: parseInt(pmRows[i][pi("Interval_Value")]) || 0,
               groupName: gName,
               dueDate: dueDate,
+              daysUntil: daysBetween(todayISO, dueDate),
               assignedShift: normalizePmShift(pmRows[i][pi("Assigned_Shift")]),
               lastDoneDate: pi("Last_Done_Date") > -1 ? pmDateStr(pmRows[i][pi("Last_Done_Date")]) : ""
-            });
+            };
+            pmUpcoming.push(up);
+            if (gName) pmSetAhead.push(up);
             continue;
           }
           if (!dueDate) continue;
@@ -4351,6 +4358,7 @@ function doPost(e) {
             planType: String(pmRows[i][pi("Plan_Type")] || ""),
             taskName: String(pmRows[i][pi("Task_Name")] || ""),
             frequency: String(pmRows[i][pi("Frequency")] || ""),
+            intervalValue: parseInt(pmRows[i][pi("Interval_Value")]) || 0,
             assignedTo: assignedTo,
             assignedShift: normalizePmShift(pmRows[i][pi("Assigned_Shift")]),
             groupName: pi("Group_Name") > -1 ? String(pmRows[i][pi("Group_Name")] || "").trim() : "",
@@ -4373,7 +4381,7 @@ function doPost(e) {
       pmTasks: result.pmTasks.length,
       total: result.maintenance.length + result.partsCheck.length + result.partsNearEnd.length + result.sortingWaitQC.length + result.pmTasks.length
     };
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", categories: result, counts: counts, pmSetAhead: pmSetAhead })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", categories: result, counts: counts, pmSetAhead: pmSetAhead, pmUpcoming: pmUpcoming })).setMimeType(ContentService.MimeType.JSON);
   }
 
   // === COMPLETE_PM_TASK — ช่างกดทำเสร็จ + แนบรูป ===
