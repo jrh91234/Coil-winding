@@ -137,6 +137,7 @@
 - **สลับกะทุกรอบตามเวลา**: ถึงวันครบกำหนดรอบถัดไปแล้วรอบเดิมยังไม่ทำ → `ensurePmPlanShifts` บันทึก `Maintenance_Log` Status=`Missed` (Assigned_Shift = กะเจ้าของรอบ, `Closed_Date` = วันที่โอน) แล้วเลื่อนไปรอบใหม่ + โอนอีกกะทันที (ย้อนหลังได้หลายรอบ, กันซ้ำด้วย Plan_ID+Due_Date, ใช้ script lock)
 - กะของแต่ละรอบยึด "รอบล่าสุดที่มีบันทึกใน Log" ของหัวข้อ แล้วสลับ A/B ตามจำนวนรอบ (`pmRoundsBetween`) — ไม่ต้องรอทำครบทุกเครื่อง
 - ทำเสร็จ (`COMPLETE_PM_TASK`): เครื่องนั้นเลื่อนไปรอบถัดไป + กะถัดไปทันที · ทำโดยอีกกะ = "แทน" (Done_Shift ≠ Assigned_Shift)
+- **ชุดงาน** (`Maintenance_Plan.Group_Name`): หลายหัวข้อในชุดเดียวกันใช้คีย์ `set:<ชื่อชุด>` (`pmPlanKey`) → ตารางรอบ/กะเดียวกัน · `SET_PM_GROUP` (topics, groupName, mainTopic, frequency) จัดเข้ารอบปัจจุบันของหัวข้อหลัก (ค้างรอบของอีกกะ → Missed) / groupName ว่าง = ยกเลิกชุด · `COMPLETE_PM_TASK` รับ `planIds` (ทำเสร็จหลายหัวข้อของเครื่องเดียวพร้อมกัน รูปเดียว) · `ADD_PM_PLAN` รับ `groupName` (ใช้ความถี่/รอบ/กะของชุด) · UI: ปุ่ม "🧩 ชุดงาน" หน้า Gantt, การ์ดชุดใน Inbox (`renderPmSetCard`)
 - Gantt: ✕ + ป้าย "B ขาด" = ขาดรอบ, เส้นประแดงถึงวันที่โอน · สถิติ `stats.missed`, `shiftStats[s].missedMonth` · ประวัติ PM ไม่รวมรายการ Missed
 
 ## Manpower (เข้างาน / OT) ใน Auto Report PDF
