@@ -131,6 +131,14 @@
 - Sheet `FiveSEndLog`: EntryID (`5SE-yyyyMMdd-XXXXXX`), Timestamp, Date, Day, Shift, DoneBy, DoneByName, Photos (URL คั่น ", "), Remark, Status (done/confirmed/rejected), ConfirmedBy, ConfirmedName, ConfirmedAt, RejectReason, ClientRequestID, Score, ScoreNote, ScoredBy, ScoredAt (สร้าง/เติมคอลัมน์อัตโนมัติ) · รูปเก็บ Drive โฟลเดอร์ `5S_Photos` (Script Property `FIVES_PHOTOS_FOLDER_ID`)
 - Backend actions (POST): `GET_FIVES_WEEK` (date → endEntries/endToday/pending ย้อน 31 วัน/canConfirm), `SAVE_FIVES_END` (shift, photos[3], remark, clientRequestId กันส่งซ้ำ), `CONFIRM_FIVES` (entryIds[], score 0–10, scoreNote), `REJECT_FIVES` (entryId, reason)
 
+## แผน PM — หมุนเวียนกะ A/B (Inbox + Gantt)
+- Frontend: `js/inbox.js` (Inbox แผน PM, Gantt `renderGanttChart`, พิมพ์ Chart `printPmPlan`) · Backend: `scr/backend.gs` (`ensurePmPlanShifts`, `COMPLETE_PM_TASK`, `GET_PM_SUMMARY`)
+- หัวข้อ = ชื่องาน + ความถี่ (`pmGroupKey`) · ทุกเครื่องในหัวข้อใช้ตารางรอบเดียวกัน (วันครบกำหนด + ความถี่ ไม่ขึ้นกับวันที่ทำจริง)
+- **สลับกะทุกรอบตามเวลา**: ถึงวันครบกำหนดรอบถัดไปแล้วรอบเดิมยังไม่ทำ → `ensurePmPlanShifts` บันทึก `Maintenance_Log` Status=`Missed` (Assigned_Shift = กะเจ้าของรอบ, `Closed_Date` = วันที่โอน) แล้วเลื่อนไปรอบใหม่ + โอนอีกกะทันที (ย้อนหลังได้หลายรอบ, กันซ้ำด้วย Plan_ID+Due_Date, ใช้ script lock)
+- กะของแต่ละรอบยึด "รอบล่าสุดที่มีบันทึกใน Log" ของหัวข้อ แล้วสลับ A/B ตามจำนวนรอบ (`pmRoundsBetween`) — ไม่ต้องรอทำครบทุกเครื่อง
+- ทำเสร็จ (`COMPLETE_PM_TASK`): เครื่องนั้นเลื่อนไปรอบถัดไป + กะถัดไปทันที · ทำโดยอีกกะ = "แทน" (Done_Shift ≠ Assigned_Shift)
+- Gantt: ✕ + ป้าย "B ขาด" = ขาดรอบ, เส้นประแดงถึงวันที่โอน · สถิติ `stats.missed`, `shiftStats[s].missedMonth` · ประวัติ PM ไม่รวมรายการ Missed
+
 ## Manpower (เข้างาน / OT) ใน Auto Report PDF
 - ที่มา: ไฟล์ JR Organize แท็บ `Attendance` → ดึงเข้ามาที่แท็บ `Attendance_JR` ของ Spreadsheet นี้ด้วย `=IMPORTRANGE("1LxRYOtg0LL6_VSuNsaNuNuBUHal_T4eOYgy4tOrHNfE","Attendance!A:J")` ที่ A1 (โค้ดห้ามเปิดไฟล์ JR Organize ตรงๆ, **ห้ามใส่แท็บนี้ใน ensureColumns/syncHeaders**)
 - Config: `APP_CONFIG.ATTENDANCE = { SHEET, SUB_DEPARTMENT }` บนสุดของ `scr/backend.gs`

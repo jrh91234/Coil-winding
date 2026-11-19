@@ -83,7 +83,7 @@ function nextPmShift(shift) {
 }
 
 // แผนที่ชื่องาน+ความถี่เดียวกัน = "กลุ่มงาน" เดียวกัน (เช่น อัดจารบี ทุกเครื่อง)
-// กลุ่มเดียวกันต้องอยู่กะเดียวกัน และถึงกำหนดพร้อมกัน — สลับกะเมื่อทำครบทุกเครื่อง
+// กลุ่มเดียวกันถึงกำหนดพร้อมกัน และสลับกะทุกรอบตามวันครบกำหนด (ไม่ต้องรอทำครบทุกเครื่อง)
 function pmGroupKey(taskName, frequency) {
   return String(taskName || "").trim().toLowerCase() + "|" + String(frequency || "").trim().toLowerCase();
 }
@@ -120,89 +120,203 @@ function pmMajorityShift(list) {
   return a >= b ? "A" : "B";
 }
 
-// ทำให้ทุกแผน Active ในกลุ่มเดียวกันมี Assigned_Shift เดียวกัน (แผนเก่าที่กะปนกัน/ว่าง ถูกจัดให้อัตโนมัติ)
-//  - กลุ่มที่มีกะอยู่แล้ว: ใช้กะของเครื่องที่ค้างทำ (ถึงกำหนดเร็วสุด) ถ้าเสมอใช้เสียงข้างมาก
-//  - กลุ่มที่ยังไม่มีกะเลย: กระจายให้สองกะมีจำนวนเครื่องใกล้เคียงกัน
+// จำนวนรอบระหว่างวันที่ 2 วัน บนตารางความถี่ของแผน (ใช้หา "คู่/คี่" ของรอบ เพื่อสลับกะ A/B ให้ถูก)
+function pmRoundsBetween(d1, d2, frequency, interval) {
+  if (!d1 || !d2 || d1 === d2) return 0;
+  let from = d1 < d2 ? d1 : d2, to = d1 < d2 ? d2 : d1, n = 0;
+  while (from < to && n < 1000) { from = pmAddFrequency(from, frequency, interval); n++; }
+  return n;
+}
+
+// 🔄 จัดรอบ/กะของแผน PM ให้ถูกต้องทุกครั้งที่อ่านข้อมูล (เรียกจาก GET_INBOX / GET_PM_SUMMARY / COMPLETE_PM_TASK ฯลฯ)
+//  กฎ: แต่ละหัวข้อ (ชื่องาน+ความถี่) สลับกะ A → B → A ทุกรอบตามวันครบกำหนด ไม่ต้องรอทำครบทุกเครื่อง
+//   1) ซิงค์วันครบกำหนดให้ทุกเครื่องในหัวข้ออยู่บนตารางรอบเดียวกัน (แก้ข้อมูลเก่าที่วันไม่ตรงกัน)
+//   2) ถึงวันครบกำหนดของรอบถัดไปแล้วแต่รอบเดิมยังไม่ทำ → บันทึก "Missed" (ขาดรอบ) ในชื่อกะเดิม
+//      แล้วเลื่อนเครื่องนั้นไปรอบใหม่ + โอนให้อีกกะทันที (ย้อนหลังได้หลายรอบ สลับกะไปตามรอบ)
+//   3) เครื่องที่อยู่รอบเดียวกัน (วันครบกำหนดเดียวกัน) ต้องเป็นกะเดียวกัน — แผนใหม่/ข้อมูลเก่าที่กะปนกันถูกจัดให้อัตโนมัติ
 function ensurePmPlanShifts(pmSheet) {
   ensureColumns(pmSheet, ["Assigned_Shift"]);
+  const lock = LockService.getScriptLock();
+  let locked = false;
+  try { locked = lock.tryLock(15000); } catch (e) { locked = false; }
+  try {
+    return ensurePmPlanShiftsLocked(pmSheet, locked);
+  } finally {
+    if (locked) lock.releaseLock();
+  }
+}
+
+function ensurePmPlanShiftsLocked(pmSheet, canWrite) {
   const rows = pmSheet.getDataRange().getValues();
   const h = rows[0].map(x => String(x).trim());
   const col = h.indexOf("Assigned_Shift");
   const ix = (n) => h.indexOf(n);
+  const dueCol = ix("Next_Due_Date");
+  const lastDoneIx = ix("Last_Done_Date");
+  const todayStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+  const freqOf = (i) => rows[i][ix("Frequency")];
+  const ivOf = (i) => rows[i][ix("Interval_Value")];
+  if (!canWrite || dueCol < 0) return rows; // ไม่ได้ล็อก → อ่านอย่างเดียว (กันบันทึก "ขาดรอบ" ซ้ำ)
+
   const groups = {};
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][ix("Status")] || "").trim() !== "Active") continue;
-    const key = pmGroupKey(rows[i][ix("Task_Name")], rows[i][ix("Frequency")]);
+    const key = pmGroupKey(rows[i][ix("Task_Name")], freqOf(i));
     (groups[key] = groups[key] || []).push(i);
   }
-  const load = { A: 0, B: 0 };
-  const target = {};
-  const undecided = [];
+  const origDue = rows.map(r => pmDateStr(r[dueCol]));
+  const origShift = rows.map(r => normalizePmShift(r[col]));
+
+  // 1) ซิงค์วันครบกำหนดทั้งกลุ่ม
+  //  - ยังไม่ถึงกำหนดเลย: ทุกเครื่อง = วันที่เร็วสุดของกลุ่ม
+  //  - ถึงกำหนดแล้ว: เครื่องที่ทำรอบนี้ไปแล้ว (วันเลยรอบนี้) คงไว้, เครื่องที่วันถูกดึงกลับแต่ Last_Done_Date อยู่ในรอบนี้ → เลื่อนไปรอบถัดไป
   Object.keys(groups).forEach(key => {
     const idxs = groups[key];
-    const shifts = idxs.map(i => normalizePmShift(rows[i][col]));
-    const present = shifts.filter(Boolean);
-    let chosen = "";
-    if (present.length) {
-      const uniq = present.filter((v, k) => present.indexOf(v) === k);
-      if (uniq.length === 1) chosen = uniq[0];
-      else {
-        let minDue = "";
-        idxs.forEach(i => { const d = pmDateStr(rows[i][ix("Next_Due_Date")]); if (d && (!minDue || d < minDue)) minDue = d; });
-        const pending = idxs.filter(i => pmDateStr(rows[i][ix("Next_Due_Date")]) === minDue).map(i => normalizePmShift(rows[i][col]));
-        chosen = pmMajorityShift(pending) || pmMajorityShift(present);
+    let cycleDue = "";
+    idxs.forEach(i => { const d = pmDateStr(rows[i][dueCol]); if (d && (!cycleDue || d < cycleDue)) cycleDue = d; });
+    if (!cycleDue) return;
+    idxs.forEach(i => {
+      const cur = pmDateStr(rows[i][dueCol]);
+      const lastDone = lastDoneIx > -1 ? pmDateStr(rows[i][lastDoneIx]) : "";
+      let want = cycleDue;
+      if (cycleDue <= todayStr) {
+        if (cur > cycleDue) want = cur;
+        else if (lastDone && lastDone >= cycleDue) {
+          want = pmNextDueAfter(cycleDue, freqOf(i), ivOf(i), lastDone);
+          if (origShift[i]) rows[i][col] = nextPmShift(origShift[i]); // ทำรอบนี้แล้ว → รอบถัดไปเป็นของอีกกะ
+        }
       }
-    }
-    if (chosen) { target[key] = chosen; load[chosen] += idxs.length; }
-    else undecided.push(key);
+      if (cur !== want) rows[i][dueCol] = want;
+    });
   });
-  undecided.sort().forEach(key => {
-    const chosen = load.A <= load.B ? "A" : "B";
-    target[key] = chosen;
-    load[chosen] += groups[key].length;
-  });
-  let changed = false;
+
+  // 2) ขึ้นรอบใหม่ตามเวลา — รอบเดิมที่ไม่ได้ทำ = ขาดรอบ (บันทึกในชื่อกะเจ้าของรอบ)
+  const rolled = {};
+  const missed = [];
   Object.keys(groups).forEach(key => {
     groups[key].forEach(i => {
-      if (normalizePmShift(rows[i][col]) !== target[key]) { rows[i][col] = target[key]; changed = true; }
+      let due = pmDateStr(rows[i][dueCol]);
+      if (!due) return;
+      let sh = normalizePmShift(rows[i][col]);
+      let next = pmAddFrequency(due, freqOf(i), ivOf(i));
+      let n = 0;
+      while (next <= todayStr && n < 500) {
+        missed.push({ i: i, due: due, shift: sh, closed: next });
+        due = next;
+        sh = sh ? nextPmShift(sh) : "";
+        next = pmAddFrequency(due, freqOf(i), ivOf(i));
+        n++;
+      }
+      if (n) { rows[i][dueCol] = due; rows[i][col] = sh; rolled[i] = true; }
     });
   });
-  if (changed && rows.length > 1) {
-    pmSheet.getRange(2, col + 1, rows.length - 1, 1).setValues(rows.slice(1).map(r => [r[col]]));
-    changed = false;
+
+  // อ่าน Maintenance_Log ครั้งเดียว: ใช้กันบันทึกขาดรอบซ้ำ + หา "รอบล่าสุดที่รู้เจ้าของ" ของแต่ละหัวข้อ
+  const ss = pmSheet.getParent();
+  let logSheet = ss.getSheetByName("Maintenance_Log");
+  const logVals = logSheet && logSheet.getLastRow() > 0 ? logSheet.getDataRange().getValues() : [[]];
+  const lH = logVals[0].map(x => String(x).trim());
+  const li = (n) => lH.indexOf(n);
+  const planGroup = {};
+  Object.keys(groups).forEach(key => groups[key].forEach(i => { planGroup[String(rows[i][ix("Plan_ID")] || "")] = key; }));
+  const latestRound = {}; // groupKey → { due, shift } ของรอบล่าสุดที่มีบันทึก (ทำแล้ว/ขาดรอบ)
+  const noteRound = (key, due, shift) => {
+    if (!key || !due || !shift) return;
+    if (!latestRound[key] || due > latestRound[key].due) latestRound[key] = { due: due, shift: shift };
+  };
+  const seenMissed = {};
+  for (let r = 1; r < logVals.length; r++) {
+    const st = String(logVals[r][li("Status")] || "");
+    const pid = String(logVals[r][li("Plan_ID")] || "");
+    const due = pmDateStr(logVals[r][li("Due_Date")]);
+    if (st === "Missed") seenMissed[pid + "|" + due] = true;
+    if (st === "Rejected" || li("Assigned_Shift") < 0) continue;
+    noteRound(planGroup[pid], due, normalizePmShift(logVals[r][li("Assigned_Shift")]));
   }
 
-  // ซิงค์วันครบกำหนดทั้งกลุ่มให้ตรงกัน (แผนเก่าที่เครื่องแต่ละเครื่องวันไม่เท่ากัน)
-  //  - ถ้ายังไม่ถึงกำหนดเลย: ทุกเครื่อง = วันที่เร็วสุดของกลุ่ม
-  //  - ถ้ารอบนี้ถึงกำหนดแล้ว: เครื่องที่ทำรอบนี้ไปแล้ว (วันเลยรอบนี้) คงวันเดิมไว้ ห้ามดึงกลับ,
-  //    เครื่องที่วันถูกดึงกลับมาแล้วแต่ Last_Done_Date อยู่ในรอบนี้ = ทำแล้ว → เลื่อนไปรอบถัดไป,
-  //    เครื่องที่ยังค้าง = วันครบกำหนดของรอบนี้ (วันที่เก่าสุด)
-  const dueCol = ix("Next_Due_Date");
-  const lastDoneIx = ix("Last_Done_Date");
-  if (dueCol > -1) {
-    const todayStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
-    Object.keys(groups).forEach(key => {
-      const idxs = groups[key];
-      let cycleDue = "";
-      idxs.forEach(i => { const d = pmDateStr(rows[i][dueCol]); if (d && (!cycleDue || d < cycleDue)) cycleDue = d; });
-      if (!cycleDue) return;
-      idxs.forEach(i => {
-        const cur = pmDateStr(rows[i][dueCol]);
-        const lastDone = lastDoneIx > -1 ? pmDateStr(rows[i][lastDoneIx]) : "";
-        let want = cycleDue;
-        if (cycleDue <= todayStr) {
-          if (cur > cycleDue) want = cur;
-          else if (lastDone && lastDone >= cycleDue) want = pmNextDueAfter(cycleDue, rows[i][ix("Frequency")], rows[i][ix("Interval_Value")], lastDone);
-        }
-        if (cur !== want) {
-          pmSheet.getRange(i + 1, dueCol + 1).setValue(want);
-          rows[i][dueCol] = want;
-          changed = true;
-        }
-      });
+  // 3) กะของแต่ละรอบในหัวข้อ: ยึด "รอบล่าสุดที่มีบันทึก" เป็นหลัก แล้วสลับ A/B ตามจำนวนรอบที่ห่างกัน
+  //    (ไม่มีบันทึกเลย → ใช้กะเดิมของเครื่องที่ไม่ได้ถูกเลื่อนรอบ, แผนใหม่ทั้งหัวข้อ → กระจายให้สองกะสมดุล)
+  const load = { A: 0, B: 0 };
+  const undecided = [];
+  const groupAnchor = {};
+  const decideGroup = (key, seedShift) => {
+    const idxs = groups[key];
+    const buckets = {};
+    idxs.forEach(i => { const d = pmDateStr(rows[i][dueCol]) || ""; (buckets[d] = buckets[d] || []).push(i); });
+    const dues = Object.keys(buckets).sort();
+    let anchorDue = "", anchorShift = "";
+    if (latestRound[key]) { anchorDue = latestRound[key].due; anchorShift = latestRound[key].shift; }
+    if (!anchorShift) {
+      for (let k = 0; k < dues.length && !anchorShift; k++) {
+        const b = buckets[dues[k]];
+        const stable = b.filter(i => !rolled[i]).map(i => normalizePmShift(rows[i][col])).filter(Boolean);
+        anchorShift = pmMajorityShift(stable.length ? stable : b.map(i => normalizePmShift(rows[i][col])).filter(Boolean));
+        if (anchorShift) anchorDue = dues[k];
+      }
+    }
+    if (!anchorShift) {
+      if (!seedShift) return false;
+      anchorDue = dues[0]; anchorShift = seedShift;
+    }
+    const f = freqOf(idxs[0]), iv = ivOf(idxs[0]);
+    groupAnchor[key] = { due: anchorDue, shift: anchorShift, f: f, iv: iv };
+    dues.forEach(d => {
+      const sh = d && pmRoundsBetween(anchorDue, d, f, iv) % 2 ? nextPmShift(anchorShift) : anchorShift;
+      buckets[d].forEach(i => { rows[i][col] = sh; });
     });
+    load[normalizePmShift(rows[idxs[0]][col]) || "A"] += idxs.length;
+    return true;
+  };
+  Object.keys(groups).forEach(key => { if (!decideGroup(key, "")) undecided.push(key); });
+  undecided.sort().forEach(key => decideGroup(key, load.A <= load.B ? "A" : "B"));
+
+  // บันทึกขาดรอบลง Maintenance_Log (กันซ้ำด้วย Plan_ID + Due_Date)
+  if (missed.length) {
+    if (!logSheet) {
+      logSheet = ss.insertSheet("Maintenance_Log");
+      logSheet.appendRow(["Log_ID", "Plan_ID", "Machine", "Task_Name", "Due_Date", "Done_Date", "Done_By", "Status", "Approved_By", "Approved_Date", "Photo_URLs", "Note", "Days_Diff", "Done_Shift", "Assigned_Shift"]);
+    }
+    ensureColumns(logSheet, ["Done_Shift", "Assigned_Shift", "Closed_Date"]);
+    const outH = logSheet.getRange(1, 1, 1, logSheet.getLastColumn()).getValues()[0].map(x => String(x).trim());
+    const oi = (n) => outH.indexOf(n);
+    const seen = seenMissed;
+    const stamp = Utilities.formatDate(new Date(), "GMT+7", "yyMMddHHmmss");
+    const out = [];
+    missed.forEach((m, k) => {
+      const planId = String(rows[m.i][ix("Plan_ID")] || "");
+      // กะเจ้าของรอบที่ขาด: นับรอบจากจุดยึดของหัวข้อ ให้สลับ A/B ต่อเนื่องเหมือนรอบอื่น ๆ
+      const an = groupAnchor[planGroup[planId]];
+      if (an) m.shift = pmRoundsBetween(an.due, m.due, an.f, an.iv) % 2 ? nextPmShift(an.shift) : an.shift;
+      if (seen[planId + "|" + m.due]) return;
+      seen[planId + "|" + m.due] = true;
+      const row = new Array(outH.length).fill("");
+      const set = (n, v) => { const c = oi(n); if (c > -1) row[c] = v; };
+      set("Log_ID", "PMX-" + stamp + "-" + k + "-" + Math.random().toString(36).substring(2, 5).toUpperCase());
+      set("Plan_ID", planId);
+      set("Machine", String(rows[m.i][ix("Machine")] || ""));
+      set("Task_Name", String(rows[m.i][ix("Task_Name")] || ""));
+      set("Due_Date", m.due);
+      set("Status", "Missed");
+      set("Note", "ขาดรอบ — ไม่ได้ทำจนถึงรอบถัดไป " + m.closed + " ระบบโอนให้" + (m.shift ? "กะ " + nextPmShift(m.shift) : "อีกกะ"));
+      set("Days_Diff", daysBetween(m.due, m.closed));
+      set("Assigned_Shift", m.shift);
+      set("Closed_Date", m.closed);
+      out.push(row);
+    });
+    if (out.length) logSheet.getRange(logSheet.getLastRow() + 1, 1, out.length, outH.length).setValues(out);
   }
-  if (changed) SpreadsheetApp.flush();
+
+  // เขียนกลับเฉพาะคอลัมน์ที่เปลี่ยน
+  let dueChanged = false, shiftChanged = false;
+  for (let i = 1; i < rows.length; i++) {
+    if (pmDateStr(rows[i][dueCol]) !== origDue[i]) dueChanged = true;
+    if (normalizePmShift(rows[i][col]) !== origShift[i]) shiftChanged = true;
+  }
+  if (rows.length > 1) {
+    if (dueChanged) pmSheet.getRange(2, dueCol + 1, rows.length - 1, 1).setValues(rows.slice(1).map(r => [r[dueCol]]));
+    if (shiftChanged) pmSheet.getRange(2, col + 1, rows.length - 1, 1).setValues(rows.slice(1).map(r => [r[col]]));
+  }
+  if (dueChanged || shiftChanged || missed.length) SpreadsheetApp.flush();
   return rows;
 }
 
@@ -280,6 +394,7 @@ function collectPmHistory(ss, data) {
       const li = (n) => lH.indexOf(n);
       const asDate = (v) => (v instanceof Date) ? Utilities.formatDate(v, "GMT+7", "yyyy-MM-dd") : String(v || "").trim().substring(0, 10);
       for (let i = 1; i < logRows.length; i++) {
+        if (String(logRows[i][li("Status")] || "") === "Missed") continue; // ขาดรอบ ไม่ใช่งานที่ทำแล้ว (ดูได้ใน Gantt)
         const planId = String(logRows[i][li("Plan_ID")] || "").trim();
         const machine = String(logRows[i][li("Machine")] || "").trim();
         const logId = String(logRows[i][li("Log_ID")] || "").trim();
@@ -4304,44 +4419,35 @@ function doPost(e) {
     setLog("Assigned_Shift", assignedShift);
     logSheet.appendRow(logRow);
 
-    // อัพเดตรอบถัดไป — ทั้งกลุ่ม (ชื่องานเดียวกัน) ใช้วันครบกำหนดเดียวกัน ไม่ว่าเครื่องไหนจะทำช้าแค่ไหน
+    // อัพเดตรอบถัดไปของเครื่องนี้ — ตารางรอบคงที่ (วันครบกำหนดรอบนี้ + ความถี่) และรอบถัดไปเป็นของอีกกะทันที
+    // (ไม่ต้องรอเครื่องอื่นในหัวข้อเดียวกัน — เครื่องที่ไม่ทำจะถูกบันทึก "ขาดรอบ" เมื่อถึงรอบถัดไป)
     const ci = (n) => pmH.indexOf(n);
     const planFreq = String(pmRows[planRow - 1][ci("Frequency")] || "");
     const planInterval = pmRows[planRow - 1][ci("Interval_Value")];
-    const groupKey = pmGroupKey(taskName, planFreq);
-    const groupRows = [];
-    for (let i = 1; i < pmRows.length; i++) {
-      if (String(pmRows[i][ci("Status")] || "").trim() !== "Active") continue;
-      if (pmGroupKey(pmRows[i][ci("Task_Name")], pmRows[i][ci("Frequency")]) === groupKey) groupRows.push(i + 1);
-    }
-    let cycleDue = pmDateStr(pmRows[planRow - 1][ci("Next_Due_Date")]);
-    groupRows.forEach(r => { const d = pmDateStr(pmRows[r - 1][ci("Next_Due_Date")]); if (d && (!cycleDue || d < cycleDue)) cycleDue = d; });
-    nextDueStr = pmNextDueAfter(cycleDue || doneDate, planFreq, planInterval, doneDate);
+    nextDueStr = pmNextDueAfter(dueDate || doneDate, planFreq, planInterval, doneDate);
+    const owner = assignedShift || doneShift;
+    nextShift = owner ? nextPmShift(owner) : "";
 
     const lastDoneCol = ci("Last_Done_Date") + 1;
     const nextDueCol = ci("Next_Due_Date") + 1;
     const shiftCol = ci("Assigned_Shift") + 1;
     if (lastDoneCol > 0) pmSheet.getRange(planRow, lastDoneCol).setValue(doneDate);
     if (nextDueCol > 0) pmSheet.getRange(planRow, nextDueCol).setValue(nextDueStr);
+    if (shiftCol > 0 && nextShift) pmSheet.getRange(planRow, shiftCol).setValue(nextShift);
 
-    // ยังเหลือเครื่องที่ค้างในรอบนี้ (วันครบกำหนดยังเป็นรอบเดิม) กี่เครื่อง
-    remaining = groupRows.filter(r => r !== planRow && (pmDateStr(pmRows[r - 1][ci("Next_Due_Date")]) || cycleDue) <= cycleDue).length;
-    cycleComplete = remaining === 0;
-    if (cycleComplete) {
-      // ครบทุกเครื่อง → ปรับทั้งกลุ่มให้เข้ารอบเดียวกัน + ส่งรอบหน้าให้อีกกะ
-      const owner = assignedShift || doneShift;
-      nextShift = owner ? nextPmShift(owner) : "";
-      groupRows.forEach(r => {
-        if (nextDueCol > 0) pmSheet.getRange(r, nextDueCol).setValue(nextDueStr);
-        if (nextShift && shiftCol > 0) pmSheet.getRange(r, shiftCol).setValue(nextShift);
-      });
+    // เครื่องอื่นในหัวข้อเดียวกันที่ยังค้างรอบนี้ (ไว้แจ้งให้ทราบ)
+    const groupKey = pmGroupKey(taskName, planFreq);
+    for (let i = 1; i < pmRows.length; i++) {
+      if (i + 1 === planRow || String(pmRows[i][ci("Status")] || "").trim() !== "Active") continue;
+      if (pmGroupKey(pmRows[i][ci("Task_Name")], pmRows[i][ci("Frequency")]) !== groupKey) continue;
+      if (pmDateStr(pmRows[i][ci("Next_Due_Date")]) === dueDate) remaining++;
     }
+    cycleComplete = remaining === 0;
     SpreadsheetApp.flush();
 
     logUserAction(doneBy, data.role || "Production", "COMPLETE_PM_TASK", "แผน " + planId + " เครื่อง " + machine);
-    const msg = "บันทึกเสร็จเรียบร้อย" + (cycleComplete
-      ? "\nครบทุกเครื่องแล้ว 🎉 รอบถัดไป " + nextDueStr + (nextShift ? " เป็นของ กะ " + nextShift : "")
-      : "\nรอบนี้ยังเหลืออีก " + remaining + " เครื่อง (กะเดิมทำต่อให้ครบ)");
+    const msg = "บันทึกเสร็จเรียบร้อย\nรอบถัดไปของเครื่องนี้ " + nextDueStr + (nextShift ? " เป็นของ กะ " + nextShift : "")
+      + (remaining ? "\nหัวข้อนี้รอบนี้ยังค้างอีก " + remaining + " เครื่อง (ถ้าไม่ทำก่อนถึงรอบถัดไป จะบันทึกขาดรอบ)" : "\nหัวข้อนี้ทำครบทุกเครื่องในรอบนี้แล้ว 🎉");
     return ContentService.createTextOutput(JSON.stringify({status: "success", message: msg, logId: logId, doneShift: doneShift, nextShift: nextShift, cycleComplete: cycleComplete, remaining: remaining})).setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -4576,7 +4682,8 @@ function doPost(e) {
             status: String(logRows[i][li("Status")] || ""),
             note: li("Note") > -1 ? String(logRows[i][li("Note")] || "") : "",
             photoUrls: li("Photo_URLs") > -1 ? splitPhotoUrls(logRows[i][li("Photo_URLs")]) : [],
-            daysDiff: parseInt(logRows[i][li("Days_Diff")]) || 0
+            daysDiff: parseInt(logRows[i][li("Days_Diff")]) || 0,
+            closedDate: li("Closed_Date") > -1 ? pmDateStr(logRows[i][li("Closed_Date")]) : ""
           });
         }
       }
@@ -4600,6 +4707,8 @@ function doPost(e) {
         doneMonth: done.length,
         onTimeMonth: done.filter(l => l.daysDiff <= 0).length,
         coverMonth: done.filter(l => l.assignedShift && l.assignedShift !== s).length,
+        missedMonth: logs.filter(l => l.status === "Missed" && l.assignedShift === s && String(l.closedDate || "").substring(0, 7) === monthPrefix).length,
+        missedTotal: logs.filter(l => l.status === "Missed" && l.assignedShift === s).length,
         planned: mine.length,
         overdue: mine.filter(p => p.nextDueDate && p.nextDueDate <= todayStr).length
       };
@@ -4607,7 +4716,7 @@ function doPost(e) {
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success", plans: plans, logs: logs, shiftStats: shiftStats, month: monthPrefix,
-      stats: { total: approved.length, onTime: onTime, late: late, overdue: overdue, avgLateDays: avgLateDays, adherencePct: approved.length > 0 ? Math.round(onTime / approved.length * 1000) / 10 : 100 }
+      stats: { total: approved.length, onTime: onTime, late: late, overdue: overdue, missed: logs.filter(l => l.status === "Missed").length, avgLateDays: avgLateDays, adherencePct: approved.length > 0 ? Math.round(onTime / approved.length * 1000) / 10 : 100 }
     })).setMimeType(ContentService.MimeType.JSON);
   }
 

@@ -2,7 +2,7 @@
 let inboxData = null;
 let inboxActiveCategory = 'all';
 
-// === 🔄 PM หมุนเวียนกะ A/B — งานชื่อเดียวกันทุกเครื่องอยู่กะเดียวกัน ทำครบทุกเครื่องแล้วรอบหน้าส่งต่ออีกกะ ===
+// === 🔄 PM หมุนเวียนกะ A/B — แต่ละหัวข้อสลับกะทุกรอบตามวันครบกำหนด รอบไหนไม่ทำ = ขาดรอบ (ฟ้องในชื่อกะเจ้าของรอบ) แล้วโอนให้อีกกะทันที ===
 const PM_SHIFT_LIST = ['A', 'B'];
 let inboxPmShiftFilter = '';
 try { inboxPmShiftFilter = localStorage.getItem('pmInboxShiftFilter') || ''; } catch (e) { /* ใช้ค่าเริ่มต้น */ }
@@ -614,11 +614,11 @@ window.updatePmShiftHint = function() {
     const assigned = hint.dataset.assigned;
     const picked = document.querySelector('input[name="pm-shift"]:checked')?.value || '';
     const parts = [];
-    if (assigned) parts.push(`งานนี้ทั้งรอบเป็นของ <b>กะ ${assigned}</b>`);
+    if (assigned) parts.push(`รอบนี้เป็นของ <b>กะ ${assigned}</b>`);
     if (picked) {
         if (assigned && picked !== assigned) parts.push(`<span class="text-orange-600 font-bold">⚠️ กะ ${picked} ทำแทน</span>`);
         const owner = assigned || picked;
-        parts.push(`ทำครบทุกเครื่องแล้ว รอบถัดไปเป็นของ <b>กะ ${owner === 'A' ? 'B' : 'A'}</b>`);
+        parts.push(`ทำเสร็จแล้วรอบถัดไปของเครื่องนี้เป็นของ <b>กะ ${owner === 'A' ? 'B' : 'A'}</b>`);
     } else {
         parts.push('<span class="text-red-500">กรุณาเลือกกะที่ทำ</span>');
     }
@@ -972,11 +972,12 @@ function renderGanttChart(container, data, opts) {
     </div>`;
 
     // Stats cards
-    statsHtml += `<div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+    statsHtml += `<div class="grid grid-cols-2 md:grid-cols-6 gap-2 mb-4">
         <div class="bg-blue-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-blue-700">${stats.total}</div><div class="text-xs text-blue-600">งานทั้งหมด</div></div>
         <div class="bg-green-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-green-700">${stats.onTime}</div><div class="text-xs text-green-600">ตรงเวลา</div></div>
         <div class="bg-red-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-red-700">${stats.late}</div><div class="text-xs text-red-600">ช้ากว่ากำหนด</div></div>
         <div class="bg-orange-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-orange-700">${stats.overdue}</div><div class="text-xs text-orange-600">ค้าง (ยังไม่ทำ)</div></div>
+        <div class="bg-rose-100 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-rose-700">${stats.missed || 0}</div><div class="text-xs text-rose-700">ขาดรอบ</div></div>
         <div class="bg-indigo-50 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-indigo-700">${stats.adherencePct}%</div><div class="text-xs text-indigo-600">On-time Rate</div></div>
     </div>`;
 
@@ -991,6 +992,7 @@ function renderGanttChart(container, data, opts) {
                     <div><div class="text-lg font-bold text-gray-800">${st.doneMonth || 0}</div><div class="text-gray-500">ทำแล้ว</div></div>
                     <div><div class="text-lg font-bold text-green-700">${st.onTimeMonth || 0}</div><div class="text-gray-500">ตรงเวลา</div></div>
                     <div><div class="text-lg font-bold text-orange-600">${st.coverMonth || 0}</div><div class="text-gray-500">ทำแทนอีกกะ</div></div>
+                    <div><div class="text-lg font-bold text-rose-700">${st.missedMonth || 0}</div><div class="text-gray-500">ขาดรอบ</div></div>
                     <div><div class="text-lg font-bold text-indigo-700">${st.planned || 0}</div><div class="text-gray-500">รอบถัดไป${st.overdue ? ` <span class="text-red-600 font-bold">(ค้าง ${st.overdue})</span>` : ''}</div></div>
                 </div>
             </div>`;
@@ -1013,18 +1015,6 @@ function renderGanttChart(container, data, opts) {
     const monthRow = months.map(m => `<div class="inline-block text-center ${opts.print ? 'text-xs' : 'text-[9px]'} font-bold text-gray-500 border-b" style="width:${m.span * CW}px">${m.label}</div>`).join('');
 
     // สร้างแถว Gantt ต่อ plan
-    // 🔄 รอบปัจจุบันของแต่ละกลุ่ม = วันครบกำหนดที่เก่าสุดในกลุ่ม (backend สลับกะทั้งกลุ่มเมื่อทุกเครื่องทำรอบนี้ครบ)
-    //    เครื่องที่ทำรอบนี้แล้ว วันครบกำหนดจะเลยรอบนี้ไป → รอบถัดไปของเครื่องนั้นจะเป็นของอีกกะ
-    const pmGroupOf = (p) => String(p.taskName || '').trim().toLowerCase() + '|' + String(p.frequency || '').trim().toLowerCase();
-    const groupCycleDue = new Map();
-    plans.forEach(p => {
-        const d = String(p.nextDueDate || '');
-        if (!d) return;
-        const k = pmGroupOf(p);
-        if (!groupCycleDue.has(k) || d < groupCycleDue.get(k)) groupCycleDue.set(k, d);
-    });
-    const otherShift = (sh) => sh === 'A' ? 'B' : sh === 'B' ? 'A' : '';
-
     const planRowObjs = plans.map(plan => {
         const planLogs = logs.filter(l => l.planId === plan.planId);
         const nextDue = toDate(plan.nextDueDate);
@@ -1052,10 +1042,19 @@ function renderGanttChart(container, data, opts) {
 
             // due date marker
             if (nextDue && d.getTime() === nextDue.getTime()) {
-                marker = `<div class="absolute inset-x-0 flex items-center justify-center" style="top:${GANTT_MID - 6}px;height:12px;z-index:10"><div class="w-3 h-3 rounded-full ${isToday ? 'bg-indigo-600' : d < today ? 'bg-red-500' : 'bg-blue-500'} border-2 border-white shadow" title="กำหนด ${plan.nextDueDate}${(() => { const cd = groupCycleDue.get(pmGroupOf(plan)); const ahead = cd && plan.nextDueDate > cd; return ahead && otherShift(plan.assignedShift) ? ' · รอบหน้าเป็นของกะ ' + otherShift(plan.assignedShift) + ' (สลับเมื่อทุกเครื่องทำรอบปัจจุบันครบ)' : plan.assignedShift ? ' · กะรับผิดชอบ: ' + plan.assignedShift : ''; })()}"></div></div>`;
+                marker = `<div class="absolute inset-x-0 flex items-center justify-center" style="top:${GANTT_MID - 6}px;height:12px;z-index:10"><div class="w-3 h-3 rounded-full ${isToday ? 'bg-indigo-600' : d < today ? 'bg-red-500' : 'bg-blue-500'} border-2 border-white shadow" title="กำหนด ${plan.nextDueDate}${plan.assignedShift ? ' · กะรับผิดชอบ: ' + plan.assignedShift : ''}"></div></div>`;
             } else if (projectedDueTimes.has(d.getTime()) && d >= today) { // ไม่แสดงรอบคาดการณ์ที่อยู่ในอดีต (ทำให้เข้าใจผิดว่ามีนัดที่ผ่านไปแล้ว)
                 marker = `<div class="absolute inset-x-0 flex items-center justify-center" style="top:${GANTT_MID - 6}px;height:12px;z-index:10" title="กำหนดถัดไป (คาดการณ์)"><div class="w-2.5 h-2.5 rounded-full bg-white border-2 border-blue-300"></div></div>`;
             }
+
+            // ❌ ขาดรอบ — วางที่วันครบกำหนดของรอบที่ไม่ได้ทำ
+            planLogs.forEach(l => {
+                if (l.status !== 'Missed') return;
+                const dueM = toDate(l.dueDate);
+                if (dueM && d.getTime() === dueM.getTime()) {
+                    marker = `<div class="absolute inset-x-0 flex items-center justify-center" style="top:${GANTT_MID - 7}px;height:14px;z-index:10"><div class="w-3.5 h-3.5 rounded-full bg-red-600 text-white text-[9px] font-black leading-none flex items-center justify-center border border-white shadow" title="ขาดรอบ — กำหนด ${l.dueDate}${l.assignedShift ? ' · กะรับผิดชอบ ' + l.assignedShift : ''} · ไม่ได้ทำจนถึงรอบถัดไป ${l.closedDate || ''}">✕</div></div>`;
+                }
+            });
 
             // log markers — คลิกเพื่อย้อนดูรายละเอียดงานที่ทำไปแล้ว
             planLogs.forEach(l => {
@@ -1091,6 +1090,14 @@ function renderGanttChart(container, data, opts) {
             }
         };
         planLogs.forEach(l => {
+            if (l.status !== 'Missed') return;
+            const dueD = toDate(l.dueDate);
+            if (!dueD) return;
+            const closed = toDate(l.closedDate) || stepByFrequency(dueD, plan.frequency, plan.intervalValue);
+            link(dayIndex(dueD), dayIndex(closed) - 0.5, '#dc2626', true, '', '', `ขาดรอบ ${l.dueDate}`);
+            if (inRange(dayIndex(dueD))) overlay += `<div class="absolute pointer-events-none text-[9px] font-black leading-none whitespace-nowrap text-red-700" style="left:${dayIndex(dueD) * CW + CW / 2}px;top:1px;transform:translateX(-50%)">ขาดรอบ</div>`;
+        });
+        planLogs.forEach(l => {
             const doneD = toDate(l.doneDate);
             if (!doneD) return;
             const dueD = toDate(l.dueDate);
@@ -1105,17 +1112,18 @@ function renderGanttChart(container, data, opts) {
             if (!shift || !inRange(idx)) return;
             const base = shift === 'A' ? 'background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc' : 'background:#fef3c7;color:#92400e;border:1px solid #fcd34d';
             const style = kind === 'cover' ? 'background:#fff;color:#c2410c;border:1px dashed #f97316'
-                : kind === 'next' ? base.replace('1px solid', '1px dashed') + ';opacity:.85' : base;
-            const text = kind === 'cover' ? `แทน ${shift}` : kind === 'done' ? `ทำ ${shift}` : kind === 'next' ? `→${shift}` : shift;
+                : kind === 'missed' ? 'background:#dc2626;color:#fff;border:1px solid #b91c1c' : base;
+            const text = kind === 'cover' ? `แทน ${shift}` : kind === 'done' ? `ทำ ${shift}` : kind === 'missed' ? `${shift} ขาด` : shift;
             overlay += `<div class="absolute pointer-events-none text-[9px] font-black leading-none whitespace-nowrap rounded px-1" style="left:${idx * CW + CW / 2}px;top:${GANTT_MID + 9}px;padding-top:2px;padding-bottom:2px;transform:translateX(-50%);${style}">${text}</div>`;
         };
         const tags = new Map(); // dayIndex → { shift, kind } (ป้ายแรกที่ลงวันนั้นชนะ ยกเว้นการทำแทนซึ่งสำคัญกว่า)
         const putTag = (idx, shift, kind) => {
             if (!shift || idx < 0) return;
             const cur = tags.get(idx);
-            if (!cur || (kind === 'cover' && cur.kind !== 'cover')) tags.set(idx, { shift, kind, resp: cur ? cur.shift : '' });
+            if (!cur || (kind === 'missed' && cur.kind !== 'missed') || (kind === 'cover' && cur.kind !== 'cover' && cur.kind !== 'missed')) tags.set(idx, { shift, kind });
         };
         planLogs.forEach(l => {
+            if (l.status === 'Missed') { const dm = toDate(l.dueDate); if (dm) putTag(dayIndex(dm), l.assignedShift, 'missed'); return; }
             const doneD = toDate(l.doneDate);
             const dueD = toDate(l.dueDate);
             const resp = l.assignedShift || '';
@@ -1126,13 +1134,7 @@ function renderGanttChart(container, data, opts) {
                 else if (!resp) putTag(doneIdx, l.doneShift, 'done');
             }
         });
-        // เครื่องนี้ทำรอบปัจจุบันไปแล้ว (วันครบกำหนดเลยรอบของกลุ่ม) → รอบถัดไปเป็นของอีกกะ เมื่อทั้งกลุ่มทำครบ
-        const cycleDue = groupCycleDue.get(pmGroupOf(plan));
-        const aheadOfCycle = !!(cycleDue && plan.nextDueDate && plan.nextDueDate > cycleDue);
-        if (nextDue) {
-            if (aheadOfCycle && otherShift(plan.assignedShift)) putTag(dayIndex(nextDue), otherShift(plan.assignedShift), 'next');
-            else putTag(dayIndex(nextDue), plan.assignedShift, 'resp');
-        }
+        if (nextDue) putTag(dayIndex(nextDue), plan.assignedShift, 'resp');
         tags.forEach((t, idx) => shiftTag(idx, t.shift, t.kind));
 
         // รอบปัจจุบันที่เลยกำหนดแล้วยังไม่ทำ: เส้นประแดงจากวันครบกำหนดถึงวันนี้
@@ -1199,13 +1201,6 @@ function renderGanttChart(container, data, opts) {
                             ${shifts.map(sh => pmShiftBadge(sh)).join('')}
                             ${overdueCount ? `<span class="bg-red-100 text-red-700 px-1.5 rounded-full font-bold">ค้าง ${overdueCount} · สูงสุด ${maxLate} วัน</span>` : ''}
                         </div>
-                        ${(() => {
-                            const cd = groupCycleDue.get(key);
-                            const owner = shifts.length === 1 ? shifts[0] : '';
-                            const left = list.filter(r => String(r.plan.nextDueDate || '') === cd).length;
-                            if (!cd || !owner || left === list.length) return '';
-                            return `<div class="text-[9px] text-gray-600 mt-0.5 leading-snug">🔄 รอบ ${cd}: กะ ${owner} ทำแล้ว ${list.length - left}/${list.length} · <b class="text-red-600">เหลือ ${left} เครื่อง</b> → ครบแล้วรอบหน้าเป็น <b>กะ ${otherShift(owner)}</b></div>`;
-                        })()}
                     </div>
                 </div>
             </div>
@@ -1226,7 +1221,7 @@ function renderGanttChart(container, data, opts) {
         <span><span class="inline-block w-3 h-3 bg-yellow-400 rounded-sm align-middle"></span> รออนุมัติ</span>
         <span><span class="inline-block text-[9px] font-black rounded px-1" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d">B</span> ใต้วันครบกำหนด = กะที่รับผิดชอบรอบนั้น</span>
         <span><span class="inline-block text-[9px] font-black rounded px-1" style="background:#fff;color:#c2410c;border:1px dashed #f97316">แทน A</span> = อีกกะมาทำแทน</span>
-        <span><span class="inline-block text-[9px] font-black rounded px-1" style="background:#e0f2fe;color:#0369a1;border:1px dashed #7dd3fc">→A</span> = รอบหน้าเป็นของกะ A (สลับกะเมื่อทุกเครื่องทำรอบปัจจุบันครบ)</span>
+        <span><span class="inline-flex w-3.5 h-3.5 rounded-full bg-red-600 text-white text-[9px] font-black items-center justify-center align-middle">✕</span> <span class="inline-block text-[9px] font-black rounded px-1" style="background:#dc2626;color:#fff">B ขาด</span> = ขาดรอบ: กะนั้นไม่ทำจนถึงรอบถัดไป ระบบโอนให้อีกกะ</span>
     </div>`;
 
     if (opts.print) {
