@@ -510,8 +510,10 @@ function renderPmTaskItem(d) {
 // มุมมองจัดกลุ่ม: งานชื่อเดียวกันหลายเครื่อง → การ์ดเดียว ขั้นตอนแสดงครั้งเดียว แล้วไล่รายการเครื่องเป็นแถว
 // 🧩 ชุดงาน: หลายหัวข้อ PM ที่ถึงกำหนดพร้อมกัน → การ์ดเดียว แถวละ 1 เครื่อง (กดทำเสร็จครั้งเดียว ปิดทุกหัวข้อของเครื่องนั้น)
 function renderPmSetCard(name, tasks) {
+    const key = String(name).trim().toLowerCase();
+    const ahead = ((inboxData && inboxData.pmSetAhead) || []).filter(a => String(a.groupName).trim().toLowerCase() === key);
     const topics = [];
-    tasks.forEach(t => { if (!topics.some(x => x.taskName === t.taskName)) topics.push(t); });
+    tasks.concat(ahead).forEach(t => { if (!topics.some(x => x.taskName === t.taskName)) topics.push(t); });
     const byMachine = new Map();
     tasks.forEach(t => {
         const k = t.machine + '|' + t.dueDate;
@@ -525,6 +527,9 @@ function renderPmSetCard(name, tasks) {
     const shifts = [...new Set(tasks.map(t => t.assignedShift).filter(Boolean))];
     const lateMachines = machines.filter(m => (m[0].daysOverdue || 0) >= 1).length;
     const topicIdx = (t) => topics.findIndex(x => x.taskName === t.taskName) + 1;
+    // หัวข้อของเครื่องนี้ที่ทำรอบนี้ไปแล้ว (อยู่รอบหน้า) — แสดงเป็นป้ายสีเทา จะได้ไม่ดูเหมือนข้อมูลหาย
+    const aheadOf = (machine) => ahead.filter(a => a.machine === machine && !tasks.some(t => t.machine === machine && t.taskName === a.taskName))
+        .sort((a, b) => topicIdx(a) - topicIdx(b));
     const rows = machines.map(list => {
         const t = list[0];
         const ti = pmDaysInfo(t.daysOverdue);
@@ -534,7 +539,8 @@ function renderPmSetCard(name, tasks) {
             <span class="text-xs text-gray-500 w-28 shrink-0 hidden sm:inline">📅 ${inboxEsc(t.dueDate)}</span>
             <span class="${ti.cls} text-[11px] px-2 py-0.5 rounded-full font-bold shrink-0">${ti.label}</span>
             ${pmShiftBadge(t.assignedShift)}
-            <span class="flex flex-wrap gap-1 min-w-0">${list.sort((a, b) => topicIdx(a) - topicIdx(b)).map(x => `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] px-1.5 py-0.5 rounded font-bold" title="${inboxEsc(x.taskName)}">${topicIdx(x)}. ${inboxEsc(pmShortName(x.taskName))}</span>`).join('')}</span>
+            <span class="flex flex-wrap gap-1 min-w-0">${list.sort((a, b) => topicIdx(a) - topicIdx(b)).map(x => `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] px-1.5 py-0.5 rounded font-bold" title="${inboxEsc(x.taskName)}">${topicIdx(x)}. ${inboxEsc(pmShortName(x.taskName))}</span>`).join('')}${
+                aheadOf(t.machine).map(a => `<span class="bg-gray-50 text-gray-400 border border-gray-200 text-[11px] px-1.5 py-0.5 rounded" title="${inboxEsc(a.taskName)} — ทำรอบนี้แล้ว${a.lastDoneDate ? ' (' + inboxEsc(a.lastDoneDate) + ')' : ''} · รอบหน้า ${inboxEsc(a.dueDate)}${a.assignedShift ? ' กะ ' + a.assignedShift : ''}">✓ ${topicIdx(a)}. ${inboxEsc(pmShortName(a.taskName))} ทำแล้ว · รอบหน้า ${inboxEsc(a.dueDate)}${a.assignedShift ? ' กะ ' + a.assignedShift : ''}</span>`).join('')}</span>
             <button onclick="window.openPmCompleteModal('${ids}')" class="ml-auto shrink-0 text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 font-bold shadow-sm">📸 ทำเสร็จ${list.length > 1 ? ` (${list.length})` : ''}</button>
         </div>`;
     }).join('');
@@ -552,8 +558,12 @@ function renderPmSetCard(name, tasks) {
                     ${lateMachines ? `<span class="${info.cls} px-2 py-0.5 rounded-full font-bold">⏰ เกินกำหนด ${lateMachines} · สูงสุด ${worst} วัน</span>` : `<span class="${info.cls} px-2 py-0.5 rounded-full font-bold">ครบวันนี้</span>`}
                     ${shifts.map(s => pmShiftBadge(s, '🔄 ')).join('')}
                 </div>
-                <div class="mt-2 space-y-0.5">${topics.map((t, i) => `<div class="text-xs text-gray-700"><b class="text-indigo-700">${i + 1}.</b> ${inboxEsc(t.taskName)} <span class="text-gray-400">· ${tasks.filter(x => x.taskName === t.taskName).length} เครื่อง</span></div>`).join('')}</div>
-                ${topics.map((t, i) => pmInstructionHtml(t.instruction, false, `${i + 1}. ${pmShortName(t.taskName)}`)).join('')}
+                <div class="mt-2 space-y-0.5">${topics.map((t, i) => {
+                    const due = tasks.filter(x => x.taskName === t.taskName).length;
+                    const doneAhead = ahead.filter(x => x.taskName === t.taskName).length;
+                    return `<div class="text-xs text-gray-700"><b class="text-indigo-700">${i + 1}.</b> ${inboxEsc(t.taskName)} <span class="text-gray-400">· ค้างรอบนี้ ${due} เครื่อง${doneAhead ? ` · ทำแล้ว ${doneAhead} เครื่อง` : ''}</span></div>`;
+                }).join('')}</div>
+                ${topics.filter(t => t.instruction).map(t => pmInstructionHtml(t.instruction, false, `${topicIdx(t)}. ${pmShortName(t.taskName)}`)).join('')}
             </div>
             ${photos ? `<div class="shrink-0 max-w-[9rem]">${photos}</div>` : ''}
         </div>
